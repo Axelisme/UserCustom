@@ -1,0 +1,15 @@
+Documents/新文字文件.txt
+.bashrc
+.zshrc
+Pictures/wallpaper/**
+UserCustom/**
+.ssh/**
+.config/i3/**
+.config/polybar/**
+.config/picom/**
+.config/alacritty/**
+.config/autorandr/**
+.config/nnn/plugins/**
+.config/nitrogen/**
+.config/nvim/**
+.config/tmux/**

@@ -7,18 +7,15 @@ fi
 
 #Set up my custom command
 export USER_CUSTOM=$HOME/UserCustom
+export zinit=$HOME/.local/share/zinit/zinit.git/zinit.zsh
 [ -f $USER_CUSTOM/myzsh.sh ] && source $USER_CUSTOM/myzsh.sh
 
-# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
-if [[ `tput colors` == "256" ]]; then
-    [[ ! -f $USER_CUSTOM/p10k/gui.zsh ]] || source $USER_CUSTOM/p10k/gui.zsh
-else
-    [[ ! -f $USER_CUSTOM/p10k/tty.zsh ]] || source $USER_CUSTOM/p10k/tty.zsh
-fi
+# To customize prompt, run `p10k configure` or edit ~/UserCustom/p10k/gui.zsh.
+[[ ! -f ~/UserCustom/p10k/ssh.zsh ]] || source ~/UserCustom/p10k/ssh.zsh
 
 # >>> conda initialize >>>
-export CRYPTOGRAPHY_OPENSSL_NO_LEGACY=1
 # !! Contents within this block are managed by 'conda init' !!
+export CRYPTOGRAPHY_OPENSSL_NO_LEGACY=1
 __conda_setup="$('/opt/miniconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
 if [ $? -eq 0 ]; then
     eval "$__conda_setup"
@@ -31,8 +28,3 @@ else
 fi
 unset __conda_setup
 # <<< conda initialize <<<
-
-#fzf
-source "/usr/share/fzf/key-bindings.zsh"
-source "/usr/share/fzf/completion.zsh"
-

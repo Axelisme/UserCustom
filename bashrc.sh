@@ -9,9 +9,12 @@ alias ls='ls --color=auto'
 alias grep='grep --color=auto'
 PS1='[\u@\h \W]\$ '
 
+#Set up my custom command
+export USER_CUSTOM=$HOME/UserCustom
+[ -f $USER_CUSTOM/mybash.sh ] && source $USER_CUSTOM/mybash.sh
+
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
-export CRYPTOGRAPHY_OPENSSL_NO_LEGACY=1
 __conda_setup="$('/opt/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
 if [ $? -eq 0 ]; then
     eval "$__conda_setup"
@@ -24,10 +27,6 @@ else
 fi
 unset __conda_setup
 # <<< conda initialize <<<
-
-#Set up my custom command
-export USER_CUSTOM=$HOME/UserCustom
-[ -f $USER_CUSTOM/mybash.sh ] && source $USER_CUSTOM/mybash.sh
 
 #fzf
 source "/usr/share/fzf/key-bindings.bash"

@@ -1,10 +1,10 @@
 ####################################################
 # env
-source $USER_CUSTOM/env.sh
+source $USER_CUSTOM/rc/env.sh
 
 ####################################################
 # alias
-source $USER_CUSTOM/aliases.sh
+source $USER_CUSTOM/rc/aliases.sh
 
 ####################################################
 # nnn
@@ -14,7 +14,7 @@ export NNN_COLORS='1234'
 export NNN_FIFO=/tmp/nnn_${USER}_$$.fifo
 export NNN_OPENER=~/.config/nnn/plugins/nuke
 export NNN_COPIER=~/.config/nnn/plugins/.cbcp
-export NNN_PLUG='e:suedit;'
+export NNN_PLUG='e:suedit;U:getplugs;d:diffs;D:dups;'
 
 n ()
 {

@@ -1,6 +1,6 @@
 ###################################################
 # myset.sh
-source $USER_CUSTOM/myset.sh
+source $USER_CUSTOM/rc/myset.sh
 
 ###################################################
 # zsh

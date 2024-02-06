@@ -15,6 +15,8 @@ export NNN_FIFO=/tmp/nnn_${USER}_$$.fifo
 export NNN_OPENER=~/.config/nnn/plugins/nuke
 export NNN_COPIER=~/.config/nnn/plugins/.cbcp
 export NNN_PLUG='e:suedit;U:getplugs;d:diffs;D:dups;'
+export NNN_SSHFS='sshfs -C -o delay_connect,idmap=user,follow_symlinks'
+export NNN_BMS="M:$HOME/.config/nnn/mounts/;D:$HOME/Downloads/;H:$HOME/"
 
 n ()
 {

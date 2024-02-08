@@ -9,14 +9,13 @@ source $USER_CUSTOM/rc/aliases.sh
 ####################################################
 # nnn
 export GUI=0
-export NNN_OPTS="cEUxi"
+export NNN_OPTS="aAceEilRuUx"
 export NNN_COLORS='1234'
-export NNN_FIFO=/tmp/nnn_${USER}_$$.fifo
-export NNN_OPENER=~/.config/nnn/plugins/nuke
-export NNN_COPIER=~/.config/nnn/plugins/.cbcp
-export NNN_PLUG='e:suedit;U:getplugs;d:diffs;D:dups;'
-export NNN_SSHFS='sshfs -C -o delay_connect,idmap=user,follow_symlinks'
-export NNN_BMS="M:$HOME/.config/nnn/mounts/;D:$HOME/Downloads/;H:$HOME/"
+export NNN_OPENER=$HOME/.config/nnn/plugins/nuke
+export NNN_COPIER=$HOME/.config/nnn/plugins/.cbcp
+export NNN_PLUG='e:suedit;d:diffs;D:dups;u:umounttree;P:preview-tabbed'
+export NNN_SSHFS='sshfs -C -o idmap=user,follow_symlinks,cache_timeout=3600'
+export NNN_BMS="M:$HOME/.config/nnn/mounts/;P:$HOME/.config/nnn/plugins;D:$HOME/Downloads/;H:$HOME/"
 
 n ()
 {

@@ -12,7 +12,7 @@ setopt nonomatch
 setopt promptsubst
 
 # 加载zinit
-source $zinit
+source $ZINIT_PATH
 
 # 加载主题
 zinit light romkatv/powerlevel10k

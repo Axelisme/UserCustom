@@ -1,9 +1,11 @@
 set t_Co=256
 colo torte
 set laststatus=1
+set showcmd
+set expandtab
 syntax enable
 let &t_SI = "\e[6 q"
-let &t_EI = "\e[2 1"
+let &t_EI = "\e[2 q"
 " 行号
 set nu
 " 取消自動換行

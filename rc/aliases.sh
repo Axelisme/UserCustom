@@ -1,7 +1,7 @@
 # ls
 alias ls='ls --color=always'
 alias ll='ls -l'
-alias la='ls -la'
+alias la='ls -lA'
 # cp
 alias cp='cp -av'
 # mv

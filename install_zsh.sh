@@ -6,4 +6,4 @@ wget -O zsh_installer https://raw.githubusercontent.com/romkatv/zsh-bin/master/i
 bash ./zsh_installer
 wget -O zinit.sh https://raw.githubusercontent.com/zdharma-continuum/zinit/HEAD/scripts/install.sh
 bash ./zinit.sh
-cd ~
+cd - > /dev/null

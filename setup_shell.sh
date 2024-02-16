@@ -17,7 +17,7 @@ backup_apply() {                               # backup_apply command src dst fl
             fi
         fi
         mkdir -p $dst                           # create dst directory
-        for file in $(\ls $src); do
+        for file in $(\ls -A $src); do
             backup_apply $1 $src/$file $dst/$file
         done
     elif [[ -f $src ]]; then                    # if src is a file

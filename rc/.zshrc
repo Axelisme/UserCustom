@@ -7,7 +7,8 @@ fi
 
 #Set up my custom command
 export USER_CUSTOM=$HOME/UserCustom
-[ -f $USER_CUSTOM/myzsh.sh ] && source $USER_CUSTOM/myzsh.sh
+export ZINIT_PATH=/usr/share/zinit/zinit.zsh
+[[ -f $USER_CUSTOM/rc/myzsh.sh ]] && source $USER_CUSTOM/rc/myzsh.sh
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 if [[ `tput colors` == "256" ]]; then
@@ -16,22 +17,4 @@ else
     [[ ! -f $USER_CUSTOM/p10k/tty.zsh ]] || source $USER_CUSTOM/p10k/tty.zsh
 fi
 
-# >>> conda initialize >>>
-# !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$('/opt/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
-else
-    if [ -f "/opt/miniconda3/etc/profile.d/conda.sh" ]; then
-        . "/opt/miniconda3/etc/profile.d/conda.sh"
-    else
-        export PATH="/opt/miniconda3/bin:$PATH"
-    fi
-fi
-unset __conda_setup
-# <<< conda initialize <<<
-
-#fzf
-source "/usr/share/fzf/key-bindings.zsh"
-source "/usr/share/fzf/completion.zsh"
-
+type zoxide > /dev/null && eval "$(zoxide init zsh)"

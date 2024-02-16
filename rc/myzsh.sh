@@ -1,6 +1,6 @@
 ###################################################
 # myset.sh
-source $USER_CUSTOM/myset.sh
+source $USER_CUSTOM/rc/myset.sh
 
 ###################################################
 # zsh
@@ -12,7 +12,7 @@ setopt nonomatch
 setopt promptsubst
 
 # 加载zinit
-source /usr/share/zinit/zinit.zsh
+source $ZINIT_PATH
 
 # 加载主题
 zinit light romkatv/powerlevel10k

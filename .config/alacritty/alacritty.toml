@@ -1,0 +1,11 @@
+import = ["/home/axel/.config/alacritty/theme/custom.toml"]
+
+[font]
+size = 12
+
+[font.normal]
+family = "hack"
+style = "Regular"
+
+[window]
+opacity = 0.7

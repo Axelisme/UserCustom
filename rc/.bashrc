@@ -18,3 +18,4 @@ PS1="\[$braket\][ \[$workdir\]\w \[$braket\]] \[$gitbranch\]\$(parse_git_branch)
 export USER_CUSTOM=$HOME/UserCustom
 [[ -f $USER_CUSTOM/rc/mybash.sh ]] && source $USER_CUSTOM/rc/mybash.sh
 
+

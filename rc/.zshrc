@@ -16,3 +16,5 @@ if [[ `tput colors` == "256" ]]; then
 else
     [[ ! -f $USER_CUSTOM/p10k/tty.zsh ]] || source $USER_CUSTOM/p10k/tty.zsh
 fi
+
+

@@ -34,9 +34,10 @@ backup_apply() {                               # backup_apply command src dst fl
 }
 
 UserCustom=$(dirname "$0")
-backup_apply cp $UserCustom/rc/.bashrc ~/.bashrc # setup bashrc
-backup_apply cp $UserCustom/rc/.zshrc  ~/.zshrc   # setup zshrc
-backup_apply ln $UserCustom/rc/.vimrc  ~/.vimrc   # setup vimrc
+backup_apply cp $UserCustom/rc/.bashrc ~/.bashrc    # setup bashrc
+backup_apply cp $UserCustom/rc/.zshrc  ~/.zshrc     # setup zshrc
+backup_apply ln $UserCustom/rc/.vimrc  ~/.vimrc     # setup vimrc
 backup_apply ln $UserCustom/.config    ~/.config    # setup config
+backup_apply cp $UserCustom/.ssh       ~/.ssh       # setup ssh
 
 unset backup_ln

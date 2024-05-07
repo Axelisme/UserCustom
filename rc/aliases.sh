@@ -12,3 +12,5 @@ alias mv='mv -v'
 alias grep='grep --color=auto'
 # zxoide
 alias cd='z'
+# mamba
+alias mamba='micromamba'

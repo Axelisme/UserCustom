@@ -39,5 +39,6 @@ backup_apply cp $UserCustom/rc/.zshrc  ~/.zshrc     # setup zshrc
 backup_apply ln $UserCustom/rc/.vimrc  ~/.vimrc     # setup vimrc
 backup_apply ln $UserCustom/.config    ~/.config    # setup config
 backup_apply cp $UserCustom/.ssh       ~/.ssh       # setup ssh
+backup_apply ln $UserCustom/.tmux.conf ~/.tmux.conf # setup tmux
 
 unset backup_ln

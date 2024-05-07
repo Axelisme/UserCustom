@@ -8,3 +8,5 @@ alias cp='cp -av'
 alias mv='mv -v'
 # grep
 alias grep='grep --color=auto'
+# mamba
+alias mamba='micromamba'

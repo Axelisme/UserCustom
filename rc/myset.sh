@@ -9,7 +9,7 @@ source $USER_CUSTOM/rc/aliases.sh
 ####################################################
 # nnn
 export GUI=0
-export NNN_OPTS="aceEruUx"
+export NNN_OPTS="aceEuUx"
 export NNN_COLORS='1234'
 export NNN_OPENER=$HOME/.config/nnn/plugins/nuke
 export NNN_COPIER=$HOME/.config/nnn/plugins/.cbcp

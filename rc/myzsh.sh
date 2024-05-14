@@ -3,6 +3,10 @@
 source $USER_CUSTOM/rc/myset.sh
 
 ###################################################
+
+# zxoide
+alias cd='z'
+
 # zsh
 # 移除重复的命令历史
 setopt HIST_IGNORE_ALL_DUPS

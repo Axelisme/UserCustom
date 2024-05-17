@@ -1,2 +1,2 @@
-NEED_PACKAGE='xclip nsxiv advcpmv tabbed alacritty kitty nnn tmux zoxide miniconda3 gvim git lsd'
+NEED_PACKAGE='xclip nsxiv advcpmv nnn tmux zoxide gvim git lsd fzf'
 paru -S --needed $NEED_PACKAGE

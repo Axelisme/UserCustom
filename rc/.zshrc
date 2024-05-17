@@ -7,7 +7,6 @@ fi
 
 #Set up my custom command
 export USER_CUSTOM=$HOME/UserCustom
-export ZINIT_PATH=/usr/share/zinit/zinit.zsh
 [[ -f $USER_CUSTOM/rc/myzsh.sh ]] && source $USER_CUSTOM/rc/myzsh.sh
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
@@ -16,5 +15,3 @@ if [[ `tput colors` == "256" ]]; then
 else
     [[ ! -f $USER_CUSTOM/p10k/tty.zsh ]] || source $USER_CUSTOM/p10k/tty.zsh
 fi
-
-type zoxide > /dev/null && eval "$(zoxide init zsh)"

@@ -9,8 +9,10 @@ ZINIT_HOME=/usr/share/zinit
 # Download Zinit, if it's not there yet
 if [ ! -d "$ZINIT_HOME" ]; then
    ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
-   mkdir -p "$(dirname $ZINIT_HOME)"
-   git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
+   if [ ! -d "$ZINIT_HOME" ]; then
+      mkdir -p "$(dirname $ZINIT_HOME)"
+      git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
+   fi
 fi
 
 
@@ -28,7 +30,6 @@ zinit light zdharma-continuum/fast-syntax-highlighting
 zinit snippet OMZP::git
 zinit snippet OMZP::sudo
 zinit snippet OMZP::extract
-# zinit snippet OMZL::key-bindings.zsh
 zinit snippet OMZP::command-not-found
 
 # Load completions

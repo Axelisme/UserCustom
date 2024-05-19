@@ -20,7 +20,7 @@ fi
 source $ZINIT_HOME/zinit.zsh
 
 # 加载主题
-zinit ice depth=1; zinit light romkatv/powerlevel10k
+zinit light romkatv/powerlevel10k
 
 # 插件
 zinit light Aloxaf/fzf-tab
@@ -30,6 +30,9 @@ zinit light zdharma-continuum/fast-syntax-highlighting
 zinit snippet OMZP::git
 zinit snippet OMZP::sudo
 zinit snippet OMZP::extract
+zinit snippet OMZL::completion.zsh
+# zinit snippet OMZL::history.zsh
+# zinit snippet OMZL::key-bindings.zsh
 zinit snippet OMZP::command-not-found
 
 # Load completions

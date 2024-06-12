@@ -74,14 +74,21 @@ type fzf > /dev/null && eval "$(fzf --zsh)"
 type zoxide > /dev/null && eval "$(zoxide init zsh)" && alias cd='z'
 
 
-# Prompt
-if type tput > /dev/null && [[ `tput colors` == "256" ]]; then
-   eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/main.toml)"
-else
-   eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/tty.toml)"
-fi
-
-
 # Load completions
 autoload -Uz compinit && compinit
 zinit cdreplay -q
+
+
+# Prompt
+if type oh-my-posh > /dev/null; then
+   if type tput > /dev/null && [[ `tput colors` == "256" ]]; then
+      eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/main.toml)"
+   else
+      eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/tty.toml)"
+   fi
+else
+   setopt PROMPT_SUBST
+   export PROMPT=$FALLBACK_PROMPT
+fi
+
+

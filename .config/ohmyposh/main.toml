@@ -1,0 +1,106 @@
+#:schema https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json
+
+version = 2
+final_space = true
+console_title_template = '{{ .Shell }} in {{ .Folder }}'
+shell_integration = true
+
+[[blocks]]
+type = 'prompt'
+alignment = 'left'
+
+[[blocks.segments]]
+type = 'os'
+style = 'diamond'
+background_templates = [
+  "{{ if gt .Code 0 }}#cc2222{{ end }}",
+  "{{ if eq .Code 0 }}#d3d7cf{{ end }}",
+]
+foreground = '#000000'
+
+[[blocks.segments]]
+type = 'path'
+style = 'powerline'
+background = '#3465a4'
+foreground = '#e4e4e4'
+powerline_symbol = "\ue0b0"
+template = " \uf07c {{ .Path }} "
+
+[blocks.segments.properties]
+home_icon = '~'
+style = 'full'
+
+[[blocks.segments]]
+type = 'git'
+style = 'powerline'
+background = '#4e9a06'
+foreground = "#000000"
+powerline_symbol = "\ue0b0"
+template = ' {{ .HEAD }}{{ if or (.Working.Changed) (.Staging.Changed) }}*{{ end }} <cyan>{{ if gt .Behind 0 }}⇣{{ end }}{{ if gt .Ahead 0 }}⇡{{ end }}</>'
+
+[blocks.segments.properties]
+branch_icon = ''
+commit_icon = '@'
+fetch_stash_count = true
+fetch_status = true
+fetch_upstream_icon = true
+
+[[blocks]]
+type = 'rprompt'
+overflow = 'hidden'
+
+[[blocks.segments]]
+type = 'executiontime'
+style = 'powerline'
+background = "#c4a000"
+foreground = "#000000"
+leading_powerline_symbol = "\ue0b2"
+invert_powerline = true
+template = " {{ .FormattedMs }} \uf252 "
+
+[blocks.segments.properties]
+threshold = 1000
+
+[[blocks.segments]]
+type = 'root'
+style = 'powerline'
+background = "#ffff66"
+foreground = "#111111"
+leading_powerline_symbol = "\ue0b2"
+invert_powerline = true
+template = " \uf0ad "
+
+[[blocks.segments]]
+type = 'python'
+style = 'powerline'
+background = "#FFDE57"
+foreground = "#111111"
+leading_powerline_symbol = "\ue0b2"
+invert_powerline = true
+template = " {{ if .Error }}{{ .Error }}{{ else }}{{ if .Venv }}{{ .Venv }} {{ end }}{{ end }}"
+
+[blocks.segments.properties]
+home_enabled = true
+fetch_version = false
+
+[[blocks]]
+type = 'prompt'
+alignment = 'left'
+newline = true
+
+[[blocks.segments]]
+type = 'text'
+style = 'plain'
+background = 'transparent'
+foreground = 'green'
+template = '❯'
+
+[transient_prompt]
+background = 'transparent'
+foreground = 'green'
+template = '❯ '
+
+[secondary_prompt]
+background = 'transparent'
+foreground = 'green'
+template = '❯❯ '

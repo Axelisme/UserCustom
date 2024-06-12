@@ -1,3 +1,18 @@
+# fallback ps1
+parse_ip() {
+    ip route get 1.1.1.1 | awk -F"src " 'NR == 1{ split($2, a," ");print a[1]}'
+}
+parse_git_branch() {
+    git branch 2> /dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/ (\1)/'
+}
+braket=$(tput setaf 82)
+workdir=$(tput setaf 33)
+gitbranch=$(tput setaf 226)
+reset=$(tput sgr0)
+FALLBACK_PS1="\[$braket\][\$(parse_ip)\[$braket\]]:\[$workdir\]\w\[$gitbranch\]\$(parse_git_branch)\n\u\[$reset\]$ "
+NEWLINE=$'\n'
+FALLBACK_PROMPT="%F{82}[\$(parse_ip)]:%F{33}%~%F{226}\$(parse_git_branch)$NEWLINE%n%f\$ "
+
 ####################################################
 # env
 source $USER_CUSTOM/rc/env.sh

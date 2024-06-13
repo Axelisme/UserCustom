@@ -80,8 +80,8 @@ zinit cdreplay -q
 
 
 # Prompt
-if type oh-my-posh > /dev/null 2>&1; then
-   if type tput > /dev/null 2>&1 && [[ `tput colors` == "256" ]]; then
+if type oh-my-posh > /dev/null; then
+   if type tput > /dev/null && [[ `tput colors` == "256" ]]; then
       eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/main.toml)"
    else
       eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/tty.toml)"

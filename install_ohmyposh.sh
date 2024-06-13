@@ -26,7 +26,6 @@ validate_dependency() {
 
 validate_dependencies() {
     validate_dependency curl
-    validate_dependency unzip
     validate_dependency realpath
     validate_dependency dirname
 }

@@ -20,11 +20,11 @@ source $ZINIT_HOME/zinit.zsh
 
 
 # 插件
-type fzf > /dev/null && zinit light Aloxaf/fzf-tab
+type fzf > /dev/null 2>&1 && zinit light Aloxaf/fzf-tab
 zinit light zsh-users/zsh-completions
 zinit light zsh-users/zsh-autosuggestions
 zinit light zdharma-continuum/fast-syntax-highlighting
-type git > /dev/null && zinit snippet OMZP::git
+type git > /dev/null 2>&1 && zinit snippet OMZP::git
 zinit snippet OMZP::sudo
 zinit snippet OMZP::extract
 zinit snippet OMZL::completion.zsh
@@ -63,15 +63,15 @@ setopt hist_find_no_dups
 zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
 zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 zstyle ':completion:*' menu no
-if type fzf > /dev/null; then
+if type fzf > /dev/null 2>&1; then
    zstyle ':fzf-tab:complete:cd:*' fzf-preview 'ls --color $realpath'
    zstyle ':fzf-tab:complete:__zoxide_z:*' fzf-preview 'ls --color $realpath'
 fi
 
 
 # Shell integrations
-type fzf > /dev/null && eval "$(fzf --zsh)"
-type zoxide > /dev/null && eval "$(zoxide init zsh)" && alias cd='z'
+type fzf > /dev/null 2>&1 && eval "$(fzf --zsh)"
+type zoxide > /dev/null 2>&1 && eval "$(zoxide init zsh)" && alias cd='z'
 
 
 # Load completions
@@ -80,8 +80,8 @@ zinit cdreplay -q
 
 
 # Prompt
-if type oh-my-posh > /dev/null; then
-   if type tput > /dev/null && [[ `tput colors` == "256" ]]; then
+if type oh-my-posh 2> /dev/null 2>&1; then
+   if type tput > /dev/null 2>&1 && [[ `tput colors` == "256" ]]; then
       eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/ssh.toml)"
    else
       eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/tty.toml)"

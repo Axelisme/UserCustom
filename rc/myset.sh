@@ -3,7 +3,7 @@ parse_ip() {
     ip route get 1.1.1.1 | awk -F"src " 'NR == 1{ split($2, a," ");print a[1]}'
 }
 parse_git_branch() {
-    git branch 2> /dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/ (\1)/'
+    git branch 2> /dev/null 2>&1 | sed -e '/^[^*]/d' -e 's/* \(.*\)/ (\1)/'
 }
 braket=$(tput setaf 82)
 workdir=$(tput setaf 33)
@@ -23,7 +23,7 @@ source $USER_CUSTOM/rc/aliases.sh
 
 ####################################################
 # nnn
-if type nnn > /dev/null; then
+if type nnn > /dev/null 2>&1; then
     if [ -n "$DISPLAY" ]; then
         export GUI=1
     else
@@ -47,7 +47,7 @@ if type nnn > /dev/null; then
         \nnn "$@"
         if [ -f "$NNN_TMPFILE" ]; then
                 . "$NNN_TMPFILE"
-                rm -f "$NNN_TMPFILE" > /dev/null
+                rm -f "$NNN_TMPFILE" > /dev/null 2>&1
         fi
     }
 fi

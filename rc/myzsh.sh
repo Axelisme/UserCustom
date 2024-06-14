@@ -18,6 +18,8 @@ fi
 # 加载zinit
 source $ZINIT_HOME/zinit.zsh
 
+# Load completions
+autoload -Uz compinit && compinit
 
 # 插件
 type fzf > /dev/null && zinit light Aloxaf/fzf-tab
@@ -30,6 +32,7 @@ zinit snippet OMZP::extract
 zinit snippet OMZL::completion.zsh
 # zinit snippet OMZL::key-bindings.zsh
 zinit snippet OMZP::command-not-found
+
 
 
 # Keybindings
@@ -70,13 +73,7 @@ fi
 
 
 # Shell integrations
-type fzf > /dev/null && eval "$(fzf --zsh)"
 type zoxide > /dev/null && eval "$(zoxide init zsh)" && alias cd='z'
-
-
-# Load completions
-autoload -Uz compinit && compinit
-zinit cdreplay -q
 
 
 # Prompt

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # recursive copy, if file exists, backup it
 backup_apply() {                               # backup_apply command src dst flag
@@ -29,6 +29,7 @@ backup_apply() {                               # backup_apply command src dst fl
             echo "Backup $dst"
             mv --backup=numbered $dst $dst.bak  # backup dst
         fi
+        echo "Apply $cmd on $dst"
         $cmd $flag $src $dst
     fi
 }

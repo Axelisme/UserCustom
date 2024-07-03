@@ -3,7 +3,6 @@
 source $USER_CUSTOM/rc/myset.sh
 
 ###################################################
-
 # ZINIT_HOME
 ZINIT_HOME=/usr/share/zinit
 # Download Zinit, if it's not there yet

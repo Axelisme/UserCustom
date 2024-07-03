@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 [[ -f $HOME/.bashrc ]] && conda init bash;
 [[ -f $HOME/.zshrc ]] && conda init zsh;

@@ -2,6 +2,10 @@
 source $USER_CUSTOM/rc/env.sh
 
 ####################################################
+# If not running interactively, don't do anything
+[[ $- != *i* ]] && return
+
+####################################################
 # alias
 source $USER_CUSTOM/rc/aliases.sh
 

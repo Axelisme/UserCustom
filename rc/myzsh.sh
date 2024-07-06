@@ -3,6 +3,10 @@
 source $USER_CUSTOM/rc/myset.sh
 
 ###################################################
+# If not running interactively, don't do anything
+[[ $- != *i* ]] && return
+
+###################################################
 # ZINIT_HOME
 ZINIT_HOME=/usr/share/zinit
 # Download Zinit, if it's not there yet

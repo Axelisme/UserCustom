@@ -34,7 +34,7 @@ backup_apply() {                               # backup_apply command src dst fl
     fi
 }
 
-UserCustom=$(dirname "$0")
+UserCustom=$(dirname $(dirname "$0"))
 backup_apply cp $UserCustom/home/.bashrc ~/.bashrc  # setup bashrc
 backup_apply cp $UserCustom/home/.zshrc  ~/.zshrc   # setup zshrc
 backup_apply ln $UserCustom/home/.vimrc  ~/.vimrc   # setup vimrc

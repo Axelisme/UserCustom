@@ -32,7 +32,8 @@ validate_dependencies() {
 
 validate_install_directory() {
     if [ ! -d "$install_dir" ]; then
-        error "Directory ${install_dir} does not exist, set a different directory and try again."
+        warn "Directory ${install_dir} does not exist, create one."
+        mkdir -p $install_dir
     fi
 
     # check if the directory is in the PATH

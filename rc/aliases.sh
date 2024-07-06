@@ -1,5 +1,6 @@
 # nnn
 type nnn > /dev/null 2>&1 && alias N='sudo -E nnn'
+
 # ls
 if type tput > /dev/null 2>&1 && [[ `tput colors` == "256" ]] && type lsd > /dev/null 2>&1; then
     alias ls='lsd'
@@ -10,10 +11,21 @@ else
     alias ll='ls -l'
     alias la='ls -lA'
 fi
+
+# neovim
+type nvim > /dev/null 2>&1 && alias vim='nvim'
+
 # cp & mv
-alias cp='cp -av'
-alias mv='mv -v'
+if type cpg > /dev/null 2>&1; then
+    alias cp='advcp -ag'
+    alias mv='advmv -g'
+else
+    alias cp='cp -av'
+    alias mv='mv -v'
+fi
+
 # grep
 alias grep='grep --color=auto'
+
 # mamba
-type micromamba > /dev/null 2>&1 && alias mamba='micromamba'
+type micromamba >> /dev/null 2>&1 && alias mamba='micromamba'

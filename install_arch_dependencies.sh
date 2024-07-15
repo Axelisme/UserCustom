@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-NEED_PACKAGE='xclip nnn zoxide git lsd fzf oh-my-posh-bin neovim'
+NEED_PACKAGE='xclip nnn zoxide git lsd fzf oh-my-posh-bin neovim zinit'
 
 if type paru > /dev/null 2>&1; then
     paru -S --needed $NEED_PACKAGE;

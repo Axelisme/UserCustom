@@ -10,6 +10,7 @@ else
   export VISUAL=vim
   export EDITOR=vim
 fi
+
 # asign python cache dir to /tmp
 export PYTHONPYCACHEPREFIX=/tmp
 # use multithread to unzip xz file

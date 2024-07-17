@@ -4,7 +4,7 @@
 
 ## 步驟 1: 安裝 Arch Linux 依賴
 
-首先，您需要執行 `install_arch_dependencies.sh` 腳本來安裝一些必要的軟體包。這些包括 `xclip`、`nnn`、`zoxide`、`git`、`lsd`、`fzf`、`oh-my-posh-bin`、`neovim`、`zinit` 等。
+首先，您需要執行 `install_arch_dependencies.sh` 腳本來安裝一些必要的軟體包。這些包括 `xclip`、`nnn`、`zoxide`、`git`、`lsd`、`fzf`、`fd`、`oh-my-posh-bin`、`neovim`、`zinit` 等。
 
 ```shell
 ./install_arch_dependencies.sh

@@ -50,3 +50,15 @@ if type nnn > /dev/null; then
         fi
     }
 fi
+
+####################################################
+# fzf
+if type fzf > /dev/null; then
+    if type fd > /dev/null; then
+        export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude  .git --ignore-file ~/.gitignore'
+    fi
+
+    if type bat > /dev/null; then
+        export FZF_DEFAULT_OPTS='--preview-window=right,40% --preview="bat -n --color=always {}"'
+    fi
+fi

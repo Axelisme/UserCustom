@@ -66,12 +66,12 @@ setopt hist_find_no_dups
 
 
 # Completion styling
-zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
+# zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
 zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 zstyle ':completion:*' menu no
 if type fzf > /dev/null; then
-   zstyle ':fzf-tab:complete:cd:*' fzf-preview 'ls --color $realpath'
-   zstyle ':fzf-tab:complete:__zoxide_z:*' fzf-preview 'ls --color $realpath'
+     zstyle ':fzf-tab:*' continuous-trigger '/'
+     zstyle ':fzf-tab:complete:*' fzf-bindings 'shift-tab:toggle+down,ctrl-a:toggle-all'
 fi
 
 

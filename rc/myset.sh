@@ -55,10 +55,8 @@ fi
 # fzf
 if type fzf > /dev/null; then
     if type fd > /dev/null; then
-        export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude  .git --ignore-file ~/.gitignore'
+        export FZF_DEFAULT_COMMAND='fd --type f --hidden --color=always --follow --exclude  .git --ignore-file ~/.gitignore'
     fi
 
-    if type bat > /dev/null; then
-        export FZF_DEFAULT_OPTS='--preview-window=right,40% --preview="bat -n --color=always {}"'
-    fi
+    export FZF_DEFAULT_OPTS='--multi --ansi'
 fi

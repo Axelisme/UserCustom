@@ -11,11 +11,11 @@ source $USER_CUSTOM/rc/myset.sh
 ZINIT_HOME=/usr/share/zinit
 # Download Zinit, if it's not there yet
 if [ ! -d "$ZINIT_HOME" ]; then
-   ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
-   if [ ! -d "$ZINIT_HOME" ]; then
-      mkdir -p "$(dirname $ZINIT_HOME)"
-      git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
-   fi
+  ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
+  if [ ! -d "$ZINIT_HOME" ]; then
+    mkdir -p "$(dirname $ZINIT_HOME)"
+    git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
+  fi
 fi
 
 # 加载zinit
@@ -70,8 +70,8 @@ setopt hist_find_no_dups
 zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 zstyle ':completion:*' menu no
 if type fzf > /dev/null; then
-     zstyle ':fzf-tab:*' continuous-trigger '/'
-     zstyle ':fzf-tab:complete:*' fzf-bindings 'shift-tab:toggle+down,ctrl-a:toggle-all'
+  zstyle ':fzf-tab:*' continuous-trigger '/'
+  zstyle ':fzf-tab:complete:*' fzf-bindings 'shift-tab:toggle+down,ctrl-a:toggle-all'
 fi
 
 
@@ -81,14 +81,14 @@ type zoxide > /dev/null && eval "$(zoxide init zsh)" && alias cd='z'
 
 # Prompt
 if type oh-my-posh > /dev/null; then
-   if type tput > /dev/null && [[ `tput colors` == "256" ]]; then
-      eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/main.toml)"
-   else
-      eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/tty.toml)"
-   fi
+  if type tput > /dev/null && [[ `tput colors` == "256" ]]; then
+    eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/main.toml)"
+  else
+    eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/tty.toml)"
+  fi
 else
-   setopt PROMPT_SUBST
-   export PROMPT=$FALLBACK_PROMPT
+  setopt PROMPT_SUBST
+  export PROMPT=$FALLBACK_PROMPT
 fi
 
 

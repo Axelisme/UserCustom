@@ -13,10 +13,10 @@ set nowrap
 " 相对行号
 set relativenumber
 augroup relative_number
-    autocmd!
-    autocmd BufLeave,FocusLost,InsertEnter   * set norelativenumber
-    autocmd BufEnter,FocusGained,InsertLeave * set relativenumber
-    autocmd BufEnter * :syntax sync fromstart
+  autocmd!
+  autocmd BufLeave,FocusLost,InsertEnter   * set norelativenumber
+  autocmd BufEnter,FocusGained,InsertLeave * set relativenumber
+  autocmd BufEnter * :syntax sync fromstart
 augroup END
 " 行号背景
 hi LineNr ctermbg=235 

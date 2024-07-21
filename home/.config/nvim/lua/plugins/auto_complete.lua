@@ -74,6 +74,6 @@ return {
   },
 
   -- disable snippets
-  { "garymjr/nvim-snippets", enabled = false },
-  { "hrsh7th/cmp-nvim-lsp", enabled = false },
+  { "garymjr/nvim-snippets", enabled = true },
+  { "hrsh7th/cmp-nvim-lsp", enabled = true },
 }

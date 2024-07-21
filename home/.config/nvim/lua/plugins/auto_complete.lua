@@ -2,15 +2,14 @@ return {
   -- copilot
   {
     "zbirenbaum/copilot.lua",
+    -- enabled = false,
     event = "InsertEnter",
-    -- lazy = false,
     cmd = "Copilot",
     build = ":Copilot auth",
     opts = {
       suggestion = {
         enabled = true,
         auto_trigger = true,
-        hide_during_completion = false,
         keymap = {
           accept = "<C-Up>",
           accept_word = "<C-Right>",
@@ -61,10 +60,11 @@ return {
   },
 
   -- override source of nvim-cmp for above line menu
+  { "hrsh7th/nvim-cmp", enabled = false },
   {
     "llllvvuu/nvim-cmp",
     branch = "feat/above",
-    -- enabled = false,
+    enabled = true,
     opts = {
       view = {
         entries = { vertical_positioning = "above", follow_cursor = true },
@@ -72,8 +72,4 @@ return {
       experimental = { ghost_text = false },
     },
   },
-
-  -- disable snippets
-  { "garymjr/nvim-snippets", enabled = true },
-  { "hrsh7th/cmp-nvim-lsp", enabled = true },
 }

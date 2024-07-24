@@ -60,7 +60,21 @@ return {
   },
 
   -- override source of nvim-cmp for above line menu
-  { "hrsh7th/nvim-cmp", enabled = false },
+  {
+    "hrsh7th/nvim-cmp",
+    enabled = false,
+    ---@param opts cmp.ConfigSchema
+    opts = function(_, opts)
+      local cmp = require("cmp")
+      opts.preselect = cmp.PreselectMode.None
+      opts.completion = { completeopt = "menu,menuone,preview,noinsert,noselect" }
+      opts.experimental.ghost_text = false
+
+      opts.mapping = vim.tbl_extend("force", opts.mapping, {
+        ["<CR>"] = cmp.mapping.confirm({ select = false }),
+      })
+    end,
+  },
   {
     "llllvvuu/nvim-cmp",
     branch = "feat/above",
@@ -69,7 +83,6 @@ return {
       view = {
         entries = { vertical_positioning = "above", follow_cursor = true },
       },
-      experimental = { ghost_text = false },
     },
   },
 }

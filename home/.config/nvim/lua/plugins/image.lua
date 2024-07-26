@@ -2,11 +2,12 @@ local use_kitty = os.getenv("KITTY_WINDOW_ID") ~= nil
 
 return {
   { "benlubas/image-save.nvim", cmd = "SaveImage" },
+  { "leafo/magick", lazy = true },
   {
     "3rd/image.nvim",
     -- enabled = false,
     lazy = not use_kitty,
-    dependencies = { "https://github.com/leafo/magick" },
+    dependencies = { "leafo/magick" },
     opts = {
       backend = "kitty",
       integrations = {

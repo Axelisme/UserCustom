@@ -33,7 +33,10 @@ if type nnn >/dev/null; then
   export NNN_SSHFS='sshfs -C -o delay_connect,idmap=user,follow_symlinks,auto_cache,cache_timeout=3600'
   export NNN_BMS="M:$HOME/.config/nnn/mounts/;P:$HOME/.config/nnn/plugins;D:$HOME/Downloads/;H:$HOME/"
 
-  n() {
+  alias nnn="nnn_cd"
+  alias N="sudo nnn_cd"
+
+  nnn_cd() {
     if [[ "${NNNLVL:-0}" -ge 1 ]]; then
       echo "nnn is already running"
       return

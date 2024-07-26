@@ -19,10 +19,22 @@ background_templates = [
 foreground = '#000000'
 
 [[blocks.segments]]
-type = 'path'
+type = 'ipify'
 style = 'powerline'
+powerline_symbol = "\ue0b0"
 background = '#333333'
 foreground = '#d3d7cf'
+template = ' {{ .IP }} '
+
+[blocks.segments.properties]
+cache_timeout = 5
+http_timeout = 1_000
+
+[[blocks.segments]]
+type = 'path'
+style = 'powerline'
+background = '#3465a4'
+foreground = '#ffffff'
 powerline_symbol = "\ue0b0"
 template = " \uf07c {{ .Path }} "
 

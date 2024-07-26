@@ -1,6 +1,3 @@
-# nnn
-type nnn >/dev/null 2>&1 && alias N='sudo -E nnn'
-
 # ls
 if type tput >/dev/null 2>&1 && [[ $(tput colors) == "256" ]] && type lsd >/dev/null 2>&1; then
   alias ls='lsd'

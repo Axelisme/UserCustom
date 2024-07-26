@@ -29,3 +29,6 @@ alias grep='grep --color=auto'
 
 # mamba
 type micromamba >/dev/null && alias mamba='micromamba'
+
+# kitty
+[[ -n $KITTY_WINDOW_ID ]] && alias ssh='kitty +kitten ssh'

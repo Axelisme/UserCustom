@@ -13,6 +13,14 @@ return {
               vim.cmd("Neotree reveal")
             end
           end,
+          ["."] = function(state)
+            local current_node = state.tree:get_node() -- this is the current node
+            local path = current_node:get_id() -- this gives you the path
+
+            if vim.fn.isdirectory(path) == 1 then
+              vim.cmd("cd " .. path)
+            end
+          end,
         },
       },
     },

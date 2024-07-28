@@ -2,6 +2,7 @@ return {
   {
     -- let mamba env can be find by venv-selector.nvim
     "linux-cultist/venv-selector.nvim",
+    ft = "python",
     opts = {
       settings = {
         search = {

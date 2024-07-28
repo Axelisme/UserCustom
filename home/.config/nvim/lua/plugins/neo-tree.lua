@@ -2,6 +2,12 @@ return {
   {
     "nvim-neo-tree/neo-tree.nvim",
     opts = {
+      filesystem = {
+        bind_to_cwd = true,
+        filtered_items = {
+          force_visible_in_empty_folder = true,
+        },
+      },
       window = {
         mappings = {
           ["<Tab>"] = function(state)
@@ -20,6 +26,14 @@ return {
             if vim.fn.isdirectory(path) == 1 then
               vim.cmd("cd " .. path)
             end
+          end,
+        },
+      },
+      event_handlers = {
+        {
+          event = "neo_tree_buffer_enter",
+          handler = function(_)
+            vim.opt.relativenumber = true
           end,
         },
       },

@@ -3,3 +3,6 @@
 -- Add any additional keymaps here
 
 local map = LazyVim.safe_keymap_set
+
+-- Let <C-l> work in terminal mode
+vim.keymap.del("t", "<C-l>")

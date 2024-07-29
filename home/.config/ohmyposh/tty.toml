@@ -12,7 +12,7 @@ alignment = 'left'
 type = 'path'
 style = 'plain'
 background = 'transparent'
-foreground = 'blue'
+foreground = 'yellow'
 
 [blocks.segments.properties]
 style = 'full'
@@ -52,20 +52,20 @@ type = 'text'
 style = 'plain'
 foreground_templates = [
   "{{if gt .Code 0}}red{{end}}",
-  "{{if eq .Code 0}}magenta{{end}}",
+  "{{if eq .Code 0}}lightGreen{{end}}",
 ]
 background = 'transparent'
-template = '>'
+template = '{{.UserName}} >'
 
 [transient_prompt]
 foreground_templates = [
   "{{if gt .Code 0}}red{{end}}",
-  "{{if eq .Code 0}}magenta{{end}}",
+  "{{if eq .Code 0}}lightGreen{{end}}",
 ]
 background = 'transparent'
-template = '> '
+template = '{{.UserName}} >'
 
 [secondary_prompt]
-foreground = 'magenta'
+foreground = 'lightGreen'
 background = 'transparent'
 template = '>> '

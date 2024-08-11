@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-NEED_PACKAGE='xsel nnn git lazygit nodejs advcpmv ripgrep lsd fzf fd oh-my-posh-bin neovim zinit nodejs'
+NEED_PACKAGE='xsel nnn git lazygit nodejs advcpmv ripgrep lsd fzf fd oh-my-posh-bin neovim zinit'
 
 if type paru >/dev/null 2>&1; then
 	paru -S --needed $NEED_PACKAGE

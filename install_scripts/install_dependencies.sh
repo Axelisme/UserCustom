@@ -3,6 +3,13 @@
 mkdir -p ~/.local/bin
 cd ~/.local/bin
 
+# neovim
+if ! command -v nvim &> /dev/null; then
+    echo "installing neovim"
+    wget -O nvim.tar.gz https://github.com/neovim/neovim/releases/download/nightly/nvim-linux64.tar.gz
+    tar zxvf nvim.tar.gz -C ~/.local --strip-components=1
+    rm nvim.tar.gz
+fi
 
 # lsd
 if ! command -v lsd &> /dev/null; then

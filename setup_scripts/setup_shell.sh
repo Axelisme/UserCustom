@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-UserCustom=$(dirname "$0")
+UserCustom=$(dirname $(dirname $(realpath "$0")))
 
 cp -b $UserCustom/home/.bashrc ~/.bashrc # setup bashrc
 cp -b $UserCustom/home/.zshrc ~/.zshrc   # setup zshrc

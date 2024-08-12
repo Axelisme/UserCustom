@@ -25,11 +25,11 @@ source $ZINIT_HOME/zinit.zsh
 autoload -Uz compinit && compinit
 
 # 插件
-type fzf >/dev/null && zinit light Aloxaf/fzf-tab
+type fzf >/dev/null 2>&1 && zinit light Aloxaf/fzf-tab
 zinit light zsh-users/zsh-completions
 zinit light zsh-users/zsh-autosuggestions
 zinit light zdharma-continuum/fast-syntax-highlighting
-type git >/dev/null && zinit snippet OMZP::git
+type git >/dev/null 2>&1 && zinit snippet OMZP::git
 zinit snippet OMZP::sudo
 zinit snippet OMZP::extract
 zinit snippet OMZL::completion.zsh
@@ -74,8 +74,8 @@ fi
 # type zoxide > /dev/null && eval "$(zoxide init zsh)" && alias cd='z'
 
 # Prompt
-if type oh-my-posh >/dev/null; then
-  if type tput >/dev/null && [[ $(tput colors) == "256" ]]; then
+if type oh-my-posh >/dev/null 2>&1; then
+  if type tput >/dev/null 2>&1 && [[ $(tput colors) == "256" ]]; then
     if [[ -v SSH_TTY ]]; then
       eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/ssh.toml)"
     else

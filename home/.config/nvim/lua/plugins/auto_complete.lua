@@ -1,3 +1,5 @@
+local cmp = require("cmp")
+
 return {
   -- copilot
   {
@@ -63,17 +65,22 @@ return {
   {
     "hrsh7th/nvim-cmp",
     enabled = false,
-    ---@param opts cmp.ConfigSchema
-    opts = function(_, opts)
-      local cmp = require("cmp")
-      opts.preselect = cmp.PreselectMode.None
-      opts.completion = { completeopt = "menu,menuone,preview,noinsert,noselect" }
-      opts.experimental.ghost_text = false
-
-      opts.mapping = vim.tbl_extend("force", opts.mapping, {
-        ["<CR>"] = cmp.mapping.confirm({ select = false }),
-      })
-    end,
+    opts = {
+      experimental = { ghost_text = false },
+      mapping = {
+        ["<CR>"] = cmp.mapping(function(fallback)
+          cmp.abort()
+          fallback()
+        end, { "i", "s" }),
+        ["<Down>"] = cmp.config.disable,
+        ["<Up>"] = cmp.config.disable,
+        ["<S-j>"] = cmp.mapping.select_next_item(),
+        ["<S-Down>"] = cmp.mapping.select_next_item(),
+        ["<S-k>"] = cmp.mapping.select_prev_item(),
+        ["<S-Up>"] = cmp.mapping.select_prev_item(),
+        ["<S-CR>"] = cmp.mapping.confirm({ select = true }),
+      },
+    },
   },
   {
     "llllvvuu/nvim-cmp",

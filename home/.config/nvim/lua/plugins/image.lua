@@ -6,7 +6,9 @@ return {
     "3rd/image.nvim",
     enabled = not in_ssh,
     lazy = true,
-    dependencies = { "leafo/magick" },
+    dependencies = {
+      { "leafo/magick", lazy = true },
+    },
     opts = {
       backend = "kitty",
       integrations = {
@@ -19,8 +21,6 @@ return {
         },
         neorg = { enabled = true },
       },
-      max_width = 100,
-      max_height = 8,
       max_height_window_percentage = math.huge,
       max_width_window_percentage = math.huge,
       window_overlap_clear_enabled = true, -- toggles images when windows are overlapped
@@ -29,11 +29,19 @@ return {
   },
   {
     "neo-tree.nvim",
-    dependencies = use_kitty and { "3rd/image.nvim" } or {},
     opts = {
+      commands = {
+        toggle_preview_lazy_image = function(state)
+          if use_kitty then
+            -- lazy load image.nvim
+            local _ = require("image")
+          end
+          require("neo-tree.sources.filesystem.commands").toggle_preview(state)
+        end,
+      },
       window = {
         mappings = {
-          ["P"] = { "toggle_preview", config = { use_float = false, use_image_nvim = use_kitty } },
+          ["P"] = { "toggle_preview_lazy_image", config = { use_float = false, use_image_nvim = use_kitty } },
         },
       },
     },

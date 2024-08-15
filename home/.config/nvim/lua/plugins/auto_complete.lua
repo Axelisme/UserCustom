@@ -67,17 +67,31 @@ return {
       local cmp = require("cmp")
       opts.experimental = { ghost_text = false }
       opts.mapping = {
-        ["<CR>"] = cmp.mapping(function(fallback)
-          cmp.abort()
-          fallback()
-        end, { "i", "s" }),
+        ["<CR>"] = cmp.config.disable,
         ["<Down>"] = cmp.config.disable,
         ["<Up>"] = cmp.config.disable,
         ["<S-j>"] = cmp.mapping.select_next_item(),
         ["<S-Down>"] = cmp.mapping.select_next_item(),
         ["<S-k>"] = cmp.mapping.select_prev_item(),
         ["<S-Up>"] = cmp.mapping.select_prev_item(),
-        ["<S-CR>"] = cmp.mapping.confirm({ select = true }),
+        ["<S-c>"] = cmp.mapping(function()
+          if cmp.visible() then
+            cmp.close()
+          else
+            cmp.complete()
+          end
+        end, { "i", "s" }),
+        ["<S-CR>"] = cmp.mapping(function(fallback)
+          if cmp.visible() then
+            local entry = cmp.get_selected_entry()
+            if not entry then
+              cmp.select_next_item({ behavior = cmp.SelectBehavior.Select })
+            end
+            cmp.confirm({ behavior = cmp.ConfirmBehavior.Replace })
+          else
+            fallback()
+          end
+        end, { "i", "s" }),
       }
     end,
   },

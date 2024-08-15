@@ -1,11 +1,10 @@
 local use_kitty = os.getenv("KITTY_WINDOW_ID") ~= nil
+local in_ssh = os.getenv("SSH_TTY") ~= nil
 
 return {
-  { "benlubas/image-save.nvim", cmd = "SaveImage" },
-  { "leafo/magick", lazy = true },
   {
     "3rd/image.nvim",
-    -- enabled = false,
+    enabled = not in_ssh,
     lazy = true,
     dependencies = { "leafo/magick" },
     opts = {
@@ -29,8 +28,7 @@ return {
     },
   },
   {
-    "nvim-neo-tree/neo-tree.nvim",
-    branch = "v3.x",
+    "neo-tree.nvim",
     dependencies = use_kitty and { "3rd/image.nvim" } or {},
     opts = {
       window = {

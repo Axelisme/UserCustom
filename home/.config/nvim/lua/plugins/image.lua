@@ -6,7 +6,7 @@ return {
   {
     "3rd/image.nvim",
     -- enabled = false,
-    lazy = not use_kitty,
+    lazy = true,
     dependencies = { "leafo/magick" },
     opts = {
       backend = "kitty",

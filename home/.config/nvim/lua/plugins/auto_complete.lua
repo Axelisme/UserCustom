@@ -1,5 +1,3 @@
-local cmp = require("cmp")
-
 return {
   -- copilot
   {
@@ -65,9 +63,10 @@ return {
   {
     "hrsh7th/nvim-cmp",
     enabled = false,
-    opts = {
-      experimental = { ghost_text = false },
-      mapping = {
+    opts = function(_, opts)
+      local cmp = require("cmp")
+      opts.experimental = { ghost_text = false }
+      opts.mapping = {
         ["<CR>"] = cmp.mapping(function(fallback)
           cmp.abort()
           fallback()
@@ -79,8 +78,8 @@ return {
         ["<S-k>"] = cmp.mapping.select_prev_item(),
         ["<S-Up>"] = cmp.mapping.select_prev_item(),
         ["<S-CR>"] = cmp.mapping.confirm({ select = true }),
-      },
-    },
+      }
+    end,
   },
   {
     "llllvvuu/nvim-cmp",

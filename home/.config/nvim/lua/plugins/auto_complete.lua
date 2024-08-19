@@ -66,33 +66,33 @@ return {
     opts = function(_, opts)
       local cmp = require("cmp")
       opts.experimental = { ghost_text = false }
-      opts.mapping = {
-        ["<CR>"] = cmp.config.disable,
-        ["<Down>"] = cmp.config.disable,
-        ["<Up>"] = cmp.config.disable,
-        ["<S-j>"] = cmp.mapping.select_next_item(),
-        ["<S-Down>"] = cmp.mapping.select_next_item(),
-        ["<S-k>"] = cmp.mapping.select_prev_item(),
-        ["<S-Up>"] = cmp.mapping.select_prev_item(),
-        ["<S-c>"] = cmp.mapping(function()
-          if cmp.visible() then
-            cmp.close()
-          else
-            cmp.complete()
-          end
-        end, { "i", "s" }),
-        ["<S-CR>"] = cmp.mapping(function(fallback)
-          if cmp.visible() then
-            local entry = cmp.get_selected_entry()
-            if not entry then
-              cmp.select_next_item({ behavior = cmp.SelectBehavior.Select })
-            end
+
+      local accept_completion = function()
+        if cmp.visible() then
+          if cmp.get_active_entry() then
             cmp.confirm({ behavior = cmp.ConfirmBehavior.Replace })
           else
-            fallback()
+            cmp.close()
           end
-        end, { "i", "s" }),
+        else
+          cmp.complete()
+        end
+      end
+
+      opts.mapping = {
+        -- disable follow keymap
+        ["<Down>"] = cmp.config.disable,
+        ["<Up>"] = cmp.config.disable,
+        ["<CR>"] = cmp.config.disable,
+        -- set new keymap
+        ["<S-Down>"] = cmp.mapping.select_next_item(),
+        ["<S-Up>"] = cmp.mapping.select_prev_item(),
+        ["<S-CR>"] = cmp.mapping(accept_completion, { "i", "s" }),
       }
+    end,
+    -- disable <Tab> and <S-Tab>
+    keys = function()
+      return {}
     end,
   },
   {

@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 
 # command name to installed
-name="micromamba"
+name="lsd"
 
 # main function to install the command
 install_function() {
   mkdir -p ~/.local/bin
-  cd ~/.local
-  curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+  cd ~/.local/bin
+
+  url=https://github.com/lsd-rs/lsd/releases/download/v1.1.2/lsd-v1.1.2-x86_64-unknown-linux-gnu.tar.gz
+  wget -O lsd.tar.gz $url
+  tar zxvf lsd.tar.gz
+  mv lsd-v1.1.2-*/lsd lsd
+  rm -r lsd.tar.gz lsd-v1.1.2-*
 }
 
 # wrapper to install the command
@@ -18,4 +23,3 @@ if ! command -v $name &>/dev/null; then
 else
   echo "$name already installed, skipping"
 fi
-

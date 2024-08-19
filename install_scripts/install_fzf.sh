@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 
 # command name to installed
-name="micromamba"
+name="fzf"
 
 # main function to install the command
 install_function() {
   mkdir -p ~/.local/bin
-  cd ~/.local
-  curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+  cd ~/.local/bin
+
+  url=https://github.com/junegunn/fzf/releases/download/v0.54.3/fzf-0.54.3-linux_amd64.tar.gz
+  wget -O fzf.tar.gz $url
+  tar zxvf fzf.tar.gz fzf
+  rm fzf.tar.gz
 }
 
 # wrapper to install the command
@@ -18,4 +22,3 @@ if ! command -v $name &>/dev/null; then
 else
   echo "$name already installed, skipping"
 fi
-

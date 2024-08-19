@@ -1,8 +1,5 @@
 return {
-  {
-    "olimorris/onedarkpro.nvim",
-    priority = 1000, -- Ensure it loads first
-  },
+  { "olimorris/onedarkpro.nvim", priority = 1000 },
   { "catppuccin", enabled = false },
 
   -- Configure LazyVim to load catppuccin

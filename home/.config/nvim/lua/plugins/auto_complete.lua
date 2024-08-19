@@ -67,13 +67,17 @@ return {
       local cmp = require("cmp")
       opts.experimental = { ghost_text = false }
 
+      local toggle_menu = function()
+        if cmp.visible() then
+          cmp.close()
+        else
+          cmp.complete()
+        end
+      end
+
       local accept_completion = function()
         if cmp.visible() then
-          if cmp.get_active_entry() then
-            cmp.confirm({ behavior = cmp.ConfirmBehavior.Replace })
-          else
-            cmp.close()
-          end
+          cmp.confirm({ behavior = cmp.ConfirmBehavior.Replace })
         else
           cmp.complete()
         end
@@ -84,10 +88,14 @@ return {
         ["<Down>"] = cmp.config.disable,
         ["<Up>"] = cmp.config.disable,
         ["<CR>"] = cmp.config.disable,
+        ["<C-Space>"] = cmp.config.disable,
         -- set new keymap
+        ["<C-n>"] = cmp.mapping.select_next_item(),
+        ["<C-p>"] = cmp.mapping.select_prev_item(),
         ["<S-Down>"] = cmp.mapping.select_next_item(),
         ["<S-Up>"] = cmp.mapping.select_prev_item(),
         ["<S-CR>"] = cmp.mapping(accept_completion, { "i", "s" }),
+        ["<C-M>"] = cmp.mapping(toggle_menu, { "i", "s" }),
       }
     end,
     -- disable <Tab> and <S-Tab>

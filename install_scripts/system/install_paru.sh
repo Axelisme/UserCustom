@@ -16,7 +16,7 @@ install_function() {
 # wrapper to install the command
 if ! command -v $name &>/dev/null; then
   echo -n "installing $name..."
-  install_function >/dev/null
+  install_function
   echo "done"
 else
   echo "$name already installed, skipping"

@@ -59,7 +59,7 @@ return {
     end,
   },
 
-  -- override source of nvim-cmp for above line menu
+  -- completion
   {
     "hrsh7th/nvim-cmp",
     enabled = false,
@@ -90,12 +90,11 @@ return {
         ["<CR>"] = cmp.config.disable,
         ["<C-Space>"] = cmp.config.disable,
         -- set new keymap
-        ["<C-n>"] = cmp.mapping.select_next_item(),
-        ["<C-p>"] = cmp.mapping.select_prev_item(),
-        ["<S-Down>"] = cmp.mapping.select_next_item(),
-        ["<S-Up>"] = cmp.mapping.select_prev_item(),
+        ["<C-n>"] = cmp.mapping.select_next_item({ behavior = cmp.SelectBehavior.Select }),
+        ["<C-p>"] = cmp.mapping.select_prev_item({ behavior = cmp.SelectBehavior.Select }),
+        ["<C-y>"] = cmp.mapping(accept_completion, { "i", "s" }),
         ["<S-CR>"] = cmp.mapping(accept_completion, { "i", "s" }),
-        ["<C-M>"] = cmp.mapping(toggle_menu, { "i", "s" }),
+        ["<C-b>"] = cmp.mapping(toggle_menu, { "i", "s" }),
       }
     end,
     -- disable <Tab> and <S-Tab>

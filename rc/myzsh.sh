@@ -24,21 +24,25 @@ source $ZINIT_HOME/zinit.zsh
 # Load completions
 autoload -Uz compinit && compinit
 
+check_have_sudo() {
+  command -v sudo &>/dev/null && groups | grep -q -E 'sudo|wheel'
+}
+
 # 插件
-type fzf >/dev/null 2>&1 && zinit light Aloxaf/fzf-tab
+command -v fzf &>/dev/null && zinit light Aloxaf/fzf-tab
 zinit light zsh-users/zsh-completions
 zinit light zsh-users/zsh-autosuggestions
 zinit light zdharma-continuum/fast-syntax-highlighting
-type git >/dev/null 2>&1 && zinit snippet OMZP::git
-zinit snippet OMZP::sudo
+command -v git &>/dev/null && zinit snippet OMZP::git
+check_have_sudo && zinit snippet OMZP::sudo
 zinit snippet OMZP::extract
 zinit snippet OMZL::completion.zsh
-# zinit snippet OMZL::key-bindings.zsh
 zinit snippet OMZP::command-not-found
+
+unset check_have_sudo
 
 # Keybindings
 zinit load 'zsh-users/zsh-history-substring-search'
-# zinit ice wait atload '_history_substring_search_config'
 bindkey -e
 bindkey '^[[A' history-substring-search-up
 bindkey '^[[B' history-substring-search-down
@@ -62,20 +66,18 @@ setopt hist_ignore_dups
 setopt hist_find_no_dups
 
 # Completion styling
-# zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
-# zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 zstyle ':completion:*' menu no
-if type fzf >/dev/null; then
+if command -v fzf &>/dev/null; then
   zstyle ':fzf-tab:*' continuous-trigger '/'
   zstyle ':fzf-tab:complete:*' fzf-bindings 'shift-tab:toggle+down,ctrl-a:toggle-all'
 fi
 
 # Shell integrations
-# type zoxide > /dev/null && eval "$(zoxide init zsh)" && alias cd='z'
+# command -v zoxide &>/dev/null && eval "$(zoxide init zsh)" && alias cd='z'
 
 # Prompt
-if type oh-my-posh >/dev/null 2>&1; then
-  if type tput >/dev/null 2>&1 && [[ $(tput colors) == "256" ]]; then
+if command -v oh-my-posh &>/dev/null; then
+  if command -v tput &>/dev/null && [[ $(tput colors) == "256" ]]; then
     if [[ -v SSH_TTY ]]; then
       eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/ssh.toml)"
     else

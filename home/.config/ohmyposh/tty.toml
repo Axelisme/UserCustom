@@ -22,7 +22,7 @@ type = 'git'
 style = 'plain'
 foreground = 'red'
 background = 'transparent'
-template = "( {{ .HEAD }}{{ if gt .Ahead 0 }} ^{{.Ahead}}{{end}}{{ if gt .Behind 0 }} v{{.Behind}}{{end}} {{ if .Working.Changed }}+{{ .Working.Added }} ~{{ .Working.Modified }} -{{ .Working.Deleted }}{{ end }} )"
+template = "( {{ .HEAD }}{{ if gt .Ahead 0 }} ^{{.Ahead}}{{end}}{{ if gt .Behind 0 }} v{{.Behind}}{{end}}{{ if .Working.Changed }} +{{ .Working.Added }} ~{{ .Working.Modified }} -{{ .Working.Deleted }}{{ end }} )"
 
 [blocks.segments.properties]
 branch_icon = ''

@@ -20,4 +20,8 @@
 
 安裝完必要的軟體包後，接下來您應該執行 `setup_shell` 腳本來設定您的 Shell 環境。這將包括配置 `.bashrc`、`.zshrc` 以及其他配置文件。  
 附帶配置文件的軟體包含：`vim`、`alacritty`、`nnn`、`neovim`、`ohmyposh`、`tmux` 等。
+```
+# setup .bashrc, .zshrc, and others
+./setup_scripts/setup_shell.sh
+```
 

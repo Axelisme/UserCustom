@@ -14,8 +14,18 @@ install_function() {
   rm nvim.tar.gz
 }
 
+version_checker() {
+  if ! command -v nvim >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # nvim versin must >= v0.9.0
+  major_version=$(nvim -v | head -n 1 | cut -d. -f2)
+  return $((major_version >= 9))
+}
+
 # wrapper to install the command
-if ! command -v $name &>/dev/null; then
+if ! version_checker; then
   echo -n "installing $name..."
   install_function >/dev/null
   echo "done"

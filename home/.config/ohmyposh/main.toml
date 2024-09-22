@@ -27,8 +27,8 @@ powerline_symbol = "\ue0b0"
 template = " \uf07c {{ .Path }} "
 
 [blocks.segments.properties]
-home_icon = '~'
-style = 'full'
+max_width = 30
+style = 'powerlevel'
 
 [[blocks.segments]]
 type = "git"

@@ -39,5 +39,5 @@ fi
 
 unset install_rime_frost
 
-echo overwrite custom rime config
-cp -br $src_dir $dst_dir
+echo "overwrite custom rime config"
+cp -TRb $src_dir $dst_dir

@@ -17,13 +17,14 @@ for src in $(realpath $UserCustom/home/.config/*); do
       mv -b $dst $dst.bak
     else
       echo "skip $dst"
+      continue
     fi
   fi
 
   # link src to dst
   if [ -d $src ]; then # is directory
     # soft link
-    ln -s $src $dst
+    ln -Ts $src $dst
   else # is file
     # hard link
     ln $src $dst

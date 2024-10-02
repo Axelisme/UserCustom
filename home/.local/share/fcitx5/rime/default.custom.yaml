@@ -1,0 +1,9 @@
+patch:
+  menu/page_size: 9
+  schema_list:
+    - schema: rime_frost             # 白霜拼音（全拼）
+    - schema: luna_pinyin
+    - schema: luna_pinyin_tw
+    - schema: terra_pinyin
+    - schema: terra_pinyin_tw
+    - schema: bopomofo_tw

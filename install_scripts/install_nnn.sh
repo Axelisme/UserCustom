@@ -8,7 +8,7 @@ install_function() {
   mkdir -p ~/.local/bin
   cd ~/.local/bin
 
-  url=https://github.com/jarun/nnn/releases/download/v4.9/nnn-static-4.9.x86_64.tar.gz
+  url=https://github.com/jarun/nnn/releases/download/v5.0/nnn-static-5.0.x86_64.tar.gz
   wget -O nnn.tar.gz $url
   tar zxvf nnn.tar.gz
   mv nnn-static nnn

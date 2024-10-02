@@ -8,7 +8,7 @@ install_function() {
   mkdir -p ~/.local/bin
   cd ~/.local/bin
 
-  url=https://github.com/junegunn/fzf/releases/download/v0.54.3/fzf-0.54.3-linux_amd64.tar.gz
+  url=https://github.com/junegunn/fzf/releases/download/v0.55.0/fzf-0.55.0-linux_amd64.tar.gz
   wget -O fzf.tar.gz $url
   tar zxvf fzf.tar.gz fzf
   rm fzf.tar.gz

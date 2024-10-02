@@ -8,7 +8,7 @@ install_function() {
   mkdir -p ~/.local/bin
   cd ~/.local/bin
 
-  url=https://github.com/jesseduffield/lazygit/releases/download/v0.43.1/lazygit_0.43.1_Linux_x86_64.tar.gz
+  url=https://github.com/jesseduffield/lazygit/releases/download/v0.44.1/lazygit_0.44.1_Linux_x86_64.tar.gz
   wget -O lazygit.tar.gz $url
   tar zxvf lazygit.tar.gz lazygit
   rm lazygit.tar.gz

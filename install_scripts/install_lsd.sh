@@ -8,11 +8,11 @@ install_function() {
   mkdir -p ~/.local/bin
   cd ~/.local/bin
 
-  url=https://github.com/lsd-rs/lsd/releases/download/v1.1.2/lsd-v1.1.2-x86_64-unknown-linux-gnu.tar.gz
+  url=https://github.com/lsd-rs/lsd/releases/download/v1.1.5/lsd-v1.1.5-x86_64-unknown-linux-gnu.tar.gz
   wget -O lsd.tar.gz $url
   tar zxvf lsd.tar.gz
-  mv lsd-v1.1.2-*/lsd lsd
-  rm -r lsd.tar.gz lsd-v1.1.2-*
+  mv lsd-*/lsd lsd
+  rm -r lsd.tar.gz lsd-*
 }
 
 # wrapper to install the command

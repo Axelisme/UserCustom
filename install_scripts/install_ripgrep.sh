@@ -8,10 +8,10 @@ install_function() {
   mkdir -p ~/.local/bin
   cd ~/.local/bin
 
-  wget -O ripgrep.tar.gz https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep-14.1.0-x86_64-unknown-linux-musl.tar.gz
+  wget -O ripgrep.tar.gz https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz
   tar zxvf ripgrep.tar.gz
-  mv ripgrep-14.1.0-*/rg rg
-  rm -r ripgrep.tar.gz ripgrep-14.1.0-*
+  mv ripgrep-*/rg rg
+  rm -r ripgrep.tar.gz ripgrep-*
 }
 
 # wrapper to install the command

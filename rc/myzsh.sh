@@ -36,7 +36,7 @@ command -v git &>/dev/null && zinit snippet OMZP::git
 check_have_sudo && zinit snippet OMZP::sudo
 zinit snippet OMZP::extract
 zinit snippet OMZL::completion.zsh
-zinit snippet OMZP::command-not-found
+# zinit snippet OMZP::command-not-found
 
 unset check_have_sudo
 

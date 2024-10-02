@@ -15,13 +15,13 @@ install_function() {
 }
 
 version_checker() {
-  if ! command -v nvim >/dev/null 2>&1; then
-    return 0
+  if ! command -v nvim &>/dev/null; then
+    return 1
   fi
 
   # nvim versin must >= v0.9.0
   major_version=$(nvim -v | head -n 1 | cut -d. -f2)
-  return $((major_version >= 9))
+  return $((major_version < 9))
 }
 
 # wrapper to install the command

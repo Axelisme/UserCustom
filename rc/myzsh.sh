@@ -28,14 +28,14 @@ check_have_sudo() {
 }
 
 # 插件
-command -v fzf &>/dev/null && zinit light Aloxaf/fzf-tab
+# command -v fzf &>/dev/null && zinit light Aloxaf/fzf-tab
 zinit light zsh-users/zsh-completions
 zinit light zsh-users/zsh-autosuggestions
 zinit light zdharma-continuum/fast-syntax-highlighting
-command -v git &>/dev/null && zinit snippet OMZP::git
+# command -v git &>/dev/null && zinit snippet OMZP::git
 check_have_sudo && zinit snippet OMZP::sudo
 zinit snippet OMZP::extract
-zinit snippet OMZL::completion.zsh
+# zinit snippet OMZL::completion.zsh
 # zinit snippet OMZP::command-not-found
 
 unset check_have_sudo
@@ -66,10 +66,10 @@ setopt hist_find_no_dups
 
 # Completion styling
 zstyle ':completion:*' menu no
-if command -v fzf &>/dev/null; then
-  zstyle ':fzf-tab:*' continuous-trigger '/'
-  zstyle ':fzf-tab:complete:*' fzf-bindings 'shift-tab:toggle+down,ctrl-a:toggle-all'
-fi
+# if command -v fzf &>/dev/null; then
+#   zstyle ':fzf-tab:*' continuous-trigger '/'
+#   zstyle ':fzf-tab:complete:*' fzf-bindings 'shift-tab:toggle+down,ctrl-a:toggle-all'
+# fi
 
 # Shell integrations
 # command -v zoxide &>/dev/null && eval "$(zoxide init zsh)" && alias cd='z'
@@ -78,13 +78,14 @@ fi
 if command -v oh-my-posh &>/dev/null; then
   if command -v tput &>/dev/null && [[ $(tput colors) == "256" ]]; then
     if [[ -v SSH_TTY ]]; then
-      eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/ssh.toml)"
+      ohmyposh_cfg=$HOME/.config/ohmyposh/ssh.toml
     else
-      eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/main.toml)"
+      ohmyposh_cfg=$HOME/.config/ohmyposh/main.toml
     fi
   else
-    eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/tty.toml)"
+    ohmyposh_cfg=$HOME/.config/ohmyposh/tty.toml
   fi
+  eval "$(oh-my-posh init zsh --config $ohmyposh_cfg)"
 else
   setopt PROMPT_SUBST
   export PROMPT=$FALLBACK_PROMPT

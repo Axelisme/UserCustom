@@ -1,9 +1,16 @@
 return {
-  -- Configure LazyVim to load catppuccin
+  { "catppuccin", enabled = false },
+  {
+    "olimorris/onedarkpro.nvim",
+    opts = { colors = { onedark_dark = { bg = "#202020" } } },
+  },
+
+  -- Configure LazyVim to load colorscheme
   {
     "LazyVim/LazyVim",
     opts = {
-      colorscheme = "catppuccin-mocha",
+      -- colorscheme = "tokyonight-night",
+      colorscheme = "onedark_dark",
     },
   },
 }

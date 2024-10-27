@@ -21,30 +21,28 @@ fi
 source $ZINIT_HOME/zinit.zsh
 
 # Load completions
-autoload -Uz compinit && compinit
-
-check_have_sudo() {
-  command -v sudo &>/dev/null && groups | grep -q -E 'sudo|wheel'
-}
+# autoload -Uz compinit && compinit
+# zicompinit
 
 # 插件
-# command -v fzf &>/dev/null && zinit light Aloxaf/fzf-tab
-zinit light zsh-users/zsh-completions
-zinit light zsh-users/zsh-autosuggestions
-zinit light zdharma-continuum/fast-syntax-highlighting
-# command -v git &>/dev/null && zinit snippet OMZP::git
-check_have_sudo && zinit snippet OMZP::sudo
-zinit snippet OMZP::extract
-# zinit snippet OMZL::completion.zsh
-# zinit snippet OMZP::command-not-found
+function _history_substring_search_config() {
+  bindkey '^[[A' history-substring-search-up
+  bindkey '^[[B' history-substring-search-down
+}
 
-unset check_have_sudo
+zinit wait lucid wait for \
+  atinit"zicompinit; zicdreplay" zdharma/fast-syntax-highlighting \
+  atload'_zsh_autosuggest_start' zsh-users/zsh-autosuggestions \
+  atpull'zinit creinstall -q .' zsh-users/zsh-completions \
+  atload'_history_substring_search_config' zsh-users/zsh-history-substring-search \
+  OMZP::sudo \
+  OMZP::extract \
+  OMZL::completion.zsh \
+  OMZL::clipboard.zsh
+# command -v fzf &>/dev/null && zinit light Aloxaf/fzf-tab
+unset _history_substring_search_config
 
 # Keybindings
-zinit load 'zsh-users/zsh-history-substring-search'
-bindkey -e
-bindkey '^[[A' history-substring-search-up
-bindkey '^[[B' history-substring-search-down
 bindkey '\033[H' beginning-of-line
 bindkey '\033[F' end-of-line
 bindkey '^[[3~' delete-char
@@ -65,7 +63,7 @@ setopt hist_ignore_dups
 setopt hist_find_no_dups
 
 # Completion styling
-zstyle ':completion:*' menu no
+# zstyle ':completion:*' menu no
 # if command -v fzf &>/dev/null; then
 #   zstyle ':fzf-tab:*' continuous-trigger '/'
 #   zstyle ':fzf-tab:complete:*' fzf-bindings 'shift-tab:toggle+down,ctrl-a:toggle-all'

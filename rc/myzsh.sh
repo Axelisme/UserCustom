@@ -20,10 +20,6 @@ fi
 # 加载zinit
 source $ZINIT_HOME/zinit.zsh
 
-# Load completions
-# autoload -Uz compinit && compinit
-# zicompinit
-
 # 插件
 function _history_substring_search_config() {
   bindkey '^[[A' history-substring-search-up
@@ -68,9 +64,6 @@ setopt hist_find_no_dups
 #   zstyle ':fzf-tab:*' continuous-trigger '/'
 #   zstyle ':fzf-tab:complete:*' fzf-bindings 'shift-tab:toggle+down,ctrl-a:toggle-all'
 # fi
-
-# Shell integrations
-# command -v zoxide &>/dev/null && eval "$(zoxide init zsh)" && alias cd='z'
 
 # Prompt
 if command -v oh-my-posh &>/dev/null; then

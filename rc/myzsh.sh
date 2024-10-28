@@ -68,11 +68,7 @@ setopt hist_find_no_dups
 # Prompt
 if command -v oh-my-posh &>/dev/null; then
   if command -v tput &>/dev/null && [[ $(tput colors) == "256" ]]; then
-    if [[ -v SSH_TTY ]]; then
-      ohmyposh_cfg=$HOME/.config/ohmyposh/ssh.toml
-    else
-      ohmyposh_cfg=$HOME/.config/ohmyposh/main.toml
-    fi
+    ohmyposh_cfg=$HOME/.config/ohmyposh/main.toml
   else
     ohmyposh_cfg=$HOME/.config/ohmyposh/tty.toml
   fi

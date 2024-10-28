@@ -3,7 +3,7 @@ return {
     "nvim-neo-tree/neo-tree.nvim",
     opts = {
       filesystem = {
-        bind_to_cwd = true,
+        bind_to_cwd = false,
         filtered_items = {
           force_visible_in_empty_folder = true,
         },

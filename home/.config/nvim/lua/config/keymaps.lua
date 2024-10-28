@@ -10,3 +10,6 @@ vim.keymap.set("i", "<c-h>", "<Left>")
 vim.keymap.set("i", "<c-j>", "<Down>")
 vim.keymap.set("i", "<c-k>", "<Up>")
 vim.keymap.set("i", "<c-l>", "<Right>")
+
+-- cd to the directory of the current file
+vim.keymap.set("n", "<leader>.", ":cd %:p:h<CR>:pwd<CR>")

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 # command name to installed
 name="fd"

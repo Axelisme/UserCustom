@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 NEED_PACKAGE='xsel nnn git lazygit nodejs advcpmv ripgrep lsd fzf fd oh-my-posh-bin neovim yazi'
 

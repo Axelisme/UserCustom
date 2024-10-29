@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 # command name to installed
 name="micromamba"
@@ -18,4 +19,3 @@ if ! command -v $name &>/dev/null; then
 else
   echo "$name already installed, skipping"
 fi
-

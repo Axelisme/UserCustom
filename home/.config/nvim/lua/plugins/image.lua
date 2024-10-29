@@ -1,9 +1,11 @@
-local enable_image = os.getenv("KITTY_WINDOW_ID") ~= nil
+local in_kitty = os.getenv("KITTY_WINDOW_ID") ~= nil
+local in_ssh = os.getenv("SSH_TTY") ~= nil
+local enable_image = not in_ssh and in_kitty
 
 return {
   {
     "3rd/image.nvim",
-    enabled = enable_image,
+    enabled = not in_ssh,
     lazy = true,
     dependencies = {
       { "leafo/magick", lazy = true },

@@ -1,9 +1,10 @@
+local in_ssh = os.getenv("SSH_TTY") ~= nil
+
 return {
   -- copilot
   {
     "zbirenbaum/copilot.lua",
-    -- enabled = false,
-    -- event = "InsertEnter",
+    enabled = not in_ssh,
     event = { "BufReadPre", "BufNewFile" },
     cmd = "Copilot",
     build = ":Copilot auth",
@@ -22,12 +23,14 @@ return {
   },
 
   -- copilot icon
-  { "AndreM222/copilot-lualine", event = "VeryLazy" },
+  { "AndreM222/copilot-lualine", event = "VeryLazy", enabled = not in_ssh },
   {
     "nvim-lualine/lualine.nvim",
     optional = true,
     opts = function(_, opts)
-      table.insert(opts.sections.lualine_x, 1, { "copilot", symbols = { show_colors = true } })
+      if not in_ssh then
+        table.insert(opts.sections.lualine_x, 1, { "copilot", symbols = { show_colors = true } })
+      end
     end,
   },
 
@@ -89,8 +92,6 @@ return {
         ["<CR>"] = cmp.config.disable,
         ["<C-Space>"] = cmp.config.disable,
         -- set new keymap
-        -- ["<C-n>"] = cmp.mapping.select_next_item({ behavior = cmp.SelectBehavior.Select }),
-        -- ["<C-p>"] = cmp.mapping.select_prev_item({ behavior = cmp.SelectBehavior.Select }),
         ["<C-n>"] = cmp.mapping(move_down, { "i", "s" }),
         ["<C-p>"] = cmp.mapping(move_up, { "i", "s" }),
         ["<C-y>"] = cmp.mapping(accept_completion, { "i", "s" }),
@@ -103,14 +104,4 @@ return {
       return {}
     end,
   },
-  -- {
-  --   "llllvvuu/nvim-cmp",
-  --   branch = "feat/above",
-  --   enabled = true,
-  --   opts = {
-  --     view = {
-  --       entries = { vertical_positioning = "above", follow_cursor = true },
-  --     },
-  --   },
-  -- },
 }

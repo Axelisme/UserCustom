@@ -3,6 +3,7 @@ set -e
 
 src_dir=$(dirname $0)
 
+$src_dir/install_unzip.sh
 $src_dir/install_fd.sh
 $src_dir/install_fzf.sh
 $src_dir/install_lazygit.sh

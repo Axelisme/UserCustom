@@ -24,6 +24,7 @@ return {
             local path = current_node:get_id() -- this gives you the path
 
             if vim.fn.isdirectory(path) == 1 then
+              require("neo-tree.command").execute({ dir = path })
               vim.cmd("cd " .. path)
             end
           end,

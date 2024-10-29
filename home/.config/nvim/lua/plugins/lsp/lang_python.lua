@@ -1,17 +1,6 @@
-local function shorter_name(filename)
-  return filename:gsub(os.getenv("HOME"), "~"):gsub("/bin/python", "")
-end
-
-local function get_venv(variable)
-  local venv = os.getenv(variable)
-  if venv ~= nil and string.find(venv, "/") then
-    local orig_venv = venv
-    for w in orig_venv:gmatch("([^/]+)") do
-      venv = w
-    end
-    venv = string.format("%s", venv)
-  end
-  return venv
+local function shorter_name(filepath)
+  -- return filepath:gsub(os.getenv("HOME"), "~"):gsub("/bin/python", "")
+  return vim.fs.basename(filepath:gsub("/bin/python", ""))
 end
 
 return {
@@ -42,21 +31,24 @@ return {
   },
   {
     "lualine.nvim",
-    opts = {
-      sections = {
-        lualine_y = {
-          {
-            function()
-              local venv = get_venv("CONDA_PREFIX") or "NO ENV"
-              return " " .. venv
-            end,
-            cond = function()
-              return vim.bo.filetype == "python"
-            end,
-          },
-        },
-      },
-    },
+    opts = function(_, opts)
+      table.insert(opts.sections.lualine_y, {
+        function()
+          local venv = os.getenv("CONDA_PREFIX")
+          if venv ~= nil and string.find(venv, "/") then
+            local orig_venv = venv
+            for w in orig_venv:gmatch("([^/]+)") do
+              venv = w
+            end
+            -- venv = string.format("%s", venv)
+          end
+          return " " .. (venv or "NO ENV")
+        end,
+        cond = function()
+          return vim.bo.filetype == "python"
+        end,
+      })
+    end,
   },
   {
     "neovim/nvim-lspconfig",

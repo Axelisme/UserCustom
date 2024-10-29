@@ -27,7 +27,7 @@ return {
             end,
           },
         },
-        lualine_y = { { "filetype", icon_only = true, separator = "", padding = { left = 1, right = 0 } } },
+        lualine_y = { { "filetype", icon_only = true, separator = "", padding = { left = 1, right = 1 } } },
         lualine_z = {},
       }
     end,

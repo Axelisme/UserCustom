@@ -27,7 +27,7 @@ return {
     "nvim-lualine/lualine.nvim",
     optional = true,
     opts = function(_, opts)
-      table.insert(opts.sections.lualine_x, 2, { "copilot", symbols = { show_colors = true } })
+      table.insert(opts.sections.lualine_x, 1, { "copilot", symbols = { show_colors = true } })
     end,
   },
 

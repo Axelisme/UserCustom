@@ -1,10 +1,9 @@
-local use_kitty = os.getenv("KITTY_WINDOW_ID") ~= nil
-local in_ssh = os.getenv("SSH_TTY") ~= nil
+local enable_image = os.getenv("KITTY_WINDOW_ID") ~= nil
 
 return {
   {
     "3rd/image.nvim",
-    enabled = not in_ssh,
+    enabled = enable_image,
     lazy = true,
     dependencies = {
       { "leafo/magick", lazy = true },
@@ -32,7 +31,7 @@ return {
     opts = {
       commands = {
         toggle_preview_lazy_image = function(state)
-          if use_kitty then
+          if enable_image then
             -- lazy load image.nvim
             local _ = require("image")
           end
@@ -41,7 +40,7 @@ return {
       },
       window = {
         mappings = {
-          ["P"] = { "toggle_preview_lazy_image", config = { use_float = false, use_image_nvim = use_kitty } },
+          ["P"] = { "toggle_preview_lazy_image", config = { use_float = false, use_image_nvim = enable_image } },
         },
       },
     },

@@ -26,10 +26,10 @@ function _history_substring_search_config() {
   bindkey '^[[B' history-substring-search-down
 }
 
-zinit wait lucid wait for \
-  atinit"zicompinit; zicdreplay" zdharma/fast-syntax-highlighting \
-  atload'_zsh_autosuggest_start' zsh-users/zsh-autosuggestions \
-  atpull'zinit creinstall -q .' zsh-users/zsh-completions \
+zinit wait lucid for \
+  atinit"ZINIT[COMPINIT_OPTS]=-C; zicompinit; zicdreplay" zdharma-continuum/fast-syntax-highlighting \
+  blockf zsh-users/zsh-completions \
+  atload'!_zsh_autosuggest_start' zsh-users/zsh-autosuggestions \
   atload'_history_substring_search_config' zsh-users/zsh-history-substring-search \
   OMZP::sudo \
   OMZP::extract \

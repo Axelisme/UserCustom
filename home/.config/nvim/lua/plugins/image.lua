@@ -1,13 +1,9 @@
-local check_enabled = function()
-  if not (os.getenv("KITTY_WINDOW_ID") and vim.fn.executable("make") and vim.fn.executable("magick")) then
-    return false
-  end
-  if vim.fn.executable("lua5.1") and vim.fn.executable("luarocks") then
-    return true
-  end
-  return vim.fn.filereadable("/usr/include/readline/readline.h")
-end
-local enable_image = check_enabled()
+local enable_image = (function()
+  return os.getenv("KITTY_WINDOW_ID") ~= nil
+    and vim.fn.executable("make") == 1
+    and vim.fn.executable("magick") == 1
+    and vim.fn.filereadable("/usr/include/readline/readline.h") == 1
+end)()
 
 return {
   {

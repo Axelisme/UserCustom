@@ -10,6 +10,7 @@ $src_dir/install_lazygit.sh
 $src_dir/install_lsd.sh
 $src_dir/install_mamba.sh
 $src_dir/install_neovim.sh
+$src_dir/install_magick.sh
 $src_dir/install_nnn.sh
 $src_dir/install_yazi.sh
 $src_dir/install_ohmyposh.sh

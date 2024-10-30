@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-NEED_PACKAGE='unzip xsel nnn git lazygit nodejs advcpmv ripgrep lsd fzf fd oh-my-posh-bin neovim yazi'
+NEED_PACKAGE='unzip xsel nnn git lazygit nodejs advcpmv ripgrep lsd fzf fd oh-my-posh-bin neovim imagemagick yazi'
 
 if type paru >/dev/null 2>&1; then
   paru -S --needed $NEED_PACKAGE

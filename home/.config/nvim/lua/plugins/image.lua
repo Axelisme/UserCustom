@@ -1,9 +1,18 @@
-local enable_image = os.getenv("KITTY_WINDOW_ID") ~= nil
+local check_enabled = function()
+  if not (os.getenv("KITTY_WINDOW_ID") and vim.fn.executable("make") and vim.fn.executable("magick")) then
+    return false
+  end
+  if vim.fn.executable("lua5.1") and vim.fn.executable("luarocks") then
+    return true
+  end
+  return vim.fn.filereadable("/usr/include/readline/readline.h")
+end
+local enable_image = check_enabled()
 
 return {
   {
     "3rd/image.nvim",
-    enabled = vim.fn.executable("make") == 1 and vim.fn.executable("magick") == 1,
+    enabled = enable_image,
     lazy = true,
     dependencies = {
       { "leafo/magick", lazy = true },

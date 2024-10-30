@@ -11,5 +11,6 @@ id = "git"
 name = "*/"
 run = "git"
 
-[plugin]
-prepend_previewers = [{ name = "*.ipynb", run = "nbpreview" }]
+[[plugin.prepend_previewers]]
+name = "*.md"
+run = "glow"

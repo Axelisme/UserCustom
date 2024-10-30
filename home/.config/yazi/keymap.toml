@@ -22,3 +22,8 @@ desc = "Toggle executable"
 on = "!"
 run = 'shell "$SHELL" --block --confirm'
 desc = "Open shell here"
+
+[[manager.prepend_keymap]]
+on = [".", "s"]
+run = "plugin what-size --args='--clipboard'"
+desc = "Calc size of selection or cwd"

@@ -3,7 +3,7 @@ local enable_image = os.getenv("KITTY_WINDOW_ID") ~= nil
 return {
   {
     "3rd/image.nvim",
-    enabled = vim.fn.executable("make") == 1,
+    enabled = vim.fn.executable("make") == 1 and vim.fn.executable("magick") == 1,
     lazy = true,
     dependencies = {
       { "leafo/magick", lazy = true },

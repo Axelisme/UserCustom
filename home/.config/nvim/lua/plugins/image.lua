@@ -1,9 +1,8 @@
-local enable_image = (function()
-  return os.getenv("KITTY_WINDOW_ID") ~= nil
-    and vim.fn.executable("make") == 1
-    and vim.fn.executable("magick") == 1
-    and vim.fn.filereadable("/usr/include/readline/readline.h") == 1
-end)()
+local in_kitty = os.getenv("KITTY_WINDOW_ID") ~= nil
+local enable_image = vim.fn.executable("make") == 1
+  and vim.fn.executable("magick") == 1
+  and vim.fn.filereadable("/usr/include/readline/readline.h") == 1
+local use_image = in_kitty and enable_image
 
 return {
   {
@@ -36,7 +35,7 @@ return {
     opts = {
       commands = {
         toggle_preview_lazy_image = function(state)
-          if enable_image then
+          if use_image then
             -- lazy load image.nvim
             local _ = require("image")
           end
@@ -45,7 +44,7 @@ return {
       },
       window = {
         mappings = {
-          ["P"] = { "toggle_preview_lazy_image", config = { use_float = false, use_image_nvim = enable_image } },
+          ["P"] = { "toggle_preview_lazy_image", config = { use_float = false, use_image_nvim = use_image } },
         },
       },
     },

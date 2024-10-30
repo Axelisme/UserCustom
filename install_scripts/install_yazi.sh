@@ -14,8 +14,6 @@ install_function() {
   unzip yazi.zip && mv yazi-* yazi_pkg
 
   mv yazi_pkg/ya* .
-  ./ya pack -a yazi-rs/plugins:hide-preview
-  ./ya pack -a BennyOe/onedark
 
   rm yazi.zip && rm -rf yazi_pkg
 }

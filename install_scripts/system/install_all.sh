@@ -10,7 +10,3 @@ elif type yay >/dev/null 2>&1; then
 else
   echo "No aur package manager found"
 fi
-
-# yazi
-ya pack -a yazi-rs/plugins:hide-preview
-ya pack -a BennyOe/onedark

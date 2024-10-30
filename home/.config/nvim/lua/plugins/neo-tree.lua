@@ -5,6 +5,7 @@ return {
       filesystem = {
         bind_to_cwd = false,
         filtered_items = {
+          hide_gitignored = false,
           force_visible_in_empty_folder = true,
         },
       },

@@ -1,5 +1,6 @@
 return {
   "nvim-telescope/telescope.nvim",
+  lazy = true,
   -- keys = {
   --   { "<leader><space>", "<cmd>Telescope find_files<CR>", desc = "Find Files (cwd)" },
   --   { "<leader>ff", "<cmd>Telescope find_files<CR>", desc = "Find Files (cwd)" },

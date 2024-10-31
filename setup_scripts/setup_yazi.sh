@@ -12,7 +12,6 @@ ya pack -a yazi-rs/plugins:chmod
 ya pack -a KKV9/compress
 ya pack -a yazi-rs/plugins:git
 ya pack -a Reledia/glow
-ya pack -a yazi-rs/plugins:hide-preview
 ya pack -a pirafrank/what-size
 
 # install yazi theme

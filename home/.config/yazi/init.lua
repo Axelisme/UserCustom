@@ -1,5 +1,5 @@
 require("git"):setup()
-require("hide-preview"):entry()
+require("modify_preview_width"):entry({ "toggle" })
 
 -- show user:group in status bar
 Status:children_add(function()

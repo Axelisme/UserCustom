@@ -1,9 +1,4 @@
 [[manager.prepend_keymap]]
-on = "T"
-run = "plugin --sync hide-preview"
-desc = "Toggle preview"
-
-[[manager.prepend_keymap]]
 on = ["c", "a"]
 run = "plugin compress"
 desc = "Archive selected files"
@@ -27,3 +22,18 @@ desc = "Open shell here"
 on = "b"
 run = "plugin what-size"
 desc = "Calc size of selection or cwd"
+
+[[manager.prepend_keymap]]
+on = "T"
+run = "plugin --sync modify_preview_width --args=toggle"
+desc = "Toggle preview"
+
+[[manager.prepend_keymap]]
+on = "<C-Right>"
+run = "plugin --sync modify_preview_width --args=decrease"
+desc = "Decrease preview width"
+
+[[manager.prepend_keymap]]
+on = "<C-Left>"
+run = "plugin --sync modify_preview_width --args=increase"
+desc = "Increase preview width"

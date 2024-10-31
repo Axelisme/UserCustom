@@ -9,16 +9,6 @@ return {
     event = "InsertEnter",
     cmd = "Copilot",
     build = ":Copilot auth",
-    keys = {
-      {
-        "<Tab>",
-        function()
-          require("copilot.suggestion").accept()
-        end,
-        mode = { "i", "s" },
-        desc = "Copilot Accept",
-      },
-    },
     opts = {
       suggestion = {
         enabled = true,
@@ -30,6 +20,7 @@ return {
           dismiss = "<C-Left>",
         },
       },
+      filetypes = { yaml = true, markdown = true },
     },
   },
 
@@ -97,11 +88,6 @@ return {
       end
 
       opts.mapping = {
-        -- disable follow keymap
-        ["<Down>"] = cmp.config.disable,
-        ["<Up>"] = cmp.config.disable,
-        ["<CR>"] = cmp.config.disable,
-        ["<C-Space>"] = cmp.config.disable,
         -- set new keymap
         ["<C-n>"] = cmp.mapping(move_down, { "i", "s" }),
         ["<C-p>"] = cmp.mapping(move_up, { "i", "s" }),
@@ -109,6 +95,17 @@ return {
         ["<S-CR>"] = cmp.mapping(accept_completion, { "i", "s" }),
         ["<C-b>"] = cmp.mapping(toggle_menu, { "i", "s" }),
       }
+      -- set copilot super tab keymap
+      if not in_ssh then
+        opts.mapping["<Tab>"] = cmp.mapping(function(fallback)
+          local cpl = require("copilot.suggestion")
+          if cpl.is_visible() then
+            cpl.accept()
+          else
+            fallback()
+          end
+        end, { "i", "s" })
+      end
     end,
     -- disable <Tab> and <S-Tab>
     keys = function()

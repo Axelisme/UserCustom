@@ -1,6 +1,24 @@
 return {
   {
     "nvim-neo-tree/neo-tree.nvim",
+    keys = {
+      {
+        "<leader>fe",
+        function()
+          require("neo-tree.command").execute({ toggle = true, dir = vim.fn.expand("%:p:h") })
+        end,
+        desc = "Explorer NeoTree (Current File)",
+      },
+      {
+        "<leader>fE",
+        function()
+          require("neo-tree.command").execute({ toggle = true, dir = LazyVim.root() })
+        end,
+        desc = "Explorer NeoTree (Root Dir)",
+      },
+      { "<leader>e", "<leader>fe", desc = "Explorer NeoTree (Current File)", remap = true },
+      { "<leader>E", "<leader>fE", desc = "Explorer NeoTree (Root Dir)", remap = true },
+    },
     opts = {
       filesystem = {
         bind_to_cwd = false,
@@ -27,14 +45,6 @@ return {
               require("neo-tree.command").execute({ dir = path })
               vim.cmd("cd " .. path)
             end
-          end,
-        },
-      },
-      event_handlers = {
-        {
-          event = "neo_tree_buffer_enter",
-          handler = function(_)
-            vim.opt.relativenumber = true
           end,
         },
       },

@@ -5,9 +5,20 @@ return {
   {
     "zbirenbaum/copilot.lua",
     enabled = not in_ssh,
-    event = { "BufReadPre", "BufNewFile" },
+    -- event = { "BufReadPre", "BufNewFile" },
+    event = "InsertEnter",
     cmd = "Copilot",
     build = ":Copilot auth",
+    keys = {
+      {
+        "<Tab>",
+        function()
+          require("copilot.suggestion").accept()
+        end,
+        mode = { "i", "s" },
+        desc = "Copilot Accept",
+      },
+    },
     opts = {
       suggestion = {
         enabled = true,

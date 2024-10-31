@@ -68,9 +68,9 @@ setopt hist_find_no_dups
 # Prompt
 if command -v oh-my-posh &>/dev/null; then
   if command -v tput &>/dev/null && [[ $(tput colors) == "256" ]]; then
-    ohmyposh_cfg=$HOME/.config/ohmyposh/main.toml
+    ohmyposh_cfg=$HOME/.config/ohmyposh/main.yaml
   else
-    ohmyposh_cfg=$HOME/.config/ohmyposh/tty.toml
+    ohmyposh_cfg=$HOME/.config/ohmyposh/tty.yaml
   fi
   eval "$(oh-my-posh init zsh --config $ohmyposh_cfg)"
 else

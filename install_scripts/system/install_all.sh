@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 set -e
 
-NEED_PACKAGE='glow unzip xsel nnn git lazygit nodejs advcpmv ripgrep lsd fzf fd oh-my-posh-bin neovim imagemagick yazi'
+src_dir=$(dirname $0)
 
-if type paru >/dev/null 2>&1; then
-  paru -S --needed $NEED_PACKAGE
-elif type yay >/dev/null 2>&1; then
-  yay -S --needed $NEED_PACKAGE
-else
-  echo "No aur package manager found"
-fi
+# zsh shell
+$src_dir/install_zsh.sh
+
+# editor
+$src_dir/install_neovim.sh
+
+# file manager
+$src_dir/install_nnn.sh
+$src_dir/install_yazi.sh
+
+# other commands
+$src_dir/install_lazygit.sh
+$src_dir/install_mamba.sh

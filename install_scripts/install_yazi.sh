@@ -18,11 +18,19 @@ install_function() {
   rm yazi.zip && rm -rf yazi_pkg
 }
 
+# check dependencies installed
+src_dir=$(dirname $0)
+$src_dir/dependencies/install_fd.sh --quiet
+$src_dir/dependencies/install_glow.sh --quiet
+$src_dir/dependencies/install_unzip.sh --quiet
+
 # wrapper to install the command
 if ! command -v $name &>/dev/null; then
   echo -n "installing $name..."
   install_function >/dev/null
   echo "done"
 else
-  echo "$name already installed, skipping"
+  if [ "$1" != "--quiet" ] && [ "$1" != "-q" ]; then
+    echo "$name already installed, skipping"
+  fi
 fi

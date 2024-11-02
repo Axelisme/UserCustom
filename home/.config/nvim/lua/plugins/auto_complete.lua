@@ -31,7 +31,7 @@ return {
     optional = true,
     opts = function(_, opts)
       if not in_ssh then
-        table.insert(opts.sections.lualine_x, 1, { "copilot", symbols = { show_colors = true } })
+        table.insert(opts.sections.lualine_x, 2, { "copilot", symbols = { show_colors = true } })
       end
     end,
   },

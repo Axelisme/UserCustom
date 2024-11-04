@@ -59,7 +59,7 @@ return {
               -- Using Ruff's import organizer
               disableOrganizeImports = true,
             },
-            python = {
+            basedpyright = {
               analysis = {
                 ignore = { "*" }, -- Use Ruff
                 -- Basic type checking

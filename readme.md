@@ -32,6 +32,3 @@
 ./setup_scripts/setup_git.sh
 ./setup_scripts/setup_yazi.sh
 ```
-
-```
-```

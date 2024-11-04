@@ -1,15 +1,12 @@
-local function shorter_name(filepath)
-  -- return filepath:gsub(os.getenv("HOME"), "~"):gsub("/bin/python", "")
-  return vim.fs.basename(filepath:gsub("/bin/python", ""))
-end
-
 return {
   {
     -- let mamba env can be find by venv-selector.nvim
     "linux-cultist/venv-selector.nvim",
     branch = "regexp",
     ft = "python",
-    dependencies = { "neovim/nvim-lspconfig" },
+    cmd = "VenvSelect",
+    dependencies = { "neovim/nvim-lspconfig", "telescope.nvim" },
+    keys = { { "<leader>cv", "<cmd>:VenvSelect<cr>", desc = "Select VirtualEnv", ft = "python" } },
     opts = {
       settings = {
         search = {
@@ -17,7 +14,9 @@ return {
           workspace = false,
           micromamba_envs = {
             command = "$FD 'bin/python$' $HOME/micromamba/envs --full-path --color never",
-            on_telescope_result_callback = shorter_name,
+            on_telescope_result_callback = function(filepath)
+              return vim.fs.basename(filepath:gsub("/bin/python", ""))
+            end,
             type = "anaconda",
           },
         },
@@ -53,7 +52,6 @@ return {
   {
     "neovim/nvim-lspconfig",
     opts = {
-      inlay_hints = { enabled = false },
       servers = {
         basedpyright = {
           settings = {
@@ -63,6 +61,7 @@ return {
             },
             basedpyright = {
               analysis = {
+                ignore = { "*" }, -- Use Ruff
                 -- Basic type checking
                 typeCheckingMode = "basic",
               },

@@ -2,18 +2,18 @@
 set -e
 
 # command name to installed
-name="glow"
+name="lsd"
 
 # main function to install the command
 install_function() {
   mkdir -p ~/.local/bin
   cd ~/.local/bin
 
-  url=https://github.com/charmbracelet/glow/releases/download/v2.0.0/glow_2.0.0_Linux_x86_64.tar.gz
-  wget -O glow.tar.gz $url
-  tar zxvf glow.tar.gz
-  mv glow_*/glow glow
-  rm -r glow.tar.gz glow_*
+  url=https://github.com/lsd-rs/lsd/releases/download/v1.1.5/lsd-v1.1.5-x86_64-unknown-linux-gnu.tar.gz
+  wget -O lsd.tar.gz $url
+  tar zxvf lsd.tar.gz
+  mv lsd-*/lsd lsd
+  rm -r lsd.tar.gz lsd-*
 }
 
 # wrapper to install the command
@@ -22,5 +22,7 @@ if ! command -v $name &>/dev/null; then
   install_function >/dev/null
   echo "done"
 else
-  echo "$name already installed, skipping"
+  if [ "$1" != "--quiet" ] && [ "$1" != "-q" ]; then
+    echo "$name already installed, skipping"
+  fi
 fi

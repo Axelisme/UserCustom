@@ -5,46 +5,46 @@ return {
   {
     "zbirenbaum/copilot.lua",
     enabled = not in_ssh,
-    -- event = { "BufReadPre", "BufNewFile" },
     event = "InsertEnter",
     cmd = "Copilot",
     build = ":Copilot auth",
-    keys = {
+    dependencies = {
       {
-        "<Tab>",
-        function()
-          require("copilot.suggestion").accept()
+        "AndreM222/copilot-lualine",
+        lazy = true,
+        config = function()
+          local lualine = require("lualine")
+          local cfg = lualine.get_config()
+          table.insert(cfg.sections.lualine_x, 2, { "copilot", symbols = { show_colors = true } })
+          lualine.setup(cfg)
         end,
-        mode = { "i", "s" },
-        desc = "Copilot Accept",
       },
     },
-    opts = {
-      suggestion = {
-        enabled = true,
-        auto_trigger = true,
-        keymap = {
-          accept = "<C-Up>",
-          accept_word = "<C-Right>",
-          accept_line = "<C-Down>",
-          dismiss = "<C-Left>",
+    opts = function()
+      -- autocmd for disable copilot when leaving insert mode
+      vim.api.nvim_create_autocmd("InsertLeave", {
+        group = vim.api.nvim_create_augroup("copilot-insert-leave", { clear = true }),
+        desc = "disable copilot when leaving insert mode",
+        callback = function()
+          require("copilot.suggestion").dismiss()
+        end,
+      })
+      return {
+        panel = { enabled = false },
+        suggestion = {
+          enabled = true,
+          auto_trigger = true,
+          keymap = {
+            accept = "<C-Up>",
+            accept_word = "<C-Right>",
+            accept_line = "<C-Down>",
+            dismiss = "<C-Left>",
+          },
         },
-      },
-    },
-  },
-
-  -- copilot icon
-  { "AndreM222/copilot-lualine", event = "VeryLazy", enabled = not in_ssh },
-  {
-    "nvim-lualine/lualine.nvim",
-    optional = true,
-    opts = function(_, opts)
-      if not in_ssh then
-        table.insert(opts.sections.lualine_x, 1, { "copilot", symbols = { show_colors = true } })
-      end
+        filetypes = { yaml = true, markdown = true },
+      }
     end,
   },
-
   -- completion
   {
     "hrsh7th/nvim-cmp",
@@ -97,22 +97,30 @@ return {
       end
 
       opts.mapping = {
-        -- disable follow keymap
-        ["<Down>"] = cmp.config.disable,
-        ["<Up>"] = cmp.config.disable,
-        ["<CR>"] = cmp.config.disable,
-        ["<C-Space>"] = cmp.config.disable,
         -- set new keymap
         ["<C-n>"] = cmp.mapping(move_down, { "i", "s" }),
         ["<C-p>"] = cmp.mapping(move_up, { "i", "s" }),
         ["<C-y>"] = cmp.mapping(accept_completion, { "i", "s" }),
         ["<S-CR>"] = cmp.mapping(accept_completion, { "i", "s" }),
-        ["<C-b>"] = cmp.mapping(toggle_menu, { "i", "s" }),
+        ["<C-x>"] = cmp.mapping(toggle_menu, { "i", "s" }),
+        ["<C-b>"] = cmp.mapping.scroll_docs(-4),
+        ["<C-f>"] = cmp.mapping.scroll_docs(4),
       }
+      -- set copilot super tab keymap
+      if not in_ssh then
+        opts.mapping["<Tab>"] = cmp.mapping(function(fallback)
+          local cpl = require("copilot.suggestion")
+          if cpl.is_visible() then
+            cpl.accept()
+          else
+            fallback()
+          end
+        end, { "i", "s" })
+      end
     end,
     -- disable <Tab> and <S-Tab>
-    keys = function()
-      return {}
-    end,
+    -- keys = function()
+    --   return {}
+    -- end,
   },
 }

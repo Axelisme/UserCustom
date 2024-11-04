@@ -4,16 +4,16 @@ use = "onedark"
 [filetype]
 rules = [
   # Empty files
-	{ mime = "inode/x-empty", fg = "red" },
+  { mime = "inode/x-empty", fg = "red" },
 
   # Special files
-  { mime = "image/*", fg = "#E5C07B" },  # Orange
+  { mime = "image/*", fg = "#E5C07B" }, # Orange
 
-	# Is rules
-	{ name = "*",  is = "orphan", fg = "red" },
-	{ name = "*",  is = "link",   fg = "cyan" },
-	{ name = "*/", is = "link",   fg = "cyan" },
-	{ name = "*",  is = "exec",   fg = "green" },
+  # Is rules
+  { name = "*", is = "orphan", fg = "red" },
+  { name = "*", is = "link", fg = "cyan" },
+  { name = "*/", is = "link", fg = "cyan" },
+  { name = "*", is = "exec", fg = "green" },
 
   # Fallback
   { name = "*", fg = "white" },

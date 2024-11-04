@@ -21,5 +21,7 @@ if ! command -v $name &>/dev/null; then
   install_function >/dev/null
   echo "done"
 else
-  echo "$name already installed, skipping"
+  if [ "$1" != "--quiet" ] && [ "$1" != "-q" ]; then
+    echo "$name already installed, skipping"
+  fi
 fi

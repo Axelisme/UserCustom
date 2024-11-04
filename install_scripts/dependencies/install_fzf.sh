@@ -2,18 +2,17 @@
 set -e
 
 # command name to installed
-name="lsd"
+name="fzf"
 
 # main function to install the command
 install_function() {
   mkdir -p ~/.local/bin
   cd ~/.local/bin
 
-  url=https://github.com/lsd-rs/lsd/releases/download/v1.1.5/lsd-v1.1.5-x86_64-unknown-linux-gnu.tar.gz
-  wget -O lsd.tar.gz $url
-  tar zxvf lsd.tar.gz
-  mv lsd-*/lsd lsd
-  rm -r lsd.tar.gz lsd-*
+  url=https://github.com/junegunn/fzf/releases/download/v0.55.0/fzf-0.55.0-linux_amd64.tar.gz
+  wget -O fzf.tar.gz $url
+  tar zxvf fzf.tar.gz fzf
+  rm fzf.tar.gz
 }
 
 # wrapper to install the command
@@ -22,5 +21,7 @@ if ! command -v $name &>/dev/null; then
   install_function >/dev/null
   echo "done"
 else
-  echo "$name already installed, skipping"
+  if [ "$1" != "--quiet" ] && [ "$1" != "-q" ]; then
+    echo "$name already installed, skipping"
+  fi
 fi

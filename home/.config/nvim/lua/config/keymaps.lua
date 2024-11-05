@@ -5,6 +5,9 @@
 -- Let <C-l> work in terminal mode
 vim.keymap.del("t", "<C-l>")
 
+-- Let <C-c> trigger "InsertEnter" event
+vim.keymap.set("i", "<C-c>", "<Esc>", { remap = true })
+
 -- Navigate in insert mode by Ctrl-hjkl
 vim.keymap.set("i", "<c-h>", "<Left>")
 vim.keymap.set("i", "<c-j>", "<Down>")

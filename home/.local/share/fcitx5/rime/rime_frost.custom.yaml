@@ -1,0 +1,3 @@
+patch:
+    # 简繁切换
+    traditionalize/opencc_config: s2tw.json  # s2t.json | s2hk.json | s2tw.json | s2twp.json

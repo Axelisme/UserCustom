@@ -1,0 +1,33 @@
+# Rime schema
+# encoding: utf-8
+
+__include: terra_pinyin.schema:/
+
+schema:
+  schema_id: terra_pinyin_tw
+  name: 地球拼音·臺灣正體
+  version: "0.20"
+  author:
+    - Stephen Hsieh <stephen.jk.hsieh@gmail.com>
+  description: |
+    地球拼音，輸出臺灣字形。
+
+switches:
+  - name: ascii_mode
+    reset: 0
+    states: [ 中文, 西文 ]
+  - name: full_shape
+    states: [ 半角, 全角 ]
+  - name: ascii_punct
+    states: [ 。，, ．， ]
+  - name: zh_tw
+    reset: 1
+    # 啓用opencc字形轉換，但不在選單中顯示
+
+translator:
+  spelling_hints: 0
+  # 不顯示拼音
+
+simplifier:
+  opencc_config: t2tw.json
+  option_name: zh_tw

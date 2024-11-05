@@ -1,71 +1,58 @@
+local in_ssh = os.getenv("SSH_TTY") ~= nil
+
 return {
   -- copilot
   {
     "zbirenbaum/copilot.lua",
-    -- enabled = false,
+    enabled = not in_ssh,
     event = "InsertEnter",
     cmd = "Copilot",
     build = ":Copilot auth",
-    opts = {
-      suggestion = {
-        enabled = true,
-        auto_trigger = true,
-        keymap = {
-          accept = "<C-Up>",
-          accept_word = "<C-Right>",
-          accept_line = "<C-Down>",
-          dismiss = "<C-Left>",
-        },
+    dependencies = {
+      {
+        "AndreM222/copilot-lualine",
+        lazy = true,
+        config = function()
+          local lualine = require("lualine")
+          local cfg = lualine.get_config()
+          table.insert(cfg.sections.lualine_x, 2, { "copilot", symbols = { show_colors = true } })
+          lualine.setup(cfg)
+        end,
       },
     },
-  },
-
-  -- copilot icon
-  {
-    "nvim-lualine/lualine.nvim",
-    optional = true,
-    event = "VeryLazy",
-    opts = function(_, opts)
-      local colors = {
-        [""] = LazyVim.ui.fg("Special"),
-        ["Normal"] = LazyVim.ui.fg("Special"),
-        ["Warning"] = LazyVim.ui.fg("DiagnosticError"),
-        ["InProgress"] = LazyVim.ui.fg("DiagnosticWarn"),
-      }
-      table.insert(opts.sections.lualine_x, 2, {
-        function()
-          local icon = LazyVim.config.icons.kinds.Copilot
-          local status = require("copilot.api").status.data
-          return icon .. (status.message or "")
-        end,
-        cond = function()
-          if not package.loaded["copilot"] then
-            return
-          end
-          local ok, clients = pcall(LazyVim.lsp.get_clients, { name = "copilot", bufnr = 0 })
-          if not ok then
-            return false
-          end
-          return ok and #clients > 0
-        end,
-        color = function()
-          if not package.loaded["copilot"] then
-            return
-          end
-          local status = require("copilot.api").status.data
-          return colors[status.status] or colors[""]
+    opts = function()
+      -- autocmd for disable copilot when leaving insert mode
+      vim.api.nvim_create_autocmd("InsertLeave", {
+        group = vim.api.nvim_create_augroup("copilot-insert-leave", { clear = true }),
+        desc = "disable copilot when leaving insert mode",
+        callback = function()
+          require("copilot.suggestion").dismiss()
         end,
       })
+      return {
+        panel = { enabled = false },
+        suggestion = {
+          enabled = true,
+          auto_trigger = true,
+          keymap = {
+            accept = "<C-Up>",
+            accept_word = "<C-Right>",
+            accept_line = "<C-Down>",
+            dismiss = "<C-Left>",
+          },
+        },
+        filetypes = { yaml = true, markdown = true },
+      }
     end,
   },
-
   -- completion
   {
     "hrsh7th/nvim-cmp",
-    enabled = false,
+    -- enabled = false,
     opts = function(_, opts)
       local cmp = require("cmp")
       opts.experimental = { ghost_text = false }
+      opts.view = { entries = { name = "custom", selection_order = "bottom_up" } }
 
       local toggle_menu = function()
         if cmp.visible() then
@@ -83,33 +70,57 @@ return {
         end
       end
 
+      local move_down = function(fallback)
+        if cmp.visible() then
+          ---@diagnostic disable-next-line: invisible
+          if cmp.core.view.custom_entries_view:is_direction_top_down() then
+            cmp.select_next_item()
+          else
+            cmp.select_prev_item()
+          end
+        else
+          fallback()
+        end
+      end
+
+      local move_up = function(fallback)
+        if cmp.visible() then
+          ---@diagnostic disable-next-line: invisible
+          if cmp.core.view.custom_entries_view:is_direction_top_down() then
+            cmp.select_prev_item()
+          else
+            cmp.select_next_item()
+          end
+        else
+          fallback()
+        end
+      end
+
       opts.mapping = {
-        -- disable follow keymap
-        ["<Down>"] = cmp.config.disable,
-        ["<Up>"] = cmp.config.disable,
-        ["<CR>"] = cmp.config.disable,
-        ["<C-Space>"] = cmp.config.disable,
         -- set new keymap
-        ["<C-n>"] = cmp.mapping.select_next_item({ behavior = cmp.SelectBehavior.Select }),
-        ["<C-p>"] = cmp.mapping.select_prev_item({ behavior = cmp.SelectBehavior.Select }),
+        ["<C-n>"] = cmp.mapping(move_down, { "i", "s" }),
+        ["<C-p>"] = cmp.mapping(move_up, { "i", "s" }),
         ["<C-y>"] = cmp.mapping(accept_completion, { "i", "s" }),
         ["<S-CR>"] = cmp.mapping(accept_completion, { "i", "s" }),
-        ["<C-b>"] = cmp.mapping(toggle_menu, { "i", "s" }),
+        ["<C-x>"] = cmp.mapping(toggle_menu, { "i", "s" }),
+        ["<C-b>"] = cmp.mapping.scroll_docs(-4),
+        ["<C-f>"] = cmp.mapping.scroll_docs(4),
       }
+      -- set copilot super tab keymap
+      if not in_ssh then
+        opts.mapping["<Tab>"] = cmp.mapping(function(fallback)
+          local cpl = require("copilot.suggestion")
+          if cpl.is_visible() then
+            cpl.accept()
+          else
+            fallback()
+          end
+        end, { "i", "s" })
+      end
     end,
     -- disable <Tab> and <S-Tab>
-    keys = function()
-      return {}
-    end,
-  },
-  {
-    "llllvvuu/nvim-cmp",
-    branch = "feat/above",
-    enabled = true,
-    opts = {
-      view = {
-        entries = { vertical_positioning = "above", follow_cursor = true },
-      },
-    },
+    -- keys = function()
+    --   return {}
+    -- end,
   },
 }

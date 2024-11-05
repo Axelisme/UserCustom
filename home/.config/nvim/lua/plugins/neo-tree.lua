@@ -1,22 +1,40 @@
 return {
   {
     "nvim-neo-tree/neo-tree.nvim",
+    keys = {
+      {
+        "<leader>fe",
+        function()
+          require("neo-tree.command").execute({ toggle = true, dir = vim.fn.expand("%:p:h") })
+        end,
+        desc = "Explorer NeoTree (Current File)",
+      },
+      {
+        "<leader>fE",
+        function()
+          require("neo-tree.command").execute({ toggle = true, dir = LazyVim.root() })
+        end,
+        desc = "Explorer NeoTree (Root Dir)",
+      },
+      { "<leader>e", "<leader>fe", desc = "Explorer NeoTree (Current File)", remap = true },
+      { "<leader>E", "<leader>fE", desc = "Explorer NeoTree (Root Dir)", remap = true },
+    },
     opts = {
       filesystem = {
-        bind_to_cwd = true,
+        bind_to_cwd = false,
         filtered_items = {
+          hide_gitignored = false,
           force_visible_in_empty_folder = true,
         },
       },
       window = {
         mappings = {
           ["<Tab>"] = function(state)
-            local node = state.tree:get_node()
-            if require("neo-tree.utils").is_expandable(node) then
-              state.commands["toggle_node"](state)
-            else
-              state.commands["open"](state)
-              vim.cmd("Neotree reveal")
+            local current_node = state.tree:get_node() -- this is the current node
+            local path = current_node:get_id() -- this gives you the path
+
+            if vim.fn.isdirectory(path) == 1 then
+              require("neo-tree.command").execute({ dir = path })
             end
           end,
           ["."] = function(state)
@@ -24,16 +42,9 @@ return {
             local path = current_node:get_id() -- this gives you the path
 
             if vim.fn.isdirectory(path) == 1 then
+              require("neo-tree.command").execute({ dir = path })
               vim.cmd("cd " .. path)
             end
-          end,
-        },
-      },
-      event_handlers = {
-        {
-          event = "neo_tree_buffer_enter",
-          handler = function(_)
-            vim.opt.relativenumber = true
           end,
         },
       },

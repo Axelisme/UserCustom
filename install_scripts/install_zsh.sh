@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 # command name to installed
 name="zsh"
@@ -13,10 +14,20 @@ install_function() {
   rm zsh_installer
 }
 
+# check dependencies installed
+src_dir=$(dirname $0)
+$src_dir/dependencies/install_fd.sh --quiet
+$src_dir/dependencies/install_fzf.sh --quiet
+$src_dir/dependencies/install_lsd.sh --quiet
+$src_dir/dependencies/install_ohmyposh.sh --quiet
+$src_dir/dependencies/install_ripgrep.sh --quiet
+
 # wrapper to install the command
 if ! command -v $name &>/dev/null; then
   install_function
   echo "installing $name...done"
 else
-  echo "$name already installed, skipping"
+  if [ "$1" != "--quiet" ] && [ "$1" != "-q" ]; then
+    echo "$name already installed, skipping"
+  fi
 fi

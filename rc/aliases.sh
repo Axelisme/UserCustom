@@ -32,3 +32,6 @@ command -v micromamba &>/dev/null && alias mmba='micromamba'
 
 # kitty
 [[ -n $KITTY_WINDOW_ID ]] && alias ssh='kitty +kitten ssh'
+
+# yazi
+command -v yazi &>/dev/null && alias yy='yazi'

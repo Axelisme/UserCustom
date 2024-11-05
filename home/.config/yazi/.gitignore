@@ -1,0 +1,4 @@
+flavors/
+plugins/*
+!plugins/modify_preview_width.yazi/
+package.toml

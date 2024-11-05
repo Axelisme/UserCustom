@@ -2,17 +2,22 @@
 set -e
 
 # command name to installed
-name="lazygit"
+name="magick"
 
 # main function to install the command
 install_function() {
   mkdir -p ~/.local/bin
   cd ~/.local/bin
 
-  url=https://github.com/jesseduffield/lazygit/releases/download/v0.44.1/lazygit_0.44.1_Linux_x86_64.tar.gz
-  wget -O lazygit.tar.gz $url
-  tar zxvf lazygit.tar.gz lazygit
-  rm lazygit.tar.gz
+  url=https://imagemagick.org/archive/binaries/magick
+  wget -O magick $url
+
+  # try to execute the command, if it fails, remove the file and raise an error
+  if ! ./magick -version &>/dev/null; then
+    rm magick
+    echo "failed to install $name"
+    exit 1
+  fi
 }
 
 # wrapper to install the command

@@ -5,8 +5,14 @@
 -- Let <C-l> work in terminal mode
 vim.keymap.del("t", "<C-l>")
 
+-- Let <C-c> trigger "InsertEnter" event
+vim.keymap.set("i", "<C-c>", "<Esc>", { remap = true })
+
 -- Navigate in insert mode by Ctrl-hjkl
 vim.keymap.set("i", "<c-h>", "<Left>")
 vim.keymap.set("i", "<c-j>", "<Down>")
 vim.keymap.set("i", "<c-k>", "<Up>")
 vim.keymap.set("i", "<c-l>", "<Right>")
+
+-- cd to the directory of the current file
+vim.keymap.set("n", "<leader>.", ":cd %:p:h<CR>:pwd<CR>", { desc = "Cd to current file directory" })

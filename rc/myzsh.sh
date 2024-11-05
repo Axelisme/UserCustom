@@ -20,31 +20,25 @@ fi
 # 加载zinit
 source $ZINIT_HOME/zinit.zsh
 
-# Load completions
-autoload -Uz compinit && compinit
-
-check_have_sudo() {
-  command -v sudo &>/dev/null && groups | grep -q -E 'sudo|wheel'
+# 插件
+function _history_substring_search_config() {
+  bindkey '^[[A' history-substring-search-up
+  bindkey '^[[B' history-substring-search-down
 }
 
-# 插件
-command -v fzf &>/dev/null && zinit light Aloxaf/fzf-tab
-zinit light zsh-users/zsh-completions
-zinit light zsh-users/zsh-autosuggestions
-zinit light zdharma-continuum/fast-syntax-highlighting
-command -v git &>/dev/null && zinit snippet OMZP::git
-check_have_sudo && zinit snippet OMZP::sudo
-zinit snippet OMZP::extract
-zinit snippet OMZL::completion.zsh
-# zinit snippet OMZP::command-not-found
-
-unset check_have_sudo
+zinit wait lucid for \
+  atinit"ZINIT[COMPINIT_OPTS]=-C; zicompinit; zicdreplay" zdharma-continuum/fast-syntax-highlighting \
+  blockf zsh-users/zsh-completions \
+  atload'!_zsh_autosuggest_start' zsh-users/zsh-autosuggestions \
+  atload'_history_substring_search_config' zsh-users/zsh-history-substring-search \
+  OMZP::sudo \
+  OMZP::extract \
+  OMZL::completion.zsh \
+  OMZL::clipboard.zsh
+# command -v fzf &>/dev/null && zinit light Aloxaf/fzf-tab
+unset _history_substring_search_config
 
 # Keybindings
-zinit load 'zsh-users/zsh-history-substring-search'
-bindkey -e
-bindkey '^[[A' history-substring-search-up
-bindkey '^[[B' history-substring-search-down
 bindkey '\033[H' beginning-of-line
 bindkey '\033[F' end-of-line
 bindkey '^[[3~' delete-char
@@ -65,26 +59,20 @@ setopt hist_ignore_dups
 setopt hist_find_no_dups
 
 # Completion styling
-zstyle ':completion:*' menu no
-if command -v fzf &>/dev/null; then
-  zstyle ':fzf-tab:*' continuous-trigger '/'
-  zstyle ':fzf-tab:complete:*' fzf-bindings 'shift-tab:toggle+down,ctrl-a:toggle-all'
-fi
-
-# Shell integrations
-# command -v zoxide &>/dev/null && eval "$(zoxide init zsh)" && alias cd='z'
+# zstyle ':completion:*' menu no
+# if command -v fzf &>/dev/null; then
+#   zstyle ':fzf-tab:*' continuous-trigger '/'
+#   zstyle ':fzf-tab:complete:*' fzf-bindings 'shift-tab:toggle+down,ctrl-a:toggle-all'
+# fi
 
 # Prompt
 if command -v oh-my-posh &>/dev/null; then
   if command -v tput &>/dev/null && [[ $(tput colors) == "256" ]]; then
-    if [[ -v SSH_TTY ]]; then
-      eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/ssh.toml)"
-    else
-      eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/main.toml)"
-    fi
+    ohmyposh_cfg=$HOME/.config/ohmyposh/main.yaml
   else
-    eval "$(oh-my-posh init zsh --config $HOME/.config/ohmyposh/tty.toml)"
+    ohmyposh_cfg=$HOME/.config/ohmyposh/tty.yaml
   fi
+  eval "$(oh-my-posh init zsh --config $ohmyposh_cfg)"
 else
   setopt PROMPT_SUBST
   export PROMPT=$FALLBACK_PROMPT

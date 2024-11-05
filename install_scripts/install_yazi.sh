@@ -2,18 +2,27 @@
 set -e
 
 # command name to installed
-name="lazygit"
+name="yazi"
 
 # main function to install the command
 install_function() {
   mkdir -p ~/.local/bin
   cd ~/.local/bin
 
-  url=https://github.com/jesseduffield/lazygit/releases/download/v0.44.1/lazygit_0.44.1_Linux_x86_64.tar.gz
-  wget -O lazygit.tar.gz $url
-  tar zxvf lazygit.tar.gz lazygit
-  rm lazygit.tar.gz
+  url=https://github.com/sxyazi/yazi/releases/download/nightly/yazi-x86_64-unknown-linux-gnu.zip
+  wget -O yazi.zip $url
+  unzip yazi.zip && mv yazi-* yazi_pkg
+
+  mv yazi_pkg/ya* .
+
+  rm yazi.zip && rm -rf yazi_pkg
 }
+
+# check dependencies installed
+src_dir=$(dirname $0)
+$src_dir/dependencies/install_fd.sh --quiet
+$src_dir/dependencies/install_glow.sh --quiet
+$src_dir/dependencies/install_unzip.sh --quiet
 
 # wrapper to install the command
 if ! command -v $name &>/dev/null; then

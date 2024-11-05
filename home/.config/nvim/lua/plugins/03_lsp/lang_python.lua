@@ -1,26 +1,12 @@
-local function shorter_name(filename)
-  return filename:gsub(os.getenv("HOME"), "~"):gsub("/bin/python", "")
-end
-
-local function get_venv(variable)
-  local venv = os.getenv(variable)
-  if venv ~= nil and string.find(venv, "/") then
-    local orig_venv = venv
-    for w in orig_venv:gmatch("([^/]+)") do
-      venv = w
-    end
-    venv = string.format("%s", venv)
-  end
-  return venv
-end
-
 return {
   {
     -- let mamba env can be find by venv-selector.nvim
     "linux-cultist/venv-selector.nvim",
     branch = "regexp",
     ft = "python",
-    dependencies = { "neovim/nvim-lspconfig" },
+    cmd = "VenvSelect",
+    dependencies = { "neovim/nvim-lspconfig", "telescope.nvim" },
+    keys = { { "<leader>cv", "<cmd>:VenvSelect<cr>", desc = "Select VirtualEnv", ft = "python" } },
     opts = {
       settings = {
         search = {
@@ -28,7 +14,9 @@ return {
           workspace = false,
           micromamba_envs = {
             command = "$FD 'bin/python$' $HOME/micromamba/envs --full-path --color never",
-            on_telescope_result_callback = shorter_name,
+            on_telescope_result_callback = function(filepath)
+              return vim.fs.basename(filepath:gsub("/bin/python", ""))
+            end,
             type = "anaconda",
           },
         },
@@ -42,26 +30,28 @@ return {
   },
   {
     "lualine.nvim",
-    opts = {
-      sections = {
-        lualine_y = {
-          {
-            function()
-              local venv = get_venv("CONDA_PREFIX") or "NO ENV"
-              return " " .. venv
-            end,
-            cond = function()
-              return vim.bo.filetype == "python"
-            end,
-          },
-        },
-      },
-    },
+    opts = function(_, opts)
+      table.insert(opts.sections.lualine_y, {
+        function()
+          local venv = os.getenv("CONDA_PREFIX")
+          if venv ~= nil and string.find(venv, "/") then
+            local orig_venv = venv
+            for w in orig_venv:gmatch("([^/]+)") do
+              venv = w
+            end
+            -- venv = string.format("%s", venv)
+          end
+          return " " .. (venv or "NO ENV")
+        end,
+        cond = function()
+          return vim.bo.filetype == "python"
+        end,
+      })
+    end,
   },
   {
     "neovim/nvim-lspconfig",
     opts = {
-      inlay_hints = { enabled = false },
       servers = {
         basedpyright = {
           settings = {
@@ -71,6 +61,7 @@ return {
             },
             basedpyright = {
               analysis = {
+                ignore = { "*" }, -- Use Ruff
                 -- Basic type checking
                 typeCheckingMode = "basic",
               },

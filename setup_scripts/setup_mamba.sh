@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 # if micromamba is not installed, show a warning and exit
 if ! type micromamba >/dev/null 2>&1; then

@@ -1,16 +1,39 @@
-#:schema https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json
 
-version: 2
+version: 3
 final_space: true
 console_title_template: "{{ .Shell }} in {{ .Folder }}"
+
+secondary_prompt:
+  template: ">> "
+  foreground: lightGreen
+  background: transparent
+transient_prompt:
+  template: "{{.UserName}} >"
+  background: transparent
+  foreground_templates:
+    - "{{if gt .Code 0}}red{{end}}"
+    - "{{if eq .Code 0}}lightGreen{{end}}"
+
 blocks:
   - type: prompt
     alignment: left
     segments:
+      - type: ipify
+        style: plain
+        foreground: blue
+        background: transparent
+        template: "{{ .IP }}"
+        cache:
+          duration: 1h
+          strategy: session
+        properties:
+          http_timeout: 500
+
       - type: path
         style: plain
-        background: transparent
         foreground: yellow
+        background: transparent
         properties:
           style: full
 
@@ -18,10 +41,7 @@ blocks:
         style: plain
         foreground: red
         background: transparent
-        template:
-          ( {{ .HEAD }}{{ if gt .Ahead 0 }} ^{{.Ahead}}{{end}}{{ if gt .Behind 0
-          }} v{{.Behind}}{{end}}{{ if .Working.Changed }} +{{ .Working.Added }}
-          ~{{ .Working.Modified }} -{{ .Working.Deleted }}{{ end }} )
+        template: ( {{ .HEAD }}{{ if gt .Ahead 0 }} ^{{.Ahead}}{{end}}{{ if gt .Behind 0 }} v{{.Behind}}{{end}}{{ if .Working.Changed }} +{{ .Working.Added }} ~{{ .Working.Modified }} -{{ .Working.Deleted }}{{ end }} )
         properties:
           branch_icon: ""
           commit_icon: "@"
@@ -46,12 +66,10 @@ blocks:
         style: plain
         foreground: yellow
         background: transparent
-        template:
-          " {{ if .Error }}{{ .Error }}{{ else }}{{ if .Venv }}{{ .Venv }} {{
-          end }}{{ end }}"
+        template: " {{ if .Error }}{{ .Error }}{{ else }}{{ if .Venv }}{{ .Venv }} {{ end }}{{ end }}"
         properties:
-          home_enabled: true
           fetch_version: false
+          home_enabled: true
 
       - type: text
         style: plain
@@ -61,24 +79,12 @@ blocks:
 
   - type: prompt
     alignment: left
-    newline: true
     segments:
       - type: text
         style: plain
+        background: transparent
         foreground_templates:
           - "{{if gt .Code 0}}red{{end}}"
           - "{{if eq .Code 0}}lightGreen{{end}}"
-        background: transparent
         template: "{{.UserName}} >"
-
-transient_prompt:
-  foreground_templates:
-    - "{{if gt .Code 0}}red{{end}}"
-    - "{{if eq .Code 0}}lightGreen{{end}}"
-  background: transparent
-  template: "{{.UserName}} >"
-
-secondary_prompt:
-  foreground: lightGreen
-  background: transparent
-  template: ">> "
+    newline: true

@@ -74,7 +74,6 @@ return {
   {
     "benlubas/molten-nvim",
     build = ":UpdateRemotePlugins",
-    ft = "python",
     cmd = "MoltenInit",
     dependencies = { "image.nvim" },
     keys = {

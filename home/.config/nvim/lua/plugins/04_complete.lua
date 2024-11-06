@@ -1,54 +1,8 @@
-local in_ssh = os.getenv("SSH_TTY") ~= nil
-
 return {
-  -- copilot
-  {
-    "zbirenbaum/copilot.lua",
-    enabled = not in_ssh,
-    event = "InsertEnter",
-    cmd = "Copilot",
-    build = ":Copilot auth",
-    dependencies = {
-      {
-        "AndreM222/copilot-lualine",
-        lazy = true,
-        config = function()
-          local lualine = require("lualine")
-          local cfg = lualine.get_config()
-          table.insert(cfg.sections.lualine_x, 2, { "copilot", symbols = { show_colors = true } })
-          lualine.setup(cfg)
-        end,
-      },
-    },
-    opts = function()
-      -- autocmd for disable copilot when leaving insert mode
-      vim.api.nvim_create_autocmd("InsertLeave", {
-        group = vim.api.nvim_create_augroup("copilot-insert-leave", { clear = true }),
-        desc = "disable copilot when leaving insert mode",
-        callback = function()
-          require("copilot.suggestion").dismiss()
-        end,
-      })
-      return {
-        panel = { enabled = false },
-        suggestion = {
-          enabled = true,
-          auto_trigger = true,
-          keymap = {
-            accept = "<C-Up>",
-            accept_word = "<C-Right>",
-            accept_line = "<C-Down>",
-            dismiss = "<C-Left>",
-          },
-        },
-        filetypes = { yaml = true, markdown = true },
-      }
-    end,
-  },
-  -- completion
   {
     "hrsh7th/nvim-cmp",
     -- enabled = false,
+    optional = true,
     opts = function(_, opts)
       local cmp = require("cmp")
       opts.experimental = { ghost_text = false }
@@ -106,17 +60,26 @@ return {
         ["<C-b>"] = cmp.mapping.scroll_docs(-4),
         ["<C-f>"] = cmp.mapping.scroll_docs(4),
       }
-      -- set copilot super tab keymap
-      if not in_ssh then
-        opts.mapping["<Tab>"] = cmp.mapping(function(fallback)
-          local cpl = require("copilot.suggestion")
-          if cpl.is_visible() then
-            cpl.accept()
-          else
-            fallback()
-          end
-        end, { "i", "s" })
-      end
     end,
+  },
+  {
+    "saghen/blink.cmp",
+    optional = true,
+    opts = {
+      keymap = {
+        preset = "default",
+        ["<C-space>"] = { "fallback" },
+        ["<C-x>"] = { "show", "hide" },
+        ["<Tab>"] = { "fallback" },
+        ["<S-Tab>"] = { "fallback" },
+      },
+      windows = { ghost_text = false },
+      sources = {
+        -- list of enabled providers
+        completion = {
+          enabled_providers = { "lsp", "path", "buffer" },
+        },
+      },
+    },
   },
 }

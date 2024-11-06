@@ -1,5 +1,6 @@
 return {
   { "catppuccin", enabled = false },
+  { "rafamadriz/friendly-snippets", enabled = false },
   { "nvim-snippets", enabled = false },
   { "ts-comments.nvim", enabled = false },
   { "tokyonight.nvim", enabled = false },

@@ -118,9 +118,5 @@ return {
         end, { "i", "s" })
       end
     end,
-    -- disable <Tab> and <S-Tab>
-    -- keys = function()
-    --   return {}
-    -- end,
   },
 }

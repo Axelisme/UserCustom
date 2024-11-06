@@ -1,5 +1,4 @@
 return {
-  -- { "telescope.nvim", enabled = false },
   { "catppuccin", enabled = false },
   { "nvim-snippets", enabled = false },
   { "ts-comments.nvim", enabled = false },

@@ -71,4 +71,27 @@ return {
       },
     },
   },
+  {
+    "benlubas/molten-nvim",
+    build = ":UpdateRemotePlugins",
+    ft = "python",
+    cmd = "MoltenInit",
+    dependencies = { "image.nvim" },
+    keys = {
+      { "<localleader>mi", ":MoltenInit<CR>", { silent = true, desc = "Initialize the plugin" } },
+      { "<localleader>ml", ":MoltenEvaluateLine<CR>", { silent = true, desc = "Evaluate line" } },
+      { "<localleader>ms", ":<C-u>MoltenEvaluateVisual<CR>gv<esc>", { silent = true, desc = "Evaluate selection" } },
+    },
+    config = function()
+      vim.g.molten_image_provider = "image.nvim"
+
+      local function map(mode, key, cmd, desc)
+        vim.keymap.set(mode, key, cmd, { silent = true, desc = desc })
+      end
+      map("n", "<localleader>mr", ":MoltenReevalCell<CR>", "Re-evaluate cell")
+      map("n", "<localleader>md", ":MoltenDelete<CR>", "Delete cell")
+      map("n", "<localleader>mh", ":MoltenHideOutput<CR>", "Hide output")
+      map("n", "<localleader>mo", ":noautocmd MoltenEnterOutput<CR>", "Open output")
+    end,
+  },
 }

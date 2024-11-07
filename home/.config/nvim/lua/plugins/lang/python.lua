@@ -3,10 +3,8 @@ return {
     -- let mamba env can be find by venv-selector.nvim
     "linux-cultist/venv-selector.nvim",
     branch = "regexp",
-    ft = "python",
-    cmd = "VenvSelect",
-    dependencies = { "neovim/nvim-lspconfig", "telescope.nvim" },
-    keys = { { "<leader>cv", "<cmd>:VenvSelect<cr>", desc = "Select VirtualEnv", ft = "python" } },
+    -- enabled = false,
+    optional = true,
     opts = {
       settings = {
         search = {
@@ -30,6 +28,7 @@ return {
   },
   {
     "lualine.nvim",
+    optional = true,
     opts = function(_, opts)
       table.insert(opts.sections.lualine_y, {
         function()
@@ -51,6 +50,7 @@ return {
   },
   {
     "neovim/nvim-lspconfig",
+    optional = true,
     opts = {
       servers = {
         basedpyright = {

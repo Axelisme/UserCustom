@@ -1,39 +1,44 @@
-[[manager.prepend_keymap]]
-on = ["c", "a"]
-run = "plugin compress"
-desc = "Archive selected files"
-
-[[manager.prepend_keymap]]
-on = ["c", "m"]
-run = "plugin chmod"
-desc = "Chmod on selected files"
-
-[[manager.prepend_keymap]]
-on = "*"
-run = "shell 'for file in $@; do if [ -x $file ]; then chmod -x $file; else chmod +x $file; fi; done' --confirm"
-desc = "Toggle executable"
-
-[[manager.prepend_keymap]]
-on = "!"
-run = 'shell "$SHELL" --block --confirm'
-desc = "Open shell here"
-
-[[manager.prepend_keymap]]
-on = "b"
-run = "plugin what-size"
-desc = "Calc size of selection or cwd"
-
-[[manager.prepend_keymap]]
-on = "T"
-run = "plugin --sync modify_preview_width --args=toggle"
-desc = "Toggle preview"
-
-[[manager.prepend_keymap]]
-on = "<C-Right>"
-run = "plugin --sync modify_preview_width --args=decrease"
-desc = "Decrease preview width"
-
-[[manager.prepend_keymap]]
-on = "<C-Left>"
-run = "plugin --sync modify_preview_width --args=increase"
-desc = "Increase preview width"
+[manager]
+prepend_keymap = [
+  { on = "h", run = "leave", desc = "Go back to the parent directory" },
+  { on = "l", run = "enter", desc = "Enter the selected directory" },
+  { on = "p", run = [
+    "yank",
+    "paste",
+    "unyank",
+  ], desc = "Paste selected files" },
+  { on = "P", run = [
+    "yank --cut",
+    "paste",
+    "unyank",
+  ], desc = "Move selected files" },
+  { on = "-", run = [
+    "yank",
+    "link",
+    "unyank",
+  ], desc = "Symlink the absolute path of yanked files" },
+  { on = "_", run = [
+    "yank",
+    "link --relative",
+    "unyank",
+  ], desc = "Symlink the relative path of yanked files" },
+  { on = "<C-->", run = [
+    "yank",
+    "hardlink",
+    "unyank",
+  ], desc = "Hardlink yanked files" },
+  { on = [
+    "c",
+    "a",
+  ], run = "plugin compress", desc = "Archive selected files" },
+  { on = [
+    "c",
+    "m",
+  ], run = "plugin chmod", desc = "Chmod on selected files" },
+  { on = "*", run = "shell 'for file in $@; do if [ -x $file ]; then chmod -x $file; else chmod +x $file; fi; done' --confirm", desc = "Toggle executable" },
+  { on = "!", run = 'shell "$SHELL" --block --confirm', desc = "Open shell here" },
+  { on = "b", run = "plugin what-size", desc = "Calc size of selection or cwd" },
+  { on = "T", run = "plugin --sync modify_preview_width --args=toggle", desc = "Toggle preview" },
+  { on = "<C-Right>", run = "plugin --sync modify_preview_width --args=decrease", desc = "Decrease preview width" },
+  { on = "<C-Left>", run = "plugin --sync modify_preview_width --args=increase", desc = "Increase preview width" },
+]

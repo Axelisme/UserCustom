@@ -3,10 +3,8 @@ return {
     -- let mamba env can be find by venv-selector.nvim
     "linux-cultist/venv-selector.nvim",
     branch = "regexp",
-    ft = "python",
-    cmd = "VenvSelect",
-    dependencies = { "neovim/nvim-lspconfig", "telescope.nvim" },
-    keys = { { "<leader>cv", "<cmd>:VenvSelect<cr>", desc = "Select VirtualEnv", ft = "python" } },
+    -- enabled = false,
+    optional = true,
     opts = {
       settings = {
         search = {
@@ -30,6 +28,7 @@ return {
   },
   {
     "lualine.nvim",
+    optional = true,
     opts = function(_, opts)
       table.insert(opts.sections.lualine_y, {
         function()
@@ -51,6 +50,7 @@ return {
   },
   {
     "neovim/nvim-lspconfig",
+    optional = true,
     opts = {
       servers = {
         basedpyright = {
@@ -70,5 +70,27 @@ return {
         },
       },
     },
+  },
+  {
+    "benlubas/molten-nvim",
+    build = ":UpdateRemotePlugins",
+    cmd = "MoltenInit",
+    dependencies = { "image.nvim" },
+    keys = {
+      { "<localleader>mi", ":MoltenInit<CR>", { silent = true, desc = "Initialize the plugin" } },
+      { "<localleader>ml", ":MoltenEvaluateLine<CR>", { silent = true, desc = "Evaluate line" } },
+      { "<localleader>ms", ":<C-u>MoltenEvaluateVisual<CR>gv<esc>", { silent = true, desc = "Evaluate selection" } },
+    },
+    config = function()
+      vim.g.molten_image_provider = "image.nvim"
+
+      local function map(mode, key, cmd, desc)
+        vim.keymap.set(mode, key, cmd, { silent = true, desc = desc })
+      end
+      map("n", "<localleader>mr", ":MoltenReevalCell<CR>", "Re-evaluate cell")
+      map("n", "<localleader>md", ":MoltenDelete<CR>", "Delete cell")
+      map("n", "<localleader>mh", ":MoltenHideOutput<CR>", "Hide output")
+      map("n", "<localleader>mo", ":noautocmd MoltenEnterOutput<CR>", "Open output")
+    end,
   },
 }

@@ -32,6 +32,7 @@ return {
   },
   {
     "neo-tree.nvim",
+    optional = true,
     opts = {
       commands = {
         toggle_preview_lazy_image = function(state)

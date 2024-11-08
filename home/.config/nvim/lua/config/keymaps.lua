@@ -3,7 +3,7 @@
 -- Add any additional keymaps here
 
 -- Let <C-l> work in terminal mode
-vim.keymap.del("t", "<C-l>")
+vim.keymap.set("t", "<C-x>", "clear<CR>", { desc = "Clear terminal" })
 
 -- Let <C-c> trigger "InsertEnter" event
 vim.keymap.set("i", "<C-c>", "<Esc>", { remap = true })

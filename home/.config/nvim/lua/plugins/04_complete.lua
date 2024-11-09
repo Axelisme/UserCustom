@@ -6,7 +6,7 @@ return {
       keymap = {
         preset = "enter",
         ["<C-space>"] = { "fallback" },
-        ["<C-x>"] = { "show", "hide" },
+        ["<C-x>"] = { "hide_documentation", "hide" },
         ["<Up>"] = { "fallback" },
         ["<Down>"] = { "fallback" },
       },

@@ -47,6 +47,7 @@ src_dir=$(dirname $0)
 $src_dir/dependencies/install_fd.sh --quiet
 $src_dir/dependencies/install_fzf.sh --quiet
 # $src_dir/dependencies/install_magick.sh --quiet # optional
+$src_dir/dependencies/install_nodejs.sh --quiet
 $src_dir/dependencies/install_ripgrep.sh --quiet
 
 # src_dir/install_lazygit.sh --quiet # optional

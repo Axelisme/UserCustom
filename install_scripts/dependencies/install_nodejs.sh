@@ -10,13 +10,9 @@ install_function() {
   cd ~/.local
 
   url=https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.xz
-  wget -O node.tar.gz $url
-  tar xJvf node.tar.gz
-  mv node-*/bin bin
-  mv node-*/lib lib
-  mv node-*/share share
-  mv node-*/include include
-  rm -rf node.tar.gz node-*
+  wget -O node.tar.xz $url
+  tar xvf node.tar.xz --strip-components=1
+  rm node.tar.xz LICENSE *.md
 }
 
 # wrapper to install the command

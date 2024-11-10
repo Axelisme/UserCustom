@@ -9,9 +9,23 @@ return {
     "3rd/image.nvim",
     enabled = enable_image,
     lazy = true,
-    dependencies = {
-      { "leafo/magick", lazy = true },
-    },
+    init = function()
+      if not use_image then
+        return
+      end
+      -- Show image
+      vim.api.nvim_create_autocmd("BufEnter", {
+        pattern = { "*.png", "*.jpg", "*.jpeg", "*.webp", "*.avif" },
+        group = vim.api.nvim_create_augroup("show_image", { clear = true }),
+        callback = function(event)
+          local buf = event.buf
+          local win = vim.api.nvim_get_current_win()
+          local path = vim.api.nvim_buf_get_name(buf)
+
+          require("image").hijack_buffer(path, win, buf)
+        end,
+      })
+    end,
     opts = {
       backend = "kitty",
       integrations = {

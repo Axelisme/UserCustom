@@ -7,6 +7,7 @@ vim.g.lazyvim_python_ruff = "ruff"
 
 vim.opt.showcmdloc = "statusline"
 
-vim.opt.foldlevel = 99
 vim.opt.foldlevelstart = 4
-vim.opt.foldnestmax = 4
+vim.opt.foldnestmax = 8
+
+vim.g.ai_cmp = false

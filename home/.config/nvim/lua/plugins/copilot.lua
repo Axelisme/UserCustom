@@ -4,18 +4,17 @@ return {
   {
     "zbirenbaum/copilot.lua",
     enabled = not in_ssh,
-    -- enabled = false,
-    event = "InsertEnter",
-    cmd = "Copilot",
-    build = ":Copilot auth",
+    -- event = "InsertEnter",
     dependencies = {
       {
         "AndreM222/copilot-lualine",
         lazy = true,
         config = function()
+          -- overwrite default status icon
           local lualine = require("lualine")
           local cfg = lualine.get_config()
-          table.insert(cfg.sections.lualine_x, 2, { "copilot", symbols = { show_colors = true } })
+          -- table.insert(cfg.sections.lualine_x, 2, { "copilot", symbols = { show_colors = true } })
+          cfg.sections.lualine_x[2] = { "copilot", symbols = { show_colors = true } }
           lualine.setup(cfg)
         end,
       },
@@ -30,10 +29,22 @@ return {
         end,
       })
 
+      -- add ai accept function
+      ---@diagnostic disable-next-line: duplicate-set-field
+      LazyVim.cmp.actions.ai_accept = function()
+        local has_words_before = function()
+          local col = vim.fn.col(".")
+          return vim.fn.getline("."):sub(1, col - 1):match("%S")
+        end
+        if has_words_before() and require("copilot.suggestion").is_visible() then
+          LazyVim.create_undo()
+          require("copilot.suggestion").accept()
+          return true
+        end
+      end
+
       return {
-        panel = { enabled = false },
         suggestion = {
-          enabled = true,
           auto_trigger = true,
           keymap = {
             accept = "<C-Up>",
@@ -42,35 +53,8 @@ return {
             dismiss = "<C-Left>",
           },
         },
-        filetypes = { yaml = true, markdown = true },
+        filetypes = { yaml = true },
       }
     end,
-  },
-  {
-    "saghen/blink.cmp",
-    optional = true,
-    opts = {
-      keymap = {
-        ["<Tab>"] = {
-          "snippet_forward",
-          function()
-            if in_ssh then
-              return false
-            end
-            local has_words_before = function()
-              local col = vim.fn.col(".")
-              return vim.fn.getline("."):sub(1, col - 1):match("%S")
-            end
-            if not has_words_before() or not require("copilot.suggestion").is_visible() then
-              return false
-            end
-            LazyVim.create_undo()
-            require("copilot.suggestion").accept()
-            return true
-          end,
-          "fallback",
-        },
-      },
-    },
   },
 }

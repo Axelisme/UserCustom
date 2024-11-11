@@ -3,6 +3,7 @@ return {
     "saghen/blink.cmp",
     -- enabled = false,
     opts = {
+      accept = { auto_brackets = { enabled = false } },
       keymap = {
         preset = "enter",
         ["<C-space>"] = { "fallback" },
@@ -10,7 +11,6 @@ return {
         ["<Up>"] = { "fallback" },
         ["<Down>"] = { "fallback" },
       },
-      windows = { ghost_text = false },
     },
   },
 }

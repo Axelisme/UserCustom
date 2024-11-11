@@ -64,6 +64,7 @@ return {
                 ignore = { "*" }, -- Use Ruff
                 -- Basic type checking
                 typeCheckingMode = "basic",
+                autoImportCompletions = false,
               },
             },
           },

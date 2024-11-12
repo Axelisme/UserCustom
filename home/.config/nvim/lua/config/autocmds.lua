@@ -38,3 +38,11 @@ autocmd({ "BufReadPre", "BufReadPost" }, {
   group = augroup("no_no_name_buffer", { clear = true }),
   desc = "no No Name Buffer",
 })
+
+-- Enable <C-l> in terminal
+autocmd("TermOpen", {
+  desc = "Enable <C-l> in terminal",
+  callback = function(ev)
+    vim.keymap.set("t", "<C-l>", "<C-l>", { buffer = ev.buf, nowait = true })
+  end,
+})

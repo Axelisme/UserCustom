@@ -1,7 +1,5 @@
 local in_kitty = os.getenv("KITTY_WINDOW_ID") ~= nil
-local enable_image = vim.fn.executable("make") == 1
-  and vim.fn.executable("magick") == 1
-  and vim.fn.filereadable("/usr/include/readline/readline.h") == 1
+local enable_image = vim.fn.executable("make") == 1 and vim.fn.executable("magick") == 1
 local use_image = in_kitty and enable_image
 
 return {

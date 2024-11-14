@@ -1,24 +1,10 @@
-local in_ssh = os.getenv("SSH_TTY") ~= nil
+In_ssh = os.getenv("SSH_TTY") ~= nil
 
 return {
   {
     "zbirenbaum/copilot.lua",
-    enabled = not in_ssh,
-    -- event = "InsertEnter",
-    dependencies = {
-      {
-        "AndreM222/copilot-lualine",
-        lazy = true,
-        config = function()
-          -- overwrite default status icon
-          local lualine = require("lualine")
-          local cfg = lualine.get_config()
-          -- table.insert(cfg.sections.lualine_x, 2, { "copilot", symbols = { show_colors = true } })
-          cfg.sections.lualine_x[2] = { "copilot", symbols = { show_colors = true } }
-          lualine.setup(cfg)
-        end,
-      },
-    },
+    enabled = not In_ssh,
+    dependencies = { "AndreM222/copilot-lualine", lazy = true },
     opts = function()
       -- autocmd for disable copilot when leaving insert mode
       vim.api.nvim_create_autocmd("InsertLeave", {
@@ -55,6 +41,13 @@ return {
         },
         filetypes = { yaml = true },
       }
+    end,
+  },
+  {
+    "nvim-lualine/lualine.nvim",
+    optional = true,
+    opts = function(_, opts)
+      opts.sections.lualine_x[2] = { "copilot", symbols = { show_colors = true } }
     end,
   },
 }

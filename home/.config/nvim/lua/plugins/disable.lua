@@ -1,4 +1,5 @@
 return {
+  { "b0o/SchemaStore.nvim", enabled = false },
   { "catppuccin", enabled = false },
   { "ts-comments.nvim", enabled = false },
   { "tokyonight.nvim", enabled = false },

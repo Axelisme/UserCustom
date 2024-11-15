@@ -4,7 +4,6 @@ return {
   {
     "zbirenbaum/copilot.lua",
     enabled = not In_ssh,
-    dependencies = { "AndreM222/copilot-lualine", lazy = true },
     opts = function()
       -- autocmd for disable copilot when leaving insert mode
       vim.api.nvim_create_autocmd("InsertLeave", {
@@ -41,13 +40,6 @@ return {
         },
         filetypes = { yaml = true },
       }
-    end,
-  },
-  {
-    "nvim-lualine/lualine.nvim",
-    optional = true,
-    opts = function(_, opts)
-      opts.sections.lualine_x[2] = { "copilot", symbols = { show_colors = true } }
     end,
   },
 }

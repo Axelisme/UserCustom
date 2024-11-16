@@ -3,6 +3,7 @@ In_ssh = os.getenv("SSH_TTY") ~= nil
 return {
   {
     "zbirenbaum/copilot.lua",
+    optional = true,
     enabled = not In_ssh,
     opts = function()
       -- autocmd for disable copilot when leaving insert mode

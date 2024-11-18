@@ -1,10 +1,7 @@
-In_ssh = os.getenv("SSH_TTY") ~= nil
-
 return {
   {
     "supermaven-inc/supermaven-nvim",
     optional = true,
-    enabled = not In_ssh,
     opts = function()
       -- add ai accept function
       ---@diagnostic disable-next-line: duplicate-set-field

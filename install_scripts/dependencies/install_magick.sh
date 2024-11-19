@@ -11,6 +11,7 @@ install_function() {
 
   url=https://imagemagick.org/archive/binaries/magick
   wget -O magick $url
+  chmod +x magick
 
   # try to execute the command, if it fails, remove the file and raise an error
   if ! ./magick -version &>/dev/null; then

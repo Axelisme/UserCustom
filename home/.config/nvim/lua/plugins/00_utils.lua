@@ -20,8 +20,12 @@ function M.telescope_image_preview()
       return
     end
 
+    -- get window size and set image size
+    local width = vim.api.nvim_win_get_width(winid)
+    local height = vim.api.nvim_win_get_height(winid)
+
     vim.schedule(function()
-      image:render()
+      image:render({ width = width, height = height })
     end)
 
     is_image_preview = true

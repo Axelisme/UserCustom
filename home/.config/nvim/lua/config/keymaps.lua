@@ -2,11 +2,11 @@
 -- Default keymaps that are always set: https://github.com/LazyVim/LazyVim/blob/main/lua/lazyvim/config/keymaps.lua
 -- Add any additional keymaps here
 
--- Let <C-l> work in terminal mode
-vim.keymap.set("t", "<C-l>", "<C-l>", { desc = "Clear terminal" })
-
 -- Let <C-c> trigger "InsertEnter" event
 vim.keymap.set("i", "<C-c>", "<Esc>", { remap = true })
+
+-- <Enter> in normal mode to insert newline below
+vim.keymap.set("n", "<Enter>", "o<Esc>", { remap = true })
 
 -- Navigate in insert mode by Ctrl-hjkl
 vim.keymap.set("i", "<c-h>", "<Left>")

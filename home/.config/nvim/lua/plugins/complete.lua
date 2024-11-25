@@ -2,6 +2,7 @@ return {
   {
     "saghen/blink.cmp",
     -- enabled = false,
+    optional = true,
     opts = {
       accept = { auto_brackets = { enabled = false } },
       keymap = {

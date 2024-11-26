@@ -7,6 +7,7 @@ UserCustom=$(dirname $(dirname $(realpath "$0")))
 backup_cp() {
   src_dir=$1
   dst_dir=$2
+  mkdir -p $dst_dir
   for src in $(realpath $src_dir/*); do
     dst=$dst_dir/$(basename $src)
 

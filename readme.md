@@ -31,5 +31,5 @@
 ./setup_scripts/setup_mamba.sh
 ./setup_scripts/setup_git.sh
 ./setup_scripts/setup_yazi.sh
-./setup_scripts/setup_fcitx5.sh
+./setup_scripts/setup_rime-frost.sh
 ```

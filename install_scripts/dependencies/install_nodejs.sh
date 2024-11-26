@@ -2,23 +2,17 @@
 set -e
 
 # command name to installed
-name="magick"
+name="node"
 
 # main function to install the command
 install_function() {
-  mkdir -p ~/.local/bin
-  cd ~/.local/bin
+  mkdir -p ~/.local
+  cd ~/.local
 
-  url=https://imagemagick.org/archive/binaries/magick
-  wget -O magick $url
-  chmod +x magick
-
-  # try to execute the command, if it fails, remove the file and raise an error
-  if ! ./magick -version &>/dev/null; then
-    rm magick
-    echo "failed to install $name"
-    exit 1
-  fi
+  url=https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.xz
+  wget -O node.tar.xz $url
+  tar xvf node.tar.xz --strip-components=1
+  rm node.tar.xz LICENSE *.md
 }
 
 # wrapper to install the command

@@ -5,16 +5,13 @@
 local augroup = vim.api.nvim_create_augroup
 local autocmd = vim.api.nvim_create_autocmd
 
---[[ Mygroup Group ]]
-augroup("mygroup", { clear = true })
-
 -- Don't continue comments with o and O
 autocmd("BufEnter", {
   pattern = { "*" },
   callback = function()
     vim.opt.formatoptions:remove({ "c", "r", "o" })
   end,
-  group = "mygroup",
+  group = augroup("no_comment_continue", { clear = true }),
   desc = "Don't new line comments",
 })
 
@@ -38,6 +35,14 @@ autocmd({ "BufReadPre", "BufReadPost" }, {
       end
     end
   end,
-  group = "mygroup",
+  group = augroup("no_no_name_buffer", { clear = true }),
   desc = "no No Name Buffer",
+})
+
+-- Enable <C-l> in terminal
+autocmd("TermOpen", {
+  desc = "Enable <C-l> in terminal",
+  callback = function(ev)
+    vim.keymap.set("t", "<C-l>", "<C-l>", { buffer = ev.buf, nowait = true })
+  end,
 })

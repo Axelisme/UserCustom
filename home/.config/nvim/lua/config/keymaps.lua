@@ -8,6 +8,9 @@ vim.keymap.set("i", "<C-c>", "<Esc>", { remap = true })
 -- <Enter> in normal mode to insert newline below
 vim.keymap.set("n", "<Enter>", "o<Esc>", { remap = true })
 
+-- Let <C-c> trigger "InsertEnter" event
+vim.keymap.set("i", "<C-c>", "<Esc>", { remap = true })
+
 -- Navigate in insert mode by Ctrl-hjkl
 vim.keymap.set("i", "<c-h>", "<Left>")
 vim.keymap.set("i", "<c-j>", "<Down>")

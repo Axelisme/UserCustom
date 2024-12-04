@@ -4,7 +4,6 @@ return {
     -- enabled = false,
     optional = true,
     opts = {
-      accept = { auto_brackets = { enabled = false } },
       keymap = {
         preset = "enter",
         ["<C-space>"] = { "fallback" },
@@ -43,7 +42,6 @@ return {
 
       opts = opts or {}
       opts = vim.tbl_deep_extend("force", opts, {
-        -- experimental = { ghost_text = false },
         view = {
           entries = { name = "custom", selection_order = "bottom_up" },
           mapping = {

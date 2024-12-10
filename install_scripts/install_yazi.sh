@@ -4,6 +4,23 @@ set -e
 # command name to installed
 name="yazi"
 
+# parse arguments
+while [ "$1" != "" ]; do
+  case $1 in
+  -f | --force)
+    force_install=true
+    ;;
+  -q | --quiet)
+    quiet=true
+    ;;
+  *)
+    echo "invalid argument: $1"
+    exit 1
+    ;;
+  esac
+  shift
+done
+
 # main function to install the command
 install_function() {
   mkdir -p ~/.local/bin
@@ -29,8 +46,12 @@ if ! command -v $name &>/dev/null; then
   echo -n "installing $name..."
   install_function >/dev/null
   echo "done"
+elif [ "$force_install" = true ]; then
+  echo -n "$name already installed, force re-installing..."
+  install_function >/dev/null
+  echo "done"
 else
-  if [ "$1" != "--quiet" ] && [ "$1" != "-q" ]; then
+  if [ "$quiet" != true ]; then
     echo "$name already installed, skipping"
   fi
 fi

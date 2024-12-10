@@ -1,3 +1,5 @@
+--- @sync entry
+
 local function toggle_layout(st)
 	if st.old_layout then
 		Tab.layout, st.old_layout = st.old_layout, nil
@@ -54,7 +56,8 @@ local function change_ratio(st, action)
 	end
 end
 
-local function entry(st, args)
+local function entry(st, job)
+	local args = job.args or job
 	local action = args[1]
 	if not action then
 		return

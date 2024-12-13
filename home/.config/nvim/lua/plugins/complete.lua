@@ -48,6 +48,7 @@ return {
             ["<C-n>"] = cmp.mapping(move_down, { "i", "s" }),
             ["<C-p>"] = cmp.mapping(move_up, { "i", "s" }),
             ["<C-y>"] = cmp.mapping.confirm({ behavior = cmp.ConfirmBehavior.Replace }),
+            ["<C-e>"] = cmp.mapping.close(),
             ["<CR>"] = cmp.mapping.confirm({ behavior = cmp.ConfirmBehavior.Replace }),
             ["<C-Space>"] = false,
             ["<S-CR>"] = false,

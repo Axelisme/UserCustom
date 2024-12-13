@@ -1,6 +1,7 @@
 In_kitty = os.getenv("KITTY_WINDOW_ID") ~= nil
+In_wezterm = os.getenv("WEZTERM_PANE") ~= nil
 local enable_image = vim.fn.executable("make") == 1 and vim.fn.executable("magick") == 1
-Use_image = In_kitty and enable_image
+Use_image = (In_wezterm or In_kitty) and enable_image
 
 return {
   {

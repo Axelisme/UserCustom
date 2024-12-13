@@ -8,7 +8,10 @@ return {
         group = vim.api.nvim_create_augroup("copilot-insert-leave", { clear = true }),
         desc = "disable copilot when leaving insert mode",
         callback = function()
-          require("copilot.suggestion").dismiss()
+          local sug = require("copilot.suggestion")
+          if sug ~= nil then
+            sug.dismiss()
+          end
         end,
       })
     end,

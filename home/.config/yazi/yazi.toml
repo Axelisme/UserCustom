@@ -1,6 +1,14 @@
 [manager]
 ratio = [0, 4, 3]
 show_symlink = false
+linemode = "mtime"
+
+[preview]
+max_width = 2048
+max_height = 2048
+image_delay = 100
+image_filter = "catmull-rom"
+image_quality = 75
 
 [[plugin.prepend_fetchers]]
 id = "git"

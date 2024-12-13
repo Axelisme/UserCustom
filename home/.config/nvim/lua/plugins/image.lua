@@ -63,25 +63,4 @@ return {
       },
     },
   },
-  {
-    "nvim-telescope/telescope.nvim",
-    optional = true,
-    opts = function(_, opts)
-      -- Image preview
-      if Use_image then
-        local image_preview = M.telescope_image_preview()
-        opts = vim.tbl_extend("force", opts, {
-          defaults = {
-            file_previewer = image_preview.file_previewer,
-            buffer_previewer_maker = image_preview.buffer_previewer_maker,
-          },
-          extensions = {
-            file_browser = { hijack_netrw = true },
-          },
-        })
-      end
-
-      return opts
-    end,
-  },
 }

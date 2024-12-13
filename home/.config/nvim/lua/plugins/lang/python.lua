@@ -4,7 +4,7 @@ return {
     "linux-cultist/venv-selector.nvim",
     branch = "regexp",
     -- enabled = false,
-    optional = true,
+    dependencies = { "nvim-telescope/telescope.nvim", lazy = true },
     opts = {
       settings = {
         search = {

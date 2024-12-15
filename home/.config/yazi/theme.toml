@@ -1,5 +1,5 @@
 [flavor]
-use = "onedark"
+dark = "onedark"
 
 [filetype]
 rules = [

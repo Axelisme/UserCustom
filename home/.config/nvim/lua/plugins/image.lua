@@ -43,24 +43,4 @@ return {
       window_overlap_clear_ft_ignore = { "cmp_menu", "cmp_docs", "fidget", "" },
     },
   },
-  {
-    "neo-tree.nvim",
-    optional = true,
-    opts = {
-      commands = {
-        toggle_preview_lazy_image = function(state)
-          if Use_image then
-            -- lazy load image.nvim
-            local _ = require("image")
-          end
-          require("neo-tree.sources.filesystem.commands").toggle_preview(state)
-        end,
-      },
-      window = {
-        mappings = {
-          ["P"] = { "toggle_preview_lazy_image", config = { use_float = false, use_image_nvim = Use_image } },
-        },
-      },
-    },
-  },
 }

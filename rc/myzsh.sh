@@ -7,38 +7,28 @@ source $USER_CUSTOM/rc/myset.sh
 [[ $- != *i* ]] && return
 
 ###################################################
-# ZINIT_HOME
-ZINIT_HOME=/usr/share/zinit
-# Download Zinit, if it's not there yet
-if [ ! -d "$ZINIT_HOME" ]; then
-  ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
-  if [ ! -d "$ZINIT_HOME" ]; then
-    git clone --depth 1 https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
-  fi
+ZDOTDIR=$HOME/.config
+if [[ ! -f ${ZDOTDIR:-${HOME}}/.zcomet/bin/zcomet.zsh ]]; then
+  command git clone https://github.com/agkozak/zcomet.git ${ZDOTDIR:-${HOME}}/.zcomet/bin
 fi
 
-# 加载zinit
-source $ZINIT_HOME/zinit.zsh
+source ${ZDOTDIR:-${HOME}}/.zcomet/bin/zcomet.zsh
 
-# 插件
-function _history_substring_search_config() {
-  bindkey '^[[A' history-substring-search-up
-  bindkey '^[[B' history-substring-search-down
-}
+zcomet trigger extract x ohmyzsh plugins/extract
+zcomet load zdharma-continuum/fast-syntax-highlighting
+zcomet load ohmyzsh plugins/sudo
+zcomet load ohmyzsh plugins/gitfast
+zcomet load ohmyzsh lib/completion.zsh
+zcomet load ohmyzsh lib/clipboard.zsh
+zcomet load zsh-users/zsh-history-substring-search
+zcomet load zsh-users/zsh-completions
+zcomet load zsh-users/zsh-autosuggestions
 
-zinit wait lucid for \
-  atinit"ZINIT[COMPINIT_OPTS]=-C; zicompinit; zicdreplay" zdharma-continuum/fast-syntax-highlighting \
-  blockf zsh-users/zsh-completions \
-  atload'!_zsh_autosuggest_start' zsh-users/zsh-autosuggestions \
-  atload'_history_substring_search_config' zsh-users/zsh-history-substring-search \
-  OMZP::sudo \
-  OMZP::extract \
-  OMZL::completion.zsh \
-  OMZL::clipboard.zsh
-# command -v fzf &>/dev/null && zinit light Aloxaf/fzf-tab
-unset _history_substring_search_config
+zcomet compinit
 
 # Keybindings
+bindkey '^[[A' history-substring-search-up
+bindkey '^[[B' history-substring-search-down
 bindkey '\033[H' beginning-of-line
 bindkey '\033[F' end-of-line
 bindkey '^[[3~' delete-char
@@ -47,7 +37,7 @@ bindkey '^[[1;5D' backward-word
 
 # History
 HISTSIZE=5000
-HISTFILE=~/.zsh_history
+HISTFILE=~/.cache/zsh_history
 SAVEHIST=$HISTSIZE
 HISTDUP=erase
 setopt appendhistory
@@ -57,13 +47,6 @@ setopt hist_ignore_all_dups
 setopt hist_save_no_dups
 setopt hist_ignore_dups
 setopt hist_find_no_dups
-
-# Completion styling
-# zstyle ':completion:*' menu no
-# if command -v fzf &>/dev/null; then
-#   zstyle ':fzf-tab:*' continuous-trigger '/'
-#   zstyle ':fzf-tab:complete:*' fzf-bindings 'shift-tab:toggle+down,ctrl-a:toggle-all'
-# fi
 
 # Prompt
 if command -v oh-my-posh &>/dev/null; then

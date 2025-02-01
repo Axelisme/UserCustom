@@ -2,9 +2,6 @@
 -- Default keymaps that are always set: https://github.com/LazyVim/LazyVim/blob/main/lua/lazyvim/config/keymaps.lua
 -- Add any additional keymaps here
 
--- Let <C-l> work in terminal event
-vim.keymap.set("t", "<C-l>", "<C-l>", { remap = true })
-
 -- Let <C-c> work like <Esc> in normal mode
 vim.keymap.set({ "i", "s" }, "<C-c>", "<C-[>", { remap = true })
 

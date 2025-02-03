@@ -2,7 +2,7 @@ return {
   {
     "folke/snacks.nvim",
     opts = {
-      explorer = {},
+      -- explorer = {},
       indent = {
         animate = {
           enabled = false,

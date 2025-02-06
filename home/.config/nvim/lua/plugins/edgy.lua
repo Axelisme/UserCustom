@@ -9,9 +9,11 @@ return {
     opts.animate = { enabled = false }
     opts.wo = { winbar = "" }
 
-    -- disable show buffer and git status in neovim
-    opts.left = vim.tbl_filter(function(panel)
-      return panel.title == "Neo-Tree Filesystem"
-    end, opts.left)
+    -- disable show buffer and git status in neo-tree
+    if pcall(require, "neo-tree") then
+      opts.left = vim.tbl_filter(function(panel)
+        return panel.title ~= "Neo-Tree Filesystem"
+      end, opts.left)
+    end
   end,
 }

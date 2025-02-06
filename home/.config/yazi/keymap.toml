@@ -43,4 +43,5 @@ prepend_keymap = [
   { on = "T", run = "plugin modify_preview_width --args=toggle", desc = "Toggle preview" },
   { on = "<C-Right>", run = "plugin modify_preview_width --args=decrease", desc = "Decrease preview width" },
   { on = "<C-Left>", run = "plugin modify_preview_width --args=increase", desc = "Increase preview width" },
+  { on = "M", run = "plugin mount", desc = "Mount device" },
 ]

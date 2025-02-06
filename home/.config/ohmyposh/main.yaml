@@ -36,7 +36,7 @@ blocks:
           strategy: session
         properties:
           shell: bash
-          command: if [[ -v SSH_TTY ]]; then wget -qO- ifconfig.me; fi
+          command: if [[ -v SSH_TTY ]]; then curl -4 ifconfig.me/ip; fi
 
       - type: path
         style: powerline

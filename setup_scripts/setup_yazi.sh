@@ -12,6 +12,7 @@ ya pack -a yazi-rs/plugins:chmod
 ya pack -a KKV9/compress
 ya pack -a yazi-rs/plugins:git
 ya pack -a pirafrank/what-size
+ya pack -a yazi-rs/plugins:mount
 
 # install yazi theme
 ya pack -a BennyOe/onedark

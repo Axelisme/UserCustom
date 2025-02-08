@@ -1,22 +1,35 @@
-{ lib, pkgs, ... }:
+{ pkgs, ... }:
+
 {
   home = {
+    username = "axel";
+    homeDirectory = "/home/axel";
+    stateVersion = "23.11";
+
     packages = with pkgs; [
       home-manager
-      # neovim
+      zsh
       curl
+      ncurses
+      fd
+      fzf
+      lsd
+      oh-my-posh
       yazi
       lazygit
       micromamba
-      oh-my-posh
+      neovim
     ];
 
-    # This needs to actually be set to your username
-    username = "axel";
-    homeDirectory = "/home/axel";
+    file = {
+      ".bashrc".source = ../home/.bashrc;
+      ".zshrc".source = ../home/.zshrc;
+      ".vimrc".source = ../home/.vimrc;
+    };
+  };
 
-    # You do not need to change this if you're reading this in the future.
-    # Don't ever change this after the first build.  Don't ask questions.
-    stateVersion = "23.11";
+  xdg.configFile = {
+    # 部署oh-my-posh主题
+    # "ohmyposh".source = ../home/.config/ohmyposh;
   };
 }

@@ -4,24 +4,46 @@ set -e
 # command name to installed
 name="lazygit"
 
+# parse arguments
+while [ "$1" != "" ]; do
+  case $1 in
+  -f | --force)
+    force_install=true
+    ;;
+  -q | --quiet)
+    quiet=true
+    ;;
+  *)
+    echo "invalid argument: $1"
+    exit 1
+    ;;
+  esac
+  shift
+done
+
 # main function to install the command
 install_function() {
   mkdir -p ~/.local/bin
   cd ~/.local/bin
 
-  url=https://github.com/jesseduffield/lazygit/releases/download/v0.44.1/lazygit_0.44.1_Linux_x86_64.tar.gz
+  version=0.45.2
+  url=https://github.com/jesseduffield/lazygit/releases/download/v${version}/lazygit_${version}_Linux_x86_64.tar.gz
   wget -O lazygit.tar.gz $url
   tar zxvf lazygit.tar.gz lazygit
   rm lazygit.tar.gz
 }
 
 # wrapper to install the command
-if ! command -v $name &>/dev/null; then
+if ! version_checker; then
   echo -n "installing $name..."
   install_function >/dev/null
   echo "done"
+elif [ "$force_install" = true ]; then
+  echo -n "$name already installed, force re-installing..."
+  install_function >/dev/null
+  echo "done"
 else
-  if [ "$1" != "--quiet" ] && [ "$1" != "-q" ]; then
+  if [ "$quiet" != true ]; then
     echo "$name already installed, skipping"
   fi
 fi

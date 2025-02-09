@@ -1,3 +1,8 @@
+# nix
+source $USER_CUSTOM/nix/nix_shell.sh
+
+####################################################
+
 # env
 source $USER_CUSTOM/rc/env.sh
 

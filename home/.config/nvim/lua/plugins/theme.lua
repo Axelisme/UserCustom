@@ -5,9 +5,7 @@ return {
     opts = {
       colors = { onedark_dark = { bg = "#202020", gray = "#6b6b6b" } },
       highlights = {
-        -- disable this to make python import highlight work
-        ["@odp.import_module.python"] = {},
-        ["@module.python"] = { fg = "#ff9f00" }, -- orange
+        ["@odp.import_module.python"] = { fg = "#ff9f00" }, -- orange
       },
     },
   },

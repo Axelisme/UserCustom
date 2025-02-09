@@ -7,6 +7,7 @@ return {
       highlights = {
         -- disable this to make python import highlight work
         ["@odp.import_module.python"] = {},
+        ["@module.python"] = { fg = "#ff9f00" }, -- orange
       },
     },
   },

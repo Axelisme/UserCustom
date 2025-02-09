@@ -106,6 +106,14 @@ blocks:
         invert_powerline: true
         template: " {{ if .Env.YAZI_LEVEL }} yazi {{ end }} "
 
+      - type: text
+        style: powerline
+        foreground: "#111111"
+        background: "#FFA500"
+        leading_powerline_symbol: 
+        invert_powerline: true
+        template: " {{ if .Env.IN_NIX_SHELL }} nix {{ end }} "
+
   - type: prompt
     alignment: left
     segments:

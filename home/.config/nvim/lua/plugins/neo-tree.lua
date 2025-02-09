@@ -1,6 +1,7 @@
 return {
   {
     "nvim-neo-tree/neo-tree.nvim",
+    optional = true,
     keys = {
       {
         "<leader>fe",
@@ -27,6 +28,12 @@ return {
           force_visible_in_empty_folder = true,
         },
       },
+      commands = {
+        toggle_preview_with_image = function(state)
+          pcall(require, "image") -- lazy load image.nvim
+          require("neo-tree.sources.filesystem.commands").toggle_preview(state)
+        end,
+      },
       window = {
         mappings = {
           ["<Tab>"] = function(state)
@@ -46,7 +53,7 @@ return {
               vim.cmd("cd " .. path)
             end
           end,
-          ["P"] = { "toggle_preview", config = { use_float = true, use_image_nvim = true } },
+          ["P"] = { "toggle_preview_with_image", config = { use_float = true, use_image_nvim = true } },
         },
       },
     },

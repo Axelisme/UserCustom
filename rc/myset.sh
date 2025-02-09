@@ -25,6 +25,8 @@ FALLBACK_PROMPT="%F{82}[\$(parse_ip)]:%F{33}%~%F{226}\$(parse_git_branch)$NEWLIN
 # nix
 if type nix-portable &>/dev/null; then
   alias nix='NP_RUNTIME=bwrap nix-portable nix'
+  alias nix-collect-garbage='NP_RUNTIME=bwrap nix-portable nix-collect-garbage'
+
   alias nixdev='NP_RUNTIME=bwrap nix-portable nix develop $USER_CUSTOM/nix -c zsh'
 fi
 

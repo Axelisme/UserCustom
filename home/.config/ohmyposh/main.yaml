@@ -59,6 +59,9 @@ blocks:
           - "{{ if gt .Ahead 0 }}#B388FF{{ end }}"
           - "{{ if gt .Behind 0 }}#B388FB{{ end }}"
         template: "{{ .HEAD }}{{ if gt .Ahead 0 }} ↑{{.Ahead}}{{end}}{{ if gt .Behind 0 }} ↓{{.Behind}}{{end}} {{ if .Working.Changed }}+{{ .Working.Added }} ~{{ .Working.Modified }} -{{ .Working.Deleted }} {{ end }}"
+        cache:
+          duration: 1s
+          strategy: folder
         properties:
           branch_icon: " "
           fetch_status: true
@@ -102,6 +105,14 @@ blocks:
         leading_powerline_symbol: 
         invert_powerline: true
         template: " {{ if .Env.YAZI_LEVEL }} yazi {{ end }} "
+
+      - type: text
+        style: powerline
+        foreground: "#111111"
+        background: "#FFA500"
+        leading_powerline_symbol: 
+        invert_powerline: true
+        template: " {{ if .Env.IN_NIX_SHELL }} nix {{ end }} "
 
   - type: prompt
     alignment: left

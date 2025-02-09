@@ -22,9 +22,9 @@
     ];
 
     file = {
-      ".bashrc".source = ../home/.bashrc;
-      ".zshrc".source = ../home/.zshrc;
-      ".vimrc".source = ../home/.vimrc;
+      # ".bashrc".source = ../home/.bashrc;
+      # ".zshrc".source = ../home/.zshrc;
+      # ".vimrc".source = ../home/.vimrc;
     };
   };
 

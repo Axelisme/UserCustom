@@ -14,5 +14,6 @@ $src_dir/install_nnn.sh
 $src_dir/install_yazi.sh
 
 # other commands
+$src_dir/install_nix.sh
 $src_dir/install_lazygit.sh
 $src_dir/install_mamba.sh

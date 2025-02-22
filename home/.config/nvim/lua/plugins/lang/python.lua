@@ -57,7 +57,6 @@ return {
               analysis = {
                 autoImportCompletions = false,
                 diagnosticMode = "openFilesOnly",
-                -- diagnosticMode = "workspace",
                 typeCheckingMode = "basic",
               },
             },

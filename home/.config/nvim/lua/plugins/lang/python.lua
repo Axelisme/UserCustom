@@ -57,7 +57,7 @@ return {
               analysis = {
                 autoImportCompletions = false,
                 diagnosticMode = "openFilesOnly",
-                typeCheckingMode = "basic",
+                typeCheckingMode = "off",
               },
             },
           },
@@ -69,7 +69,7 @@ return {
               analysis = {
                 autoImportCompletions = false,
                 diagnosticMode = "openFilesOnly",
-                typeCheckingMode = "basic",
+                typeCheckingMode = "off",
                 inlayHints = {
                   variableTypes = false,
                   callArgumentsNames = false,

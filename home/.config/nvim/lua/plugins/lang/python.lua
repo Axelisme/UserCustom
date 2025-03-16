@@ -14,7 +14,7 @@ return {
           cwd = false,
           workspace = false,
           micromamba_envs = {
-            command = "$FD 'bin/python$' $HOME/micromamba/envs --full-path --color never",
+            command = "$FD 'bin/python$' $MAMBA_ROOT_PREFIX/envs --full-path --color never",
             on_telescope_result_callback = function(filepath)
               return vim.fs.basename(filepath:gsub("/bin/python", ""))
             end,
@@ -36,7 +36,6 @@ return {
             for w in orig_venv:gmatch("([^/]+)") do
               venv = w
             end
-            -- venv = string.format("%s", venv)
           end
           return " " .. (venv or "NO ENV")
         end,
@@ -51,18 +50,31 @@ return {
     optional = true,
     opts = {
       servers = {
+        pyright = {
+          settings = {
+            python = {
+              disableOrganizeImports = true,
+              analysis = {
+                autoImportCompletions = false,
+                diagnosticMode = "openFilesOnly",
+                typeCheckingMode = "off",
+              },
+            },
+          },
+        },
         basedpyright = {
           settings = {
-            pyright = {
-              -- Using Ruff's import organizer
-              disableOrganizeImports = true,
-            },
             basedpyright = {
+              disableOrganizeImports = true,
               analysis = {
-                ignore = { "*" }, -- Use Ruff
-                -- Basic type checking
-                typeCheckingMode = "basic",
                 autoImportCompletions = false,
+                diagnosticMode = "openFilesOnly",
+                typeCheckingMode = "off",
+                inlayHints = {
+                  variableTypes = false,
+                  callArgumentsNames = false,
+                  functionReturnTypes = true,
+                },
               },
             },
           },

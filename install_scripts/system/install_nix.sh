@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-NEED_PACKAGE='git ripgrep lsd dust fzf fd oh-my-posh-bin'
+NEED_PACKAGE='nix'
 
 if type paru >/dev/null 2>&1; then
   paru -S --needed $NEED_PACKAGE

@@ -20,3 +20,8 @@ export PYTHONPYCACHEPREFIX=/tmp
 export XZ_DEFAULTS='-T0'
 # no .gnupg in home directory
 export GNUPGHOME="${XDG_DATA_HOME:-$HOME/.local/share}/gnupg"
+
+# micromamba
+if command -v micromamba &>/dev/null; then
+  export MAMBA_ROOT_PREFIX=$HOME/.local/share/micromamba
+fi

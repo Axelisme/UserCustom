@@ -40,8 +40,8 @@ prepend_keymap = [
   { on = "*", run = "shell 'for file in $@; do if [ -x $file ]; then chmod -x $file; else chmod +x $file; fi; done'", desc = "Toggle executable" },
   { on = "!", run = 'shell "$SHELL" --block', desc = "Open shell here" },
   { on = "b", run = "plugin what-size", desc = "Calc size of selection or cwd" },
-  { on = "T", run = "plugin modify_preview_width --args=toggle", desc = "Toggle preview" },
-  { on = "<C-Right>", run = "plugin modify_preview_width --args=decrease", desc = "Decrease preview width" },
-  { on = "<C-Left>", run = "plugin modify_preview_width --args=increase", desc = "Increase preview width" },
+  { on = "T", run = "plugin modify_preview_width toggle", desc = "Toggle preview" },
+  { on = "<C-Right>", run = "plugin modify_preview_width decrease", desc = "Decrease preview width" },
+  { on = "<C-Left>", run = "plugin modify_preview_width increase", desc = "Increase preview width" },
   { on = "M", run = "plugin mount", desc = "Mount device" },
 ]

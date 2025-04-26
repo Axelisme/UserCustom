@@ -79,7 +79,11 @@ local function entry(st, job)
 		change_ratio(st, action)
 	end
 
-	ya.emit("resize", {})
+	if ya.emit then
+		ya.emit("app:resize", {})
+	else
+		ya.app_emit("resize", {})
+	end
 end
 
 return { entry = entry }

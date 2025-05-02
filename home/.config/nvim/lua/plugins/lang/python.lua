@@ -1,12 +1,8 @@
 return {
   {
     -- let mamba env can be find by venv-selector.nvim
-    -- "linux-cultist/venv-selector.nvim",
-    -- branch = "regexp",
-    -- enabled = false,
-    -- dependencies = { "nvim-telescope/telescope.nvim", lazy = true },
-    "stefanboca/venv-selector.nvim",
-    branch = "sb/push-rlpxsqmllxtz",
+    "linux-cultist/venv-selector.nvim",
+    branch = "regexp",
     enabled = true,
     opts = {
       settings = {

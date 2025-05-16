@@ -5,6 +5,10 @@
 local augroup = vim.api.nvim_create_augroup
 local autocmd = vim.api.nvim_create_autocmd
 
+if vim.g.vscode then
+  return
+end
+
 -- Don't continue comments with o and O
 autocmd("BufEnter", {
   pattern = { "*" },

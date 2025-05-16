@@ -14,14 +14,6 @@ install_function() {
   rm zsh_installer
 }
 
-# check dependencies installed
-src_dir=$(dirname $0)
-$src_dir/dependencies/install_fd.sh --quiet
-$src_dir/dependencies/install_fzf.sh --quiet
-$src_dir/dependencies/install_lsd.sh --quiet
-$src_dir/dependencies/install_ohmyposh.sh --quiet
-$src_dir/dependencies/install_ripgrep.sh --quiet
-
 # wrapper to install the command
 if ! command -v $name &>/dev/null; then
   install_function

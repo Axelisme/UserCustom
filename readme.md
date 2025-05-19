@@ -1,20 +1,22 @@
 # UserCustom Shell 設定
 
-此專案包含一系列的 Shell 腳本，用於在 Arch Linux 系統上安裝必要的軟體包並進行shell環境設定。以下是設定過程的步驟指南。
+此專案包含一系列的 Shell 腳本，用於在 Linux 系統上安裝必要的軟體包並進行shell環境設定。以下是設定過程的步驟指南。
 
-## 步驟 1: 安裝 Arch Linux 依賴
+## 步驟 1: 安裝依賴
 
 執行install_scripts裡的腳本，或請自行安裝相關軟體。  
 
+### 步驟 1.1: 安裝zsh以及stew等基礎依賴
+
 ```bash
-# install all in system
-./install_scripts/system/install_all.sh
+./install_scripts/install_zsh.sh
+./install_scripts/install_stew.sh
+./install_scripts/install_mamba.sh #(Optional)
+```
 
-# install all in user home
-./install_scripts/install_all.sh
-
-# install respectively in user home
-./install_scripts/install_{xxx}.sh
+### 步驟 1.2: 使用stew安裝其餘依賴(可自動追蹤最新版本)
+```bash
+stew install install_scripts/Stewfile
 ```
 
 ## 步驟 2: 設定 Shell 環境

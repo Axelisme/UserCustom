@@ -22,17 +22,8 @@ NEWLINE=$'\n'
 FALLBACK_PROMPT="%F{82}[\$(parse_ip)]:%F{33}%~%F{226}\$(parse_git_branch)$NEWLINE%n%f\$ "
 
 ####################################################
-# nix
-if type nix-portable &>/dev/null; then
-  alias nix='NP_RUNTIME=bwrap nix-portable nix'
-  alias nix-collect-garbage='NP_RUNTIME=bwrap nix-portable nix-collect-garbage'
-
-  alias nixdev='NP_RUNTIME=bwrap nix-portable nix develop $USER_CUSTOM/nix -c zsh'
-fi
-
-####################################################
 # nnn
-if type nnn >/dev/null 2>&1; then
+if command -v nnn >/dev/null 2>&1; then
   export GUI=0
   export NNN_OPTS="aceEuUx"
   export NNN_COLORS='1234'
@@ -61,8 +52,8 @@ fi
 
 ####################################################
 # fzf
-if type fzf >/dev/null 2>&1; then
-  if type fd >/dev/null 2>&1; then
+if command -v fzf >/dev/null 2>&1; then
+  if command -v fd >/dev/null 2>&1; then
     export FZF_DEFAULT_COMMAND='fd --type f --hidden --color=always --follow --exclude  .git --ignore-file ~/.gitignore'
   fi
 
@@ -71,7 +62,7 @@ fi
 
 ####################################################
 # yazi
-if type yazi >/dev/null 2>&1; then
+if command -v yazi >/dev/null 2>&1; then
   function y() {
     local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
     yazi "$@" --cwd-file="$tmp"

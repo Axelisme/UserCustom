@@ -27,13 +27,13 @@ zcomet load zsh-users/zsh-autosuggestions
 zcomet compinit
 
 # Keybindings
-bindkey '^[[A' history-substring-search-up
-bindkey '^[[B' history-substring-search-down
-bindkey '\033[H' beginning-of-line
-bindkey '\033[F' end-of-line
-bindkey '^[[3~' delete-char
-bindkey '^[[1;5C' forward-word
-bindkey '^[[1;5D' backward-word
+bindkey -e '^[[A' history-substring-search-up
+bindkey -e '^[[B' history-substring-search-down
+bindkey -e '\033[H' beginning-of-line
+bindkey -e '\033[F' end-of-line
+bindkey -e '^[[3~' delete-char
+bindkey -e '^[[1;5C' forward-word
+bindkey -e '^[[1;5D' backward-word
 
 # History
 HISTSIZE=5000

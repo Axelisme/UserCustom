@@ -1,44 +1,46 @@
 return {
   {
-    -- let mamba env can be find by venv-selector.nvim
     "linux-cultist/venv-selector.nvim",
-    branch = "regexp",
     enabled = true,
-    opts = {
-      settings = {
+    branch = "main",
+    -- current Lazyvim Extra/lang/python plugins have wrong setting format, override it
+    config = function()
+      require("venv-selector").setup({
+        options = {
+          picker = "snacks",
+          enable_default_searches = true,
+          activate_venv_in_terminal = true,
+          enable_cache_venvs = true,
+          on_telescope_result_callback = function(filepath)
+            local env_path = filepath:gsub("/bin/python", "")
+            if vim.endswith(env_path, ".venv") then
+              return vim.fs.basename(vim.fs.dirname(env_path)) .. " venv"
+            end
+
+            return vim.fs.basename(env_path)
+          end,
+          on_venv_activate_callback = function()
+            local venv_name = vim.fs.basename(require("venv-selector").venv())
+            if venv_name == ".venv" then
+              venv_name = ""
+            end
+            vim.fn.setenv("CONDA_DEFAULT_ENV", venv_name)
+          end,
+        },
         search = {
-          cwd = false,
-          workspace = false,
-          micromamba_envs = {
+          micromamba = {
             command = "$FD 'bin/python$' $MAMBA_ROOT_PREFIX/envs --full-path --color never",
-            on_telescope_result_callback = function(filepath)
-              return vim.fs.basename(filepath:gsub("/bin/python", ""))
-            end,
             type = "anaconda",
           },
         },
-      },
-    },
+      })
+    end,
   },
   {
     "lualine.nvim",
     optional = true,
     opts = function(_, opts)
-      table.insert(opts.sections.lualine_y, {
-        function()
-          local venv = os.getenv("CONDA_PREFIX")
-          if venv ~= nil and string.find(venv, "/") then
-            local orig_venv = venv
-            for w in orig_venv:gmatch("([^/]+)") do
-              venv = w
-            end
-          end
-          return " " .. (venv or "NO ENV")
-        end,
-        cond = function()
-          return vim.bo.filetype == "python"
-        end,
-      })
+      table.insert(opts.sections.lualine_y, "venv-selector")
     end,
   },
   {
@@ -65,7 +67,7 @@ return {
               analysis = {
                 autoImportCompletions = false,
                 diagnosticMode = "openFilesOnly",
-                typeCheckingMode = "off",
+                typeCheckingMode = "base",
                 inlayHints = {
                   variableTypes = false,
                   callArgumentsNames = false,

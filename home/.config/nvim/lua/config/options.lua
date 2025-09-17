@@ -8,9 +8,11 @@ vim.g.lazyvim_python_ruff = "ruff"
 
 vim.opt.showcmdloc = "statusline"
 
-vim.opt.foldlevel = 99
-vim.opt.foldlevelstart = 4
-vim.opt.foldnestmax = 8
+vim.o.foldlevel = 99
+vim.o.foldlevelstart = 4
+-- vim.opt.foldexpr = "v:lua.vim.treesitter.foldexpr()"
+-- vim.opt.foldtext = "v:lua.vim.treesitter.foldtext()"
+-- vim.opt.foldtext = ""
 
 vim.g.ai_cmp = false
 

@@ -1,0 +1,132 @@
+#!/bin/bash
+set -u
+
+# 防多實例
+LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/kh-volume.lock"
+exec 9>"$LOCK_FILE" || exit 1
+flock -n 9 || { echo "Another instance is running."; exit 1; }
+
+# ---- 載入設定 ----
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/kh-volume/config.conf"
+if [ -f "$CONF" ]; then
+  # shellcheck disable=SC1090
+  . "$CONF"
+else
+  echo "Config not found: $CONF" >&2
+  exit 1
+fi
+
+# ---- 必要參數檢查 ----
+: "${SINK_NAME:?}"
+: "${MAMBA:?}"
+: "${ENV:?}"
+: "${IFACE:?}"
+: "${DB_MIN:?}"
+: "${DB_MAX:?}"
+: "${KHTOOL_REPO:?}"
+: "${KHTOOL_WORKDIR:?}"
+: "${INIT_VOL_PCT:?}"
+: "${INIT_MUTE:?}"
+
+# 可選參數
+SINK_DESC="${SINK_DESC:-KH150}"
+
+KHTOOL_PY="$KHTOOL_REPO/khtool.py"
+[ -x "$MAMBA" ] || { echo "micromamba not found at $MAMBA" >&2; exit 1; }
+[ -f "$KHTOOL_PY" ] || { echo "khtool.py not found at $KHTOOL_PY" >&2; exit 1; }
+mkdir -p "$KHTOOL_WORKDIR"
+
+# ---- 建立/取得虛擬 sink（純控制，不接聲音流）----
+CREATED_SINK=false
+MODULE_ID=""
+
+if ! pactl list short sinks | awk '{print $2}' | grep -qx "$SINK_NAME"; then
+  MODULE_ID="$(pactl load-module module-null-sink \
+    sink_name="$SINK_NAME" \
+    sink_properties=device.description="$SINK_DESC" || true)"
+  if [ -z "$MODULE_ID" ]; then
+    echo "Failed to load module-null-sink" >&2; exit 1
+  fi
+  CREATED_SINK=true
+fi
+
+# 找到 sink index
+SINK_INDEX="$(pactl list short sinks | awk -v n="$SINK_NAME" '$2==n{print $1; exit}')"
+if [ -z "${SINK_INDEX:-}" ]; then
+  echo "Cannot find sink named '$SINK_NAME'." >&2; exit 1
+fi
+
+# ---- 啟動預設狀態：50% + mute（避免一開始太大聲）----
+pactl set-sink-volume "$SINK_INDEX" "${INIT_VOL_PCT}%" || true
+if [ "$INIT_MUTE" = "yes" ]; then
+  pactl set-sink-mute "$SINK_INDEX" 1 || true
+else
+  pactl set-sink-mute "$SINK_INDEX" 0 || true
+fi
+
+# ---- 清理：只在本程式建立過才卸載 ----
+cleanup() {
+  if $CREATED_SINK && [ -n "${MODULE_ID:-}" ]; then
+    pactl unload-module "$MODULE_ID" || true
+  fi
+}
+trap cleanup EXIT INT TERM
+
+# ---- 工具函式 ----
+get_vol_pct () {
+  pactl get-sink-volume "$SINK_INDEX" | grep -o '[0-9]\+%' | head -n1 | tr -d '%'
+}
+get_mute () {
+  pactl get-sink-mute "$SINK_INDEX" | awk '{print $2}'
+}
+pct_to_db () {
+  local pct="${1:-0}"
+  [[ "$pct" =~ ^[0-9]+$ ]] || pct=0
+  (( pct<0 )) && pct=0
+  (( pct>100 )) && pct=100
+  echo $(( DB_MIN + (pct * (DB_MAX - DB_MIN) / 100) ))
+}
+run_khtool () {
+  ( cd "$KHTOOL_WORKDIR" && "$MAMBA" run -n "$ENV" "$KHTOOL_PY" "$@" )
+}
+apply_mute () { run_khtool -i "$IFACE" --mute; }
+apply_level_unmute () {
+  local db="$1"
+  run_khtool -i "$IFACE" --level "$db"
+  run_khtool -i "$IFACE" --unmute >/dev/null 2>&1
+}
+
+# ---- 初始同步到音響：跟 UI 對齊（50% + mute）----
+LAST_VOL="$INIT_VOL_PCT"
+LAST_MUTE="$INIT_MUTE"
+
+if [ "$LAST_MUTE" = "yes" ]; then
+  apply_mute
+else
+  DB="$(pct_to_db "$LAST_VOL")"
+  apply_level_unmute "$DB"
+fi
+
+# ---- 事件監聽（只在變更時呼叫 khtool）----
+pactl subscribe | while read -r line; do
+  case "$line" in
+    *"on sink #$SINK_INDEX"*)
+      CUR_VOL="$(get_vol_pct)"; CUR_VOL="${CUR_VOL:-$LAST_VOL}"
+      CUR_MUTE="$(get_mute)";  CUR_MUTE="${CUR_MUTE:-$LAST_MUTE}"
+
+      if [ "$CUR_MUTE" != "$LAST_MUTE" ]; then
+        if [ "$CUR_MUTE" = "yes" ]; then
+          apply_mute
+        else
+          DB="$(pct_to_db "$CUR_VOL")"
+          apply_level_unmute "$DB"
+        fi
+        LAST_MUTE="$CUR_MUTE"
+      elif [ "$CUR_MUTE" = "no" ] && [ "$CUR_VOL" != "$LAST_VOL" ]; then
+        DB="$(pct_to_db "$CUR_VOL")"
+        apply_level_unmute "$DB"
+        LAST_VOL="$CUR_VOL"
+      fi
+      ;;
+  esac
+done

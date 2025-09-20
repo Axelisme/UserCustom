@@ -2,39 +2,35 @@ return {
   {
     "linux-cultist/venv-selector.nvim",
     enabled = true,
-    branch = "main",
-    -- current Lazyvim Extra/lang/python plugins have wrong setting format, override it
-    config = function()
-      require("venv-selector").setup({
-        options = {
-          picker = "snacks",
-          enable_default_searches = true,
-          activate_venv_in_terminal = true,
-          enable_cache_venvs = true,
-          on_telescope_result_callback = function(filepath)
-            local env_path = filepath:gsub("/bin/python", "")
-            if vim.endswith(env_path, ".venv") then
-              return vim.fs.basename(vim.fs.dirname(env_path)) .. " venv"
-            end
+    opts = {
+      options = {
+        picker = "snacks",
+        enable_default_searches = true,
+        activate_venv_in_terminal = true,
+        enable_cache_venvs = true,
+        on_telescope_result_callback = function(filepath)
+          local env_path = filepath:gsub("/bin/python", "")
+          if vim.endswith(env_path, ".venv") then
+            return vim.fs.basename(vim.fs.dirname(env_path)) .. " venv"
+          end
 
-            return vim.fs.basename(env_path)
-          end,
-          on_venv_activate_callback = function()
-            local venv_name = vim.fs.basename(require("venv-selector").venv())
-            if venv_name == ".venv" then
-              venv_name = ""
-            end
-            vim.fn.setenv("CONDA_DEFAULT_ENV", venv_name)
-          end,
+          return vim.fs.basename(env_path)
+        end,
+        on_venv_activate_callback = function()
+          local venv_name = vim.fs.basename(require("venv-selector").venv())
+          if venv_name == ".venv" then
+            venv_name = ""
+          end
+          vim.fn.setenv("CONDA_DEFAULT_ENV", venv_name)
+        end,
+      },
+      search = {
+        micromamba = {
+          command = "$FD 'bin/python$' $MAMBA_ROOT_PREFIX/envs --full-path --color never",
+          type = "anaconda",
         },
-        search = {
-          micromamba = {
-            command = "$FD 'bin/python$' $MAMBA_ROOT_PREFIX/envs --full-path --color never",
-            type = "anaconda",
-          },
-        },
-      })
-    end,
+      },
+    },
   },
   {
     "lualine.nvim",

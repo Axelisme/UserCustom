@@ -10,9 +10,6 @@ vim.opt.showcmdloc = "statusline"
 
 vim.o.foldlevel = 99
 vim.o.foldlevelstart = 4
--- vim.opt.foldexpr = "v:lua.vim.treesitter.foldexpr()"
--- vim.opt.foldtext = "v:lua.vim.treesitter.foldtext()"
--- vim.opt.foldtext = ""
 
 vim.g.ai_cmp = false
 

@@ -1,15 +1,17 @@
 return {
   {
     "neovim/nvim-lspconfig",
-    opts = function(_, opts)
-      local keys = require("lazyvim.plugins.lsp.keymaps").get()
-      -- disable <c-k> for navigate in insert mode
-      keys[#keys + 1] = { "<c-k>", false, mode = "i" }
-      -- disable <Tab> for indent in insert mode
-      keys[#keys + 1] = { "<Tab>", false, mode = "i" }
-
-      opts.inlay_hints = { enabled = false }
-    end,
+    opts = {
+      servers = {
+        ["*"] = {
+          keys = {
+            { "<c-k>", false, mode = "i" },
+            { "<Tab>", false, mode = "i" },
+          },
+        },
+      },
+      inlay_hints = { enabled = false },
+    },
   },
   {
     "folke/noice.nvim",

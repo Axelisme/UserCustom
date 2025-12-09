@@ -1,22 +1,32 @@
 [mgr]
 prepend_keymap = [
-  { on = "h", run = "leave", desc = "Go back to the parent directory" },
-  { on = "l", run = "enter", desc = "Enter the selected directory" },
-  { on = "d", run = "remove --permanently", desc = "Delete permanently" },
-  { on = "D", run = "remove", desc = "Delete to trash" },
-  { on = [
-    "c",
-    "a",
-  ], run = "plugin compress", desc = "Archive selected files" },
-  { on = [
-    "c",
-    "m",
-  ], run = "plugin chmod", desc = "Chmod on selected files" },
-  { on = "*", run = "shell 'for file in $@; do if [ -x $file ]; then chmod -x $file; else chmod +x $file; fi; done'", desc = "Toggle executable" },
-  { on = "!", run = 'shell "$SHELL" --block', desc = "Open shell here" },
-  { on = "b", run = "plugin what-size", desc = "Calc size of selection or cwd" },
-  { on = "T", run = "plugin modify_preview_width toggle", desc = "Toggle preview" },
-  { on = "<C-Right>", run = "plugin modify_preview_width decrease", desc = "Decrease preview width" },
-  { on = "<C-Left>", run = "plugin modify_preview_width increase", desc = "Increase preview width" },
-  { on = "M", run = "plugin mount", desc = "Mount device" },
+    { on = "h", run = "leave", desc = "Go back to the parent directory" },
+    { on = "l", run = "enter", desc = "Enter the selected directory" },
+    { on = "d", run = "remove --permanently", desc = "Delete permanently" },
+    { on = "D", run = "remove", desc = "Delete to trash" },
+    { on = [
+        "c",
+        "a",
+    ], run = "plugin compress", desc = "Archive selected files" },
+    { on = [
+        "c",
+        "m",
+    ], run = "plugin chmod", desc = "Chmod on selected files" },
+    { on = "*", run = "shell 'for file in $@; do if [ -x $file ]; then chmod -x $file; else chmod +x $file; fi; done'", desc = "Toggle executable" },
+    { on = "!", run = 'shell "$SHELL" --block', desc = "Open shell here" },
+    { on = "B", run = "plugin what-size", desc = "Calc size of selection or cwd" },
+    { on = "T", run = "plugin modify_preview_width toggle", desc = "Toggle preview" },
+    { on = "<C-Right>", run = "plugin modify_preview_width decrease", desc = "Decrease preview width" },
+    { on = "<C-Left>", run = "plugin modify_preview_width increase", desc = "Increase preview width" },
+    { on = "M", run = "plugin mount", desc = "Mount device" },
+    { on = "m", run = "plugin bookmarks save", desc = "Save current position as a bookmark" },
+    { on = "'", run = "plugin bookmarks jump", desc = "Jump to a bookmark" },
+    { on = [
+        "b",
+        "d",
+    ], run = "plugin bookmarks delete", desc = "Delete a bookmark" },
+    { on = [
+        "b",
+        "D",
+    ], run = "plugin bookmarks delete_all", desc = "Delete all bookmarks" },
 ]

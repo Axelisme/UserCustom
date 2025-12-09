@@ -3,8 +3,8 @@ set -e
 
 # if micromamba is not installed, show a warning and exit
 if ! type ya >/dev/null 2>&1; then
-  echo "yazi could not be found. Please install yazi and try again."
-  exit
+    echo "yazi could not be found. Please install yazi and try again."
+    exit
 fi
 
 # install yazi package
@@ -12,7 +12,7 @@ ya pack -a yazi-rs/plugins:chmod
 ya pack -a KKV9/compress
 ya pack -a yazi-rs/plugins:git
 ya pack -a pirafrank/what-size
-# ya pack -a yazi-rs/plugins:mount
+ya pkg add dedukun/bookmarks
 
 # install yazi theme
 ya pack -a BennyOe/onedark

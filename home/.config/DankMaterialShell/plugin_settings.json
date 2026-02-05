@@ -1,0 +1,10 @@
+{
+  "calculator": {
+    "enabled": true,
+    "trigger": "="
+  },
+  "displayMirror": {
+    "enabled": false,
+    "autoRefresh": true
+  }
+}

@@ -78,7 +78,7 @@ layout {
         left -3
         right -3
         top -3
-        bottom -3
+        bottom -2
     }
 }
 
@@ -95,15 +95,6 @@ cursor {
 window-rule {
     geometry-corner-radius 8
     clip-to-geometry true
-}
-
-layer-rule {
-    match namespace="^quickshell$"
-    place-within-backdrop true
-}
-layer-rule {
-    match namespace="dms:blurwallpaper"
-    place-within-backdrop true
 }
 
 
@@ -301,3 +292,4 @@ include "dms/binds.kdl"
 include "dms/alttab.kdl"
 include "dms/cursor.kdl"
 include "dms/windowrules.kdl"
+include "dms/wpblur.kdl"

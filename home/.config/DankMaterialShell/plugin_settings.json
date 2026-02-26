@@ -1,0 +1,14 @@
+{
+  "calculator": {
+    "enabled": true,
+    "trigger": "="
+  },
+  "displayMirror": {
+    "enabled": false,
+    "autoRefresh": true
+  },
+  "dankKDEConnect": {
+    "enabled": true,
+    "selectedDeviceId": "9886a90f98ec4203b546dc6cb7264a41"
+  }
+}

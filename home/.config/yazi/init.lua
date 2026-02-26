@@ -1,5 +1,5 @@
 require("git"):setup()
-require("modify_preview_width"):entry({ "toggle" })
+require("modify-preview-width"):entry({ "toggle" })
 
 require("session"):setup({
 	sync_yanked = true,

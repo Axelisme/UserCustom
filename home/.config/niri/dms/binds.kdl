@@ -1,26 +1,31 @@
 binds {
     Alt+S hotkey-overlay-title="Open Settings" {
-        spawn-sh "dms ipc call settings toggle"; 
+        spawn-sh "dms ipc settings toggle"; 
     }
     Alt+N hotkey-overlay-title="Open Notepad" {
-        spawn-sh "dms ipc call notepad toggle"; 
+        spawn-sh "dms ipc notepad toggle"; 
     }
     Mod+Space hotkey-overlay-title="Application Menu" {
-        spawn-sh "dms ipc call spotlight toggle"; 
+        spawn-sh "dms ipc launcher toggle"; 
     }
     Super+Alt+L hotkey-overlay-title="Lock the Screen" {
-        spawn-sh "dms ipc call lock lock"; 
+        spawn-sh "dms ipc lock lock"; 
     }
     Mod+V hotkey-overlay-title="Clipboard history" {
-        spawn-sh "dms ipc call clipboard toggle";
+        spawn-sh "dms ipc clipboard toggle";
     }
     Mod+Escape hotkey-overlay-title="Power Menu" {
-        spawn-sh "dms ipc call powermenu toggle";
+        spawn-sh "dms ipc powermenu toggle";
     }
-    XF86AudioRaiseVolume allow-when-locked=true { spawn-sh "dms ipc call audio increment 5"; }
-    XF86AudioLowerVolume allow-when-locked=true { spawn-sh "dms ipc call audio decrement 5"; }
-    XF86AudioMute        allow-when-locked=true { spawn-sh "dms ipc call audio mute"; }
-    XF86AudioMicMute     allow-when-locked=true { spawn-sh "dms ipc call audio micmute"; }
-    XF86MonBrightnessUp allow-when-locked=true { spawn "dms" "ipc" "call" "brightness" "increment" "5" ""; }
-    XF86MonBrightnessDown allow-when-locked=true { spawn "dms" "ipc" "call" "brightness" "decrement" "5" ""; }  
+
+    XF86AudioRaiseVolume allow-when-locked=true { spawn-sh "dms ipc audio increment 5"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn-sh "dms ipc audio decrement 5"; }
+    XF86AudioMute        allow-when-locked=true { spawn-sh "dms ipc audio mute"; }
+    XF86AudioMicMute     allow-when-locked=true { spawn-sh "dms ipc audio micmute"; }
+    XF86MonBrightnessUp allow-when-locked=true { spawn "dms" "ipc" "brightness" "increment" "5" ""; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "dms" "ipc" "brightness" "decrement" "5" ""; }  
+
+    Print { spawn-sh "dms ipc niri screenshot"; }
+    Ctrl+Print { spawn-sh "dms ipc niri screenshotScreen"; }
+    Alt+Print { spawn-sh "dms ipc niri screenshotWindow"; }
 }

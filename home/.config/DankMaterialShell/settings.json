@@ -26,17 +26,19 @@
   "showSeconds": false,
   "padHours12Hour": false,
   "useFahrenheit": false,
-  "windSpeedUnit": "kmh",
+  "windSpeedUnit": "ms",
   "nightModeEnabled": false,
   "animationSpeed": 4,
   "customAnimationDuration": 50,
+  "syncComponentAnimationSpeeds": true,
   "popoutAnimationSpeed": 1,
   "popoutCustomAnimationDuration": 150,
   "modalAnimationSpeed": 1,
   "modalCustomAnimationDuration": 150,
+  "enableRippleEffects": true,
   "wallpaperFillMode": "Fill",
-  "blurredWallpaperLayer": false,
-  "blurWallpaperOnOverview": true,
+  "blurredWallpaperLayer": true,
+  "blurWallpaperOnOverview": false,
   "showLauncherButton": true,
   "showWorkspaceSwitcher": true,
   "showFocusedWindow": true,
@@ -138,6 +140,7 @@
   "scrollTitleEnabled": true,
   "audioVisualizerEnabled": true,
   "audioScrollMode": "volume",
+  "audioWheelScrollAmount": 5,
   "clockCompactMode": false,
   "focusedWindowCompactMode": true,
   "runningAppsCompactMode": true,
@@ -204,6 +207,7 @@
   "dankLauncherV2BorderThickness": 2,
   "dankLauncherV2BorderColor": "primary",
   "dankLauncherV2ShowFooter": true,
+  "dankLauncherV2UnloadOnClose": true,
   "useAutoLocation": true,
   "weatherEnabled": true,
   "networkPreference": "ethernet",
@@ -267,9 +271,9 @@
   "brightnessDevicePins": {},
   "wifiNetworkPins": {
     "preferredWifi": [
+      "ZenFone7",
       "AxelHotspot",
-      "122B-1",
-      "122B"
+      "122B-1"
     ]
   },
   "bluetoothDevicePins": {
@@ -307,7 +311,7 @@
   "matugenTemplateVscode": false,
   "matugenTemplateEmacs": true,
   "showDock": false,
-  "dockAutoHide": true,
+  "dockAutoHide": false,
   "dockSmartAutoHide": false,
   "dockGroupByApp": true,
   "dockOpenOnOverview": false,
@@ -333,6 +337,8 @@
   "dockMaxVisibleRunningApps": 0,
   "dockShowOverflowBadge": true,
   "notificationOverlayEnabled": false,
+  "notificationPopupShadowEnabled": true,
+  "notificationPopupPrivacyMode": false,
   "modalDarkenBackground": true,
   "lockScreenShowPowerActions": true,
   "lockScreenShowSystemIcons": true,
@@ -342,6 +348,7 @@
   "lockScreenShowPasswordField": true,
   "lockScreenShowMediaPlayer": true,
   "lockScreenPowerOffMonitorsOnLock": false,
+  "lockAtStartup": false,
   "enableFprint": false,
   "maxFprintTries": 3,
   "lockScreenActiveMonitor": "all",
@@ -353,12 +360,15 @@
   "notificationTimeoutCritical": 0,
   "notificationCompactMode": false,
   "notificationPopupPosition": 0,
+  "notificationAnimationSpeed": 1,
+  "notificationCustomAnimationDuration": 400,
   "notificationHistoryEnabled": true,
   "notificationHistoryMaxCount": 50,
   "notificationHistoryMaxAgeDays": 7,
   "notificationHistorySaveLow": true,
   "notificationHistorySaveNormal": true,
   "notificationHistorySaveCritical": true,
+  "notificationRules": [],
   "osdAlwaysShowValue": false,
   "osdPosition": 5,
   "osdVolumeEnabled": true,
@@ -426,7 +436,8 @@
           "id": "memUsage",
           "enabled": true,
           "minimumWidth": true,
-          "showSwap": false
+          "showSwap": false,
+          "showInGb": true
         },
         {
           "id": "network_speed_monitor",
@@ -435,9 +446,14 @@
       ],
       "centerWidgets": [
         {
+          "id": "spacer",
+          "enabled": true,
+          "size": 5
+        },
+        {
           "id": "music",
           "enabled": true,
-          "mediaSize": 1
+          "mediaSize": 3
         },
         {
           "id": "appsDock",
@@ -460,6 +476,10 @@
         },
         {
           "id": "clipboard",
+          "enabled": true
+        },
+        {
+          "id": "idleInhibitor",
           "enabled": true
         },
         {
@@ -505,7 +525,7 @@
       "fontScale": 1,
       "autoHide": false,
       "autoHideDelay": 250,
-      "openOnOverview": false,
+      "openOnOverview": true,
       "visible": true,
       "popupGapsAuto": true,
       "popupGapsManual": 5,
@@ -513,7 +533,14 @@
       "widgetOutlineColor": "primary",
       "maximizeDetection": true,
       "widgetOutlineOpacity": 0.5,
-      "widgetOutlineThickness": 1
+      "widgetOutlineThickness": 1,
+      "clickThrough": false,
+      "iconScale": 1.25,
+      "shadowIntensity": 0,
+      "shadowOpacity": 50,
+      "maximizeWidgetIcons": false,
+      "maximizeWidgetText": false,
+      "removeWidgetPadding": false
     }
   ],
   "desktopClockEnabled": false,
@@ -592,7 +619,12 @@
       "trigger": "?"
     }
   },
-  "launcherPluginVisibility": {},
+  "clipboardEnterToPaste": false,
+  "launcherPluginVisibility": {
+    "dms_settings_search": {
+      "allowWithoutTrigger": false
+    }
+  },
   "launcherPluginOrder": [],
   "configVersion": 5
 }

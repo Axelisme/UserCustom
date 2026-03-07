@@ -10,6 +10,11 @@ input {
         accel-speed 0.4
     }
 }
+gestures {
+    hot-corners {
+        off
+    }
+}
 
 // // You can configure outputs by their name, which you can find
 // // by running `niri msg outputs` while inside a niri instance.

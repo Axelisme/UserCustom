@@ -6,11 +6,13 @@ binds {
     Mod+Space hotkey-overlay-title="App Launcher: Toggle" { spawn "dms" "ipc" "call" "spotlight" "toggle"; }
     Mod+V hotkey-overlay-title="Clipboard: Toggle" { spawn "dms" "ipc" "call" "clipboard" "toggle"; }
     Print hotkey-overlay-title="Screenshot: Window" { spawn "dms" "ipc" "call" "niri" "screenshotWindow"; }
+    Shift+Print hotkey-overlay-title="Screenshot: Interactive" { spawn "dms" "ipc" "call" "niri" "screenshot"; }
     Super+Alt+L hotkey-overlay-title="Lock Screen" { spawn "dms" "ipc" "call" "lock" "lock"; }
     XF86AudioLowerVolume allow-when-locked=true hotkey-overlay-title="Volume Down (5%)" { spawn "dms" "ipc" "call" "audio" "decrement" "5"; }
-    XF86AudioMicMute hotkey-overlay-title="Microphone Mute Toggle" allow-when-locked=true { spawn "dms" "ipc" "call" "audio" "micmute"; }
+    XF86AudioMicMute allow-when-locked=true hotkey-overlay-title="Microphone Mute Toggle" { spawn "dms" "ipc" "call" "audio" "micmute"; }
     XF86AudioMute allow-when-locked=true hotkey-overlay-title="Volume Mute Toggle" { spawn "dms" "ipc" "call" "audio" "mute"; }
-    XF86AudioRaiseVolume allow-when-locked=true hotkey-overlay-title="Volume Up (5%)" { spawn "dms" "ipc" "call" "audio" "increment" "5"; }
+    XF86AudioRaiseVolume hotkey-overlay-title="Volume Up (5%)" allow-when-locked=true { spawn "dms" "ipc" "call" "audio" "increment" "5"; }
     XF86MonBrightnessDown allow-when-locked=true hotkey-overlay-title="Brightness Down (5%)" { spawn "dms" "ipc" "call" "brightness" "decrement" "5" ""; }
     XF86MonBrightnessUp allow-when-locked=true hotkey-overlay-title="Brightness Up (5%)" { spawn "dms" "ipc" "call" "brightness" "increment" "5" ""; }
+    Alt+V hotkey-overlay-title="Open Code" { spawn "code"; }
 }

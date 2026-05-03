@@ -37,7 +37,7 @@ environment {
     XDG_CURRENT_DESKTOP "niri"
     ELECTRON_OZONE_PLATFORM_HINT "auto"
     XDG_SESSION_TYPE "wayland"
-    XDG_MENU_PREFIX "plasma-"
+    XDG_MENU_PREFIX "arch-"
     GDK_BACKEND "wayland"
 
     // Wayland Platform Settings
@@ -86,6 +86,8 @@ layout {
         bottom -2
     }
 }
+
+spawn-sh-at-startup "kbuildsycoca6"
 
 prefer-no-csd
 

@@ -47,32 +47,32 @@ return {
         pyright = {
           settings = {
             python = {
-              disableOrganizeImports = true,
+              -- disableOrganizeImports = true,
               analysis = {
                 autoImportCompletions = false,
-                diagnosticMode = "openFilesOnly",
-                typeCheckingMode = "off",
+                -- diagnosticMode = "openFilesOnly",
+                -- typeCheckingMode = "off",
               },
             },
           },
         },
-        basedpyright = {
-          settings = {
-            basedpyright = {
-              disableOrganizeImports = true,
-              analysis = {
-                autoImportCompletions = false,
-                diagnosticMode = "openFilesOnly",
-                typeCheckingMode = "base",
-                inlayHints = {
-                  variableTypes = false,
-                  callArgumentsNames = false,
-                  functionReturnTypes = true,
-                },
-              },
-            },
-          },
-        },
+        -- basedpyright = {
+        --   settings = {
+        --     basedpyright = {
+        --       disableOrganizeImports = true,
+        --       analysis = {
+        --         autoImportCompletions = false,
+        --         diagnosticMode = "openFilesOnly",
+        --         typeCheckingMode = "base",
+        --         inlayHints = {
+        --           variableTypes = false,
+        --           callArgumentsNames = false,
+        --           functionReturnTypes = true,
+        --         },
+        --       },
+        --     },
+        --   },
+        -- },
       },
     },
   },

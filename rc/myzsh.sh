@@ -7,6 +7,36 @@ source $USER_CUSTOM/rc/myset.sh
 [[ $- != *i* ]] && return
 
 ###################################################
+# History
+HISTSIZE=5000
+HISTFILE=~/.cache/zsh_history
+SAVEHIST=$HISTSIZE
+HISTDUP=erase
+setopt appendhistory
+setopt sharehistory
+setopt hist_ignore_space
+setopt hist_ignore_all_dups
+setopt hist_save_no_dups
+setopt hist_ignore_dups
+setopt hist_find_no_dups
+
+# Comment ignore
+setopt INTERACTIVE_COMMENTS
+
+# Prompt
+if command -v oh-my-posh &>/dev/null; then
+  if command -v tput &>/dev/null && [[ $(tput colors) == "256" ]]; then
+    ohmyposh_cfg=$HOME/.config/ohmyposh/main.yaml
+  else
+    ohmyposh_cfg=$HOME/.config/ohmyposh/tty.yaml
+  fi
+  eval "$(oh-my-posh init zsh --config $ohmyposh_cfg)"
+else
+  setopt PROMPT_SUBST
+  export PROMPT=$FALLBACK_PROMPT
+fi
+
+###################################################
 ZDOTDIR=$HOME/.config
 if [[ ! -f ${ZDOTDIR:-${HOME}}/.zcomet/bin/zcomet.zsh ]]; then
   command git clone https://github.com/agkozak/zcomet.git ${ZDOTDIR:-${HOME}}/.zcomet/bin
@@ -26,6 +56,7 @@ zcomet load zsh-users/zsh-autosuggestions
 
 zcomet compinit
 
+###################################################
 # Keybindings
 bindkey -e '^[[A' history-substring-search-up
 bindkey -e '^[[B' history-substring-search-down
@@ -34,29 +65,3 @@ bindkey -e '\033[F' end-of-line
 bindkey -e '^[[3~' delete-char
 bindkey -e '^[[1;5C' forward-word
 bindkey -e '^[[1;5D' backward-word
-
-# History
-HISTSIZE=5000
-HISTFILE=~/.cache/zsh_history
-SAVEHIST=$HISTSIZE
-HISTDUP=erase
-setopt appendhistory
-setopt sharehistory
-setopt hist_ignore_space
-setopt hist_ignore_all_dups
-setopt hist_save_no_dups
-setopt hist_ignore_dups
-setopt hist_find_no_dups
-
-# Prompt
-if command -v oh-my-posh &>/dev/null; then
-  if command -v tput &>/dev/null && [[ $(tput colors) == "256" ]]; then
-    ohmyposh_cfg=$HOME/.config/ohmyposh/main.yaml
-  else
-    ohmyposh_cfg=$HOME/.config/ohmyposh/tty.yaml
-  fi
-  eval "$(oh-my-posh init zsh --config $ohmyposh_cfg)"
-else
-  setopt PROMPT_SUBST
-  export PROMPT=$FALLBACK_PROMPT
-fi

@@ -30,5 +30,5 @@ fi
 
 # claude code
 if command -v claude-code &>/dev/null; then
-  export ENABLE_LSP_TOOL=1
+  export ENABLE_LSP_TOOLS=1
 fi

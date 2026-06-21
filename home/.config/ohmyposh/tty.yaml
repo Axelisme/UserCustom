@@ -27,14 +27,14 @@ blocks:
         cache:
           duration: 1h
           strategy: session
-        properties:
+        options:
           http_timeout: 500
 
       - type: path
         style: plain
         foreground: yellow
         background: transparent
-        properties:
+        options:
           style: full
 
       - type: git
@@ -42,7 +42,7 @@ blocks:
         foreground: red
         background: transparent
         template: ( {{ .HEAD }}{{ if gt .Ahead 0 }} ^{{.Ahead}}{{end}}{{ if gt .Behind 0 }} v{{.Behind}}{{end}}{{ if .Working.Changed }} +{{ .Working.Added }} ~{{ .Working.Modified }} -{{ .Working.Deleted }}{{ end }} )
-        properties:
+        options:
           branch_icon: ""
           commit_icon: "@"
           fetch_status: true
@@ -54,7 +54,7 @@ blocks:
         style: plain
         foreground: yellow
         background: transparent
-        properties:
+        options:
           threshold: 1000
 
       - type: root
@@ -67,7 +67,7 @@ blocks:
         foreground: yellow
         background: transparent
         template: " {{ if .Error }}{{ .Error }}{{ else }}{{ if .Venv }}{{ .Venv }} {{ end }}{{ end }}"
-        properties:
+        options:
           fetch_version: false
           home_enabled: true
 

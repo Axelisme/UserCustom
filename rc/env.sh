@@ -27,8 +27,3 @@ export GOPATH=$HOME/.local/share/go
 if command -v micromamba &>/dev/null; then
   export MAMBA_ROOT_PREFIX=$HOME/.local/share/micromamba
 fi
-
-# claude code
-if command -v claude-code &>/dev/null; then
-  export ENABLE_LSP_TOOL=1
-fi

@@ -10,5 +10,9 @@
   "dankKDEConnect": {
     "enabled": true,
     "selectedDeviceId": "6c0c5b6f23234c23824d78a1ca82478b"
+  },
+  "claudeUsage": {
+    "enabled": true,
+    "displayStyle": "rings"
   }
 }

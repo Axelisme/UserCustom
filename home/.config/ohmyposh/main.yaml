@@ -25,18 +25,30 @@ blocks:
           - "{{ if gt .Code 0 }}#cc2222{{ end }}"
           - "{{ if eq .Code 0 }}#d3d7cf{{ end }}"
 
-      - type: command
+      - type: ipify
         style: powerline
         foreground: "#d3d7cf"
         background: "#333333"
         powerline_symbol: 
-        template: "{{ .Output }}"
+        template: "{{ if .Env.SSH_TTY }} {{ .IP }} {{ end }}"
         cache:
           duration: 1h
           strategy: session
-        properties:
-          shell: bash
-          command: if [[ -v SSH_TTY ]]; then curl -4 ifconfig.me/ip; fi
+        options:
+          http_timeout: 300
+
+      # - type: command
+      #   style: powerline
+      #   foreground: "#d3d7cf"
+      #   background: "#333333"
+      #   powerline_symbol: 
+      #   template: "{{ .Output }}"
+      #   cache:
+      #     duration: 1h
+      #     strategy: session
+      #   options:
+      #     shell: bash
+      #     command: if [[ -v SSH_TTY ]]; then curl -4 ifconfig.me/ip; fi
 
       - type: path
         style: powerline
@@ -44,7 +56,7 @@ blocks:
         background: "#3465a4"
         powerline_symbol: 
         template: " \uf07c {{ .Path }} "
-        properties:
+        options:
           max_width: 30
           style: powerlevel
 
@@ -62,7 +74,7 @@ blocks:
         cache:
           duration: 1s
           strategy: folder
-        properties:
+        options:
           branch_icon: " "
           fetch_status: true
 
@@ -76,7 +88,7 @@ blocks:
         leading_powerline_symbol: 
         invert_powerline: true
         template: " {{ .FormattedMs }} \uf252 "
-        properties:
+        options:
           threshold: 1000
 
       - type: root

@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 40
+skill_version: 41
 ---
 
 # Orchestrate
@@ -258,6 +258,10 @@ milestone delivery: <recipient, runtime mechanism, timing, payload, failure fall
   (tests-only cleanup, docs, and independent adapters usually qualify; work on the reviewed
   contract never does). A finding that may change the next slice's interface, or any
   P1/contract-level finding, retracts run-ahead to single-writer until resolved.
+- Before dispatch into an area, check its candidate backlog
+  (`candidate-backlog list --area <area> --status inbox`): rider items on the same code may
+  fold into a slice at near-zero cost — never as scope expansion. At task closeout, close
+  inbox items this task resolved or obsoleted.
 - Before dispatch, label the closed-list critical axes each slice crosses. Two or more axes →
   root explicitly chooses (a) a foundation checkpoint freezing the shared contract/boundary
   first, or (b) `review-before-next-slice` when splitting would create an untestable

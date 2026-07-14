@@ -37,7 +37,8 @@ User 主動觸發,表示把「當前交付的這份任務/專案」的實作裁�
 - 內部照樣先 plan、照樣強型別 / Fast Fail / 責任明確——只是不再把 plan gate 在 user 批准上。
 - 收尾跑該專案**既有的** type-check / test / lint / format gates;**通過後才 commit**。
 - 動到的模組文件 / README / ADR 一併更新。
-- 多 agent 共用同一 checkout 時,動工前先認領 scope(taskboard 等協調機制)。
+- 多 agent 並行時,動工前先宣告 write scope(依 repo 的協調慣例,例如 orchestrate 的
+  spawn-prompt 一句話宣告;同檔案/同 public API 的工作不並行)。
 
 ## 只有兩種情況停下來找 user
 

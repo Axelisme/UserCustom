@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 32
+skill_version: 33
 ---
 
 # Orchestrate
@@ -228,8 +228,16 @@ milestone delivery: <recipient, runtime mechanism, timing, payload, failure fall
   cross-session work, in the domain packet. Never in a queue file or CLI — a queue that
   outlives the lead's ability to steer is a bug, not a feature.
 - A queue never expands authority: items are pre-authorized and same-scope, and a writer
-  never invents the next item. Preemption order: stop conditions > review findings > next
-  queued item. An exhausted queue ends the turn; the lease is retained.
+  never invents the next item. Preemption order: stop conditions > contract-affecting review
+  findings > next queued item > deferred findings. An exhausted queue ends the turn; the
+  lease is retained.
+- Findings route by severity, not uniformly: a finding that invalidates a premise of upcoming
+  slices (P1, contract or interface change) preempts immediately — deferring it means building
+  on a known-wrong premise, and rework compounds with distance. A real but self-contained
+  finding (naming, minor cleanup, a missing secondary test) does not interrupt the writer: it
+  goes to the finding ledger and is fixed in one dedicated cleanup slice at the end of the
+  queue, or logged to the candidate backlog when it falls outside the task. Deferral is root's
+  explicit call — the reviewer reports severity, never silently downgrades.
 - With a warmed-up persistent reviewer consuming announced SHAs, this pipelines review of
   slice N with implementation of N+1. By default, run at most one unreviewed slice ahead and
   keep announced commits append-only (follow-up commits only, no rewriting).

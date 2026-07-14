@@ -12,6 +12,4 @@
 | Date | Command | Result |
 |---|---|---|
 
-## Handoff Notes
-
-- <context compaction 或下一位 agent 需要知道的狀態。>
+<!-- 交接狀態不寫在這裡：packet＋task_plan Current State 是唯一交接載體（見 SKILL.md）。 -->

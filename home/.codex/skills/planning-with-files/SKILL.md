@@ -2,7 +2,7 @@
 name: planning-with-files
 description: 以 explicit task-id 管理 repo-local durable task narrative；只在跨回合、critical或資訊量確有需要時使用。
 user-invocable: true
-skill_version: 3
+skill_version: 4
 ---
 
 # Planning with Files
@@ -27,14 +27,33 @@ skill_version: 3
 ```
 
 `task_plan.md`是唯一必需檔。`findings.md`只在研究量大或有非顯而易見evidence時建立；`progress.md`只在跨回合、
-audit或handoff確有需要時建立；`archive.md`只在真的壓縮舊Phase內容時建立。不要形式性建立空檔。
+audit確有需要時建立；`archive.md`只在真的壓縮舊Phase內容時建立。不要形式性建立空檔。
+
+## 檔案分工（每檔一句 charter，互斥不重疊）
+
+| 檔案 | 回答的問題 |
+|---|---|
+| `task_plan.md` | 任務要去哪、決定了什麼、走到哪——**唯一 authority**（goal、decision ledger、Phase） |
+| `domains/<domain>.md` | 這個 domain 此刻的作戰狀態——當前快取，整頁覆寫，domain 完成即刪 |
+| `spec.md` | 凍結的 contract 全文（`to-spec` 產出；review 的 frozen_contract 指向這裡） |
+| `wayfinder-map.md` | 動工前的決策地圖（`wayfinder` 產出；effort 級，可先於 task 存在） |
+| `findings.md` | 調查**發現**了什麼——investigator 的 repo 事實與風險 |
+| `progress.md` | 何時發生過什麼——append-only 審計軌跡 |
+| `archive.md` | 舊 Phase 的壓縮沉澱 |
+| `../../artifacts/<task-id>/` | 證據大塊本體（plan 目錄外、ephemeral、task 收尾即刪，見 orchestrate） |
+
+**命名消歧**：`findings.md` 收的是*調查發現*（investigation findings）；*review findings*（reviewer
+的缺陷回報）不進 findings.md——active 的記在 domain packet 的 `Finding ledger` 欄位，已解決的只留
+task_plan decision／commit 引用。交接的唯一載體是 packet＋task_plan Current State，不另寫 handoff 文件。
 
 ## Active Domain Packet
 
 長任務為每個active domain維持一份短小packet：單 domain task 直接放在`task_plan.md`的「當前狀態」節；
 多 domain 並行的 task 才拆成`domains/<domain>.md`（同 plan 目錄下，一 domain 一頁）。固定欄位是`Domain`、
 `Owner / Reviewer`、`Current SHA`、`Frozen decisions`、`Superseded decisions`、`Open stop conditions`、
-`Source map`與`Next acceptance gate`。沒有的值明寫`none`，不能省略欄位；packet是task_plan之上的當前狀態
+`Review debt`（已宣告待審的 SHA 與 run-ahead 位置）、`Finding ledger`（active／deferred review findings
+含嚴重度）、`Anomalies`（unusable evidence 的指令與替代證據）、`Source map`與`Next acceptance gate`。
+沒有的值明寫`none`，不能省略欄位；packet是task_plan之上的當前狀態
 快取——決策只在task_plan/ADR記一次，packet只放指標＋一行摘要，在lease交接或checkpoint邊界整頁覆寫，
 domain完成即刪。domain lease不因Phase、checkpoint、commit或turn完成而清除。
 

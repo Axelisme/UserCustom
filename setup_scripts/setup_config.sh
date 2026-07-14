@@ -14,6 +14,11 @@ backup_cp() {
     # if dst exists and not a link, backup it
     if [ -e $dst ]; then
       if [ ! -L $dst ]; then
+        # same inode as src (still hard-linked) -> nothing to refresh
+        if [ $dst -ef $src ]; then
+          echo "skip $dst"
+          continue
+        fi
         echo "backup $dst"
         mv -b $dst $dst.bak
       else
@@ -34,4 +39,8 @@ backup_cp() {
 }
 
 backup_cp $UserCustom/home/.config $HOME/.config
+backup_cp $UserCustom/home/.codex/skills $HOME/.codex/skills
+backup_cp $UserCustom/home/.codex/agents $HOME/.codex/agents
+backup_cp $UserCustom/home/.claude/skills $HOME/.claude/skills
+backup_cp $UserCustom/home/.claude/agents $HOME/.claude/agents
 backup_cp $UserCustom/home/.local/include $HOME/.local/include

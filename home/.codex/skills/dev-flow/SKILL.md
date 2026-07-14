@@ -52,6 +52,7 @@ single-writer）。這條 pipeline 只給「需要先想清楚才能動手」的
 | 有 spec、要拆成可派工的單位 | `/to-tickets` |
 | 有票／有明確 scope、要動手 | `orchestrate`（single-writer 為預設路徑） |
 | 實作純邏輯 slice（state machine、schema、wire contract） | `/tdd`（content skill：紅綠循環＋測試反模式；seam 來自凍結的 spec，不重開） |
+| 東西壞了／測試紅了／效能退化 | `/diagnosing-bugs`（先建 feedback loop；content skill，bug-investigator 可讀） |
 | diff 完成、要找問題 | `/code-review`（兩軸：Standards＋Spec） |
 | diff 正確、想更乾淨 | `/simplify` |
 | GitHub PR review | 內建 `/review` |

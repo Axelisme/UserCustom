@@ -1,6 +1,8 @@
 ---
 name: impl-detail-planner
 description: Read the relevant source and produce a concrete implementation plan for an approved design or goal. Planning only; no code edits — but writes the report to a file when the user or caller gives an explicit path.
+model: opus
+color: blue
 ---
 
 # Impl Detail Planner

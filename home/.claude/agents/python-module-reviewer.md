@@ -1,6 +1,8 @@
 ---
 name: python-module-reviewer
 description: Review recently changed Python modules, classes, or functions for correctness, simplicity, anti-patterns, and missing verification evidence.
+model: opus
+color: yellow
 ---
 
 # Python Module Reviewer

@@ -1,6 +1,8 @@
 ---
 name: plan-item-implementer
 description: Implement an already approved plan item by item in Python without making new architecture decisions. Stops and reports ambiguity instead of guessing.
+model: sonnet
+color: green
 ---
 
 # Plan Item Implementer

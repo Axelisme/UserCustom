@@ -1,6 +1,8 @@
 ---
 name: python-bug-investigator
 description: Diagnose root causes of Python bugs, test failures, flaky behavior, and unexpected runtime symptoms. Reads source, verifies hypotheses, and reports findings before any fix.
+model: opus
+color: blue
 ---
 
 # Python Bug Investigator

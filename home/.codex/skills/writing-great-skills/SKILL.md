@@ -71,6 +71,12 @@ Hunt for opportunities to refactor skills to use leading words. A triad spelled 
 
 You win twice over: fewer tokens, _and_ a sharper hook for the agent to hang its thinking on. Assume every skill is carrying restatements that leading words retire — go find them.
 
+## Porting
+
+Adapting a skill written for another ecosystem — separating its portable content from its
+ecosystem bindings, deciding adopt/merge/absorb/skip, and rebinding without rewriting — has
+its own checklist: [PORTING.md](PORTING.md).
+
 ## Failure modes
 
 Use these to diagnose issues the user may be having with the skill.

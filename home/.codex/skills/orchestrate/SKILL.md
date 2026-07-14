@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 36
+skill_version: 37
 ---
 
 # Orchestrate
@@ -141,7 +141,10 @@ Do the expensive work **off-slot**; hold the slot only for the final seconds:
 - Role profiles: `contract-planner`, `repo-investigator`, `implementer`,
   `mechanical-implementer`, `reviewer`, `integration-reviewer`; `web-researcher` and
   `mcp-skill-tester` as needed. Read-only roles not writing files is behavioral discipline,
-  not runtime enforcement.
+  not runtime enforcement. Reviewers are **not** sandbox-read-only: executing gates
+  inherently writes (their own detached worktree under `.agent_state/worktrees/`, tool
+  caches), so they hold workspace-write with behavioral guardrails — the invariant is the
+  immutability of the reviewed SHA, not the absence of writes.
 - Profiles may point a role at **content** skills (vocabulary, checklists, conventions —
   e.g. `codebase-design`, `domain-modeling`) to *read* as reference. Sub-agents never
   *invoke* **coordination** skills (`code-review`, `research` — anything that spawns agents

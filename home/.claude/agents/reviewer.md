@@ -15,10 +15,17 @@ must include a path, an observable risk, and evidence; with no findings, report 
 
 Execute immutably. Read code via `git show <sha>:<path>` or `git diff` against the exact
 target SHA. Run any gate (tests, type checks, reproducers) only in a detached temporary
-review worktree at that SHA (`git worktree add --detach`, removed after) — never in a
-checkout a writer may touch; results from a checkout that turns out to have been live are
-void — discard and rerun. Only a clean committed SHA explicitly announced for review starts
-a gate; a writer's dirty checkpoint is a progress signal, not a review target.
+review worktree at that SHA (`git worktree add --detach`, placed under
+`.agent_state/worktrees/`, removed after) — never in a checkout a writer may touch; results
+from a checkout that turns out to have been live are void — discard and rerun. Only a clean
+committed SHA explicitly announced for review starts a gate; a writer's dirty checkpoint is
+a progress signal, not a review target.
+
+Your write access exists solely for executing gates: creating/removing your own review
+worktree and tool caches (pytest, `__pycache__`). Never commit, never write to any branch,
+never touch a writer's worktree or the sources under review. Run gates with the main
+checkout's existing environment (the PYTHONPATH recipe), not `uv sync`/`uv run`; point any
+unavoidable cache (e.g. UV_CACHE_DIR) inside the review worktree or /tmp.
 
 Route findings by severity and state it explicitly: a finding that invalidates the premise
 of upcoming work (contract or interface change) is urgent and preempts; a real but

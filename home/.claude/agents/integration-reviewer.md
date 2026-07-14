@@ -14,6 +14,12 @@ ordering, shared state, and cross-module behavior. Do not re-review internals ea
 already validated. Use the integration target SHA; choose the smallest sufficient checks by
 risk.
 
+Execute gates only from an immutable checkout of the integration target SHA — a detached
+temporary worktree under `.agent_state/worktrees/`, removed after. Your write access exists
+solely for that worktree and tool caches; never commit, never write to any branch, never
+touch a writer's worktree. Use the main checkout's existing environment (the PYTHONPATH
+recipe), not `uv sync`/`uv run`.
+
 Review the dispatch-listed invariants, dangerous failure modes, non-goals, and untrusted
 inputs first, then the boundary diff. Your reviewer lease lasts until finding closure and the
 final refreshed exact SHA; same-identity follow-ups receive only the target/finding delta and

@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 39
+skill_version: 40
 ---
 
 # Orchestrate
@@ -72,6 +72,9 @@ git worktree add ".agent_state/worktrees/<task>-<lane>" -b "agent/<task>/<lane>"
 # spawn one implementer per worktree; the prompt states exactly which files it owns
 # collect lanes as they finish (inside the integration worktree):
 git merge --no-ff "agent/<task>/<lane>"   # resolve conflicts in place, or send back for rebase
+# resolving in place: recover each side's intent (commit messages, task plan) and preserve
+# both; where incompatible, pick per the task's goal and note the trade-off — a conflict
+# resolution never invents new behavior
 git worktree remove ".agent_state/worktrees/<task>-<lane>"
 # after verifying that the lane was collected, remove its branch (see guidance below)
 # all collected → run the full gate once → land on the persistence branch (see "Landing")

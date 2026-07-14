@@ -1,5 +1,5 @@
 {
-  "currentThemeName": "purple",
+  "currentThemeName": "blue",
   "currentThemeCategory": "generic",
   "customThemeFile": "",
   "registryThemeVariants": {},
@@ -20,10 +20,12 @@
   "niriLayoutRadiusOverride": -1,
   "niriLayoutBorderSize": -1,
   "hyprlandLayoutGapsOverride": -1,
+  "hyprlandLayoutGapsOutOverride": -1,
   "hyprlandLayoutRadiusOverride": -1,
   "hyprlandLayoutBorderSize": -1,
   "hyprlandResizeOnBorder": false,
   "mangoLayoutGapsOverride": -1,
+  "mangoLayoutGapsOutOverride": -1,
   "mangoLayoutRadiusOverride": -1,
   "mangoLayoutBorderSize": -1,
   "mangoTrackpadNaturalScrolling": true,
@@ -64,6 +66,8 @@
   "wallpaperFillMode": "Fill",
   "blurredWallpaperLayer": true,
   "blurWallpaperOnOverview": false,
+  "wallpaperBackgroundColorMode": "black",
+  "wallpaperBackgroundCustomColor": "#000000",
   "showLauncherButton": true,
   "showWorkspaceSwitcher": true,
   "showFocusedWindow": true,
@@ -83,6 +87,12 @@
   "showClock": true,
   "showNotificationButton": true,
   "showBattery": true,
+  "showBatteryPercent": true,
+  "showBatteryPercentOnlyOnBattery": false,
+  "showBatteryTime": false,
+  "showBatteryTimeOnlyOnBattery": false,
+  "batteryPillStyle": false,
+  "batteryPillPercentSign": false,
   "showControlCenterButton": true,
   "showCapsLockIndicator": true,
   "controlCenterShowNetworkIcon": true,
@@ -172,17 +182,33 @@
   "workspaceFocusedBorderColor": "primary",
   "workspaceFocusedBorderCustomColor": "#6750A4",
   "workspaceFocusedBorderThickness": 2,
+  "workspaceUnfocusedMonitorSeparateAppearance": false,
+  "workspaceUnfocusedMonitorColorMode": "default",
+  "workspaceUnfocusedMonitorFocusedCustomColor": "#6750A4",
+  "workspaceUnfocusedMonitorOccupiedColorMode": "none",
+  "workspaceUnfocusedMonitorOccupiedCustomColor": "#625B71",
+  "workspaceUnfocusedMonitorUnfocusedColorMode": "default",
+  "workspaceUnfocusedMonitorUnfocusedCustomColor": "#49454E",
+  "workspaceUnfocusedMonitorUrgentColorMode": "default",
+  "workspaceUnfocusedMonitorUrgentCustomColor": "#B3261E",
+  "workspaceUnfocusedMonitorBorderEnabled": false,
+  "workspaceUnfocusedMonitorBorderColor": "primary",
+  "workspaceUnfocusedMonitorBorderCustomColor": "#6750A4",
+  "workspaceUnfocusedMonitorBorderThickness": 2,
   "workspaceNameIcons": {},
   "waveProgressEnabled": true,
   "scrollTitleEnabled": true,
   "mediaAdaptiveWidthEnabled": true,
   "audioVisualizerEnabled": true,
+  "mediaUseAlbumArtAccent": false,
   "audioScrollMode": "volume",
   "audioWheelScrollAmount": 5,
   "audioDeviceScrollVolumeEnabled": false,
+  "mediaExcludePlayers": [],
   "clockCompactMode": false,
   "focusedWindowCompactMode": true,
   "focusedWindowSize": 1,
+  "focusedWindowShowIcon": true,
   "runningAppsCompactMode": true,
   "barMaxVisibleApps": 0,
   "barMaxVisibleRunningApps": 0,
@@ -243,6 +269,8 @@
   "greeterLockDateFormat": "",
   "greeterFontFamily": "",
   "greeterWallpaperFillMode": "",
+  "greeterSyncPending": false,
+  "greeterSyncBaseline": {},
   "mediaSize": 1,
   "appLauncherViewMode": "list",
   "spotlightModalViewMode": "list",
@@ -261,6 +289,7 @@
   "appDrawerSectionViewModes": {},
   "niriOverviewOverlayEnabled": true,
   "dankLauncherV2Size": "compact",
+  "dankLauncherV2ShowSourceBadges": true,
   "dankLauncherV2BorderEnabled": false,
   "dankLauncherV2BorderThickness": 2,
   "dankLauncherV2BorderColor": "primary",
@@ -274,8 +303,33 @@
   "keybindsFloatingWindow": false,
   "useAutoLocation": true,
   "weatherEnabled": true,
-  "networkPreference": "ethernet",
-  "iconTheme": "System Default",
+  "dashTabs": [
+    {
+      "id": "overview",
+      "enabled": true
+    },
+    {
+      "id": "media",
+      "enabled": true
+    },
+    {
+      "id": "wallpaper",
+      "enabled": true
+    },
+    {
+      "id": "weather",
+      "enabled": true
+    },
+    {
+      "id": "settings",
+      "enabled": true
+    }
+  ],
+  "networkPreference": "wifi",
+  "iconThemeDark": "System Default",
+  "iconThemeLight": "System Default",
+  "iconThemePerMode": false,
+  "lastAppliedIconTheme": "",
   "cursorSettings": {
     "theme": "System Default",
     "size": 24,
@@ -326,7 +380,7 @@
   "soundPluggedIn": true,
   "muteSoundsWhenMediaPlaying": true,
   "acMonitorTimeout": 300,
-  "acLockTimeout": 600,
+  "acLockTimeout": 300,
   "acSuspendTimeout": 0,
   "acSuspendBehavior": 0,
   "acProfileName": "2",
@@ -343,7 +397,9 @@
   "batteryNotifyCritical": true,
   "batteryLowThreshold": 20,
   "batteryNotifyLow": false,
-  "batteryNotificationType": 0,
+  "batteryChargeLimitNotificationType": 0,
+  "batteryLowNotificationType": 0,
+  "batteryCriticalNotificationType": 0,
   "batteryAutoPowerSaver": false,
   "lockBeforeSuspend": true,
   "loginctlLockIntegration": true,
@@ -459,12 +515,14 @@
   "maxFprintTries": 3,
   "enableU2f": false,
   "u2fMode": "or",
-  "lockScreenActiveMonitor": "all",
   "lockScreenInactiveColor": "#000000",
   "lockScreenNotificationMode": 0,
   "lockScreenVideoEnabled": false,
   "lockScreenVideoPath": "",
   "lockScreenVideoCycling": false,
+  "lockScreenWallpaperPath": "",
+  "lockScreenWallpaperFillMode": "",
+  "lockScreenFontFamily": "",
   "hideBrightnessSlider": false,
   "notificationTimeoutLow": 5000,
   "notificationTimeoutNormal": 5000,
@@ -566,7 +624,11 @@
           "enabled": true
         },
         {
-          "id": "claudeUsage",
+          "id": "aiOverviewControl",
+          "enabled": true
+        },
+        {
+          "id": "codexBar",
           "enabled": true
         }
       ],
@@ -743,8 +805,12 @@
   "builtInPluginSettings": {
     "dms_settings_search": {
       "trigger": "?"
+    },
+    "dms_clipboard_search": {
+      "trigger": "cb"
     }
   },
+  "clipboardClickToPaste": false,
   "clipboardEnterToPaste": false,
   "clipboardRememberTypeFilter": false,
   "clipboardTypeFilter": "all",
@@ -773,6 +839,10 @@
   "frameCloseGaps": true,
   "frameLauncherEmergeSide": "bottom",
   "frameLauncherArcExtender": false,
+  "frameLauncherEdgeHover": false,
   "frameMode": "separate",
-  "configVersion": 11
+  "barInsetPaddingShared": -1,
+  "barInsetPaddingSyncAll": false,
+  "frameBarInsetPadding": -1,
+  "configVersion": 12
 }

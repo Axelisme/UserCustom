@@ -55,6 +55,25 @@ single-writer）。這條 pipeline 只給「需要先想清楚才能動手」的
 | diff 正確、想更乾淨 | `/simplify` |
 | GitHub PR review | 內建 `/review` |
 
+## 粒度交接：wayfinder 停在哪、planner 從哪接手
+
+判準：**wayfinder 產出決策，planner 產出推導**。測試——「兩個稱職工程師拿同樣的決策
+與程式碼，會收斂到相同答案嗎？」會 → 可推導，執行期由 `contract-planner` just-in-time
+補（它讀的是當前程式碼，不會腐爛）；不會 → 真決策，wayfinder/用戶層。
+
+耐久度梯度（越早期產出必須越耐久，因為 wayfinder 跨多 session）：
+
+- **wayfinder**：destination、out-of-scope、領域詞彙、不可逆軸向選擇（persistence／
+  wire schema 哲學、ownership 劃分）、價值取捨——能活過 refactor 的層次。
+- **to-spec / to-tickets**：模組級介面概念、schema 形狀、測試 seam（HITL 確認）、
+  垂直切片＋驗收＋blocking edges。不寫 file path／code（prototype 固化的決策片段例外）。
+- **planner（執行期）**：精確 integration point、write scope 切分、wave 內順序、
+  targeted-test 指令——一切從當前程式碼可推導的。
+
+下限：後續階段永遠不需要重開決策（重開＝contract-level 中斷，最貴）。上限：可推導的
+一律不寫（早期寫死的程式碼細節到執行時是腐爛的假權威）。一句話：**具體到「不需要再問
+用戶就能動工」為止，然後停手。**
+
 ## 三個 review 的分工（不要混用）
 
 - **`/code-review`** = 找問題、只回報：Standards（repo 規範＋Fowler smell baseline）

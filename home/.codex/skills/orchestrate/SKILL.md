@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 34
+skill_version: 35
 ---
 
 # Orchestrate
@@ -11,13 +11,10 @@ lives in exactly three native carriers — **Git** (code and branch topology), *
 (work in progress), and the **plan directory** (cross-session narrative). This skill defines
 conventions plus a few hard rules; it never creates state files.
 
-This skill is **root-only**: sub-agents never load it. The division of knowledge is
-three-layered — this skill carries root's coordination doctrine; each role's standing orders
-(immutable review execution, milestone points, blast-radius protocol, severity reporting)
-live in its role profile; everything task-specific (SHAs, scope, queue, packet) arrives in
-the spawn/follow-up prompt. If a sub-agent would need a rule from this file, that rule
-belongs in a profile or the prompt — move it there rather than having the sub-agent read
-the skill.
+This skill is **root-only**: sub-agents never load it. Knowledge is three-layered — this
+skill holds root's coordination doctrine; each role's standing orders live in its role
+profile; task specifics (SHAs, scope, queue, packet) arrive in the spawn/follow-up prompt.
+A rule a sub-agent needs belongs in a profile or the prompt, never in this file alone.
 
 ## Design principles
 
@@ -95,12 +92,10 @@ Coordination conventions:
   `PYTHONPATH=<worktree>/<pkg-root> <main-checkout>/.venv/bin/python -m pytest ...`; follow
   the repo's documented test recipe when it names one. Anything needing the full environment
   runs in the main checkout.
-- For routine `--no-ff` collection, `git merge-base --is-ancestor <lane> <task>` is a useful
-  absorption check before branch cleanup. If `git branch -d` complains only because the
-  current checkout does not see that ancestry, root may use `git branch -D` after establishing
-  equivalent evidence (for example, expected tree identity via `git diff --quiet <lane> <task>`).
-  These are suggested proofs, not a mandatory command sequence; `-D` itself is never evidence
-  that a lane was collected.
+- Before deleting a collected lane branch, hold evidence it was absorbed —
+  `git merge-base --is-ancestor <lane> <task>`, or tree identity via
+  `git diff --quiet <lane> <task>`. With such evidence `git branch -D` is fine; `-D` itself
+  is never the evidence.
 
 ## Landing on a persistence branch
 
@@ -176,24 +171,14 @@ not cover the changed surface is never silently promoted into target-SHA sign-of
 closure returns to the same reviewer with only the refreshed target, finding delta, and changed
 evidence.
 
-**Review execution is immutable.** Naming an exact SHA is necessary but not sufficient — a
-reviewer must never *execute* anything from a checkout a writer may still touch:
-
-- Pure reading reviews can work from `git show <sha>:<path>` / `git diff <base> <sha>` without
-  any checkout.
-- Any reviewer-run gate (tests, type checks, reproducers) executes in a detached temporary
-  review worktree at the exact SHA (`git worktree add --detach <path> <sha>`, removed after),
-  or in a lane checkout that is provably frozen and clean — never in a worktree with a live
-  writer.
-- The moment the writer resumes work in a lane, that lane's checkout is invalid for validating
-  any previously announced SHA. Results already collected from a checkout that turns out to
-  have been live are void — discard them and rerun from an immutable checkout; they are never
-  evidence.
-
-Two checkpoint kinds, not one. A **code checkpoint** is writer-side and may be dirty — it
-exists for progress, blast-radius classification, and cherry-pick safety, and never enters a
-formal gate. A **review checkpoint** is a clean committed SHA explicitly announced for review;
-only these start reviewer gates.
+**Review execution is immutable.** Gates run only from immutable checkouts: `git show` /
+`git diff` for pure reading; a detached temporary worktree at the exact SHA (or a provably
+frozen clean lane) for anything executed — never a checkout with a live writer. Once the
+writer resumes, results from that checkout are void: discard and rerun. Only a **review
+checkpoint** (a clean committed SHA explicitly announced for review) starts a gate; a
+writer's dirty **code checkpoint** (progress, blast-radius, cherry-pick safety) never does.
+Operational detail lives in the reviewer profile; root's job is handing over an immutable
+target and voiding evidence that turns out to be live.
 
 Reviews attach to the exact SHA they inspected. After a reviewed lane is collected, the
 orchestrator chooses evidence proportional to the merge:
@@ -239,59 +224,41 @@ milestone delivery: <recipient, runtime mechanism, timing, payload, failure fall
   never invents the next item. Preemption order: stop conditions > contract-affecting review
   findings > next queued item > deferred findings. An exhausted queue ends the turn; the
   lease is retained.
-- Findings route by severity, not uniformly: a finding that invalidates a premise of upcoming
-  slices (P1, contract or interface change) preempts immediately — deferring it means building
-  on a known-wrong premise, and rework compounds with distance. A real but self-contained
-  finding (naming, minor cleanup, a missing secondary test) does not interrupt the writer: it
-  goes to the finding ledger and is fixed in one dedicated cleanup slice at the end of the
-  queue, or logged to the candidate backlog when it falls outside the task. Deferral is root's
-  explicit call — the reviewer reports severity, never silently downgrades.
-- With a warmed-up persistent reviewer consuming announced SHAs, this pipelines review of
-  slice N with implementation of N+1. By default, run at most one unreviewed slice ahead and
-  keep announced commits append-only (follow-up commits only, no rewriting).
-- Run-ahead is conditional, not free: slice N+1 qualifies only if it is **surface-disjoint**
-  from the SHA under review — it must not modify the public wire, schema, shared fixtures, or
-  the same state machine slice N touches (tests-only cleanup, docs, and independent adapters
-  usually qualify; work on the reviewed contract never does). When a finding may change the
-  next slice's interface — or any P1 / contract-level finding lands — run-ahead retracts to
-  single-writer until the finding is resolved.
-- Before dispatch, label the closed-list critical axes each slice crosses. When one slice crosses
-  two or more axes, root explicitly chooses either (a) a coherent foundation checkpoint that
-  freezes the shared contract/boundary first, or (b) `review-before-next-slice` when splitting
-  would create an untestable half-change. A slice spanning **three or more authority
-  boundaries** (critical axes plus surfaces like operation lifecycle or frontend projection)
-  defaults to being split — foundation first, vertical remainder — because its review surface
-  outgrows one gate; keeping it whole requires a stated reason. File count is only a warning
-  signal; critical axes, boundary count, and independent acceptance determine the shape.
+- Findings route by severity (the reviewer reports it, root decides deferral): a
+  premise-invalidating finding (P1, contract or interface change) preempts immediately —
+  rework compounds with distance. A self-contained finding (naming, minor cleanup, a missing
+  secondary test) goes to the finding ledger for one queue-end cleanup slice, or to the
+  candidate backlog when outside the task.
+- With a warmed-up persistent reviewer consuming announced SHAs, review of slice N pipelines
+  with implementation of N+1: announce N, begin N+1, keep announced commits append-only
+  (follow-up commits only, no rewriting), at most one unreviewed slice ahead — root may
+  tighten or relax against review latency, surface stability, and rework cost.
+- Run-ahead is conditional: N+1 qualifies only if **surface-disjoint** from the SHA under
+  review — not touching its public wire, schema, shared fixtures, or state machine
+  (tests-only cleanup, docs, and independent adapters usually qualify; work on the reviewed
+  contract never does). A finding that may change the next slice's interface, or any
+  P1/contract-level finding, retracts run-ahead to single-writer until resolved.
+- Before dispatch, label the closed-list critical axes each slice crosses. Two or more axes →
+  root explicitly chooses (a) a foundation checkpoint freezing the shared contract/boundary
+  first, or (b) `review-before-next-slice` when splitting would create an untestable
+  half-change. **Three or more authority boundaries** (critical axes plus surfaces like
+  operation lifecycle or frontend projection) → default to splitting, foundation first then
+  vertical remainder; keeping it whole requires a stated reason. File count is only a warning
+  signal; axes, boundary count, and independent acceptance determine the shape.
 - The milestone contract is a fixed field of every spawn/follow-up prompt — never delegated
-  to profile injection (profiles may restate it, but runtimes do not guarantee they load):
-  recipient, mechanism, payload, boundary timing, no-ack continuation, run-ahead limit, and
-  failure fallback. Standard notification points, trimmed per task: **inventory** (scope and
-  source map confirmed), **first-green** (first slice passing targeted tests),
-  **failure-cluster** (a related group of failures worth steering on), and **clean-SHA** (a
-  committed review checkpoint ready for gates).
+  to profile injection (runtimes do not guarantee profiles load): recipient, mechanism,
+  payload, boundary timing, no-ack continuation, run-ahead limit, failure fallback. The
+  standard notification points (**inventory / first-green / failure-cluster / clean-SHA**)
+  are defined in the implementer profile; the prompt states only deviations.
 
-A useful event rhythm is: announce slice N's milestone, begin N+1, and let the reviewer consume
-N in parallel. One unreviewed slice ahead is the safety default; root may tighten or relax it
-after considering review latency, surface stability, and likely rework cost. If a finding arrives
-before N+1 reaches a checkpoint, preserve the nearest coherent state and then use the
-blast-radius guidance below.
-
-When a problem with an announced slice N surfaces during N+1 (a review finding, or the
-implementer's own discovery):
-
-1. **Default to checkpointing first.** Reach the nearest coherent point and commit the N+1 work
-   in progress. Avoid discarding useful uncommitted work — task/lane commits cost little because
-   landing squashes them away; an abandoned attempt can remain as a dead-end commit.
-2. **Classify the fix's blast radius** (the implementer judges and states the classification
-   in its report):
-   - *Localized* — the fix touches no surface N+1 builds on → fix N as a follow-up commit,
-     rerun the thin checks, resume N+1 on top; all progress kept.
-   - *Surface-changing* — the fix alters an interface/schema N+1 uses → fix N, then adapt:
-     keep the checkpointed parts that don't touch the changed surface, redo the rest (the
-     checkpoint stays in history as a cherry-pick source).
-   - *Contract-level* — slice N's premise itself is wrong → stop the queue, report
-     `needs_decision` with everything checkpointed; the lead re-plans.
+When a problem with announced slice N surfaces during N+1 (a review finding or the
+implementer's own discovery), the implementer checkpoints first — nearest coherent point,
+commit the work in progress; task/lane commits are free because landing squashes them — and
+classifies the fix's blast radius in its report (full protocol in the implementer profile):
+*localized* → fix N as a follow-up, resume N+1 on top; *surface-changing* → fix N, keep the
+checkpointed parts off the changed surface, redo the rest; *contract-level* → the queue
+stops with `needs_decision`, everything checkpointed, and root re-plans. Root treats the
+classification as the routing signal and never lets useful uncommitted work be discarded.
 
 ## Validation anomalies
 

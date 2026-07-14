@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 31
+skill_version: 32
 ---
 
 # Orchestrate
@@ -233,6 +233,12 @@ milestone delivery: <recipient, runtime mechanism, timing, payload, failure fall
 - With a warmed-up persistent reviewer consuming announced SHAs, this pipelines review of
   slice N with implementation of N+1. By default, run at most one unreviewed slice ahead and
   keep announced commits append-only (follow-up commits only, no rewriting).
+- Run-ahead is conditional, not free: slice N+1 qualifies only if it is **surface-disjoint**
+  from the SHA under review — it must not modify the public wire, schema, shared fixtures, or
+  the same state machine slice N touches (tests-only cleanup, docs, and independent adapters
+  usually qualify; work on the reviewed contract never does). When a finding may change the
+  next slice's interface — or any P1 / contract-level finding lands — run-ahead retracts to
+  single-writer until the finding is resolved.
 - Before dispatch, label the closed-list critical axes each slice crosses. When one slice crosses
   two or more axes, root explicitly chooses either (a) a coherent foundation checkpoint that
   freezes the shared contract/boundary first, or (b) `review-before-next-slice` when splitting

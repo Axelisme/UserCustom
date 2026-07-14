@@ -4,8 +4,7 @@ description: A relentless interview to sharpen a plan or design, which also crea
 disable-model-invocation: true
 ---
 
-Run a `/grilling` session, using the `/domain-modeling` skill.
-
-Rules:
-
-Ask exactly one question at a time during the interview. Accumulate documentation changes while the user is answering, then write ADR/glossary updates in batches at natural checkpoints or at the end of the session instead of after every answer.
+Run a `/grilling` session, using the `/domain-modeling` skill in **checkpoint mode**:
+accumulate glossary/ADR changes while the interview runs, and write them in batches at
+natural checkpoints (a settled decision cluster, or session end) — the interview keeps its
+rhythm, the docs still land.

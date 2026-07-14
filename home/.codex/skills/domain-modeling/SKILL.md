@@ -9,6 +9,12 @@ Actively build and sharpen the project's domain model as you design. This is the
 
 ## File structure
 
+**The repo's documented conventions win.** If CLAUDE.md / AGENTS.md names where the
+glossary, module notes, and ADRs live (e.g. module `README.md` cheat-sheets plus a
+`docs/adr/` with a topic-grouped `README.md` index, `ADR-NNNN` references, `[[NNNN]]`
+interlinks, present tense), write there in that shape — including updating the ADR index —
+and use the layout below only as the fallback for repos that document nothing.
+
 Most repos have a single context:
 
 ```
@@ -57,9 +63,11 @@ When domain relationships are being discussed, stress-test them with specific sc
 
 When the user states how something works, check whether the code agrees. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?"
 
-### Update CONTEXT.md inline
+### Update the glossary as terms resolve
 
-When a term is resolved, update `CONTEXT.md` right there. Don't batch these up — capture them as they happen. Use the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md).
+When a term is resolved, capture it in the glossary promptly — by default inline, right
+there; a calling skill may declare **checkpoint mode**, batching the writes at natural
+checkpoints instead. Use the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md).
 
 `CONTEXT.md` should be totally devoid of implementation details. Do not treat `CONTEXT.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
 
@@ -71,4 +79,5 @@ Only offer to create an ADR when all three are true:
 2. **Surprising without context** — a future reader will wonder "why did they do it this way?"
 3. **The result of a real trade-off** — there were genuine alternatives and you picked one for specific reasons
 
-If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](./ADR-FORMAT.md).
+If any of the three is missing, skip the ADR. Follow the repo's existing ADR shape and
+index conventions; [ADR-FORMAT.md](./ADR-FORMAT.md) is the fallback format.

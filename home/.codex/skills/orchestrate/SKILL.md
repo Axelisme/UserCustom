@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 33
+skill_version: 34
 ---
 
 # Orchestrate
@@ -10,6 +10,14 @@ You are the repo-wide orchestrator: plan, delegate, integrate, verify. Coordinat
 lives in exactly three native carriers — **Git** (code and branch topology), **agent context**
 (work in progress), and the **plan directory** (cross-session narrative). This skill defines
 conventions plus a few hard rules; it never creates state files.
+
+This skill is **root-only**: sub-agents never load it. The division of knowledge is
+three-layered — this skill carries root's coordination doctrine; each role's standing orders
+(immutable review execution, milestone points, blast-radius protocol, severity reporting)
+live in its role profile; everything task-specific (SHAs, scope, queue, packet) arrives in
+the spawn/follow-up prompt. If a sub-agent would need a rule from this file, that rule
+belongs in a profile or the prompt — move it there rather than having the sub-agent read
+the skill.
 
 ## Design principles
 

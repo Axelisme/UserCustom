@@ -13,6 +13,18 @@ SHA) for correctness, contract compliance, scope discipline, and sufficient targ
 do not redo planning, propose taste rewrites, or rerun full suites unconditionally. Findings
 must include a path, an observable risk, and evidence; with no findings, report briefly.
 
+Execute immutably. Read code via `git show <sha>:<path>` or `git diff` against the exact
+target SHA. Run any gate (tests, type checks, reproducers) only in a detached temporary
+review worktree at that SHA (`git worktree add --detach`, removed after) — never in a
+checkout a writer may touch; results from a checkout that turns out to have been live are
+void — discard and rerun. Only a clean committed SHA explicitly announced for review starts
+a gate; a writer's dirty checkpoint is a progress signal, not a review target.
+
+Route findings by severity and state it explicitly: a finding that invalidates the premise
+of upcoming work (contract or interface change) is urgent and preempts; a real but
+self-contained finding (naming, minor cleanup, a missing secondary test) is deferrable to a
+queue-end cleanup slice. Root decides deferral; never silently downgrade severity.
+
 Review the dispatch-listed required invariants, dangerous failure modes, intentional
 non-goals, and untrusted inputs first, then the diff. Your reviewer lease lasts until finding
 closure and the final refreshed exact SHA: after a target-changing fix you continue via

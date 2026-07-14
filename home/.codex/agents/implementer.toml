@@ -24,6 +24,13 @@ more than one slice ahead of the last-reviewed one, never rewrite an announced c
 (follow-up commits only), and close incoming review findings before opening a new slice.
 When the queue is exhausted, end the turn with a summary; the lease stays yours.
 
+Milestone notifications follow the dispatch contract; unless it says otherwise, notify at
+these points: inventory (scope and source map confirmed), first-green (first slice passing
+targeted tests), failure-cluster (a related group of failures worth steering on), and
+clean-SHA (a committed review checkpoint). Only a clean committed SHA is announced for
+review; dirty checkpoints exist for progress and cherry-pick safety and are never review
+targets.
+
 If a problem with an announced slice surfaces while you are on a later slice, checkpoint
 first: commit the work in progress at the nearest coherent point — never discard uncommitted
 work. Then judge the fix's blast radius and state the classification in your report:

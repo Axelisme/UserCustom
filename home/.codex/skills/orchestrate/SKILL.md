@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 41
+skill_version: 42
 ---
 
 # Orchestrate
@@ -233,8 +233,8 @@ profile: <requested role; runtime-effective role when relevant>
 lease + write scope: <domain owner; the only files this writer may change>
 slices: <ordered 3–5 slices, each with acceptance and targeted checks>
 critical shaping: <axes; foundation checkpoint or review-before-next-slice; rationale>
-stop conditions: <contract uncertainty, scope collision, critical surprise, ...>
-milestone delivery: <recipient, runtime mechanism, timing, payload, failure fallback>
+stop conditions: <task-specific additions only — standing ones live in the profile>
+milestone delivery: <deviations from the standing contract only>
 ```
 
 - The queue lives in the agent's context (spawn prompt, extended by follow-up deltas) or, for
@@ -269,11 +269,15 @@ milestone delivery: <recipient, runtime mechanism, timing, payload, failure fall
   operation lifecycle or frontend projection) → default to splitting, foundation first then
   vertical remainder; keeping it whole requires a stated reason. File count is only a warning
   signal; axes, boundary count, and independent acceptance determine the shape.
-- The milestone contract is a fixed field of every spawn/follow-up prompt — never delegated
-  to profile injection (runtimes do not guarantee profiles load): recipient, mechanism,
-  payload, boundary timing, no-ack continuation, run-ahead limit, failure fallback. The
-  standard notification points (**inventory / first-green / failure-cluster / clean-SHA**)
-  are defined in the implementer profile; the prompt states only deviations.
+- The milestone contract is **standing content**: its fields (recipient, mechanism, payload,
+  boundary timing, no-ack continuation, run-ahead limit, failure fallback) and the standard
+  notification points (**inventory / first-green / failure-cluster / clean-SHA**) live in
+  the role profile and the runtime binding — the spawn prompt states only deviations and
+  task-specific values, never restates them. Delivery is verified, not assumed: the agent's
+  inventory milestone must confirm which profile it loaded; no confirmation → root pastes
+  the contract verbatim (from the profile file) before dispatching further slices. The same
+  rule binds every standing/task split: profiles carry standing stop conditions and report
+  formats; prompt fields carry only the task's additions.
 
 When a problem with announced slice N surfaces during N+1 (a review finding or the
 implementer's own discovery), the implementer checkpoints first — nearest coherent point,

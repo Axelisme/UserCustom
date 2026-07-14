@@ -16,6 +16,12 @@ hosts that support named agents, but the collaboration tool's `spawn_agent` curr
 
 When root dispatches:
 
+- **This runtime does not load named-agent profiles.** At the **first** spawn of a role
+  identity, root pastes that role's standing orders verbatim into `message` — read the
+  `developer_instructions` block from `~/.codex/agents/<role>.toml` and inline it; do not
+  summarize it from memory (summaries drift from the file). Follow-ups to the same identity
+  never repeat it; they carry only the delta. With domain leases this makes the profile a
+  one-time cost per agent, not per slice.
 - Write the profile name, task boundary, file scope, delivery format, and constraints
   explicitly into `message`.
 - Note `profile_requested=<profile>`, `profile_effective=generic_role_adapter` in the report;

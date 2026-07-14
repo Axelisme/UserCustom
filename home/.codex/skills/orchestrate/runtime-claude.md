@@ -93,3 +93,20 @@ frozen decisions, acceptance commands, stop conditions, and artifact pointers.
   approximated by the agent definition's tools allowlist (no `Edit`/`Write`/`NotebookEdit`);
   regardless of enforcement, a read-only role writing files is a behavioral violation.
 - **Nesting**: workers must not spawn sub-agents (skill policy, stricter than the runtime).
+
+## Agent teams: evaluated and not adopted
+
+Claude Code's experimental agent teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) were
+evaluated and rejected for this skill; the binding stays on native subagents. Reasons:
+
+- Teams coordinate through state files (`~/.claude/tasks/{team}/`, mailbox JSONs under
+  `~/.claude/teams/`) — exactly the workflow-state machinery the skill forbids; that state
+  also lives outside Git, so `/resume` cannot restore it (crash recovery breaks).
+- Teammates self-claim tasks and message each other without the lead, bypassing root's
+  steering points: write-scope declaration, run-ahead retraction, severity-routed
+  preemption.
+- Experimental reliability (task-status lag, unmarked completions) and ~3–4× token cost.
+
+Native `Agent` + `SendMessage` already covers the load-bearing needs: same-identity
+follow-up (domain lease), background execution with completion events, parallel read-only
+fan-out. Revisit only if teams gain a root-mediated mode and Git-recoverable state.

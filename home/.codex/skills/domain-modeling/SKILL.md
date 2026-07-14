@@ -10,10 +10,11 @@ Actively build and sharpen the project's domain model as you design. This is the
 ## File structure
 
 **The repo's documented conventions win.** If CLAUDE.md / AGENTS.md names where the
-glossary, module notes, and ADRs live (e.g. module `README.md` cheat-sheets plus a
-`docs/adr/` with a topic-grouped `README.md` index, `ADR-NNNN` references, `[[NNNN]]`
-interlinks, present tense), write there in that shape — including updating the ADR index —
-and use the layout below only as the fallback for repos that document nothing.
+glossary, module notes, and ADRs live (e.g. a `docs/glossary.md`, module `README.md`
+cheat-sheets, and a `docs/adr/` with a topic-grouped `README.md` index, `ADR-NNNN`
+references, `[[NNNN]]` interlinks, present tense), write there in that shape — including
+updating the ADR index — and use the layout below only as the fallback for repos that
+document nothing.
 
 Most repos have a single context:
 

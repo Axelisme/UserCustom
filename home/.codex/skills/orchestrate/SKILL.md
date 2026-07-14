@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 37
+skill_version: 38
 ---
 
 # Orchestrate
@@ -145,6 +145,15 @@ Do the expensive work **off-slot**; hold the slot only for the final seconds:
   inherently writes (their own detached worktree under `.agent_state/worktrees/`, tool
   caches), so they hold workspace-write with behavioral guardrails — the invariant is the
   immutability of the reviewed SHA, not the absence of writes.
+- **When to delegate planning.** Root plans inline by default — it holds the user's intent.
+  Delegate to `repo-investigator` when the open question is factual (what exists, who calls
+  what); to `contract-planner` when the contract, dependency graph, or write split has not
+  converged **and** one of: converging it needs deep source reading root should not carry;
+  an independent, unanchored derivation is worth having on a critical axis; or the next
+  wave's contract can converge while the current wave implements. Planner output is evidence
+  for root's decision, never the decision itself; a frozen contract dispatches straight to
+  writers, and reviewer is the wrong tool for unconverged contracts — it verifies
+  implementations against contracts, not contracts themselves.
 - Profiles may point a role at **content** skills (vocabulary, checklists, conventions —
   e.g. `codebase-design`, `domain-modeling`) to *read* as reference. Sub-agents never
   *invoke* **coordination** skills (`code-review`, `research` — anything that spawns agents

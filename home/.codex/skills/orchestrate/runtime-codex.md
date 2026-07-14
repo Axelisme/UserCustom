@@ -16,12 +16,16 @@ hosts that support named agents, but the collaboration tool's `spawn_agent` curr
 
 When root dispatches:
 
-- **This runtime does not load named-agent profiles.** At the **first** spawn of a role
-  identity, root pastes that role's standing orders verbatim into `message` — read the
-  `developer_instructions` block from `~/.codex/agents/<role>.toml` and inline it; do not
-  summarize it from memory (summaries drift from the file). Follow-ups to the same identity
-  never repeat it; they carry only the delta. With domain leases this makes the profile a
-  one-time cost per agent, not per slice.
+- **This runtime does not load named-agent profiles.** Default delivery: at the first spawn
+  of a role identity, the first line of `message` instructs the agent to read its standing
+  orders from `~/.codex/agents/<role>.toml` (the `developer_instructions` block) and follow
+  them, and to confirm **in its inventory milestone** which profile file it loaded. This
+  keeps the profile text out of root's context and always delivers the file's current
+  version; the inventory confirmation turns "hope it read it" into a checked handshake.
+- Fallback: if the sandbox blocks reading `~/.codex/agents` (or the agent reports it
+  cannot), root pastes the `developer_instructions` block verbatim into `message` — read
+  from the file, never summarized from memory. Either way, follow-ups to the same identity
+  never repeat it; with domain leases the cost is once per agent, not per slice.
 - Write the profile name, task boundary, file scope, delivery format, and constraints
   explicitly into `message`.
 - Note `profile_requested=<profile>`, `profile_effective=generic_role_adapter` in the report;

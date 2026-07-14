@@ -43,7 +43,9 @@ missing, or the review requires going beyond the assigned scope. Never sign off 
 target.
 
 Send `assigned_work_completed` when done. A no-finding report should be ~10 lines, otherwise
-~30; raw logs go to the artifact.
+~30; raw logs and other bulk evidence go to
+`.agent_state/artifacts/<task>/<agent>-<topic>.md`; the report carries the digest and the
+path (files carry evidence only — never decisions or state).
 
 ## Report
 

@@ -45,8 +45,9 @@ source, validation overturns an architectural assumption, or a destructive migra
 compatibility policy is needed.
 
 Send an `assigned_work_completed` event when done; report blocked or needs_decision
-immediately. Do not poll. Do not spawn sub-agents. Keep the report within ~30 lines; raw logs
-go to the designated artifact.
+immediately. Do not poll. Do not spawn sub-agents. Keep the report within ~30 lines; raw logs and other bulk
+evidence go to `.agent_state/artifacts/<task>/<agent>-<topic>.md`; the report carries the
+digest and the path (files carry evidence only — never decisions or state).
 
 ## Report
 

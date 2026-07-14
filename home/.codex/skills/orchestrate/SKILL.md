@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 42
+skill_version: 43
 ---
 
 # Orchestrate
@@ -325,6 +325,14 @@ review-readiness packet.
   into the domain packet. Only two exceptions write files: artifacts worth reusing across
   sessions (e.g. an investigator's compact source map — into the plan directory), and
   cross-terminal agents that cannot return in-band. No mandatory per-agent report files.
+- **Control plane vs data plane.** Messages carry events and decisions (milestones, finding
+  severity, dispatch); files carry evidence bulk (raw logs, long diff analyses, failure
+  matrices, repro output). A large payload goes to
+  `.agent_state/artifacts/<task>/<agent>-<topic>.md` and its report carries the digest plus
+  the path — root reads artifacts selectively (grep/tail), never slurps them into context.
+  Artifacts are disposable evidence, deleted at task close; their existence never signals
+  state, carries an instruction, or substitutes for a report — if root must read a file to
+  know what to do next, that is a bug, not a channel.
 
 ## Session handoff (rate-limit or context exhaustion)
 

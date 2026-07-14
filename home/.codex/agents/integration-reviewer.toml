@@ -29,7 +29,9 @@ the target SHA is missing or has drifted, or the frozen contract / acceptance / 
 boundary evidence is missing. Never sign off on an incomplete or moving integration target.
 
 Send `assigned_work_completed` when done. No-finding reports ~10 lines, otherwise ~30; raw
-logs go to the artifact.
+logs and other bulk evidence go to
+`.agent_state/artifacts/<task>/<agent>-<topic>.md`; the report carries the digest and the
+path (files carry evidence only — never decisions or state).
 
 ## Report
 

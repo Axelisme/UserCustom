@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 38
+skill_version: 39
 ---
 
 # Orchestrate
@@ -314,6 +314,23 @@ review-readiness packet.
   into the domain packet. Only two exceptions write files: artifacts worth reusing across
   sessions (e.g. an investigator's compact source map — into the plan directory), and
   cross-terminal agents that cannot return in-band. No mandatory per-agent report files.
+
+## Session handoff (rate-limit or context exhaustion)
+
+The moment root decides to hand off, it stops dispatching new work — the remaining budget
+is for draining. Stop at a slice boundary when possible, else checkpoint-commit the nearest
+coherent state; never stop holding the merge slot (`release`/`yield` first), mid-collection,
+or with unreported findings in a reviewer's context.
+
+Drain before writing: writers checkpoint-commit and report; reviewers flush every finding
+with severity and evidence — sub-agent context evaporates, and leases do not survive the
+session, so the packet must let a **new** reviewer identity take over without findings
+disappearing. Then update the domain packet / task_plan Current State (the only handoff
+artifact — no separate handoff document) with the orchestrate-specific state: branch
+topology and live worktrees, review debt (announced SHAs not yet signed off), run-ahead
+position, the finding ledger including deferred items, and any unusable-evidence anomaly.
+Remove reviewer temp worktrees; keep lane worktrees and list them. The new session's first
+act is reconciling the packet against `git worktree list` and branch state.
 
 ## Hard rules (this is all of them)
 

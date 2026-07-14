@@ -31,6 +31,17 @@ stew install install_scripts/Stewfile
 ./setup_scripts/setup_config.sh
 ```
 
+## Agent skills 與 profiles
+
+`home/.codex/skills/`（實體）與 `home/.claude/skills/`（相對 symlink）承載全部 personal
+agent skill；`home/.claude/agents/*.md` 與 `home/.codex/agents/*.toml` 是 agent profile
+（同一角色雙格式，修改請同 commit 動兩檔）。`setup_config.sh` 會把目錄 symlink、檔案
+hard link 到 `$HOME`。
+
+**注意**：`git pull` 或編輯工具改寫 `home/` 下的*檔案*會產生新 inode、使 `$HOME` 端的
+hard link 停在舊內容——之後重跑 `./setup_scripts/setup_config.sh` 即可（有同 inode skip，
+重跑免費；產生的 `.bak` 可刪）。
+
 ## 步驟 3: 設定其他軟體(Optional)
 
 ```bash

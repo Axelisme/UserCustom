@@ -46,6 +46,7 @@ single-writer）。這條 pipeline 只給「需要先想清楚才能動手」的
 |---|---|
 | 模糊想法，一個 session 裝不下 | `/wayfinder`（先 chart，之後每 session 解一票） |
 | 想法明確但決策沒對齊 | `/grilling`（＋`/domain-modeling` 固定詞彙） |
+| 訪談中的決策需要落檔（ADR／glossary） | `/grill-with-docs`（checkpoint mode 批次寫入） |
 | 需要 repo 外的事實才能決定 | `/research` |
 | 「該長怎樣／state model 對不對」吵不出結果 | `/prototype` |
 | 討論收斂、該寫下來了 | `/to-spec` |

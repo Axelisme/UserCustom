@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 35
+skill_version: 36
 ---
 
 # Orchestrate
@@ -142,6 +142,11 @@ Do the expensive work **off-slot**; hold the slot only for the final seconds:
   `mechanical-implementer`, `reviewer`, `integration-reviewer`; `web-researcher` and
   `mcp-skill-tester` as needed. Read-only roles not writing files is behavioral discipline,
   not runtime enforcement.
+- Profiles may point a role at **content** skills (vocabulary, checklists, conventions —
+  e.g. `codebase-design`, `domain-modeling`) to *read* as reference. Sub-agents never
+  *invoke* **coordination** skills (`code-review`, `research` — anything that spawns agents
+  or re-derives dispatch inputs); those are root's. To apply a coordination skill's
+  checklist inside a review, root names that lens in the packet's `reviewer_focus`.
 - The mapping of abstract capabilities (spawn / follow-up / interrupt / wait) to the current
   runtime's actual tools lives at `$SKILL_DIR/runtime-<runtime>.md` — `runtime-claude.md` for
   Claude Code, `runtime-codex.md` for Codex (hand-maintained; read the one matching the

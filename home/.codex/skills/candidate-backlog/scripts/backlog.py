@@ -10,7 +10,7 @@ import re
 import sys
 import time
 import unicodedata
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -84,7 +84,7 @@ def ensure_dirs(base: Path) -> None:
 
 
 @contextmanager
-def locked(base: Path, timeout: float = 10.0) -> Iterator[None]:
+def locked(base: Path, timeout: float = 10.0) -> Generator[None]:
     ensure_dirs(base)
     lock = base / ".lock"
     deadline = time.monotonic() + timeout
@@ -263,11 +263,6 @@ def command_plan(args: argparse.Namespace) -> dict[str, Any]:
         if meta["status"] != "inbox":
             raise BacklogError("only inbox items can be planned")
         task_id = validate_task_id(args.task_id)
-        task_plan = (
-            args.root.resolve() / ".agent_state" / "plans" / task_id / "task_plan.md"
-        )
-        if not task_plan.is_file():
-            raise BacklogError(f"formal task plan not found: {task_plan}")
         meta["planned_task"] = task_id
         meta["planned_at"] = now()
         move_item(base, path, meta, "planned")
@@ -281,9 +276,10 @@ def command_close(args: argparse.Namespace) -> dict[str, Any]:
         if meta["status"] not in ("inbox", "planned"):
             raise BacklogError("only inbox or planned items can be closed")
         if args.resolution == "implemented":
-            if meta["status"] != "planned":
-                raise BacklogError("implemented resolution requires a planned item")
-            if args.task_id != meta.get("planned_task"):
+            task_id = validate_task_id(args.task_id) if args.task_id else None
+            if task_id is None:
+                raise BacklogError("implemented resolution requires a task-id")
+            if meta["status"] == "planned" and task_id != meta.get("planned_task"):
                 raise BacklogError("implemented resolution requires the bound task-id")
             if not args.commit or not args.validation:
                 raise BacklogError(

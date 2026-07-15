@@ -1,3 +1,7 @@
+---
+orchestrate_compat: 53
+---
+
 # Git coordination and landing
 
 Read this reference before creating or changing task/lane branches, using worktrees,
@@ -18,10 +22,11 @@ collecting or deleting lanes, or landing on a persistence branch. The hard rules
 ## Single writer
 
 Single-writer code changes work directly on the task branch with no lane and normally no
-worktree: create `task/<task>` in the main checkout, implement, run targeted tests and the
-full gate with the real environment, then land and delete the task branch. Use a worktree for
-one writer only when the main checkout must stay available or user-owned dirty state would
-conflict. Q&A, read-only research, and one-round review create no branch.
+worktree: create `task/<task>` in the main checkout, implement, run targeted acceptance and
+the repo/risk-required broader gate with the real environment, then land and delete the task
+branch. Use a worktree for one writer only when the main checkout must stay available or
+user-owned dirty state would conflict. Q&A, read-only research, and one-round review create
+no branch.
 
 ## Multi-writer parallelism
 
@@ -71,7 +76,8 @@ file while active can admit concurrent holders.
 
 Keep expensive work off-slot:
 
-1. Rebase `task/<task>` onto the persistence tip, run the full gate once, and record that tip.
+1. Rebase `task/<task>` onto the persistence tip, run the repo/risk-required broader gate
+   once, record the command/rationale and that tip.
 2. Claim the slot and re-read the persistence tip.
 3. Tip unchanged: squash-merge and release.
 4. Tip moved: use `git merge-tree --write-tree`. Only when conflict-free **and** new commits

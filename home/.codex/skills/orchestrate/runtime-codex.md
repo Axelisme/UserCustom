@@ -1,3 +1,7 @@
+---
+orchestrate_compat: 53
+---
+
 # Orchestrate — Codex runtime binding
 
 This file is the hand-written companion for the current Codex collaboration runtime. It maps
@@ -44,8 +48,8 @@ ordered slices:
   1. <slice; acceptance; targeted tests>
   2. <slice; acceptance; targeted tests>
 stop conditions: <when to checkpoint and return needs_decision>
-milestone delivery: send_message(slice, sha, tests, green_checkpoint,
-  remaining_uncertainty, finding_class, review_target, next), then continue
+milestone delivery: send_message(slice, checkpoint_kind, kind-specific evidence, next),
+  then continue when authorized
 ```
 
 The labels make runtime adaptation visible; they are not a mandatory report schema. Because
@@ -55,19 +59,20 @@ dispatch must also include the runtime-effective milestone contract itself; nami
 
 ```text
 milestone delivery:
-- after every completed slice, before starting the next, call collaboration.send_message
-  to /root
-- payload: MILESTONE slice=<id> sha=<exact SHA or uncommitted>
-  tests=<commands/results>
-  green_checkpoint=<qualified(red=<test/reason>;green=<same test + regression>)|not-applicable>
-  remaining_uncertainty=<behavior-only|structural|critical|anomaly>
+- after every completed slice or required stop, before starting any next slice, call
+  collaboration.send_message to /root
+- common payload: MILESTONE slice=<id>
+  checkpoint_kind=<progress|validated|review> next=<current/next slice or final>
+- progress adds only: completion=<done/remaining> stop_reason=<none|reason>; omit SHA/tests
+- validated/review add: sha=<exact clean SHA>
+  validation=<tdd-green(red=<test/reason>;green=<same test + regression>)|targeted-acceptance(<commands/results>)>
+  remaining_uncertainty=<behavior-only|structural|hard-critical|anomaly>
   finding_class=<none/mechanically-propagatable/design-invalidating/dangerous-intermediate/scope-collision>
-  review_target=<yes|no>
-  next=<next slice or final>
+- checkpoint_kind=review freezes that SHA and creates review debt; validated does not
 - continue through the pre-authorized normal wave without acknowledgement unless a stop
-  condition or review-before-next-slice marker applies; a qualified green checkpoint (or
-  non-TDD targeted acceptance) plus behavior-only uncertainty authorizes run-ahead; hold for
-  structural, critical, or anomaly uncertainty; stop at the wave boundary
+  condition or review-before-next-slice marker applies; validated (or normal review) plus
+  behavior-only uncertainty authorizes run-ahead; progress never authorizes the next slice;
+  hold for structural, hard-critical, or anomaly uncertainty; stop at the wave boundary
 - if send_message is unavailable or fails, end the turn at this boundary; root will use
   followup_task to continue the same identity
 ```
@@ -88,8 +93,10 @@ effective on other Codex hosts, but it is not a substitute here.
 | status | `list_agents` | list live agents in the current root thread tree; filter with `path_prefix`. |
 | worktree isolation | plain `git worktree` | per `references/git-coordination.md`; no separate tooling. |
 
-Collaboration tools must be called directly, never wrapped in `functions.exec`. Do not build
-sleep/poll loops; advance on agent events or a single `wait_agent` result.
+Collaboration tools must be called directly, never wrapped in `functions.exec`. Repeated
+event-driven `wait_agent` calls after a timeout are allowed for long tasks, with a user update
+when ongoing work would otherwise be silent. Do not build shell sleep loops, tight status/Git
+probe loops, or use liveness as phase evidence. Do not infer an agent's phase from `running`.
 
 ## Flow control
 
@@ -108,10 +115,10 @@ sleep/poll loops; advance on agent events or a single `wait_agent` result.
 - **Pipelined slices** — a recommended option for frozen contracts; the pattern and its
   guardrails (run-ahead, append-only commits, retract-class protocol) live in
   `references/slice-queues.md`. Runtime mechanics here: the implementer pushes each milestone via
-  `send_message` with the useful subset of `slice / sha / tests / green_checkpoint /
-  remaining_uncertainty / finding_class / review_target / next` and
+  `send_message` with `slice / checkpoint_kind / next` plus the fields required by that
+  checkpoint kind, and
   normally continues without an ack. `running` proves only liveness, not the current phase;
-  root waits for agent events and does not build a polling loop. If an expected boundary arrives
+  root uses repeated event-driven waits and does not build a polling loop. If an expected boundary arrives
   only as a final response, repeat the milestone contract and degrade subsequent dispatch to one
   slice per turn — the completion event plus an immediate `followup_task` keeps the same identity.
   Root may choose that simpler rhythm whenever review or contract uncertainty should steer the

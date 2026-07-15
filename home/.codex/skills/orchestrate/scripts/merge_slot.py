@@ -8,8 +8,8 @@ running or a holder is inside the landing critical section: recreating the
 flock file could allow two holders to land concurrently.
 
 The tool performs no Git operations. The landing recipe (rebase off-slot, run
-the full gate, claim, re-read the persistence tip, squash-merge or yield) lives
-in the orchestrate skill.
+the repo/risk-required broader gate, claim, re-read the persistence tip,
+squash-merge or yield) lives in the orchestrate skill.
 """
 
 from __future__ import annotations

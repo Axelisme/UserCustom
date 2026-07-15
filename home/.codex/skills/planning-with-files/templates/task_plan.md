@@ -56,4 +56,7 @@
 
 ## Active Notes
 
-- <仍在詳細保留的 Phase note；超過規則時移到 archive.md。>
+### Phase 1 — <topic>
+
+- Conclusion / Commit: <完成時填入結論與 exact commit；未完成時寫 pending>
+- Detail: <仍在 hot window 內、跨 session 有價值的 evidence。>

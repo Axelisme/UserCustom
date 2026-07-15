@@ -50,17 +50,22 @@ class OrchestrateContractTests(unittest.TestCase):
         self.assertIn("continue through the pre-authorized normal wave", text)
         self.assertNotIn("one unreviewed slice", text)
 
-    def test_core_defines_green_checkpoint_run_ahead(self) -> None:
+    def test_core_defines_checkpoint_taxonomy_and_run_ahead(self) -> None:
         text = normalized_text(ORCHESTRATE / "SKILL.md")
-        self.assertIn("skill_version: 51", text)
+        self.assertIn("skill_version: 53", text)
         self.assertIn("## Routing fast paths", text)
+        self.assertIn("checkpoint_kind", text)
+        self.assertIn("progress", text)
+        self.assertIn("validated", text)
+        self.assertIn("review", text)
         self.assertIn("TDD cycle", text)
         self.assertIn("green checkpoint", text)
+        self.assertIn("TDD subtype", text)
+        self.assertIn("targeted-acceptance", text)
         self.assertIn("behavior-dependent", text)
         self.assertIn("structure-dependent", text)
         self.assertIn("run-ahead evidence, never review sign-off", text)
-        self.assertIn("need not create per-slice review debt", text)
-        self.assertIn("all critical slices keep", text)
+        self.assertIn("hard-critical slices keep", text)
         self.assertIn("never an automatic per-wave gate", text)
 
     def test_entrypoint_is_bounded_and_routes_progressively(self) -> None:
@@ -83,24 +88,69 @@ class OrchestrateContractTests(unittest.TestCase):
     def test_hard_rules_remain_closed(self) -> None:
         text = normalized_text(ORCHESTRATE / "SKILL.md")
         self.assertIn("## Hard rules (this is all of them)", text)
-        self.assertIn("The full suite runs **once**", text)
+        self.assertIn("hard_critical_axes", text)
+        self.assertIn("named_review_risks", text)
         self.assertIn(
             "hardware operation, persistence/migration, public wire schema, security",
             text,
         )
+        self.assertIn("broadest gate required by the repo and risk", text)
+        self.assertIn("If that is not the full suite", text)
+        self.assertNotIn("The full suite runs **once**", text)
         self.assertIn("landing on them requires the user's explicit authority", text)
 
-    def test_runtime_bindings_carry_green_checkpoint_evidence(self) -> None:
+    def test_runtime_bindings_carry_checkpoint_specific_payloads(self) -> None:
         for name in ("runtime-codex.md", "runtime-claude.md"):
             with self.subTest(runtime=name):
                 text = (ORCHESTRATE / name).read_text(encoding="utf-8")
-                self.assertIn("green_checkpoint", text)
+                self.assertIn("checkpoint_kind", text)
+                self.assertIn("progress", text)
+                self.assertIn("validated", text)
+                self.assertIn("review", text)
+                self.assertIn("completion", text)
+                self.assertIn("stop_reason", text)
+                self.assertIn("tdd-green", text)
+                self.assertIn("targeted-acceptance", text)
                 self.assertIn("remaining_uncertainty", text)
-                self.assertIn("review_target", text)
                 self.assertIn("behavior-only", text)
                 self.assertIn("structural", text)
-                self.assertIn("critical", text)
+                self.assertIn("hard-critical", text)
                 self.assertIn("anomaly", text)
+                self.assertNotIn("review_target", text)
+
+    def test_disclosed_files_match_entrypoint_compatibility(self) -> None:
+        paths = [
+            *(ORCHESTRATE / "references").glob("*.md"),
+            ORCHESTRATE / "runtime-codex.md",
+            ORCHESTRATE / "runtime-claude.md",
+        ]
+        for path in paths:
+            with self.subTest(path=path.name):
+                self.assertIn(
+                    "orchestrate_compat: 53", path.read_text(encoding="utf-8")
+                )
+
+    def test_codex_wait_is_event_driven_not_single_shot(self) -> None:
+        text = normalized_text(ORCHESTRATE / "runtime-codex.md")
+        self.assertIn("Repeated event-driven `wait_agent`", text)
+        self.assertIn("timeout", text)
+        self.assertIn("user update", text)
+        self.assertIn("Do not infer an agent's phase from `running`", text)
+        self.assertNotIn("a single `wait_agent` result", text)
+
+    def test_telemetry_accepts_unknown_without_guessing(self) -> None:
+        text = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
+        self.assertIn("wall=~18m", text)
+        self.assertIn("wait=unknown", text)
+        self.assertIn("Never reconstruct or guess timing", text)
+
+    def test_durable_decisions_separate_effect_from_recording(self) -> None:
+        text = normalized_text(ORCHESTRATE / "references" / "evidence-and-handoff.md")
+        self.assertIn("Decisions take effect in the in-band control plane", text)
+        self.assertIn("conclusion or ADR pointer", text)
+        self.assertIn("never dispatches work or triggers a state transition", text)
+        self.assertIn("compact <task-id>", text)
+        self.assertIn("status remains read-only", text)
 
     def test_role_profiles_assign_permanent_tests_to_implementer(self) -> None:
         for agents, suffix in ((CODEX_AGENTS, ".toml"), (CLAUDE_AGENTS, ".md")):
@@ -113,8 +163,10 @@ class OrchestrateContractTests(unittest.TestCase):
                     encoding="utf-8"
                 )
                 self.assertIn("permanent executable tests", implementer)
-                self.assertIn("explicitly designated clean SHA", implementer)
+                self.assertIn("checkpoint_kind=progress|validated|review", implementer)
+                self.assertNotIn("review_target", implementer)
                 self.assertIn("permanent regression test", reviewer)
+                self.assertIn("checkpoint_kind=review", reviewer)
                 self.assertIn("Test seams and oracles", planner)
 
     def test_tdd_allows_local_cleanup_after_green(self) -> None:

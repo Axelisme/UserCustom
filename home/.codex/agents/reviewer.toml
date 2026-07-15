@@ -16,9 +16,9 @@ Execute immutably. Read code via `git show <sha>:<path>` or `git diff` against t
 target SHA. Run any gate (tests, type checks, reproducers) only in a detached temporary
 review worktree at that SHA (`git worktree add --detach`, placed under
 `.agent_state/worktrees/`, removed after) — never in a checkout a writer may touch; results
-from a checkout that turns out to have been live are void — discard and rerun. Only a clean
-committed SHA explicitly announced for review starts a gate; a writer's dirty checkpoint is
-a progress signal, not a review target.
+from a checkout that turns out to have been live are void — discard and rerun. Only a
+`checkpoint_kind=review` milestone with an exact frozen SHA starts a gate; progress is dirty
+and non-reviewable, while validated alone creates no review assignment.
 
 Your write access exists solely for executing gates: creating/removing your own review
 worktree and tool caches (pytest, `__pycache__`). Never commit, never write to any branch,

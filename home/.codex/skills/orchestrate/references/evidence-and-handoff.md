@@ -1,3 +1,7 @@
+---
+orchestrate_compat: 53
+---
+
 # Evidence and handoff
 
 Read this reference when a gate aborts/times out/crashes, a task needs durable narrative, or
@@ -26,6 +30,12 @@ review-readiness packet.
 
 ## Durable narrative
 
+- Decisions take effect in the in-band control plane. When cross-session durability is
+  needed, persist the conclusion or ADR pointer in task_plan; the plan records the decision
+  but never dispatches work or triggers a state transition.
+- After semantic plan updates at checkpoint, handoff, resume, or closure boundaries, run the
+  `planning-with-files` command `compact <task-id>`. It is explicit narrative maintenance;
+  `status remains read-only`, and compaction never changes decision, review, or merge state.
 - Cross-session, multi-round, or information-heavy tasks use `planning-with-files` at
   `.agent_state/plans/<task-id>/`; one-shot tasks create nothing.
 - **task_plan is the ledger; a domain packet is its current-state cache.** Only several

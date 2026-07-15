@@ -1,3 +1,7 @@
+---
+orchestrate_compat: 53
+---
+
 # Delegation and review
 
 Read this reference before the first agent action, assigning roles, or requesting/closing a
@@ -34,8 +38,12 @@ is available.
 
 Classify the checkpoint's changed surface, not the task's maximum global risk:
 
-- **Critical** — hardware, persistence/migration, public wire schema, security, or a
-  task-declared `critical_axis`: one different-identity reviewer over that diff.
+- **Hard-critical** — a diff crossing `hard_critical_axes` (hardware,
+  persistence/migration, public wire schema, security): one mandatory different-identity
+  reviewer over that diff.
+- **Named review risk** — a task-scoped `named_review_risk`: root explicitly chooses extra
+  depth, identity, and waiting. It may mirror hard-critical treatment but never expands the
+  closed list.
 - **Normal** — internal presenters, adapters, GUI glue, private lifecycle: one focused review
   or a root self-review with a one-line rationale.
 - **Mechanical** — deletion, rename, fixture move, docs wording: root spot-checks scope, tree
@@ -52,8 +60,8 @@ regression. Reviewer owns the adversarial matrix, temporary reproducers, finding
 probes, and source audit — not a parallel permanent-test lane or habitual rerun of writer
 suites. A missing behavior returns to the writer for a failing permanent regression before
 the fix. Root owns SHA/parent/scope/tree-identity checks and at most one thin critical slice.
-Integration owns the single broad gate. Duplicate evidence needs a stated reason such as
-suspected environment skew.
+Integration owns the single repo/risk-required broader gate. Duplicate evidence needs a
+stated reason such as suspected environment skew.
 
 ## Review-readiness packet
 
@@ -64,7 +72,8 @@ trim only fields that truly do not apply:
 base_sha: <review base>
 target_sha: <exact immutable SHA>
 frozen_contract: <task-plan / ADR pointer plus required invariants>
-critical_axes: <hardware / persistence / public wire / security / none>
+hard_critical_axes: <hardware / persistence / public wire / security / none>
+named_review_risks: <task-scoped risks plus chosen depth/identity/waiting / none>
 changed_surface: <paths, seams, lifecycle or wire behavior>
 acceptance_and_evidence: <targeted commands and results>
 known_anomalies: <exact failed command, classification, replacement evidence>
@@ -74,8 +83,8 @@ reviewer_focus: <dangerous failures and explicit non-goals>
 
 Missing base/target SHA, frozen contract, or changed surface is a readiness failure, not an
 invitation for the reviewer to reconstruct the task. Name the dangerous failure for every
-critical axis. Old-SHA review, aborted suites, or incomplete tree-equivalence proof never
-become target-SHA sign-off.
+hard-critical axis and named review risk. Old-SHA review, aborted suites, or incomplete
+tree-equivalence proof never become target-SHA sign-off.
 
 ## Re-review and immutable execution
 

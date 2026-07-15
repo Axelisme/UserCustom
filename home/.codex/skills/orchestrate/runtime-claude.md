@@ -1,3 +1,7 @@
+---
+orchestrate_compat: 53
+---
+
 # Orchestrate — Claude Code runtime binding
 
 This file is the hand-written **Claude Code** companion for the `orchestrate` skill. It maps
@@ -34,16 +38,18 @@ ordered slices:
   1. <slice; acceptance; targeted tests>
   2. <slice; acceptance; targeted tests>
 stop conditions: <when to checkpoint and return needs_decision>
-milestone delivery: SendMessage(slice, sha, tests, green_checkpoint,
-  remaining_uncertainty, finding_class, review_target, next) when available
+milestone delivery: SendMessage(slice, checkpoint_kind, kind-specific evidence, next)
+  when available
 ```
 
 `finding_class` is `none`, `mechanically-propagatable`, `design-invalidating`,
 `dangerous-intermediate`, or `scope-collision`; the final three are retract classes.
-`green_checkpoint` is `qualified(red=<test/reason>;green=<same test + regression>)` or
-`not-applicable`; `remaining_uncertainty` is `behavior-only`, `structural`, `critical`, or
-`anomaly`; `review_target` is `yes` or `no`. Only qualified/non-TDD behavior-only
-checkpoints run ahead, and only explicit review targets create review debt.
+`checkpoint_kind` is `progress`, `validated`, or `review`. Progress carries `completion`,
+`stop_reason`, and `next` only, omitting SHA/tests. Validated/review carry exact `sha`, `finding_class`,
+`validation=tdd-green(...)|targeted-acceptance(...)`, and
+`remaining_uncertainty=behavior-only|structural|hard-critical|anomaly`.
+`checkpoint_kind=review` freezes its SHA and creates review debt. Validated (or normal review)
+with behavior-only uncertainty may run ahead; progress never authorizes the next slice.
 
 The labels make runtime adaptation visible; they are not a mandatory report schema.
 
@@ -81,8 +87,8 @@ needs no `SendMessage` and is unaffected.)
 - **Pipelined slices** — a recommended option for frozen contracts; the pattern and its
   guardrails (run-ahead, append-only commits, retract-class protocol) live in
   `references/slice-queues.md`. When available, the implementer pushes the useful subset of
-  `slice / sha / tests / green_checkpoint / remaining_uncertainty / finding_class /
-  review_target / next` via `SendMessage` and normally continues without an ack. When
+  `slice / checkpoint_kind / next` plus the fields required by that kind via `SendMessage`
+  and normally continues without an ack. When
   `SendMessage` is unavailable,
   root may instead let a fully pre-authorized queue
   finish in one turn or dispatch a single slice and stop at completion, depending on steering

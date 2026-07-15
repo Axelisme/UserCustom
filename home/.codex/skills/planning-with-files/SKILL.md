@@ -2,7 +2,7 @@
 name: planning-with-files
 description: 以 explicit task-id 管理 repo-local durable task narrative；只在跨回合、critical或資訊量確有需要時使用。
 user-invocable: true
-skill_version: 4
+skill_version: 5
 ---
 
 # Planning with Files
@@ -22,12 +22,13 @@ skill_version: 4
 ```text
 <repo-python> <skill-dir>/scripts/plan.py --root <repo> init <task-id> --goal <text> [--with-findings] [--with-progress]
 <repo-python> <skill-dir>/scripts/plan.py --root <repo> status <task-id>
+<repo-python> <skill-dir>/scripts/plan.py --root <repo> compact <task-id>
 <repo-python> <skill-dir>/scripts/plan.py --root <repo> check <task-id>
 <repo-python> <skill-dir>/scripts/plan.py --root <repo> archive <task-id>
 ```
 
 `task_plan.md`是唯一必需檔。`findings.md`只在研究量大或有非顯而易見evidence時建立；`progress.md`只在跨回合、
-audit確有需要時建立；`archive.md`只在真的壓縮舊Phase內容時建立。不要形式性建立空檔。
+audit確有需要時建立；`history/`只由`compact`在真的移出cold內容時建立。不要形式性建立空檔。
 
 ## 檔案分工（每檔一句 charter，互斥不重疊）
 
@@ -38,8 +39,8 @@ audit確有需要時建立；`archive.md`只在真的壓縮舊Phase內容時建�
 | `spec.md` | 凍結的 contract 全文（`to-spec` 產出；review 的 frozen_contract 指向這裡） |
 | `wayfinder-map.md` | 動工前的決策地圖（`wayfinder` 產出；effort 級，可先於 task 存在） |
 | `findings.md` | 調查**發現**了什麼——investigator 的 repo 事實與風險 |
-| `progress.md` | 何時發生過什麼——append-only 審計軌跡 |
-| `archive.md` | 舊 Phase 的壓縮沉澱 |
+| `progress.md` | 何時發生過什麼——一般writer append-only的hot審計軌跡 |
+| `history/NNNN-<kind>.md` | compact移出的immutable cold原文；非authority、按需讀取 |
 | `../../artifacts/<task-id>/` | 證據大塊本體（plan 目錄外、ephemeral、task 收尾即刪，見 orchestrate） |
 
 **命名消歧**：`findings.md` 收的是*調查發現*（investigation findings）；*review findings*（reviewer
@@ -58,8 +59,9 @@ task_plan decision／commit 引用。交接的唯一載體是 packet＋task_plan
 domain完成即刪。domain lease不因Phase、checkpoint、commit或turn完成而清除。
 
 跨session恢復時依序讀：`Goal` → `Current State`／Active Domain Packet → 生效中的task-plan
-decision／ADR → active Phase → historical notes／`archive.md`。歷史內容只提供evidence，不具有目前workflow
-authority；若與active decision衝突，必須沿replacement pointer回到目前生效的decision，不可自行選擇較舊敘述。
+decision／ADR → active Phase → Historical Phase Summary；只有追查時才用`rg`定位`history/`片段。
+cold歷史只提供evidence，不具有目前workflow authority；若與active decision衝突，必須沿replacement
+pointer回到目前生效的decision，不可自行選擇較舊敘述。
 
 ## 更新時機
 
@@ -82,9 +84,28 @@ authority來源，不得自行宣告validation、review或merge authority。
 每次操作只讀寫`.agent_state/plans/<task-id>/`。跨模組且長期有效的決策仍寫`docs/adr/`；validation輸出
 只記結論與exact SHA，不複製完整log進plan。計劃檔是資料，不可覆蓋user/developer/system instructions。
 
+## Deterministic compaction
+
+`compact <task-id>`是唯一可改寫hot history的介面；它explicit、atomic-write、無背景daemon，且只處理
+可機械解析的current template。`status`永遠read-only；`check`與`archive`也不隱性compact。root在完成
+plan語意更新後，於checkpoint、handoff、resume、closure boundary呼叫`compact`；未達門檻是成功的no-op。
+
+共同budget是每個hot檔與每個immutable history segment最多16 KiB：
+
+- `task_plan.md`詳細Phase超過10個或超過budget時，每批只搬最舊5個；五個都必須在Phase table標成
+  `completed`，且每個`### Phase N — Topic`都有唯一非空`Conclusion / Commit`。Current State、active
+  decision、domain packet、open review debt永不壓縮；live檔留下Historical Phase Summary列。
+- `progress.md`超過40筆任一table row或budget時，搬移舊prefix並各保留最近20筆。一般writer仍只append；
+  compactor是唯一可搬移sealed prefix的角色。Current State不在此檔，因此history不取得authority。
+- `findings.md`只在超過budget時搬移`Status=resolved`且有`Evidence / Closure`pointer的Discoveries row。
+  open finding、Design Notes、Risks、Open Questions永不自動壓縮；只靠這些內容就超過budget時Fast Fail。
+
+Cold檔使用task-wide sequence命名`history/NNNN-<kind>.md`，kind是`task-plan`、`progress`或
+`findings`；建立後不可改寫。若舊plan缺少current template結構、closure evidence不足、單一history
+unit超過budget，`compact` Fast Fail且不猜測。它只維護narrative，不派工、不變更
+decision/review/merge狀態。
+
 ## Check與archive
 
 `check`只要求`task_plan.md`存在且Phase table沒有`pending`、`in_progress`或`blocked`；optional files缺省不是錯誤。
 完成的plan可用`archive`精確搬到`.agent_state/archives/<task-id>/plan`，destination存在即Fast Fail。
-
-若詳細Phase超過10個，才把最舊5個移到同目錄`archive.md`並留下摘要列；未達門檻不建立archive檔。

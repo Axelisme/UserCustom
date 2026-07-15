@@ -4,8 +4,8 @@
 
 ## Discoveries
 
-| Date | Area | Finding | Evidence |
-|---|---|---|---|
+| ID | Status | Date | Area | Finding | Evidence / Closure |
+|---|---|---|---|---|---|
 
 ## Design Notes
 

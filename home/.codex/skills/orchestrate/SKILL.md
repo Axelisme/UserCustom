@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 47
+skill_version: 48
 ---
 
 # Orchestrate
@@ -302,6 +302,14 @@ milestone delivery: <deviations from the standing contract only>
   finding-focused — each fix re-checked at its own thin slice on the current HEAD SHA, an
   interface fix sweeping its call sites in one pass — never a whole-wave re-review. Retract
   classes never reach this wave: by definition they already stopped or pulled forward.
+- **Per-wave metrics (skill-tuning telemetry).** At each wave close root records one compact
+  line — appended to the task_plan current-state log, or just stated in the conversation when
+  there is no plan directory:
+  `wave N — work=<slices> ledger=<findings>(<retract-class>) rework=<fixes> review=<slice
+  reviews> re-verify=<count> rounds=<n>`. This is disposable telemetry, not coordination
+  state — no new file or schema, nothing downstream reads it — kept only so the accumulation
+  bound, interrupt rate, and re-review cost can be reviewed afterward to tune wave size and
+  the retract-class boundary.
 - Before dispatch into an area, check its candidate backlog
   (`candidate-backlog list --area <area> --status inbox`): rider items on the same code may
   fold into a slice at near-zero cost — never as scope expansion. At task closeout, close

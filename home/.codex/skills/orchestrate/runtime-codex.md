@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 54
+orchestrate_compat: 55
 ---
 
 # Orchestrate — Codex runtime binding
@@ -37,25 +37,29 @@ When root dispatches:
 - If the task hard-requires a specific model, sandbox, or named-agent identity that the
   current tools cannot guarantee, return `needs_decision`.
 
-For a pipelined slice queue, this compact prompt shape is a useful Codex-oriented starting
-point. Omit fields that add no value for a small or exploratory task:
+For any pipelined role, use the same compact contract. Omit fields that add no value for a
+small or exploratory task:
 
 ```text
 profile_requested=<profile>
 profile_effective=generic_role_adapter
-lease + write scope: <domain ownership and the only files this writer may change>
-ordered slices:
-  1. <slice; acceptance; targeted tests>
-  2. <slice; acceptance; targeted tests>
+lease: <role/domain; writer scope or reviewer immutable scope>
+wave + basis: <wave id; exact SHA/ADR/contract assumptions>
+ordered items:
+  1. <item; dependencies; readiness; acceptance/output>
+  2. <item; dependencies; readiness; acceptance/output>
+continue_without_ack: <qualifying outcome and dependency rule>
 stop conditions: <when to checkpoint and return needs_decision>
-milestone delivery: send_message(slice, checkpoint_kind, kind-specific evidence, next),
-  then continue when authorized
+milestone delivery: send_message(<role milestone and next>), then continue when authorized
 ```
 
 The labels make runtime adaptation visible; they are not a mandatory report schema. Because
 this Codex collaboration runtime does not load the requested project profile, a multi-slice
 dispatch must also include the runtime-effective milestone contract itself; naming
-`profile_requested=implementer` is insufficient:
+`profile_requested=<role>` is insufficient. The prompt must include the runtime-effective
+contract for that role.
+
+Writer milestones use:
 
 ```text
 milestone delivery:
@@ -78,6 +82,28 @@ milestone delivery:
   hold for structural, hard-critical, or anomaly uncertainty; stop at the wave boundary
 - if send_message is unavailable or fails, end the turn at this boundary; root will use
   followup_task to continue the same identity
+```
+
+Planner milestones use:
+
+```text
+PLAN_MILESTONE wave=<N+1> planning_mode=<contract-resolution|wave-ahead>
+outcome=<proposal|needs_decision> basis=<SHA/ADRs> invalidators=<conditions>
+items=<3-5 slices with dependencies/acceptance/risk/review policy> next=<idle|stop>
+- wave-ahead proposes one wave only; it never freezes/dispatches or advances to N+2
+- notify root, then end the turn and retain the planner lease
+```
+
+Reviewer milestones use:
+
+```text
+REVIEW_MILESTONE target=<exact SHA> outcome=<pass|needs_fix|blocked|needs_decision>
+findings=<severity/path/behavior/evidence/propagation|none>
+evidence=<source audit/adversarial probes/thin commands> next=<target id|idle|stop>
+- pass plus a complete queued readiness packet continues without acknowledgment
+- other outcomes stop by default; independent-nonblocking continuation must be pre-authorized
+- no ready packet means idle; never poll Git
+- if send_message is unavailable or fails, end the turn; root resumes by followup_task
 ```
 
 Use the actual root canonical task name if it differs from `/root`. This explicit block is the
@@ -115,17 +141,19 @@ probe loops, or use liveness as phase evidence. Do not infer an agent's phase fr
   summaries, stop with `interrupt_agent`, then continue the *same* agent via `followup_task`
   carrying the corrective delta. Its loaded context is an asset; respawning a fresh identity
   throws it away (and, per the skill, needs an articulable reason).
-- **Pipelined slices** — a recommended option for frozen contracts; the pattern and its
-  guardrails (run-ahead, append-only commits, retract-class protocol) live in
-  `references/slice-queues.md`. Runtime mechanics here: the implementer pushes each milestone via
-  `send_message` with `slice / checkpoint_kind / next` plus the fields required by that
-  checkpoint kind, and
-  normally continues without an ack. `running` proves only liveness, not the current phase;
-  root uses repeated event-driven waits and does not build a polling loop. If an expected boundary arrives
-  only as a final response, repeat the milestone contract and degrade subsequent dispatch to one
-  slice per turn — the completion event plus an immediate `followup_task` keeps the same identity.
-  Root may choose that simpler rhythm whenever review or contract uncertainty should steer the
-  next dispatch.
+- **Pipelined roles** — planner/writer/reviewer use the shared lease, ordered items,
+  readiness, milestone, continuation, and stop model in `references/slice-queues.md`. A
+  running role receives an appended ready item by `send_message`/`followup_task` at a message
+  boundary; an idle role requires `followup_task` because `send_message` does not start a
+  turn. Roles report every item before continuing, retain only active plus pending items, and
+  never poll Git. Planner stops after one wave proposal; writer continues qualifying normal
+  slices; reviewer continues after PASS when another complete target is ready. Root remains
+  the only producer/preemptor and never stores a shadow queue.
+- `running` proves only liveness, not the current phase; root uses repeated event-driven waits
+  and does not build a polling loop. If expected milestones arrive only as final responses,
+  repeat the runtime contract and degrade that role to one item per turn. The final event plus
+  immediate `followup_task` preserves identity. Use this simpler rhythm whenever contract or
+  review uncertainty needs steering.
 
 ## Runtime limits and repo config
 

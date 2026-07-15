@@ -1,33 +1,52 @@
 ---
-orchestrate_compat: 54
+orchestrate_compat: 55
 ---
 
-# Slice queues
+# Role pipelines and slice queues
 
-Read this reference before dispatching more than one slice, allowing green-checkpoint
-run-ahead, maintaining a finding ledger, or recording wave metrics. Read
+Read this reference before dispatching more than one role item, allowing pipeline
+continuation, maintaining a finding ledger, or recording wave metrics. Read
 `delegation-and-review.md` and the current runtime binding as well when agents are involved.
 
-## Queue shape
+## Shared Role Pipeline Contract
 
-Use a pre-authorized queue only when the contract is frozen and each slice has independent
-acceptance. Prefer 3–5 slices per wave; longer plans lose steering points. The writer commits,
-runs targeted checks, sends a milestone at each boundary, and continues without an ack unless
-a stop condition fires. Exploratory work stays single-slice.
+Planner, writer, and reviewer are bounded queue consumers. Root is the only producer and
+control plane. Each dispatch or follow-up carries the useful subset of:
 
 ```text
 profile: <requested role; runtime-effective role when relevant>
-lease + write scope: <domain owner; only files this writer may change>
-slices: <ordered 3–5 slices, each with acceptance and targeted checks>
-hard_critical_axes: <closed-list axes / none>
-named_review_risks: <task-scoped risks plus chosen treatment / none>
-stop conditions: <task-specific additions; standing ones remain in profile>
-milestone delivery: <runtime mechanism and deviations from standing contract>
+lease: <role/domain; write scope for writers, immutable scope for reviewers>
+wave + basis: <wave id; exact SHA/ADR/contract assumptions>
+ordered items: <bounded items with dependencies and readiness>
+milestone delivery: <runtime event and kind-specific evidence>
+continue_without_ack: <qualifying outcome and dependency rule>
+stop conditions: <task-specific additions plus profile defaults>
 ```
 
-The queue lives in agent context (spawn plus follow-up deltas) or, across sessions, the domain
-packet. Never create a queue file or CLI. Items are pre-authorized and same-scope; a writer
-does not invent the next item. An exhausted queue ends the turn but retains the domain lease.
+Item completion is not turn completion. A role first sends its milestone, then consumes the
+next already-ready item when policy permits. It never invents or polls for work. Queue
+exhaustion ends the turn but retains the lease; root resumes the same identity with a delta.
+
+The live queue exists only in agent context (spawn plus follow-up messages). Across sessions,
+the domain packet records the current item, bounded pending items, exact checkpoint, and next
+gate so root can reconcile against Git and resend a delta. Never create a queue file, queue
+manager, receipt, or coordination CLI. A future helper may only lint a supplied packet; it
+must not write state, advance an item, dispatch, or infer phase from Git/liveness.
+
+## Planner rolling horizon
+
+The planner profile supports `planning_mode=contract-resolution|wave-ahead`:
+
+- `contract-resolution` settles an uncertain contract/dependency split before writers start.
+- `wave-ahead` proposes exactly Wave N+1 while frozen Wave N executes. It includes basis and
+  assumptions, 3–5 proposed slices, behavior/structure dependencies, test seams/oracles,
+  write scopes, hard axes, named risks, review policy, and invalidation triggers.
+
+A wave-ahead proposal is evidence, not authority. Root reconciles it with integrated Git,
+review verdicts, and open findings at the Wave N boundary, then freezes it or sends the same
+planner a delta refresh. The planner never dispatches, never edits the plan as a trigger, and
+never plans N+2 before root freezes N+1. Structure-dependent or hard-critical successors may
+be proposed only conditionally on their preceding review gate.
 
 ## Checkpoint taxonomy
 
@@ -68,6 +87,47 @@ keep `review-before-next-slice`; a named review risk follows its declared treatm
 normal review is cumulative/asynchronous or root
 self-review according to the entrypoint route.
 
+## Reviewer target queue
+
+Root appends a reviewer item only when its full review-readiness packet and immutable exact
+SHA exist. The reviewer sends a verdict milestone after every target. `PASS` permits immediate
+consumption of the next already-ready target without root acknowledgment. `needs_fix`,
+`blocked`, `needs_decision`, readiness failure, target drift, or queue exhaustion stops by
+default. Root may pre-authorize continuation after a non-retract finding only when the next
+target is explicitly independent and surface-disjoint; the reviewer still reports the
+finding immediately and never decides its deferral.
+
+If the next packet arrives while the reviewer is running, the runtime delivers it as a queue
+delta. If the reviewer is already idle, root uses same-identity follow-up. No ready packet
+means idle, not Git polling. Finding closure and refreshed-SHA review return to the same
+reviewer lease.
+
+## Review policy
+
+Pipeline mechanics do not imply per-slice review. Freeze three independent fields per wave:
+
+```text
+review_cadence: none | cumulative | selected | per-slice
+review_waiting: async | before-dependent | before-next
+review_continuation: pass-only | independent-nonblocking
+```
+
+| mode | cadence | waiting | continuation |
+|---|---|---|---|
+| mechanical | none | async | pass-only |
+| normal wave | cumulative | async | pass-only |
+| named-risk wave | selected | declared treatment | pass-only by default |
+| structure-dependent foundation | selected | before-dependent | pass-only |
+| hard-critical | per-slice | before-next | pass-only |
+
+Exploratory mode has planner/investigator work only. Direct mode uses root planning and no
+role pipeline. Normal mode runs planner one wave ahead, writer slices, and cumulative/selected
+review targets concurrently. Foundation-gated mode pauses the writer until the foundation
+review releases dependent items. Hard-critical mode remains serial across dependent
+writer/reviewer items. Parallel-domain mode may have separate writer leases and one ordered
+reviewer queue, but root still collects serially and plans only one wave beyond the critical
+path.
+
 ## Findings, preemption, and retraction
 
 Preemption order is: stop conditions > retract-class finding > next queued item > deferred
@@ -97,15 +157,16 @@ scope collision pull forward. Never discard useful uncommitted work merely to re
 
 ## Pipelining and review targets
 
-Normal validated checkpoints need not create per-slice review debt. Root may explicitly
-promote one to `checkpoint_kind=review` for asynchronous exact-SHA review or choose one
-cumulative wave-boundary review/self-review. A warm reviewer consumes only review targets.
-Announced commits stay append-only while the writer runs ahead; the 3–5-slice wave is the
-accumulation bound.
+Normal validated checkpoints need not create per-slice review debt. Root follows the frozen
+cadence: promote selected SHAs to `checkpoint_kind=review`, or create one cumulative
+wave-boundary review/self-review. A warm reviewer consumes only complete review targets and
+may pipeline PASS results. Announced commits stay append-only while the writer runs ahead;
+the 3–5-slice wave bounds both implementation and review accumulation.
 
 Hard-critical slices do not pipeline. Building on an unreviewed
 persistence/wire/security/hardware change is the compounding risk the model rejects. Named
-review risks pipeline or wait according to their frozen treatment.
+review risks pipeline or wait according to their frozen treatment. Planner one-wave-ahead is
+allowed here only as a conditional proposal, never as dependent writer authorization.
 
 ## Wave-boundary fix wave
 
@@ -128,6 +189,8 @@ classes never reach this wave because they already stopped or pulled forward.
   when multiple later slices consume it.
 - A slice without a clean checkpoint after roughly 60–90 minutes reports the bottleneck. An
   over-budget reviewer reports confirmed deterministic findings and continues by follow-up.
+- Freeze review cadence/waiting/continuation with the wave. Reviewer queueing is an execution
+  optimization, not a reason to upgrade normal validated slices into review debt.
 - Standing milestone/stop/report contracts live in the role profile and runtime binding;
   prompts send only deltas. Inventory must confirm the loaded profile or root supplies the
   standing contract before further dispatch.

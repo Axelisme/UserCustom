@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 54
+skill_version: 55
 ---
 
 # Orchestrate
@@ -12,6 +12,10 @@ progress), and the **plan directory** (cross-session narrative). Never add workf
 files, receipts, or a coordination CLI. The only sanctioned primitive is the skill-relative
 ephemeral merge slot (`scripts/merge_slot.py`, lock + FIFO only), which never stores task
 state.
+
+Root is the only control plane. Live planner/writer/reviewer queues stay in agent context;
+Git proves checkpoints and the plan preserves only cross-session conclusions/current state.
+No script advances, dequeues, dispatches, or infers a role queue.
 
 This skill is **root-only**: sub-agents do not load it. Standing role orders live in role
 profiles; task facts (objective, SHA, scope, queue, evidence) live in spawn/follow-up prompts.
@@ -43,7 +47,7 @@ deviation briefly.
 | Q&A, read-only research, one-round review | root only; no branch or plan | none |
 | mechanical batch | one writer and targeted checks | root spot-check; one final gate |
 | normal single writer | task branch in the main checkout | root self-review unless a named risk justifies a reviewer |
-| normal 3–5-slice wave | one domain owner with a pre-authorized queue | validated checkpoints run ahead; cumulative/asynchronous review |
+| normal 3–5-slice wave | planner may draft one wave ahead; writer consumes a pre-authorized queue | validated writer run-ahead; cumulative/selected reviewer pipeline |
 | structure-dependent foundation or named review risk | freeze one foundation checkpoint when needed | risk-shaped review/waiting |
 | hard-critical diff | freeze one foundation checkpoint | review-before-next-slice; different identity required |
 
@@ -61,7 +65,7 @@ Every loaded reference/runtime must declare `orchestrate_compat` equal to this e
 |---|---|
 | create/change task or lane branches, use worktrees, collect/delete lanes, or land | [Git coordination and landing](references/git-coordination.md) |
 | spawn/follow-up/interrupt/wait for agents, assign roles, or request/close review | [Delegation and review](references/delegation-and-review.md), then the matching `runtime-<runtime>.md` before the first agent action |
-| dispatch more than one slice, use validated run-ahead, a finding ledger, or wave metrics | [Slice queues](references/slice-queues.md) |
+| dispatch more than one role item, use planner/writer/reviewer pipelines, a finding ledger, or wave metrics | [Slice queues](references/slice-queues.md) |
 | a gate aborts/times out/crashes, the task needs durable narrative, or the session must hand off | [Evidence and handoff](references/evidence-and-handoff.md) |
 
 Pure Q&A and root-only read work need no reference. A single-writer change reads Git
@@ -73,8 +77,8 @@ coordination only when branch or landing operations are actually needed.
    current branch, worktrees, and any user-owned dirty state. When dispatching into an area,
    check its candidate backlog for same-scope riders without expanding scope.
 2. **Freeze.** State objective, acceptance, non-goals, write scope, test seams/oracles,
-   `hard_critical_axes`, and `named_review_risks`. Unfrozen contract or ownership is not
-   writer-ready.
+   `hard_critical_axes`, `named_review_risks`, dependencies, and review cadence/waiting.
+   Unfrozen contract or ownership is not writer-ready.
 3. **Route.** Pick the fast path, load only its references, and choose root execution versus
    delegation. Same-file or same public contract/schema/fixture work stays serial.
 4. **Execute.** Preserve user changes; keep useful work committed at coherent checkpoints.
@@ -100,6 +104,9 @@ coordination only when branch or landing operations are actually needed.
   time; root is the only merger.
 - Git is the database: `git worktree list` is the registry, status is the diagnostic, and
   ancestry/tree identity proves collection. No shadow workflow state.
+- Root issues bounded role queues through spawn/follow-up messages, consumes milestone events,
+  classifies findings, and serializes collection. Item completion is not turn completion;
+  acknowledgment is required only at a frozen gate.
 - Domain continuity is a convention: continue the same identity with a delta-only follow-up
   unless the domain changed, independent identity is required, or genuinely parallel scope
   exists. If the runtime cannot preserve required identity, return `needs_decision`.
@@ -118,7 +125,28 @@ reproducers, finding probes, and source audit. A missing-behavior finding return
 writer for a failing permanent regression before the fix. Integration owns the one broad
 gate. Reviews bind to the exact immutable SHA they inspected.
 
-## Checkpoint taxonomy and run-ahead
+## Role pipelines and checkpoints
+
+Planner, writer, and reviewer share one **Role Pipeline Contract**: a lease, bounded ordered
+items, per-item readiness, milestone delivery, `continue_without_ack`, and stop conditions.
+They never invent or poll for the next item. After notifying root, a role consumes the next
+already-ready item when policy permits; queue exhaustion ends the turn but retains the lease.
+
+- **Planner:** in `wave-ahead` mode proposes Wave N+1 while Wave N executes. The proposal
+  includes basis/assumptions, 3–5 slices, dependencies, test oracles, risk/review policy, and
+  invalidators. It is not dispatch authority; root reconciles and freezes it at the wave
+  boundary. Planner never advances to N+2 until N+1 is frozen.
+- **Writer:** consumes implementation slices and emits progress/validated/review checkpoints.
+  Normal behavior-dependent validation may continue without acknowledgment.
+- **Reviewer:** consumes complete exact-SHA readiness packets. After each verdict it notifies
+  root; PASS may continue to the next ready target without acknowledgment. `needs_fix` stops
+  by default unless root pre-authorized an independent, surface-disjoint target.
+
+At wave freeze, choose review policy independently of queue mechanics:
+`cadence=none|cumulative|selected|per-slice`,
+`waiting=async|before-dependent|before-next`, and
+`continuation=pass-only|independent-nonblocking`. Mechanical defaults to none, normal waves
+to cumulative/async, and hard-critical checkpoints to per-slice/before-next/pass-only.
 
 A **TDD cycle** is implementer-local red → minimal green → optional behavior-preserving
 cleanup. A slice may contain several cycles and ends at one coherent vertical behavior plus
@@ -137,7 +165,8 @@ affected-regression green, and an independent oracle across the frozen module in
 Non-TDD work uses the `targeted-acceptance` subtype. Either is **run-ahead evidence, never
 review sign-off** when uncertainty is behavior-dependent, with no anomaly/retract-class
 finding or hard-critical axis. Structure-dependent work waits; all hard-critical slices keep
-`review-before-next-slice`. Load the slice-queue reference before using this route.
+`review-before-next-slice`. Planner may prepare their next wave only conditionally. Load the
+slice-queue reference before using this route.
 
 ## Durable state boundary
 

@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 54
+orchestrate_compat: 55
 ---
 
 # Orchestrate — Claude Code runtime binding
@@ -27,19 +27,20 @@ Profiles map to `Agent`'s `subagent_type`: `contract-planner`, `repo-investigato
 a repo may override or extend them with its own `.claude/agents/`). If a profile is not
 registered in the current session, fall back to `general-purpose` and say so.
 
-For a pipelined slice queue, this compact prompt shape is a useful Claude-oriented starting
-point. Omit fields that add no value for a small or exploratory task:
+For any pipelined role, use the same compact contract. Omit fields that add no value for a
+small or exploratory task:
 
 ```text
 profile_requested=<subagent_type>
 profile_effective=<selected subagent_type/model/isolation>
-lease + write scope: <domain ownership and the only files this writer may change>
-ordered slices:
-  1. <slice; acceptance; targeted tests>
-  2. <slice; acceptance; targeted tests>
+lease: <role/domain; writer scope or reviewer immutable scope>
+wave + basis: <wave id; exact SHA/ADR/contract assumptions>
+ordered items:
+  1. <item; dependencies; readiness; acceptance/output>
+  2. <item; dependencies; readiness; acceptance/output>
+continue_without_ack: <qualifying outcome and dependency rule>
 stop conditions: <when to checkpoint and return needs_decision>
-milestone delivery: SendMessage(slice, checkpoint_kind, kind-specific evidence, next)
-  when available
+milestone delivery: SendMessage(<role milestone and next>) when available
 ```
 
 `finding_class` is `none`, `mechanically-propagatable`, `design-invalidating`,
@@ -52,6 +53,17 @@ run-ahead. Validated/review carry exact `sha`, `finding_class`,
 `remaining_uncertainty=behavior-only|structural|hard-critical|anomaly`.
 `checkpoint_kind=review` freezes its SHA and creates review debt. Validated (or normal review)
 with behavior-only uncertainty may run ahead; progress never authorizes the next slice.
+
+Planner reports `PLAN_MILESTONE` with `wave`,
+`planning_mode=contract-resolution|wave-ahead`, basis, invalidators, proposed 3–5 items, and
+`outcome=proposal|needs_decision`. Wave-ahead stops after N+1 and never freezes, dispatches, or
+plans N+2.
+
+Reviewer reports `REVIEW_MILESTONE` with exact target, `outcome=pass|needs_fix|blocked|
+needs_decision`, findings/evidence, and next. PASS plus a complete queued readiness packet may
+continue without acknowledgment. Other outcomes stop by default; continuation after a
+non-retract finding requires a pre-authorized independent/surface-disjoint next target. No
+ready packet means idle, never Git polling.
 
 The labels make runtime adaptation visible; they are not a mandatory report schema.
 
@@ -86,16 +98,14 @@ needs no `SendMessage` and is unaffected.)
   stop with `TaskStop`, then continue the *same* agent via a `SendMessage` follow-up carrying
   the corrective delta. Its loaded context is an asset; respawning a fresh identity throws it
   away (and, per the skill, needs an articulable reason).
-- **Pipelined slices** — a recommended option for frozen contracts; the pattern and its
-  guardrails (run-ahead, append-only commits, retract-class protocol) live in
-  `references/slice-queues.md`. When available, the implementer pushes the useful subset of
-  `slice / checkpoint_kind / next` plus the fields required by that kind via `SendMessage`
-  and normally continues without an ack. When
-  `SendMessage` is unavailable,
-  root may instead let a fully pre-authorized queue
-  finish in one turn or dispatch a single slice and stop at completion, depending on steering
-  risk. If the next step requires same-identity continuation, follow the capability rule above
-  and return `needs_decision`; do not claim that a fresh spawn is a continuation.
+- **Pipelined roles** — planner/writer/reviewer use the shared queue contract in
+  `references/slice-queues.md`. With `SendMessage`, each role emits an item milestone and
+  consumes the next ready item allowed by policy: planner stops after one wave proposal,
+  writer continues qualifying normal slices, reviewer continues after PASS. Root alone
+  appends/preempts queues. When `SendMessage` is unavailable, root may let a fully
+  pre-authorized queue finish in one turn or dispatch one item and stop, depending on
+  steering risk. If the next step requires same-identity continuation, follow the capability
+  rule above and return `needs_decision`; never respawn and call it continuation.
 
 ## Fork context policy
 

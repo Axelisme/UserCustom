@@ -52,7 +52,7 @@ class OrchestrateContractTests(unittest.TestCase):
 
     def test_core_defines_checkpoint_taxonomy_and_run_ahead(self) -> None:
         text = normalized_text(ORCHESTRATE / "SKILL.md")
-        self.assertIn("skill_version: 54", text)
+        self.assertIn("skill_version: 55", text)
         self.assertIn("## Routing fast paths", text)
         self.assertIn("checkpoint_kind", text)
         self.assertIn("progress", text)
@@ -67,6 +67,10 @@ class OrchestrateContractTests(unittest.TestCase):
         self.assertIn("run-ahead evidence, never review sign-off", text)
         self.assertIn("hard-critical slices keep", text)
         self.assertIn("never an automatic per-wave gate", text)
+        self.assertIn("Role Pipeline Contract", text)
+        self.assertIn("continue_without_ack", text)
+        self.assertIn("Planner", text)
+        self.assertIn("Reviewer", text)
 
     def test_entrypoint_is_bounded_and_routes_progressively(self) -> None:
         path = ORCHESTRATE / "SKILL.md"
@@ -130,8 +134,78 @@ class OrchestrateContractTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path.name):
                 self.assertIn(
-                    "orchestrate_compat: 54", path.read_text(encoding="utf-8")
+                    "orchestrate_compat: 55", path.read_text(encoding="utf-8")
                 )
+
+    def test_role_pipeline_keeps_live_queue_in_context(self) -> None:
+        core = normalized_text(ORCHESTRATE / "SKILL.md")
+        queues = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
+        self.assertIn("Root is the only control plane", core)
+        self.assertIn("Live planner/writer/reviewer queues stay in agent context", core)
+        self.assertIn("No script advances, dequeues, dispatches", core)
+        self.assertIn("## Shared Role Pipeline Contract", queues)
+        self.assertIn("live queue exists only in agent context", queues)
+        self.assertIn("Never create a queue file, queue manager", queues)
+        self.assertIn("helper may only lint a supplied packet", queues)
+
+    def test_planner_is_exactly_one_wave_ahead(self) -> None:
+        queues = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
+        self.assertIn("planning_mode=contract-resolution|wave-ahead", queues)
+        self.assertIn("proposes exactly Wave N+1", queues)
+        self.assertIn("never plans N+2", queues)
+        for agents, suffix in ((CODEX_AGENTS, ".toml"), (CLAUDE_AGENTS, ".md")):
+            planner = (agents / f"contract-planner{suffix}").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("planning_mode=contract-resolution|wave-ahead", planner)
+            self.assertIn("PLAN_MILESTONE", planner)
+            self.assertIn("Wave N+2", planner)
+            self.assertIn("never freezes the proposal", planner)
+
+    def test_reviewer_pipeline_continues_pass_without_ack(self) -> None:
+        delegation = normalized_text(
+            ORCHESTRATE / "references" / "delegation-and-review.md"
+        )
+        self.assertIn("## Reviewer pipeline", delegation)
+        self.assertIn("`pass` plus a ready packet permits continuation", delegation)
+        self.assertIn("Other outcomes stop by default", delegation)
+        self.assertIn("independent-nonblocking", delegation)
+        for agents, suffix in ((CODEX_AGENTS, ".toml"), (CLAUDE_AGENTS, ".md")):
+            reviewer = (agents / f"reviewer{suffix}").read_text(encoding="utf-8")
+            self.assertIn("Role Pipeline Contract consumer", reviewer)
+            self.assertIn("PASS plus an already-ready packet", reviewer)
+            self.assertIn("continues without acknowledgment", reviewer)
+            self.assertIn("needs_fix", reviewer)
+
+    def test_review_policy_is_separate_from_queue_mechanics(self) -> None:
+        queues = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
+        self.assertIn("review_cadence: none | cumulative | selected | per-slice", queues)
+        self.assertIn("review_waiting: async | before-dependent | before-next", queues)
+        self.assertIn(
+            "review_continuation: pass-only | independent-nonblocking", queues
+        )
+        self.assertIn("Pipeline mechanics do not imply per-slice review", queues)
+
+    def test_runtime_bindings_cover_all_pipeline_roles(self) -> None:
+        for name in ("runtime-codex.md", "runtime-claude.md"):
+            with self.subTest(runtime=name):
+                text = (ORCHESTRATE / name).read_text(encoding="utf-8")
+                self.assertIn("PLAN_MILESTONE", text)
+                self.assertIn("REVIEW_MILESTONE", text)
+                self.assertIn("continue_without_ack", text)
+                self.assertIn("wave-ahead", text)
+                self.assertIn("pass", text.lower())
+
+    def test_disclosed_docs_fit_single_read_budget(self) -> None:
+        paths = [
+            ORCHESTRATE / "SKILL.md",
+            *(ORCHESTRATE / "references").glob("*.md"),
+            ORCHESTRATE / "runtime-codex.md",
+            ORCHESTRATE / "runtime-claude.md",
+        ]
+        for path in paths:
+            with self.subTest(path=path.name):
+                self.assertLessEqual(len(path.read_bytes()), 16_384)
 
     def test_codex_wait_is_event_driven_not_single_shot(self) -> None:
         text = normalized_text(ORCHESTRATE / "runtime-codex.md")
@@ -187,6 +261,9 @@ class OrchestrateContractTests(unittest.TestCase):
                 self.assertIn("permanent regression test", reviewer)
                 self.assertIn("checkpoint_kind=review", reviewer)
                 self.assertIn("Test seams and oracles", planner)
+                for profile in (implementer, reviewer, planner):
+                    self.assertIn("Role Pipeline Contract consumer", profile)
+                    self.assertIn("continue_without_ack", profile)
 
     def test_tdd_allows_local_cleanup_after_green(self) -> None:
         text = TDD_SKILL.read_text(encoding="utf-8")

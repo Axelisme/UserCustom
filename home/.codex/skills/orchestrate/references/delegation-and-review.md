@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 54
+orchestrate_compat: 55
 ---
 
 # Delegation and review
@@ -11,25 +11,30 @@ is available.
 
 ## Persistent agents and roles
 
+- **Root control plane.** Root alone issues/appends/preempts role queues, freezes planner
+  proposals, classifies finding deferral, and serializes collection. Agents notify root at
+  every item boundary; an item milestone is not a request for routine acknowledgment.
 - **Domain lease.** The next slice in the same domain returns to the same agent by default as
   a follow-up carrying only the delta: current SHA, finding/next slice, and scope changes.
   Spawning a new identity requires a reason: independent review, changed domain, or genuinely
   parallel scope. A completed turn or commit does not end ownership.
 - Finding fixes return to the original implementer. Finding closure and refreshed-SHA review
   return to the original reviewer.
-- **Warm reviewer lease.** Pause and resume a warmed reviewer; do not respawn it. Warm-up
+- **Reviewer queue lease.** Pause and resume a warmed reviewer; do not respawn it. Warm-up
   produces exactly four artifacts: source map, acceptance/adversarial matrix, stop conditions,
-  and deletion checklist. Formal review reuses them and adds exact-diff inspection.
+  and deletion checklist. Formal review reuses them and adds exact-diff inspection. A PASS
+  verdict may continue directly to the next complete ready target in its pre-authorized queue.
 - If same-identity continuation is needed but the runtime cannot provide it, return
   `needs_decision`; never silently rebuild context in a fresh identity.
 - Roles: `contract-planner`, `repo-investigator`, `implementer`,
   `mechanical-implementer`, `reviewer`, `integration-reviewer`; `web-researcher` and
   `mcp-skill-tester` as needed. Read-only discipline is behavioral. A reviewer may need a
   detached workspace-write checkout for gates; the invariant is reviewed-SHA immutability.
-- Root plans inline by default. Use `repo-investigator` for a deep factual question and
-  `contract-planner` only when contract/write split has not converged and the reading is too
-  deep for root, a critical derivation needs independent anchoring, or planning can converge
-  during the current wave. Planner output is evidence; root freezes the decision.
+- Root plans inline by default. Use `repo-investigator` for a deep factual question. The
+  `contract-planner` profile accepts `planning_mode=contract-resolution` when contract/write
+  split has not converged, or `planning_mode=wave-ahead` on long tasks to propose exactly the
+  next wave while the current frozen wave executes. Planner output is evidence; root alone
+  reconciles and freezes it, and no planner advances two waves ahead.
 - Profiles may read content skills such as `codebase-design` or `domain-modeling`. They never
   invoke coordination skills that spawn agents or re-derive dispatch inputs. Root names any
   desired coordination lens in `reviewer_focus`.
@@ -51,6 +56,11 @@ Classify the checkpoint's changed surface, not the task's maximum global risk:
 
 The two-agent `code-review` skill is a Standards/Spec milestone audit that root runs only
 when requested or materially justified, never automatically per slice or by a sub-agent.
+
+Review cadence is separate from depth: `none|cumulative|selected|per-slice`; waiting is
+`async|before-dependent|before-next`; reviewer continuation is
+`pass-only|independent-nonblocking`. Freeze all three with the wave. A reviewer queue never
+creates review debt by itself; only the writer's announced `checkpoint_kind=review` does.
 
 ## Evidence ownership
 
@@ -85,6 +95,26 @@ Missing base/target SHA, frozen contract, or changed surface is a readiness fail
 invitation for the reviewer to reconstruct the task. Name the dangerous failure for every
 hard-critical axis and named review risk. Old-SHA review, aborted suites, or incomplete
 tree-equivalence proof never become target-SHA sign-off.
+
+## Reviewer pipeline
+
+Each reviewer item is one complete readiness packet. After inspecting its immutable target,
+the reviewer sends root a verdict milestone before touching any next item:
+
+```text
+target_sha: <reviewed exact SHA>
+outcome: pass | needs_fix | blocked | needs_decision
+findings: <severity + path + behavior + evidence + propagation class | none>
+evidence: <source audit, adversarial probes, thin commands/results>
+next: <ready target id | idle | stop>
+```
+
+`pass` plus a ready packet permits continuation without acknowledgment. Other outcomes stop
+by default. Root may pre-authorize `independent-nonblocking` continuation only when the
+dependency map proves the next target surface-disjoint; reviewer still reports immediately
+and never decides whether the finding itself defers. If no ready packet exists, end the turn
+and retain the lease; never poll Git. Queue exhaustion, stop, or inability to notify root ends
+the turn. Finding closure and refreshed-SHA review stay with the same reviewer.
 
 ## Re-review and immutable execution
 

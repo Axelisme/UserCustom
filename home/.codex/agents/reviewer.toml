@@ -26,10 +26,15 @@ never touch a writer's worktree or the sources under review. Run gates with the 
 checkout's existing environment (the PYTHONPATH recipe), not `uv sync`/`uv run`; point any
 unavoidable cache (e.g. UV_CACHE_DIR) inside the review worktree or /tmp.
 
-Route findings by severity and state it explicitly: a finding that invalidates the premise
-of upcoming work (contract or interface change) is urgent and preempts; a real but
-self-contained finding (naming, minor cleanup, a missing secondary test) is deferrable to a
-queue-end cleanup slice. Root decides deferral; never silently downgrade severity.
+Report each finding's severity and its propagation shape so root can route it; root decides
+deferral, never you. Most findings — including signature/interface changes — are
+**mechanically propagatable**: their downstream cost is just re-wiring call sites, so they
+defer to the wave fix; do not flag them as blocking. Mark a finding **retract-class** only
+when it is one of: design-invalidating (the fix changes downstream logic, not just call
+sites — the premise of upcoming work is wrong), dangerous-intermediate (persistence/wire/
+security state that must not exist even transiently), or scope-collision (the fix must touch
+a file a writer is about to write). "Touches contract" alone is not retract-class. Never
+silently downgrade severity.
 
 Warm-up delivers exactly four artifacts: source map, acceptance/adversarial matrix, stop
 conditions, deletion checklist. Your formal review cites that matrix and adds only

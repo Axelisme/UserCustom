@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 46
+skill_version: 47
 ---
 
 # Orchestrate
@@ -265,20 +265,43 @@ milestone delivery: <deviations from the standing contract only>
   cross-session work, in the domain packet. Never in a queue file or CLI — a queue that
   outlives the lead's ability to steer is a bug, not a feature.
 - A queue never expands authority: items are pre-authorized and same-scope, and a writer
-  never invents the next item. Preemption order: stop conditions > contract-affecting review
-  findings > next queued item > deferred findings. An exhausted queue ends the turn; the
-  lease is retained.
-- Findings route by severity (the reviewer reports it, root decides deferral):
-  premise-invalidating (P1, contract/interface change) preempts immediately — rework
-  compounds with distance; self-contained findings go to the finding ledger for one
-  queue-end cleanup slice, or to the candidate backlog when outside the task.
-- Pipelining: a warm reviewer consumes announced SHAs while the writer implements N+1 —
-  announced commits stay append-only, at most one unreviewed slice ahead (root may tighten
-  or relax). Run-ahead is conditional: N+1 must be **surface-disjoint** from the SHA under
-  review (not its public wire, schema, shared fixtures, or state machine; tests-only
-  cleanup, docs, and independent adapters usually qualify). A finding that may change the
-  next slice's interface, or any P1/contract-level finding, retracts run-ahead to
-  single-writer until resolved.
+  never invents the next item. Preemption order: stop conditions > retract-class findings
+  (design-invalidating, dangerous-intermediate, scope-collision) > next queued item >
+  deferred (ledger) findings. An exhausted queue ends the turn; the lease is retained.
+- **Findings default to the ledger, not to preemption.** The reviewer reports; root decides
+  deferral by one question — *is the fix mechanical to propagate later, or would deferral
+  force re-design?* A signature / parameter / return / naming / local-bug finding is
+  mechanical, so it accumulates in the finding ledger **even when it touches an interface**:
+  batching an interface fix until every call site exists yields a better fix (informed by all
+  callers, cut once against them) and pays the interrupt cost zero times — "touches contract"
+  is not by itself a reason to preempt, and interrupting an agent mid-flow costs more than the
+  linear cost of propagating the fix later. Only three **retract classes** pull the queue back
+  to single-writer immediately:
+  - **design-invalidating** — the fix changes downstream *logic*, not just its call sites
+    (wrong seam, approach, or ownership); every further slice would build on a refuted premise;
+  - **dangerous-intermediate** — persistence/migration, public wire, or security, where a
+    broken state must not exist even transiently across slices;
+  - **scope-collision** — the fix must touch a file the writer is about to write (a scheduling
+    constraint, not a severity one).
+  Everything else waits for the wave fix; outside-task findings go to the candidate backlog.
+- **Pipelining across the wave.** A warm reviewer consumes announced SHAs asynchronously while
+  the writer runs ahead through the queue; announced commits stay append-only and the writer
+  does not block on review. Review lags implementation by design — the reviewer inspects each
+  frozen SHA from an immutable checkout while the writer is already further along, and findings
+  collect in the ledger. The wave itself (3–5 slices) is the accumulation bound; the retract
+  classes above are the only brakes, and absent them the writer never stops for review. A
+  deferred fix keeps its ledger slot only while its scope stays **surface-disjoint** from what
+  the writer is about to touch — a collision reclassifies it as scope-collision and pulls it
+  forward. Critical slices (hard-rule surfaces or declared `critical_axes`) do not pipeline:
+  they hold `review-before-next-slice`, since building on an unreviewed
+  persistence/wire/security change is exactly the compounding the accumulation model refuses.
+- **Wave-boundary fix wave.** The finding ledger drains at the wave boundary, not per slice:
+  root dispatches one fix wave that applies contract/interface fixes **first** (widest
+  propagation, cut once against all now-known call sites) then local fixes, so a local fix
+  never lands in code the interface propagation is about to rewrite. Re-verify stays
+  finding-focused — each fix re-checked at its own thin slice on the current HEAD SHA, an
+  interface fix sweeping its call sites in one pass — never a whole-wave re-review. Retract
+  classes never reach this wave: by definition they already stopped or pulled forward.
 - Before dispatch into an area, check its candidate backlog
   (`candidate-backlog list --area <area> --status inbox`): rider items on the same code may
   fold into a slice at near-zero cost — never as scope expansion. At task closeout, close
@@ -308,11 +331,13 @@ milestone delivery: <deviations from the standing contract only>
 When a problem with announced slice N surfaces during N+1 (a review finding or the
 implementer's own discovery), the implementer checkpoints first — nearest coherent point,
 commit the work in progress; task/lane commits are free because landing squashes them — and
-classifies the fix's blast radius in its report (full protocol in the implementer profile):
-*localized* → fix N as a follow-up, resume N+1 on top; *surface-changing* → fix N, keep the
-checkpointed parts off the changed surface, redo the rest; *contract-level* → the queue
-stops with `needs_decision`, everything checkpointed, and root re-plans. Root treats the
-classification as the routing signal and never lets useful uncommitted work be discarded.
+classifies the fix in its report (full protocol in the implementer profile). A mechanically
+propagatable fix — localized, or a signature/interface change whose downstream cost is just
+re-wiring call sites — goes to the finding ledger and lands in the wave fix while the writer
+continues. Only the retract classes stop the flow: a fix that changes downstream *logic*
+(design-invalidating) stops the queue with `needs_decision` for root to re-plan; a
+dangerous-intermediate or scope-collision fix pulls forward. Root treats the classification
+as the routing signal and never lets useful uncommitted work be discarded.
 
 ## Validation anomalies
 

@@ -13,6 +13,15 @@ acceptance criteria; handle local detail yourself, do not redesign the contract.
 inside the assigned workdir and file scope; run targeted validation, not unrelated full
 suites.
 
+For TDD-shaped work, you own the permanent executable tests. Work in local red → green
+cycles at confirmed seams; a slice may contain several cycles, so do not notify root after
+each one. At the clean slice boundary report the intended red, the same-test green plus
+affected regression, and `remaining_uncertainty=behavior-only|structural|critical|anomaly`.
+A qualified green checkpoint lets a non-critical, behavior-dependent next slice run ahead;
+hold for structural, critical, or anomaly uncertainty. Local cleanup after green is yours
+while interface behavior stays fixed; changing the seam, ownership, contract, or lifecycle
+is a stop condition.
+
 You hold the domain lease declared at dispatch; a checkpoint, commit, or completed turn does
 not end ownership. The next slice of the same domain, and fixes for review findings, return
 to you as delta-only follow-ups. If a new path is a necessary closure of the frozen contract,
@@ -20,10 +29,11 @@ report it under `Scope changes requested` and wait for root; do not silently cro
 
 If dispatch includes a pre-authorized slice queue, work through it in order without waiting
 for an ack: at each slice boundary commit a checkpoint, run that slice's targeted tests,
-notify the lead with the exact SHA and evidence, then start the next queued slice. Review
-runs asynchronously behind you — do not wait for it, and do not stop for incoming findings
-unless the lead pulls one forward; most findings accumulate for a fix wave at the wave
-boundary. The exception is a slice the dispatch marks `review-before-next-slice` (critical
+notify the lead with the exact SHA and evidence, then start the next queued slice. Only an
+explicitly designated clean SHA starts review; ordinary green checkpoints do not create
+per-slice review debt. When review is assigned it runs asynchronously — do not wait or stop
+for findings unless the lead pulls one forward; most findings accumulate for a fix wave at
+the wave boundary. The exception is a slice marked `review-before-next-slice` (critical
 surfaces): hold at that boundary until its review clears. Never rewrite an announced commit
 (follow-up commits only). When the queue is exhausted, end the turn with a summary; the lease
 stays yours.
@@ -31,9 +41,9 @@ stays yours.
 Milestone notifications follow the dispatch contract; unless it says otherwise, notify at
 these points: **inventory** (scope and source map confirmed), **first-green** (first slice
 passing targeted tests), **failure-cluster** (a related group of failures worth steering
-on), and **clean-SHA** (a committed review checkpoint). Only a clean committed SHA is
-announced for review; dirty checkpoints exist for progress and cherry-pick safety and are
-never review targets.
+on), and **clean-SHA** (a committed slice checkpoint with `review_target=yes|no`). Only an
+explicitly designated clean SHA is announced for review; dirty checkpoints exist for
+progress and cherry-pick safety and are never review targets.
 
 If a problem with an announced slice surfaces while you are on a later slice, checkpoint
 first: commit the work in progress at the nearest coherent point — never discard uncommitted

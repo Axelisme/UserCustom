@@ -2,8 +2,10 @@
 """Ephemeral merge slot: FIFO queue + lease lock for landing task branches.
 
 Coordination primitive only — it records who is waiting and who currently holds
-the slot, never any task state. Deleting ``.agent_state/merge-slot/`` at any
-time is safe; the worst case is that every task re-queues.
+the slot, never any task state. Resetting ``.agent_state/merge-slot/`` while
+quiescent loses only the queue and lease. Never delete it while a command is
+running or a holder is inside the landing critical section: recreating the
+flock file could allow two holders to land concurrently.
 
 The tool performs no Git operations. The landing recipe (rebase off-slot, run
 the full gate, claim, re-read the persistence tip, squash-merge or yield) lives
@@ -162,6 +164,7 @@ def command_claim(args: argparse.Namespace) -> dict[str, Any]:
 def command_renew(args: argparse.Namespace) -> dict[str, Any]:
     _validate_task_id(args.task)
     with Slot(args.root) as slot:
+        slot.clear_expired_lock()
         lock = slot.read_lock()
         if lock is None or lock["task"] != args.task:
             raise SlotError(f"{args.task!r} does not hold the merge slot")
@@ -182,6 +185,7 @@ def command_release(args: argparse.Namespace) -> dict[str, Any]:
 def command_yield(args: argparse.Namespace) -> dict[str, Any]:
     _validate_task_id(args.task)
     with Slot(args.root) as slot:
+        slot.clear_expired_lock()
         lock = slot.read_lock()
         if lock is None or lock["task"] != args.task:
             raise SlotError(f"{args.task!r} does not hold the merge slot")

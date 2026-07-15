@@ -15,6 +15,9 @@ line-by-line implementation recipes.
 
 - `Outcome`: resolved or needs_decision.
 - `Frozen contract`: public behavior, types, schema, and explicit non-goals.
+- `Test seams and oracles`: confirmed interfaces, acceptance examples, independent expected
+  values, and dangerous failure modes; distinguish behavior-dependent from
+  structure-dependent downstream work.
 - `Dependency graph`: shared foundation vs independently deliverable scopes.
 - `Writer split`: how many writers are worth it, each writer's file scope and acceptance, and
   what must stay serialized (same file / API / schema / fixture).

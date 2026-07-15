@@ -27,6 +27,12 @@ never touch a writer's worktree or the sources under review. Run gates with the 
 checkout's existing environment (the PYTHONPATH recipe), not `uv sync`/`uv run`; point any
 unavoidable cache (e.g. UV_CACHE_DIR) inside the review worktree or /tmp.
 
+Tests are run-ahead evidence for frozen-seam behavior, not proof that the seam, ownership,
+or lifecycle is correct. Challenge the oracle, missing cases, structure, scope, and dangerous
+failure modes. You may run a temporary reproducer outside the reviewed sources, but the
+permanent regression test and fix return to the implementer: report the independent oracle
+and exact failing scenario instead of creating a parallel test lane.
+
 Report each finding's severity and its propagation shape so root can route it; root decides
 deferral, never you. Most findings — including signature/interface changes — are
 **mechanically propagatable**: their downstream cost is just re-wiring call sites, so they

@@ -23,6 +23,21 @@ A **seam** is the public boundary you test at: the interface where you observe b
 
 **Test only at pre-agreed seams.** Before writing any test, write down the seams under test and confirm them. In an interactive session, confirm with the user ("What's the public interface, and which seams should we test?"). Inside an orchestrated task, the seams come from the frozen spec/contract — to-spec already confirmed them with the user; do not re-open them mid-implementation. A missing seam there is a contract gap to report (`Scope changes requested`), not a question to improvise. No test is written at an unconfirmed seam — agreeing seams up front is how testing effort lands on critical paths instead of every edge case.
 
+## Ownership in orchestrated work
+
+Root or the contract planner freezes the seams, acceptance examples, independent oracles,
+and dangerous failure modes. The implementer owns the permanent executable tests and works
+vertically through test → implementation cycles; do not create a parallel test-writer lane
+that collides on the same interface, fixture, or files. A reviewer contributes an independent
+adversarial matrix or temporary reproducer. When review finds missing behavior, the finding
+returns to the implementer, who first adds the failing permanent regression test and then the
+fix.
+
+A TDD cycle is smaller than an orchestration slice. One slice may contain several cycles and
+reports their compact red/green evidence only at its clean checkpoint, not after every test.
+Green behavior evidence never overrides an orchestrator's structural stop condition or
+mandatory critical review.
+
 ## Anti-patterns
 
 - **Implementation-coupled** — mocks internal collaborators, tests private methods, or verifies through a side channel (querying the database instead of using the interface). The tell: the test breaks when you refactor but behavior hasn't changed.
@@ -32,5 +47,8 @@ A **seam** is the public boundary you test at: the interface where you observe b
 ## Rules of the loop
 
 - **Red before green.** Write the failing test first, then only enough code to pass it. Don't anticipate future tests or add speculative features.
-- **One slice at a time.** One seam, one test, one minimal implementation per cycle.
-- **Refactoring is not part of the loop.** It belongs to the review stage (see the `code-review` skill), not the red → green implementation cycle.
+- **One cycle at a time.** One seam, one test, one minimal implementation per cycle.
+- **Local cleanup after green.** The implementer may refactor implementation details while
+  the same interface behavior stays green. A change to the seam, ownership, contract, or
+  lifecycle is not local cleanup: stop and return it for design/review rather than hiding it
+  inside the TDD cycle.

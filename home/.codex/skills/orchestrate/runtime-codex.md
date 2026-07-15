@@ -44,7 +44,8 @@ ordered slices:
   1. <slice; acceptance; targeted tests>
   2. <slice; acceptance; targeted tests>
 stop conditions: <when to checkpoint and return needs_decision>
-milestone delivery: send_message(slice, sha, tests, blast_radius, next), then continue
+milestone delivery: send_message(slice, sha, tests, green_checkpoint,
+  remaining_uncertainty, finding_class, review_target, next), then continue
 ```
 
 The labels make runtime adaptation visible; they are not a mandatory report schema. Because
@@ -57,10 +58,16 @@ milestone delivery:
 - after every completed slice, before starting the next, call collaboration.send_message
   to /root
 - payload: MILESTONE slice=<id> sha=<exact SHA or uncommitted>
-  tests=<commands/results> blast_radius=<none/localized/surface-changing/contract-level>
+  tests=<commands/results>
+  green_checkpoint=<qualified(red=<test/reason>;green=<same test + regression>)|not-applicable>
+  remaining_uncertainty=<behavior-only|structural|critical|anomaly>
+  finding_class=<none/mechanically-propagatable/design-invalidating/dangerous-intermediate/scope-collision>
+  review_target=<yes|no>
   next=<next slice or final>
-- continue without waiting for acknowledgement unless a stop condition applies
-- never run more than one unreviewed slice ahead
+- continue through the pre-authorized normal wave without acknowledgement unless a stop
+  condition or review-before-next-slice marker applies; a qualified green checkpoint (or
+  non-TDD targeted acceptance) plus behavior-only uncertainty authorizes run-ahead; hold for
+  structural, critical, or anomaly uncertainty; stop at the wave boundary
 - if send_message is unavailable or fails, end the turn at this boundary; root will use
   followup_task to continue the same identity
 ```
@@ -79,7 +86,7 @@ effective on other Codex hosts, but it is not a substitute here.
 | interrupt | `interrupt_agent` | abort the agent's current turn; the agent can still receive later messages or follow-ups. |
 | wait / event | `wait_agent` | wait for a live agent mailbox update; timeout is not a failure. Returns a summary of which agents updated, not necessarily the full payload. |
 | status | `list_agents` | list live agents in the current root thread tree; filter with `path_prefix`. |
-| worktree isolation | plain `git worktree` | per SKILL.md; no separate tooling. |
+| worktree isolation | plain `git worktree` | per `references/git-coordination.md`; no separate tooling. |
 
 Collaboration tools must be called directly, never wrapped in `functions.exec`. Do not build
 sleep/poll loops; advance on agent events or a single `wait_agent` result.
@@ -99,9 +106,10 @@ sleep/poll loops; advance on agent events or a single `wait_agent` result.
   carrying the corrective delta. Its loaded context is an asset; respawning a fresh identity
   throws it away (and, per the skill, needs an articulable reason).
 - **Pipelined slices** — a recommended option for frozen contracts; the pattern and its
-  guardrails (run-ahead, append-only commits, blast-radius protocol) live in SKILL.md
-  "Dispatch". Runtime mechanics here: the implementer pushes each milestone via
-  `send_message` with the useful subset of `slice / sha / tests / blast_radius / next` and
+  guardrails (run-ahead, append-only commits, retract-class protocol) live in
+  `references/slice-queues.md`. Runtime mechanics here: the implementer pushes each milestone via
+  `send_message` with the useful subset of `slice / sha / tests / green_checkpoint /
+  remaining_uncertainty / finding_class / review_target / next` and
   normally continues without an ack. `running` proves only liveness, not the current phase;
   root waits for agent events and does not build a polling loop. If an expected boundary arrives
   only as a final response, repeat the milestone contract and degrade subsequent dispatch to one

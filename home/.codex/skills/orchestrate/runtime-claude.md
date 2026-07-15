@@ -15,7 +15,7 @@ as `runtime-claude.md`; the Codex counterpart is `runtime-codex.md`.
 | interrupt | `TaskStop` |
 | wait / event | subagents run in the background by default and notify the lead on completion; use `Monitor` for active waiting |
 | status | `TaskList` / `TaskGet` / `TaskOutput` |
-| ephemeral worktree isolation | `Agent` with `isolation:"worktree"` (single-agent, auto-cleanup). Durable / cross-terminal worktrees use plain `git worktree` per SKILL.md |
+| ephemeral worktree isolation | `Agent` with `isolation:"worktree"` (single-agent, auto-cleanup). Durable / cross-terminal worktrees use plain `git worktree` per `references/git-coordination.md` |
 
 Profiles map to `Agent`'s `subagent_type`: `contract-planner`, `repo-investigator`,
 `web-researcher`, `implementer`, `mechanical-implementer`, `reviewer`, `integration-reviewer`,
@@ -34,8 +34,16 @@ ordered slices:
   1. <slice; acceptance; targeted tests>
   2. <slice; acceptance; targeted tests>
 stop conditions: <when to checkpoint and return needs_decision>
-milestone delivery: SendMessage(slice, sha, tests, blast_radius, next) when available
+milestone delivery: SendMessage(slice, sha, tests, green_checkpoint,
+  remaining_uncertainty, finding_class, review_target, next) when available
 ```
+
+`finding_class` is `none`, `mechanically-propagatable`, `design-invalidating`,
+`dangerous-intermediate`, or `scope-collision`; the final three are retract classes.
+`green_checkpoint` is `qualified(red=<test/reason>;green=<same test + regression>)` or
+`not-applicable`; `remaining_uncertainty` is `behavior-only`, `structural`, `critical`, or
+`anomaly`; `review_target` is `yes` or `no`. Only qualified/non-TDD behavior-only
+checkpoints run ahead, and only explicit review targets create review debt.
 
 The labels make runtime adaptation visible; they are not a mandatory report schema.
 
@@ -71,10 +79,12 @@ needs no `SendMessage` and is unaffected.)
   the corrective delta. Its loaded context is an asset; respawning a fresh identity throws it
   away (and, per the skill, needs an articulable reason).
 - **Pipelined slices** — a recommended option for frozen contracts; the pattern and its
-  guardrails (run-ahead, append-only commits, blast-radius protocol) live in SKILL.md
-  "Dispatch". When available, the implementer pushes the useful subset of
-  `slice / sha / tests / blast_radius / next` via `SendMessage` and normally continues without
-  an ack. When `SendMessage` is unavailable, root may instead let a fully pre-authorized queue
+  guardrails (run-ahead, append-only commits, retract-class protocol) live in
+  `references/slice-queues.md`. When available, the implementer pushes the useful subset of
+  `slice / sha / tests / green_checkpoint / remaining_uncertainty / finding_class /
+  review_target / next` via `SendMessage` and normally continues without an ack. When
+  `SendMessage` is unavailable,
+  root may instead let a fully pre-authorized queue
   finish in one turn or dispatch a single slice and stop at completion, depending on steering
   risk. If the next step requires same-identity continuation, follow the capability rule above
   and return `needs_decision`; do not claim that a fresh spawn is a continuation.

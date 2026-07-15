@@ -362,7 +362,7 @@ def render_history(*, kind: str, source: str, body: str) -> str:
     title = kind.replace("-", " ").title()
     return (
         "---\n"
-        "planning_compat: 5\n"
+        "planning_compat: 6\n"
         f"history_kind: {kind}\n"
         f"source: {source}\n"
         "---\n\n"
@@ -415,7 +415,63 @@ def markdown_cell(value: str) -> str:
     return " ".join(value.replace("|", r"\|").split())
 
 
+def validate_last_updated(text: str, *, filename: str) -> None:
+    matches = re.findall(r"^\*\*Last updated:\*\* .+$", text, flags=re.MULTILINE)
+    if len(matches) != 1:
+        raise PlanError(f"{filename} must contain exactly one Last updated field")
+
+
+def validate_task_plan(text: str) -> None:
+    validate_last_updated(text, filename="task_plan.md")
+    lines = text.splitlines()
+    phase_table = markdown_table(
+        lines,
+        "## Phase Status",
+        ("Phase", "Status", "Scope", "Acceptance"),
+    )
+    valid_statuses = {"pending", "in_progress", "blocked", "completed"}
+    for row in phase_table.rows:
+        if row.cells[1] not in valid_statuses:
+            raise PlanError(f"phase {row.cells[0]} has invalid status {row.cells[1]!r}")
+    markdown_table(
+        lines,
+        "## Historical Phase Summary",
+        ("Phase", "Topic", "Conclusion / Commit"),
+    )
+    phase_blocks(lines)
+
+
+def validate_progress(text: str) -> None:
+    validate_last_updated(text, filename="progress.md")
+    lines = text.splitlines()
+    markdown_table(lines, "## Timeline", progress_table_header("## Timeline"))
+    markdown_table(
+        lines,
+        "## Verification Log",
+        progress_table_header("## Verification Log"),
+    )
+
+
+def findings_table(text: str) -> tuple[list[str], MarkdownTable]:
+    validate_last_updated(text, filename="findings.md")
+    lines = text.splitlines()
+    header = ("ID", "Status", "Date", "Area", "Finding", "Evidence / Closure")
+    table = markdown_table(lines, "## Discoveries", header)
+    for row in table.rows:
+        if row.cells[1] not in {"open", "resolved"}:
+            raise PlanError(
+                f"finding {row.cells[0]} has invalid status {row.cells[1]!r}"
+            )
+        if (
+            row.cells[1] == "resolved"
+            and row.cells[5].strip().lower() in EMPTY_CLOSURE_VALUES
+        ):
+            raise PlanError(f"resolved finding lacks closure evidence: {row.cells[0]}")
+    return lines, table
+
+
 def compact_task_plan(text: str) -> tuple[str, list[HistorySegment], int]:
+    validate_task_plan(text)
     working = text
     archived_units: list[str] = []
     archived_count = 0
@@ -519,6 +575,7 @@ def progress_history_header(heading: str, header: tuple[str, ...]) -> str:
 
 
 def compact_progress(text: str) -> tuple[str, list[HistorySegment], dict[str, int]]:
+    validate_progress(text)
     lines = text.splitlines()
     timeline_header = progress_table_header("## Timeline")
     verification_header = progress_table_header("## Verification Log")
@@ -585,21 +642,10 @@ def compact_progress(text: str) -> tuple[str, list[HistorySegment], dict[str, in
 
 
 def compact_findings(text: str) -> tuple[str, list[HistorySegment], int]:
+    lines, table = findings_table(text)
     if utf8_size(text) <= LIVE_FILE_LIMIT_BYTES:
         return text, [], 0
-    lines = text.splitlines()
     header = ("ID", "Status", "Date", "Area", "Finding", "Evidence / Closure")
-    table = markdown_table(lines, "## Discoveries", header)
-    for row in table.rows:
-        if row.cells[1] not in {"open", "resolved"}:
-            raise PlanError(
-                f"finding {row.cells[0]} has invalid status {row.cells[1]!r}"
-            )
-        if (
-            row.cells[1] == "resolved"
-            and row.cells[5].strip().lower() in EMPTY_CLOSURE_VALUES
-        ):
-            raise PlanError(f"resolved finding lacks closure evidence: {row.cells[0]}")
 
     resolved = [row for row in table.rows if row.cells[1] == "resolved"]
     remove: set[int] = set()
@@ -668,10 +714,7 @@ def write_prepared_compaction(
     return history_files
 
 
-def command_compact(args: argparse.Namespace) -> dict[str, Any]:
-    root = Path(args.root).resolve()
-    validate_task_id(args.task_id)
-    directory = require_plan(root, args.task_id)
+def prepare_compaction(directory: Path) -> PreparedCompaction:
     prepared = PreparedCompaction()
 
     task_plan = directory / "task_plan.md"
@@ -703,16 +746,33 @@ def command_compact(args: argparse.Namespace) -> dict[str, Any]:
             prepared.replacements[findings] = compacted_findings
         prepared.history.extend(findings_history)
         prepared.counts["findings_rows"] = findings_count
+    return prepared
 
+
+def run_compaction(args: argparse.Namespace, *, operation: str) -> dict[str, Any]:
+    root = Path(args.root).resolve()
+    validate_task_id(args.task_id)
+    directory = require_plan(root, args.task_id)
+    prepared = prepare_compaction(directory)
     history_files = write_prepared_compaction(directory, prepared)
     return {
         "ok": True,
+        "operation": operation,
         "task_id": args.task_id,
         "plan_dir": str(directory),
         "changed": bool(prepared.replacements),
         "compacted": prepared.counts,
         "history_files": history_files,
     }
+
+
+def command_compact(args: argparse.Namespace) -> dict[str, Any]:
+    return run_compaction(args, operation="compact")
+
+
+def command_checkpoint(args: argparse.Namespace) -> dict[str, Any]:
+    """Validate current narrative and compact only when thresholds require it."""
+    return run_compaction(args, operation="checkpoint")
 
 
 def command_init(args: argparse.Namespace) -> dict[str, Any]:
@@ -837,6 +897,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     for name, handler in (
         ("status", command_status),
+        ("checkpoint", command_checkpoint),
         ("compact", command_compact),
         ("check", command_check),
         ("archive", command_archive),

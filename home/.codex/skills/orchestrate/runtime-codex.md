@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 55
+orchestrate_compat: 57
 ---
 
 # Orchestrate — Codex runtime binding
@@ -36,6 +36,10 @@ When root dispatches:
   do not claim a TOML profile took effect.
 - If the task hard-requires a specific model, sandbox, or named-agent identity that the
   current tools cannot guarantee, return `needs_decision`.
+- Bootstrap identity with the entrypoint's `orchestrate identity` pseudo command when
+  different identity or a warm reviewer matters. Supply the runtime-observed agent id,
+  effective adapter, profile path, writer id, and park capability; the command hashes the
+  profile/standing orders but never claims the runtime loaded them.
 
 For any pipelined role, use the same compact contract. Omit fields that add no value for a
 small or exploratory task:
@@ -103,6 +107,8 @@ evidence=<source audit/adversarial probes/thin commands> next=<target id|idle|st
 - pass plus a complete queued readiness packet continues without acknowledgment
 - other outcomes stop by default; independent-nonblocking continuation must be pre-authorized
 - no ready packet means idle; never poll Git
+- queue exhaustion ends the active turn; this runtime does not expose a proven slot-free park,
+  so report `park_capability=unknown` and resume by same-identity `followup_task`
 - if send_message is unavailable or fails, end the turn; root resumes by followup_task
 ```
 
@@ -120,7 +126,7 @@ effective on other Codex hosts, but it is not a substitute here.
 | interrupt | `interrupt_agent` | abort the agent's current turn; the agent can still receive later messages or follow-ups. |
 | wait / event | `wait_agent` | wait for a live agent mailbox update; timeout is not a failure. Returns a summary of which agents updated, not necessarily the full payload. |
 | status | `list_agents` | list live agents in the current root thread tree; filter with `path_prefix`. |
-| worktree isolation | plain `git worktree` | per `references/git-coordination.md`; no separate tooling. |
+| worktree isolation | plain `git worktree` or the entrypoint's explicit aliases | per `references/git-coordination.md`; aliases add guards but no workflow state. |
 
 Collaboration tools must be called directly, never wrapped in `functions.exec`. Repeated
 event-driven `wait_agent` calls after a timeout are allowed for long tasks, with a user update

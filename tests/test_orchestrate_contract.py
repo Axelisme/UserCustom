@@ -52,7 +52,7 @@ class OrchestrateContractTests(unittest.TestCase):
 
     def test_core_defines_checkpoint_taxonomy_and_run_ahead(self) -> None:
         text = normalized_text(ORCHESTRATE / "SKILL.md")
-        self.assertIn("skill_version: 55", text)
+        self.assertIn("skill_version: 57", text)
         self.assertIn("## Routing fast paths", text)
         self.assertIn("checkpoint_kind", text)
         self.assertIn("progress", text)
@@ -134,7 +134,7 @@ class OrchestrateContractTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path.name):
                 self.assertIn(
-                    "orchestrate_compat: 55", path.read_text(encoding="utf-8")
+                    "orchestrate_compat: 57", path.read_text(encoding="utf-8")
                 )
 
     def test_role_pipeline_keeps_live_queue_in_context(self) -> None:
@@ -146,7 +146,8 @@ class OrchestrateContractTests(unittest.TestCase):
         self.assertIn("## Shared Role Pipeline Contract", queues)
         self.assertIn("live queue exists only in agent context", queues)
         self.assertIn("Never create a queue file, queue manager", queues)
-        self.assertIn("helper may only lint a supplied packet", queues)
+        self.assertIn("autonomous coordination controller", queues)
+        self.assertIn("must not write workflow state", queues)
 
     def test_planner_is_exactly_one_wave_ahead(self) -> None:
         queues = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
@@ -154,9 +155,7 @@ class OrchestrateContractTests(unittest.TestCase):
         self.assertIn("proposes exactly Wave N+1", queues)
         self.assertIn("never plans N+2", queues)
         for agents, suffix in ((CODEX_AGENTS, ".toml"), (CLAUDE_AGENTS, ".md")):
-            planner = (agents / f"contract-planner{suffix}").read_text(
-                encoding="utf-8"
-            )
+            planner = (agents / f"contract-planner{suffix}").read_text(encoding="utf-8")
             self.assertIn("planning_mode=contract-resolution|wave-ahead", planner)
             self.assertIn("PLAN_MILESTONE", planner)
             self.assertIn("Wave N+2", planner)
@@ -179,7 +178,9 @@ class OrchestrateContractTests(unittest.TestCase):
 
     def test_review_policy_is_separate_from_queue_mechanics(self) -> None:
         queues = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
-        self.assertIn("review_cadence: none | cumulative | selected | per-slice", queues)
+        self.assertIn(
+            "review_cadence: none | cumulative | selected | per-slice", queues
+        )
         self.assertIn("review_waiting: async | before-dependent | before-next", queues)
         self.assertIn(
             "review_continuation: pass-only | independent-nonblocking", queues
@@ -219,6 +220,8 @@ class OrchestrateContractTests(unittest.TestCase):
         text = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
         self.assertIn("wall=~18m", text)
         self.assertIn("wait=unknown", text)
+        self.assertIn("Omit timing fields with no observation", text)
+        self.assertIn("not wave wall/wait time", text)
         self.assertIn("Never reconstruct or guess timing", text)
         self.assertIn("review=<initial reviews/time>", text)
         self.assertIn("re-review=<closure or refreshed-SHA reviews/time>", text)
@@ -231,7 +234,7 @@ class OrchestrateContractTests(unittest.TestCase):
         self.assertIn("reconcile Current State against Git", text)
         self.assertIn("only open/deferred review findings", text)
         self.assertIn("counts plus evidence pointers", text)
-        self.assertIn("compact <task-id>", text)
+        self.assertIn("checkpoint <task-id>", text)
         self.assertIn("no unresolved finding", text)
 
     def test_durable_decisions_separate_effect_from_recording(self) -> None:
@@ -239,8 +242,44 @@ class OrchestrateContractTests(unittest.TestCase):
         self.assertIn("Decisions take effect in the in-band control plane", text)
         self.assertIn("conclusion or ADR pointer", text)
         self.assertIn("never dispatches work or triggers a state transition", text)
-        self.assertIn("compact <task-id>", text)
+        self.assertIn("checkpoint <task-id>", text)
         self.assertIn("status remains read-only", text)
+
+    def test_v57_aliases_are_stateless_explicit_guards(self) -> None:
+        core = normalized_text(ORCHESTRATE / "SKILL.md")
+        git = normalized_text(ORCHESTRATE / "references" / "git-coordination.md")
+        self.assertIn("## Inspection and safety aliases", core)
+        for command in (
+            "orchestrate doctor",
+            "orchestrate identity",
+            "orchestrate status",
+            "orchestrate lane create",
+            "orchestrate review checkout",
+            "orchestrate collect",
+            "orchestrate lane cleanup",
+            "plan checkpoint",
+        ):
+            self.assertIn(command, core)
+        self.assertIn("stateless guards", git)
+        self.assertIn("never infer a verdict or queue state", git)
+
+    def test_oversized_critical_slice_has_one_acceptance_domain(self) -> None:
+        queues = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
+        self.assertIn("at least two hard axes or three authority boundaries", queues)
+        self.assertIn("exactly one acceptance domain", queues)
+        self.assertIn("2–4 explicit progress checkpoints", queues)
+        self.assertIn("one final review checkpoint/formal review", queues)
+
+    def test_reviewer_parking_does_not_assume_runtime_capability(self) -> None:
+        delegation = normalized_text(
+            ORCHESTRATE / "references" / "delegation-and-review.md"
+        )
+        self.assertIn("slot-free parking", delegation)
+        self.assertIn("slot-free|slot-held|unknown", delegation)
+        for agents, suffix in ((CODEX_AGENTS, ".toml"), (CLAUDE_AGENTS, ".md")):
+            reviewer = (agents / f"reviewer{suffix}").read_text(encoding="utf-8")
+            self.assertIn("without surrendering the logical lease", reviewer)
+            self.assertIn("active concurrency slot", reviewer)
 
     def test_role_profiles_assign_permanent_tests_to_implementer(self) -> None:
         for agents, suffix in ((CODEX_AGENTS, ".toml"), (CLAUDE_AGENTS, ".md")):

@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 55
+orchestrate_compat: 57
 ---
 
 # Git coordination and landing
@@ -41,6 +41,11 @@ git worktree add ".agent_state/worktrees/<task>-<lane>" \
 git merge --no-ff "agent/<task>/<lane>"
 git worktree remove ".agent_state/worktrees/<task>-<lane>"
 ```
+
+Root may use the v57 `orchestrate lane create|cleanup`, `review checkout|cleanup`, and
+`collect` pseudo aliases from the entrypoint instead. They are stateless guards around these
+same operations: exact inputs only, JSON evidence, Git recheck immediately before mutation,
+and Fast Fail on dirty/drifted/unabsorbed state. They never infer a verdict or queue state.
 
 - Declare each writer's file scope in one sentence. A conflict means the split was poor; fix
   the plan rather than adding machinery.

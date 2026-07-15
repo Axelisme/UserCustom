@@ -146,7 +146,8 @@ class PlanningWithFilesCompactionTests(unittest.TestCase):
 
     def test_skill_contract_routes_explicit_bounded_compaction(self) -> None:
         text = " ".join((SKILL / "SKILL.md").read_text(encoding="utf-8").split())
-        self.assertIn("skill_version: 5", text)
+        self.assertIn("skill_version: 6", text)
+        self.assertIn("checkpoint <task-id>", text)
         self.assertIn("compact <task-id>", text)
         self.assertIn("`status`永遠read-only", text)
         self.assertIn("最多16 KiB", text)
@@ -176,6 +177,66 @@ class PlanningWithFilesCompactionTests(unittest.TestCase):
             }
             self.assertEqual(after, before)
             self.assertFalse((directory / "history").exists())
+
+    def test_checkpoint_validates_and_skips_noop_compaction(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            directory = self.init(root, "--with-findings", "--with-progress")
+            before = {
+                path.relative_to(directory): path.read_bytes()
+                for path in directory.rglob("*")
+                if path.is_file()
+            }
+
+            result = run_plan(root, "checkpoint", "demo")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["operation"], "checkpoint")
+            self.assertFalse(payload["changed"])
+            after = {
+                path.relative_to(directory): path.read_bytes()
+                for path in directory.rglob("*")
+                if path.is_file()
+            }
+            self.assertEqual(after, before)
+            self.assertFalse((directory / "history").exists())
+
+    def test_checkpoint_rejects_invalid_optional_schema_below_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            directory = self.init(root, "--with-findings")
+            path = directory / "findings.md"
+            text = path.read_text(encoding="utf-8").replace(
+                "|---|---|---|---|---|---|",
+                "|---|---|---|---|---|---|\n"
+                "| F-001 | maybe | 2026-01-01 | core | bad status | evidence |",
+            )
+            path.write_text(text, encoding="utf-8")
+            before = path.read_bytes()
+
+            result = run_plan(root, "checkpoint", "demo")
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("invalid status", result.stderr)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_checkpoint_compacts_when_threshold_is_reached(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            directory = self.init(root)
+            (directory / "task_plan.md").write_text(phase_plan(), encoding="utf-8")
+
+            result = run_plan(root, "checkpoint", "demo")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertTrue(payload["changed"])
+            self.assertEqual(payload["compacted"]["task_plan_phases"], 5)
+            history = (directory / "history" / "0001-task-plan.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("planning_compat: 6", history)
 
     def test_compact_archives_oldest_five_completed_phases(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 55
+orchestrate_compat: 57
 ---
 
 # Delegation and review
@@ -24,6 +24,10 @@ is available.
   produces exactly four artifacts: source map, acceptance/adversarial matrix, stop conditions,
   and deletion checklist. Formal review reuses them and adds exact-diff inspection. A PASS
   verdict may continue directly to the next complete ready target in its pre-authorized queue.
+- A logical reviewer lease does not justify occupying an active concurrency slot while no
+  packet is ready. If the runtime explicitly supports slot-free parking, park it; otherwise
+  end the turn and resume the same identity by follow-up. Record capability as
+  `slot-free|slot-held|unknown` instead of assuming.
 - If same-identity continuation is needed but the runtime cannot provide it, return
   `needs_decision`; never silently rebuild context in a fresh identity.
 - Roles: `contract-planner`, `repo-investigator`, `implementer`,

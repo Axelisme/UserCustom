@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 55
+orchestrate_compat: 57
 ---
 
 # Evidence and handoff
@@ -34,8 +34,9 @@ review-readiness packet.
   needed, persist the conclusion or ADR pointer in task_plan; the plan records the decision
   but never dispatches work or triggers a state transition.
 - After semantic plan updates at checkpoint, handoff, resume, or closure boundaries, run the
-  `planning-with-files` command `compact <task-id>`. It is explicit narrative maintenance;
-  `status remains read-only`, and compaction never changes decision, review, or merge state.
+  `planning-with-files` command `checkpoint <task-id>`. It validates current schemas and
+  compacts only when required; `status remains read-only`, and maintenance never changes
+  decision, review, or merge state.
 - Cross-session, multi-round, or information-heavy tasks use `planning-with-files` at
   `.agent_state/plans/<task-id>/`; one-shot tasks create nothing.
 - **task_plan is the ledger; a domain packet is its current-state cache.** Only several

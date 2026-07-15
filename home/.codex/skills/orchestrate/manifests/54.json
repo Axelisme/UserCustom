@@ -1,0 +1,140 @@
+{
+  "documents": {
+    "SKILL.md": {
+      "bytes": 9834,
+      "sections": {
+        "Checkpoint taxonomy and run-ahead": "3012d22fa195d26ab8049dc1546480359292144fac6ec474d301afafdf679c36",
+        "Core coordination model": "6f5da2940828bf322d1725f4c1e89f508019e983fc6a68d250b2eaa9ef5455c8",
+        "Definition of done": "a945e862b8bd2981293d54384f74f0242b21a9d9255dd392700c74f0d1485079",
+        "Durable state boundary": "2c89888ef2fc6bea2429635a5d76b895c086991afb237df20aec62bbce70af9c",
+        "Hard rules (this is all of them)": "54ac0e9664525b5b18ff11a045e3232f93427ad64698894ed88d566ec3f65a33",
+        "Load only the branch you need": "54ec9eb993669b7f15b97f563796e94700ebffab1dbacb5afa92aa9ac2c356db",
+        "Operating loop": "8b817e70fcabde785439e93fbee0507a6646d9643cea7c17942817749cad82f5",
+        "Orchestrate": "715988614f3e4767dfe08552e16fe889fd5e4328a22d7c7c71820c9c32ad6fc2",
+        "Review and test ownership": "3e9dd4cc66b928b2e5acc424d93b6eed2c146bf880622ab4b75559c3196fc7dc",
+        "Routing fast paths": "995f9aa237f11a9f6f89e48ea629e26e43523fd84939205ff384aef631c341f1"
+      },
+      "sha256": "06a09b1e0de8dc4577b1225761e2ab861aed81df2498db7e368c453b65ea2daf"
+    },
+    "references/delegation-and-review.md": {
+      "bytes": 6289,
+      "orchestrate_compat": 54,
+      "sections": {
+        "Delegation and review": "d054238daee01e7e917bcea4c46ed519a2e478681552f8627dfe3aee215bdb8e",
+        "Evidence ownership": "115912f79fd6259cf545e300cde892025b904eb0d48c734ea307660440d89c43",
+        "Persistent agents and roles": "8cb50f5cb92eb352cb49568d9e0b3ffdf0c0aa1c7452ba3a58088451d862a156",
+        "Re-review and immutable execution": "1b4f4cc86efbaa2efb372369fa375d24d83f89e0f5dbe272b467986fcf699cc7",
+        "Review depth": "82f948410e7514ea74b0e0804e304243dc847da34075927e8331c6a2459c605b",
+        "Review-readiness packet": "0efd2acdab0406cfff18cd2a58a82784282816c1f07f5453a195f197088af434"
+      },
+      "sha256": "0cb8ca98b1fbb4c59d7c624a13611faac4d03b14e032724389444330f6c1e38e"
+    },
+    "references/evidence-and-handoff.md": {
+      "bytes": 4019,
+      "orchestrate_compat": 54,
+      "sections": {
+        "Durable narrative": "4d000042a066cc851a585ba797e8ca421d223c0721b5df3a5926e2ec658c6b5b",
+        "Evidence and handoff": "86d9250330d4b46ce8ce5de4554c89008ee89fbba955769fd06453c9d4ffb1f6",
+        "Session handoff": "1cb298d8d921e1179e1c5dbb1db05dc74fcd5813402b0d2dc7eb93409d3e0d70",
+        "Validation anomalies": "3feeca78a3052741c01dd8cf318a829d02cbd093e7603ad6554565d21c3b7aa9"
+      },
+      "sha256": "2deaf2b0499f03b538b4455bde30a195247eec05d32d80fd5a102440a4dc6bf3"
+    },
+    "references/git-coordination.md": {
+      "bytes": 4473,
+      "orchestrate_compat": 54,
+      "sections": {
+        "Git coordination and landing": "be17c1758ece9a5b6883464f9bf55d83a2e964777e2c863a4872e9e5bb055003",
+        "Landing on persistence": "7c0521fd3457a045ae5975828132b81202e4fed8ca3f5ed3250575e2470a00e4",
+        "Multi-writer parallelism": "03a2dd82b16f48e9c710d07d069aaba868a20b8fe37e4032ca87a1444089910e",
+        "Single writer": "a90a2c2781693a177e670f7840f08df579919aa7f3d7674f033b153ab0eea820",
+        "Terms and branch hierarchy": "aede0725a0c1839ec187fc880a86eb761c261b94661aa4c97134de9aaed881a7"
+      },
+      "sha256": "45b9c86a3e66f58029bebf3735e71cdb73ae3cb45cfe715259c12eccaf93f59d"
+    },
+    "references/slice-queues.md": {
+      "bytes": 9061,
+      "orchestrate_compat": 54,
+      "sections": {
+        "Checkpoint taxonomy": "971896aa979ec9f5bb97f501b0df4b1fcb48e96b88448ac168c25dcc421d2970",
+        "Findings, preemption, and retraction": "cb9e7f6f931facefa801b832dbcc0a516e40d496b19086d4c35aeeabe1a82df7",
+        "Per-wave metrics": "02e4e022a2126737acdf6c6bda0d8421e1dbc92cb9ea418eb1c762c2584fdcca",
+        "Pipelining and review targets": "77759dcbc44bc30cc4ac0ea4b184bb66a8fd89b8b30aaa72c7b3532508e0b0eb",
+        "Queue shape": "a2052f368a9fa1a17e59773a8ea9099cc802e2b5bff4e6bf34f9e7dab97009fc",
+        "Shaping the wave": "3f2241a75cd7e89302523206f4a68a6fff37f0c8fe9564fa6b1fb2da0ea31013",
+        "Slice queues": "6709487eb84ef5e46058c6b01e8067f2c65ba9d3954442002e46e0da8aeec080",
+        "Wave-boundary fix wave": "750d25914e130ad8811e097970dcb4aa8b40b606e40b2f77af6f402ad909a85a",
+        "Wave-boundary narrative maintenance": "31d17c5e4c9cda7baa665b373f039ca29016761844046af392b65533a0fc6a9b"
+      },
+      "sha256": "6a19f15a10c4d4226f5389f1b575429dfbe2f855f81190939cbff3900c0b404b"
+    },
+    "runtime-claude.md": {
+      "bytes": 7787,
+      "orchestrate_compat": 54,
+      "sections": {
+        "Agent teams: evaluated and not adopted": "2c6eb35616cba414229f097acdbb26ebb82271ae3cad9f61100d6e0fc025d1d6",
+        "Capability flag: same-identity continuation": "b80b44a89b6ca3b597858c1cf8edbfcc2ecf32ff4039edc4065b0f9b38ae42ed",
+        "Flow control": "5a731d26b71153b9ef475e220c0ca23f4c08a8a9f28b3ee29be78bedcc798ba0",
+        "Fork context policy": "3da9a5f623acf3f888ddc40e80056775329f6a3d944315924f34617b40a70ec7",
+        "Model and sandbox mapping": "f2957f35e9975638c0d793395e5765f9ab7af63e54b7dd583319e70335f7137e",
+        "Orchestrate \u2014 Claude Code runtime binding": "31e1ed41a702694591b50fc0c6556b3774efcddb0123e20d669edc973b9f486a",
+        "Tool binding": "17892da0a78b335804cdb40d08d134c3577069c8819d12d6db922eb8b13b1cc3"
+      },
+      "sha256": "eee1b66bd91afafe09bdd169fde33afca0215ad235599ac66aa0b4b3e3f105be"
+    },
+    "runtime-codex.md": {
+      "bytes": 9004,
+      "orchestrate_compat": 54,
+      "sections": {
+        "Flow control": "589b86a1c386958e6889fcec90ade1e5802d19923a607ea78cb4278d77fc35ac",
+        "Orchestrate \u2014 Codex runtime binding": "391af330099a4a8c38a72d54dc0f6d8232b29fb24b8688247dbfcd522a0cecb1",
+        "Profiles and dispatch": "189ce2a6d622a1d876020015885a38cd8eb6890104a48769bfceba245cac64d2",
+        "Runtime limits and repo config": "c515449032e065b730ffe73e055c35067cbb3dfec1933dd7bb84e51e2e5d3eaf",
+        "Tool binding": "06a73854160a5a1c0ac1a0c092e5e8cbae9b3a75b25277d05e292ddc3482dd7d"
+      },
+      "sha256": "542f3c06d6a0aefb4bcb11935c0e92e4e64747b4e0183f3267ff85cb6914d665"
+    },
+    "scripts/merge_slot.py": {
+      "bytes": 8852,
+      "sections": {
+        "__file__": "b9de8f8ece6ea7b6faf09784ab4bc8b4389256388b6a6660bbd503b116315e4e"
+      },
+      "sha256": "b9de8f8ece6ea7b6faf09784ab4bc8b4389256388b6a6660bbd503b116315e4e"
+    }
+  },
+  "orchestrate_compat": 54,
+  "profiles": {
+    ".claude/agents/contract-planner.md": {
+      "bytes": 1621,
+      "sha256": "a798a3a5504c72dd5a7d899133db2e12da02bc5f88e1609ad1892ce106700afe",
+      "standing_orders_sha256": "6d3ec0d3d1ddbe1271a22b77a041e2d395af519b1cd82caa682b42fd749fe7bd"
+    },
+    ".claude/agents/implementer.md": {
+      "bytes": 4980,
+      "sha256": "3840f77a67a5b2e1772fce72b248210ca6bf427e7141269998c5d8465de07a31",
+      "standing_orders_sha256": "6397643351ceb2eef85e91692e168a2f946fde893173d1dc911f7e511f24b383"
+    },
+    ".claude/agents/reviewer.md": {
+      "bytes": 4910,
+      "sha256": "86af1412d7a5a3eb3badec914b5756a1059a597fbfa6256afa2cb179e4a89fc9",
+      "standing_orders_sha256": "2a069160a32ab4a014380109cc67bba043fa2a2ec60e272261f0c464b46a54e8"
+    },
+    ".codex/agents/contract-planner.toml": {
+      "bytes": 1695,
+      "sha256": "2fa86438ba846a42ddab4dc5eec42cdd2f13109c8c3e5e9f76b53ac1255a1cdb",
+      "standing_orders_sha256": "6d3ec0d3d1ddbe1271a22b77a041e2d395af519b1cd82caa682b42fd749fe7bd"
+    },
+    ".codex/agents/implementer.toml": {
+      "bytes": 5056,
+      "sha256": "4bcccb032464935067fe517d7e8fda4894e9a79fcf68cf573566391657a09e4a",
+      "standing_orders_sha256": "6397643351ceb2eef85e91692e168a2f946fde893173d1dc911f7e511f24b383"
+    },
+    ".codex/agents/reviewer.toml": {
+      "bytes": 4985,
+      "sha256": "bc26db1b220566d9923acfbc124e1099bcd3a4090fe6522c4c8f2a5bb7abeb60",
+      "standing_orders_sha256": "2a069160a32ab4a014380109cc67bba043fa2a2ec60e272261f0c464b46a54e8"
+    }
+  },
+  "schema_version": 1,
+  "skill_version": 54
+}

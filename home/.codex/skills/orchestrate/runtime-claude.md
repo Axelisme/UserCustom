@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 55
+orchestrate_compat: 57
 ---
 
 # Orchestrate — Claude Code runtime binding
@@ -19,13 +19,18 @@ as `runtime-claude.md`; the Codex counterpart is `runtime-codex.md`.
 | interrupt | `TaskStop` |
 | wait / event | subagents run in the background by default and notify the lead on completion; use `Monitor` for active waiting |
 | status | `TaskList` / `TaskGet` / `TaskOutput` |
-| ephemeral worktree isolation | `Agent` with `isolation:"worktree"` (single-agent, auto-cleanup). Durable / cross-terminal worktrees use plain `git worktree` per `references/git-coordination.md` |
+| ephemeral worktree isolation | `Agent` with `isolation:"worktree"` (single-agent, auto-cleanup). Durable / cross-terminal worktrees use plain Git or the entrypoint's explicit guarded aliases per `references/git-coordination.md` |
 
 Profiles map to `Agent`'s `subagent_type`: `contract-planner`, `repo-investigator`,
 `web-researcher`, `implementer`, `mechanical-implementer`, `reviewer`, `integration-reviewer`,
 `mcp-skill-tester` (registered as user-level Claude Code agent types in `~/.claude/agents/`;
 a repo may override or extend them with its own `.claude/agents/`). If a profile is not
 registered in the current session, fall back to `general-purpose` and say so.
+
+When different identity or a warm reviewer matters, use the entrypoint's `orchestrate
+identity` pseudo command with the runtime-observed agent id, selected profile, writer id, and
+`park_capability=slot-free|slot-held|unknown`. The hash report proves profile content, not
+that the runtime selected or parked it; capability still comes from current tools.
 
 For any pipelined role, use the same compact contract. Omit fields that add no value for a
 small or exploratory task:
@@ -63,7 +68,9 @@ Reviewer reports `REVIEW_MILESTONE` with exact target, `outcome=pass|needs_fix|b
 needs_decision`, findings/evidence, and next. PASS plus a complete queued readiness packet may
 continue without acknowledgment. Other outcomes stop by default; continuation after a
 non-retract finding requires a pre-authorized independent/surface-disjoint next target. No
-ready packet means idle, never Git polling.
+ready packet means idle, never Git polling. Queue exhaustion ends active work. Claim slot-free
+parking only when the current runtime explicitly reports it; otherwise end the turn and
+resume through same-identity `SendMessage`.
 
 The labels make runtime adaptation visible; they are not a mandatory report schema.
 

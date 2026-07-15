@@ -12,4 +12,4 @@
 | Date | Command | Result |
 |---|---|---|
 
-<!-- 一般更新 append-only；只有 explicit compact 可搬移 sealed prefix。交接狀態仍只寫在 packet＋task_plan Current State。 -->
+<!-- 一般更新 append-only；只有 explicit checkpoint/compact 可搬移 sealed prefix。交接狀態仍只寫在 packet＋task_plan Current State。 -->

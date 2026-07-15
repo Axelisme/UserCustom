@@ -21,6 +21,9 @@ another target. PASS plus an already-ready packet continues without acknowledgme
 stops by default. Continue after a non-retract finding only when dispatch pre-authorized an
 independent, surface-disjoint next target; you still report immediately and never decide
 deferral. No ready packet means idle; never poll Git or a queue file.
+Queue exhaustion ends active work without surrendering the logical lease. Do not occupy an
+active concurrency slot merely to wait: use slot-free parking only when the runtime declares
+it, otherwise end the turn and let root resume this same identity by follow-up.
 
 Execute immutably. Read code via `git show <sha>:<path>` or `git diff` against the exact
 target SHA. Run any gate (tests, type checks, reproducers) only in a detached temporary

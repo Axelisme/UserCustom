@@ -1,0 +1,144 @@
+{
+  "documents": {
+    "SKILL.md": {
+      "bytes": 11956,
+      "sections": {
+        "Core coordination model": "438a962f4121d84ea9497c7b6261ecd79579b216ba65d56ccc0a36054ccdb957",
+        "Definition of done": "a945e862b8bd2981293d54384f74f0242b21a9d9255dd392700c74f0d1485079",
+        "Durable state boundary": "2c89888ef2fc6bea2429635a5d76b895c086991afb237df20aec62bbce70af9c",
+        "Hard rules (this is all of them)": "54ac0e9664525b5b18ff11a045e3232f93427ad64698894ed88d566ec3f65a33",
+        "Load only the branch you need": "32ea72fdf510b08435d53b617dd77f3c45dd8e012a05f31ec6a6d6d3173e9224",
+        "Operating loop": "e8eda83457e5cbf2f42a3f45d4e4337433a31dab0f467030848af4e24da62d1c",
+        "Orchestrate": "aec97d2b91f476a4ba2f26e62aedd4f8e7dc2e54bd03fedb580f0df8d8c48a8e",
+        "Review and test ownership": "3e9dd4cc66b928b2e5acc424d93b6eed2c146bf880622ab4b75559c3196fc7dc",
+        "Role pipelines and checkpoints": "823124813f5619ff29b1d3d5097e71568af89f51711acb84f30ec004ba443b0c",
+        "Routing fast paths": "30e867d982f22708b7af2a2532f45de6970801b7e6ae1fb962652cab5034959c"
+      },
+      "sha256": "75a96c85ff4761df67305ad897a212c4a99320c2eefc33667b29dbd6f626693b"
+    },
+    "references/delegation-and-review.md": {
+      "bytes": 8086,
+      "orchestrate_compat": 55,
+      "sections": {
+        "Delegation and review": "d054238daee01e7e917bcea4c46ed519a2e478681552f8627dfe3aee215bdb8e",
+        "Evidence ownership": "115912f79fd6259cf545e300cde892025b904eb0d48c734ea307660440d89c43",
+        "Persistent agents and roles": "1c56b3b1ff15eca5cec6d4408fdc4bff880b36bee1865727b4f1fa3866257a93",
+        "Re-review and immutable execution": "1b4f4cc86efbaa2efb372369fa375d24d83f89e0f5dbe272b467986fcf699cc7",
+        "Review depth": "4398f32723fbe72940fcc194bd53a73a91cfb189152aad9d451ead13875c5dc8",
+        "Review-readiness packet": "0efd2acdab0406cfff18cd2a58a82784282816c1f07f5453a195f197088af434",
+        "Reviewer pipeline": "d0b5765cfd90083c9ec4fd74d9ef1ba847d1553bbe2149dd84324e379593c82f"
+      },
+      "sha256": "29debbe49ade7bc30479a59d6458595ca00281bbe739f73c1eea9e5673552a2e"
+    },
+    "references/evidence-and-handoff.md": {
+      "bytes": 4019,
+      "orchestrate_compat": 55,
+      "sections": {
+        "Durable narrative": "4d000042a066cc851a585ba797e8ca421d223c0721b5df3a5926e2ec658c6b5b",
+        "Evidence and handoff": "86d9250330d4b46ce8ce5de4554c89008ee89fbba955769fd06453c9d4ffb1f6",
+        "Session handoff": "1cb298d8d921e1179e1c5dbb1db05dc74fcd5813402b0d2dc7eb93409d3e0d70",
+        "Validation anomalies": "3feeca78a3052741c01dd8cf318a829d02cbd093e7603ad6554565d21c3b7aa9"
+      },
+      "sha256": "619d3b3ed1d4a5d7f02e787430821d9a1c99b02feb18b434370d8b6779b80be2"
+    },
+    "references/git-coordination.md": {
+      "bytes": 4473,
+      "orchestrate_compat": 55,
+      "sections": {
+        "Git coordination and landing": "be17c1758ece9a5b6883464f9bf55d83a2e964777e2c863a4872e9e5bb055003",
+        "Landing on persistence": "7c0521fd3457a045ae5975828132b81202e4fed8ca3f5ed3250575e2470a00e4",
+        "Multi-writer parallelism": "03a2dd82b16f48e9c710d07d069aaba868a20b8fe37e4032ca87a1444089910e",
+        "Single writer": "a90a2c2781693a177e670f7840f08df579919aa7f3d7674f033b153ab0eea820",
+        "Terms and branch hierarchy": "aede0725a0c1839ec187fc880a86eb761c261b94661aa4c97134de9aaed881a7"
+      },
+      "sha256": "03bccd0fcafc29bcaed52b745816fbe919d8de139cf9334b99ec84c73e74317c"
+    },
+    "references/slice-queues.md": {
+      "bytes": 12700,
+      "orchestrate_compat": 55,
+      "sections": {
+        "Checkpoint taxonomy": "971896aa979ec9f5bb97f501b0df4b1fcb48e96b88448ac168c25dcc421d2970",
+        "Findings, preemption, and retraction": "cb9e7f6f931facefa801b832dbcc0a516e40d496b19086d4c35aeeabe1a82df7",
+        "Per-wave metrics": "02e4e022a2126737acdf6c6bda0d8421e1dbc92cb9ea418eb1c762c2584fdcca",
+        "Pipelining and review targets": "7f32a2ba861c15e532cbf6ddec935343ce30daa31cbe2c53eb20a232cf3935f4",
+        "Planner rolling horizon": "42812c60947dfa3d75b51a0d03b9a00a7e5041bb9f081a2faacd17af1a6fb2ac",
+        "Review policy": "4781eac6f4b97b6af5655d7d8453e49b81d16c46c71f6054b2ae23490e2486ce",
+        "Reviewer target queue": "288e975b67875636ee2ea0bc53d2342a0ff340ada668377724c9f102e7bd9781",
+        "Role pipelines and slice queues": "7a350967b925d7fe5ebce4d0cf93b28b500cdfaea76fd84f3edaf6f2cebdb6fb",
+        "Shaping the wave": "48e126afdad0f2cbea4894bfe5c9702e14dda3e09c0a7cca2b0ac487e0c69693",
+        "Shared Role Pipeline Contract": "0b834773f0f5dadd9c67be5a0417ce94e29d0ab7bf22c61dbbc4cc2ee6f7d31a",
+        "Wave-boundary fix wave": "750d25914e130ad8811e097970dcb4aa8b40b606e40b2f77af6f402ad909a85a",
+        "Wave-boundary narrative maintenance": "31d17c5e4c9cda7baa665b373f039ca29016761844046af392b65533a0fc6a9b"
+      },
+      "sha256": "1f0a119eab028a90181002c367360baff44e8a391e76e62bf5782c1cb2136005"
+    },
+    "runtime-claude.md": {
+      "bytes": 8442,
+      "orchestrate_compat": 55,
+      "sections": {
+        "Agent teams: evaluated and not adopted": "2c6eb35616cba414229f097acdbb26ebb82271ae3cad9f61100d6e0fc025d1d6",
+        "Capability flag: same-identity continuation": "b80b44a89b6ca3b597858c1cf8edbfcc2ecf32ff4039edc4065b0f9b38ae42ed",
+        "Flow control": "e26ccaeec6683d27a6f8b4f05357cde4b899756acb17de9230fc8361af0506b2",
+        "Fork context policy": "3da9a5f623acf3f888ddc40e80056775329f6a3d944315924f34617b40a70ec7",
+        "Model and sandbox mapping": "f2957f35e9975638c0d793395e5765f9ab7af63e54b7dd583319e70335f7137e",
+        "Orchestrate \u2014 Claude Code runtime binding": "31e1ed41a702694591b50fc0c6556b3774efcddb0123e20d669edc973b9f486a",
+        "Tool binding": "dc577c92ff24b9376a3f126ecda0662a6a156d1110ca75d1f09705b28d9b6d3a"
+      },
+      "sha256": "9c126271ca7a4387f1dc97dc63c44dcf26b59b2a14c6aad8fa26458f942db2cb"
+    },
+    "runtime-codex.md": {
+      "bytes": 10371,
+      "orchestrate_compat": 55,
+      "sections": {
+        "Flow control": "170521c9716623d4d814a1635ad8f218ac69ee04307525f0632d80c005a3435f",
+        "Orchestrate \u2014 Codex runtime binding": "391af330099a4a8c38a72d54dc0f6d8232b29fb24b8688247dbfcd522a0cecb1",
+        "Profiles and dispatch": "57a96f9a94f54e2f382633c2cd1b3eb5558824db36495469f6143011872e3b09",
+        "Runtime limits and repo config": "c515449032e065b730ffe73e055c35067cbb3dfec1933dd7bb84e51e2e5d3eaf",
+        "Tool binding": "06a73854160a5a1c0ac1a0c092e5e8cbae9b3a75b25277d05e292ddc3482dd7d"
+      },
+      "sha256": "0db41a16d0ae54dcb54823df0abeac2e0cc9d42ce2b851bf3c9f33533e87dcb8"
+    },
+    "scripts/merge_slot.py": {
+      "bytes": 8852,
+      "sections": {
+        "__file__": "b9de8f8ece6ea7b6faf09784ab4bc8b4389256388b6a6660bbd503b116315e4e"
+      },
+      "sha256": "b9de8f8ece6ea7b6faf09784ab4bc8b4389256388b6a6660bbd503b116315e4e"
+    }
+  },
+  "orchestrate_compat": 55,
+  "profiles": {
+    ".claude/agents/contract-planner.md": {
+      "bytes": 2275,
+      "sha256": "65cfe5b6687833822852dbf0bf0dd56b73d05c9b19eecd001c581163c73b2969",
+      "standing_orders_sha256": "5e15de89c11b0b0d09c3615c9c967cafae401ddd855afa68f5bc4b1919c20ba8"
+    },
+    ".claude/agents/implementer.md": {
+      "bytes": 5390,
+      "sha256": "93b118b12077f4608868392ae476680ba416b0cd9257f7d619d6ab2022c99683",
+      "standing_orders_sha256": "324da3170c05cbfdb141ebbfdc3c4157668c5e0c02ea0e42d09a582867462386"
+    },
+    ".claude/agents/reviewer.md": {
+      "bytes": 5709,
+      "sha256": "88fce05c880decb7555a3b127efd72ae5f12681986ed9e7885ee56d7db784e5e",
+      "standing_orders_sha256": "02dbc8504fdcac25c05c5ee11347404034cf242137c9766abf2786eed40fc40b"
+    },
+    ".codex/agents/contract-planner.toml": {
+      "bytes": 2349,
+      "sha256": "0037d4230136426494e324711296d364e8b17cbd5834965885b62b6f58cbded5",
+      "standing_orders_sha256": "5e15de89c11b0b0d09c3615c9c967cafae401ddd855afa68f5bc4b1919c20ba8"
+    },
+    ".codex/agents/implementer.toml": {
+      "bytes": 5466,
+      "sha256": "328a24f91cc092d403c79dd36b957b58bb05d2ab2507ebbb14d4decc8fecda96",
+      "standing_orders_sha256": "324da3170c05cbfdb141ebbfdc3c4157668c5e0c02ea0e42d09a582867462386"
+    },
+    ".codex/agents/reviewer.toml": {
+      "bytes": 5784,
+      "sha256": "2614498fe4eab3ed5bf080960ac05a895ab55ba1ec1d5c24525a6b7d0b4bdae2",
+      "standing_orders_sha256": "02dbc8504fdcac25c05c5ee11347404034cf242137c9766abf2786eed40fc40b"
+    }
+  },
+  "schema_version": 1,
+  "skill_version": 55
+}

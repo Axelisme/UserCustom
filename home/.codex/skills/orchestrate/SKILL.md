@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 55
+skill_version: 57
 ---
 
 # Orchestrate
@@ -9,9 +9,10 @@ skill_version: 55
 Plan, delegate, integrate, and verify repo-wide work. Coordination state lives in exactly
 three native carriers: **Git** (code and branch topology), **agent context** (work in
 progress), and the **plan directory** (cross-session narrative). Never add workflow state
-files, receipts, or a coordination CLI. The only sanctioned primitive is the skill-relative
-ephemeral merge slot (`scripts/merge_slot.py`, lock + FIFO only), which never stores task
-state.
+files, receipts, or an autonomous coordination controller. Read-only inspectors and explicit
+stateless Git safety adapters may expose those native carriers, but never infer review,
+dispatch, phase, or queue transitions. The ephemeral merge slot (`scripts/merge_slot.py`,
+lock + FIFO only) likewise stores no task state.
 
 Root is the only control plane. Live planner/writer/reviewer queues stay in agent context;
 Git proves checkpoints and the plan preserves only cross-session conclusions/current state.
@@ -59,7 +60,10 @@ user requests it or both axes carry material risk. It is never an automatic per-
 The entrypoint is deliberately bounded. Before acting on a branch below, read its linked file
 completely; do not load references for branches the task does not enter.
 Every loaded reference/runtime must declare `orchestrate_compat` equal to this entrypoint's
-`skill_version`; a mismatch returns `needs_decision` instead of mixing contracts.
+`skill_version`; `doctor` verifies the release manifest before complex work. A mismatch
+returns `needs_decision` instead of mixing contracts. `diff` may narrow rereading only when
+the current context can name the manifest version it already loaded; a new session reads each
+triggered document completely.
 
 | trigger | required reference |
 |---|---|
@@ -108,8 +112,27 @@ coordination only when branch or landing operations are actually needed.
   classifies findings, and serializes collection. Item completion is not turn completion;
   acknowledgment is required only at a frozen gate.
 - Domain continuity is a convention: continue the same identity with a delta-only follow-up
-  unless the domain changed, independent identity is required, or genuinely parallel scope
-  exists. If the runtime cannot preserve required identity, return `needs_decision`.
+   unless the domain changed, independent identity is required, or genuinely parallel scope
+   exists. If the runtime cannot preserve required identity, return `needs_decision`.
+
+## Inspection and safety aliases
+
+These are pseudo aliases; use `--help` for arguments. Every mutation is an explicit root
+action, emits JSON evidence with observed time/duration, and rechecks Git immediately before
+changing it. No command advances a role queue or writes coordination state.
+
+```text
+orchestrate := <repo-python> <skill-dir>/scripts/orchestrate.py
+orchestrate doctor | diff <old-version> <new-version>
+orchestrate identity --requested <role> --effective <role> --profile <path> --agent-id <id> [--writer-agent-id <id> --require-different-identity] [--park-capability slot-free|slot-held|unknown]
+orchestrate status --root <repo> --task-id <task>
+orchestrate lane create --root <repo> --task-id <task> --lane <lane> --base <exact-sha>
+orchestrate review checkout <exact-sha> --root <repo> | review cleanup --root <repo> --worktree <path>
+orchestrate collect --root <task-worktree> --task-ref <task-branch> --lane-ref <lane-branch> --expected-lane-sha <sha> --reviewed-sha <sha>
+orchestrate lane cleanup --root <repo> --task-ref <task-branch> --lane-ref <lane-branch> --worktree <path>
+plan := <repo-python> <planning-skill-dir>/scripts/plan.py --root <repo>
+plan checkpoint <task-id>
+```
 
 ## Review and test ownership
 
@@ -140,7 +163,10 @@ already-ready item when policy permits; queue exhaustion ends the turn but retai
   Normal behavior-dependent validation may continue without acknowledgment.
 - **Reviewer:** consumes complete exact-SHA readiness packets. After each verdict it notifies
   root; PASS may continue to the next ready target without acknowledgment. `needs_fix` stops
-  by default unless root pre-authorized an independent, surface-disjoint target.
+  by default unless root pre-authorized an independent, surface-disjoint target. Queue
+  exhaustion parks the logical lease without holding an active concurrency slot when the
+  runtime explicitly supports that capability; otherwise end the turn and use same-identity
+  follow-up.
 
 At wave freeze, choose review policy independently of queue mechanics:
 `cadence=none|cumulative|selected|per-slice`,
@@ -175,7 +201,8 @@ One-shot tasks create no plan. Cross-session, multi-round, or information-heavy 
 current-state cache. Decisions take effect in-band; cross-session work persists conclusions
 or ADR pointers without turning files into instructions or workflow signals. After semantic
 plan updates at wave close, checkpoint, handoff, resume, or closure boundaries, invoke its
-explicit `compact <task-id>` maintenance; compaction is never a workflow transition.
+explicit `checkpoint <task-id>` validation/conditional maintenance; it is never a workflow
+transition and produces no semantic content.
 
 ## Definition of done
 

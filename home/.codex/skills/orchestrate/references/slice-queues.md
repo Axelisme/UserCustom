@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 55
+orchestrate_compat: 57
 ---
 
 # Role pipelines and slice queues
@@ -30,8 +30,9 @@ exhaustion ends the turn but retains the lease; root resumes the same identity w
 The live queue exists only in agent context (spawn plus follow-up messages). Across sessions,
 the domain packet records the current item, bounded pending items, exact checkpoint, and next
 gate so root can reconcile against Git and resend a delta. Never create a queue file, queue
-manager, receipt, or coordination CLI. A future helper may only lint a supplied packet; it
-must not write state, advance an item, dispatch, or infer phase from Git/liveness.
+manager, receipt, or autonomous coordination controller. An inspector may validate a
+supplied packet or expose Git/plan facts, but must not write workflow state, advance an item,
+dispatch, or infer phase/review from Git/liveness.
 
 ## Planner rolling horizon
 
@@ -99,8 +100,9 @@ finding immediately and never decides its deferral.
 
 If the next packet arrives while the reviewer is running, the runtime delivers it as a queue
 delta. If the reviewer is already idle, root uses same-identity follow-up. No ready packet
-means idle, not Git polling. Finding closure and refreshed-SHA review return to the same
-reviewer lease.
+means idle, not Git polling. A runtime-declared slot-free park may retain the logical identity
+without occupying concurrency; otherwise the turn ends and follow-up resumes it. Finding
+closure and refreshed-SHA review return to the same reviewer lease.
 
 ## Review policy
 
@@ -184,6 +186,12 @@ classes never reach this wave because they already stopped or pulled forward.
   creates an untestable half-change. Three or more authority boundaries (hard axes plus
   lifecycle/projection surfaces) default to foundation-first splitting; keeping one slice
   needs a stated reason.
+- A source map crossing at least two hard axes or three authority boundaries is oversized.
+  Root either splits out shared foundation gates, or freezes one atomic critical vertical
+  with exactly one acceptance domain, 2–4 explicit progress checkpoints, and an exit
+  condition for every dangerous intermediate. The latter still has one final review
+  checkpoint/formal review; progress milestones never become review targets and no dependent
+  slice starts before that final review clears.
 - Prefer a medium vertical slice: one authoritative contract, one real consumer, end-to-end
   acceptance, and deletion of the old path. A foundation deserves its own checkpoint only
   when multiple later slices consume it.
@@ -201,15 +209,17 @@ At wave close, append one compact line to task_plan current state, or state it i
 when there is no plan:
 
 ```text
-wave N — mode=<route> work=<slices> handoff=<count> wall=<observed, e.g. ~18m|unknown>
-wait=<observed review/gate/resource/decision time, e.g. unknown>
+wave N — mode=<route> work=<slices> handoff=<count> [wall=<observed, e.g. ~18m|unknown>]
+[wait=<observed review/gate/resource/decision time, e.g. unknown>]
 ledger=<findings>(<retract-class>) rework=<fixes/time>
 review=<initial reviews/time> re-review=<closure or refreshed-SHA reviews/time>
 re-verify=<writer/root fix checks/time> rounds=<n>
 ```
 
-Use only runtime timestamps or durations explicitly reported by an agent/tool. `wall=~18m`
-and `wait=unknown` are valid. Never reconstruct or guess timing after the fact. Parallel
+Use only runtime timestamps or durations explicitly reported by an agent/tool. Omit timing
+fields with no observation; `wall=~18m` and an explicitly reported `wait=unknown` are valid.
+Never reconstruct or guess timing after the fact. Tool-emitted operation duration is only
+that command's runtime, not wave wall/wait time. Parallel
 durations may overlap. `review` counts initial reviews, `re-review` counts closure or
 refreshed-SHA reviews, and `re-verify` counts writer/root fix checks. Never infer re-review
 from rounds. This is disposable tuning telemetry for communication cost, review
@@ -224,7 +234,7 @@ At every wave close when a plan exists:
 2. keep only open/deferred review findings in the active Finding ledger;
 3. append the per-wave metrics above;
 4. collapse closed review findings into counts plus evidence pointers;
-5. after those semantic updates, run `planning-with-files compact <task-id>`; and
+5. after those semantic updates, run `planning-with-files checkpoint <task-id>`; and
 6. remove disposable artifacts only when their evidence is summarized and no unresolved
    finding points to them.
 

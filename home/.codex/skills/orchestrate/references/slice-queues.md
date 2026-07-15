@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 58
+orchestrate_compat: 60
 ---
 
 # Role pipelines and slice queues
@@ -10,36 +10,38 @@ continuation, maintaining a finding ledger, or recording wave metrics. Read
 
 ## Shared Role Pipeline Contract
 
-Planner, writer, and reviewer are bounded queue consumers. Root is the only producer and
-control plane. Each dispatch or follow-up carries the useful subset of:
+Planner, writer, and reviewer consume bounded ordered items under root control. Planner items
+and hard-critical items remain direct in-band dispatches. A v60 normal writer/reviewer wave
+may instead use the [durable delivery spool](durable-delivery-spool.md), whose files carry only
+already-ready items inside the same frozen bounded wave. Root is its only producer and the
+bound lease holder its only consumer. Each initial dispatch carries the useful subset of:
 
 ```text
 profile: <requested role; runtime-effective role when relevant>
 lease: <role/domain; write scope for writers, immutable scope for reviewers>
 wave + basis: <wave id; exact SHA/ADR/contract assumptions>
-ordered items: <bounded items with dependencies and readiness>
+ordered items or spool binding: <bounded items, or absolute path + generation>
 milestone delivery: <runtime event and kind-specific evidence>
 continue_without_ack: <qualifying outcome and dependency rule>
 stop conditions: <task-specific additions plus profile defaults>
 ```
 
-Item completion is not turn completion. A role first sends its milestone, then consumes the
-next already-ready item when policy permits. It never invents or polls for work. Queue
-exhaustion ends the turn but retains the lease; root resumes the same identity with a delta.
+Item completion is not turn completion. A role sends its milestone before the final response,
+then consumes the next already-ready item when policy permits. It never invents or polls for
+work. Queue exhaustion ends the turn but retains the lease; root resumes it with a delta.
 
-The recommended, not mandatory, turn shape freezes one bounded queue at dispatch; routine
-work is not drip-fed into a running role. Milestones flow outward without acknowledgment,
-then root sends the next batch after turn completion. Mid-turn inbound control remains valid
-for a confirmed major review finding, retract/stop/correction, or a predeclared readiness
-change that does not alter the current item. Count these exceptions as
-`mid-turn-inbound=<n>`; zero is preferred, not required.
+Dispatch is idle-first. Direct mode follows up an idle agent and accumulates ordinary busy
+work until its next turn. Spool mode publishes ready files, checks status once, wakes only an
+idle consumer, and checks once more at its completion event. A running consumer discovers
+routine additions at item boundaries. Confirmed major finding, retract, and invalidation stay
+direct and may interrupt. No work means idle, never filler. Count direct mid-turn exceptions
+as `mid-turn-inbound=<n>`; zero is preferred.
 
-The live queue exists only in agent context (spawn plus follow-up messages). Across sessions,
-the domain packet records the current item, bounded pending items, exact checkpoint, and next
-gate so root can reconcile against Git and resend a delta. Never create a queue file, queue
-manager, receipt, or autonomous coordination controller. An inspector may validate a
-supplied packet or expose Git/plan facts, but must not write workflow state, advance an item,
-dispatch, or infer phase/review from Git/liveness.
+The spool is the sole workflow-file exception: it transports frozen work but does not create
+review debt, prove completion, or advance a phase. Across sessions, task_plan/domain packets
+still carry conclusions and current narrative; root reconciles both narrative and spool
+against Git before republishing or waking. No queue manager, receipt, polling daemon, or
+autonomous controller is allowed.
 
 ## Planner rolling horizon
 
@@ -107,14 +109,13 @@ default. Root may pre-authorize continuation after a non-retract finding only wh
 target is explicitly independent and surface-disjoint; the reviewer still reports the
 finding immediately and never decides its deferral.
 
-Prefer dispatching a bounded batch of packets that are already ready. A newly ready routine
-target waits for same-identity follow-up after queue exhaustion; a predeclared readiness-only
-append may be delivered mid-turn when overlap materially helps and the current review cannot
-change. No ready packet means idle, not Git polling. A runtime-declared slot-free park may
-retain the logical identity without occupying concurrency; otherwise the turn ends and
-follow-up resumes it. Finding closure and refreshed-SHA review return to the same reviewer
-lease. A confirmed major review finding gets immediate notification to root before the
-target's routine verdict so affected work can be stopped.
+Prefer a bounded batch of already-ready packets. In normal v60 mode root may publish a newly
+ready exact-SHA packet into the reviewer's current spool generation without interrupting a
+running review. The reviewer discovers it at the next item boundary. No ready packet means
+idle, not Git polling. A runtime-declared slot-free park may retain identity; otherwise the
+turn ends and root wakes the same lease if its completion-side inspection finds work. Finding
+closure and refreshed-SHA review return to that lease. A confirmed major finding still gets
+immediate direct notification before the routine verdict.
 
 ## Review policy
 
@@ -172,14 +173,14 @@ scope collision pull forward. Never discard useful uncommitted work merely to re
 
 ## Pipelining and review targets
 
-Normal validated checkpoints need not create per-slice review debt. Root follows the frozen
+Normal validated checkpoints need not create per-slice review debt. A queue file does not create review debt. Root follows the frozen
 cadence: promote selected SHAs to `checkpoint_kind=review`, or create one cumulative
 wave-boundary review/self-review. A warm reviewer consumes only complete review targets and
 may pipeline PASS results. Announced commits stay append-only while the writer runs ahead;
 the target 3–5-slice wave (tail/final 1–2) bounds implementation and review accumulation.
 
-Hard-critical slices do not pipeline and normally use one writer slice plus one reviewer
-target per turn. Building on an unreviewed
+Hard-critical slices do not use the durable spool, do not pipeline, and normally use one
+direct writer slice plus one reviewer target per turn. Building on an unreviewed
 persistence/wire/security/hardware change is the compounding risk the model rejects. Named
 review risks pipeline or wait according to their frozen treatment. Planner one-wave-ahead is
 allowed here only as a conditional proposal, never as dependent writer authorization.
@@ -202,10 +203,11 @@ classes never reach this wave because they already stopped or pulled forward.
   needs a stated reason.
 - A source map crossing at least two hard axes or three authority boundaries is oversized.
   Root either splits out shared foundation gates, or freezes one atomic critical vertical
-  with exactly one acceptance domain, 2–4 explicit progress checkpoints, and an exit
-  condition for every dangerous intermediate. The latter still has one final review
-  checkpoint/formal review; progress milestones never become review targets and no dependent
-  slice starts before that final review clears.
+  with exactly one acceptance domain; target 2–4 summarized progress checkpoints and an exit
+  condition for every dangerous intermediate. Root may aggregate low-level events; an
+  immediate major finding notification does not count against this budget. The latter has
+  one final review checkpoint/formal review; progress milestones never become review targets
+  and no dependent slice starts before that final review clears.
 - Prefer a medium vertical slice: one authoritative contract, one real consumer, end-to-end
   acceptance, and deletion of the old path. A foundation deserves its own checkpoint only
   when multiple later slices consume it.

@@ -21,6 +21,10 @@ REFERENCE_CONTRACTS = {
         "Wave-boundary fix wave",
         "Per-wave metrics",
     ),
+    "durable-delivery-spool.md": (
+        "at-least-once",
+        "lost wakeup",
+    ),
     "evidence-and-handoff.md": (
         "Validation anomalies",
         "Session handoff",
@@ -52,7 +56,7 @@ class OrchestrateContractTests(unittest.TestCase):
 
     def test_core_defines_checkpoint_taxonomy_and_run_ahead(self) -> None:
         text = normalized_text(ORCHESTRATE / "SKILL.md")
-        self.assertIn("skill_version: 58", text)
+        self.assertIn("skill_version: 60", text)
         self.assertIn("## Routing fast paths", text)
         self.assertIn("checkpoint_kind", text)
         self.assertIn("progress", text)
@@ -134,20 +138,20 @@ class OrchestrateContractTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path.name):
                 self.assertIn(
-                    "orchestrate_compat: 58", path.read_text(encoding="utf-8")
+                    "orchestrate_compat: 60", path.read_text(encoding="utf-8")
                 )
 
-    def test_role_pipeline_keeps_live_queue_in_context(self) -> None:
+    def test_role_pipeline_limits_the_durable_spool(self) -> None:
         core = normalized_text(ORCHESTRATE / "SKILL.md")
         queues = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
         self.assertIn("Root is the only control plane", core)
-        self.assertIn("Live planner/writer/reviewer queues stay in agent context", core)
-        self.assertIn("No script advances, dequeues, dispatches", core)
+        self.assertIn("three authoritative carriers", core)
+        self.assertIn("durable delivery spool", core)
         self.assertIn("## Shared Role Pipeline Contract", queues)
-        self.assertIn("live queue exists only in agent context", queues)
-        self.assertIn("Never create a queue file, queue manager", queues)
-        self.assertIn("autonomous coordination controller", queues)
-        self.assertIn("must not write workflow state", queues)
+        self.assertIn("already-ready items", queues)
+        self.assertIn("sole workflow-file exception", queues)
+        self.assertIn("autonomous controller", queues)
+        self.assertIn("does not create review debt", queues)
 
     def test_planner_is_exactly_one_wave_ahead(self) -> None:
         queues = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
@@ -245,7 +249,7 @@ class OrchestrateContractTests(unittest.TestCase):
         self.assertIn("checkpoint <task-id>", text)
         self.assertIn("status remains read-only", text)
 
-    def test_v57_aliases_are_stateless_explicit_guards(self) -> None:
+    def test_v59_aliases_are_stateless_explicit_guards(self) -> None:
         core = normalized_text(ORCHESTRATE / "SKILL.md")
         git = normalized_text(ORCHESTRATE / "references" / "git-coordination.md")
         self.assertIn("## Inspection and safety aliases", core)
@@ -267,7 +271,8 @@ class OrchestrateContractTests(unittest.TestCase):
         queues = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
         self.assertIn("at least two hard axes or three authority boundaries", queues)
         self.assertIn("exactly one acceptance domain", queues)
-        self.assertIn("2–4 explicit progress checkpoints", queues)
+        self.assertIn("target 2–4 summarized progress checkpoints", queues)
+        self.assertIn("major finding notification does not count", queues)
         self.assertIn("one final review checkpoint/formal review", queues)
 
     def test_reviewer_parking_does_not_assume_runtime_capability(self) -> None:
@@ -281,27 +286,22 @@ class OrchestrateContractTests(unittest.TestCase):
             self.assertIn("without surrendering the logical lease", reviewer)
             self.assertIn("active concurrency slot", reviewer)
 
-    def test_turn_queue_freeze_is_recommended_not_mandatory(self) -> None:
+    def test_spool_stays_inside_the_frozen_bounded_wave(self) -> None:
         core = normalized_text(ORCHESTRATE / "SKILL.md")
         queues = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
-        self.assertIn("recommended turn shape", core)
-        self.assertIn("frozen bounded queue", core)
-        self.assertIn("not a hard rule", core)
-        self.assertIn("routine work is not drip-fed", queues)
-        self.assertIn("major review finding", queues)
-        self.assertIn("immediate notification", queues)
-        self.assertIn("predeclared readiness", queues)
+        self.assertIn("already-ready normal writer/reviewer items", core)
+        self.assertIn("same frozen bounded wave", queues)
+        self.assertIn("publish", queues)
+        self.assertIn("confirmed major finding", queues)
+        self.assertIn("immediate direct notification", queues)
 
-    def test_work_bearing_delta_uses_followup_without_status_branch(self) -> None:
+    def test_routine_work_uses_spool_and_direct_work_is_exceptional(self) -> None:
         runtime = normalized_text(ORCHESTRATE / "runtime-codex.md")
-        self.assertIn("work-bearing delta", runtime)
-        self.assertIn("always uses `followup_task`", runtime)
-        self.assertIn("running→idle race", runtime)
+        self.assertIn("publish one bounded ready batch", runtime)
+        self.assertIn("use `followup_task` only when", runtime)
+        self.assertIn("completion-side check", runtime)
         self.assertIn("pure notification", runtime)
-        self.assertNotIn(
-            "running role receives an appended ready item by `send_message`/`followup_task`",
-            runtime,
-        )
+        self.assertIn("urgent correction", runtime)
 
     def test_tail_wave_does_not_pad_to_three_slices(self) -> None:
         core = normalized_text(ORCHESTRATE / "SKILL.md")
@@ -320,9 +320,7 @@ class OrchestrateContractTests(unittest.TestCase):
         self.assertIn("status=acquired", git)
         self.assertIn("verify <task>", git)
         self.assertIn("git diff --quiet task/<task> <landed-commit>", git)
-        self.assertIn(
-            "successful evidence must bind to the final integrated tree", core
-        )
+        self.assertIn("evidence must bind to the final integrated tree", core)
         self.assertIn("Any later code change invalidates it", core)
         self.assertNotIn("broadest gate required by the repo and risk** once", core)
 
@@ -359,6 +357,110 @@ class OrchestrateContractTests(unittest.TestCase):
                 for profile in (implementer, reviewer, planner):
                     self.assertIn("Role Pipeline Contract consumer", profile)
                     self.assertIn("continue_without_ack", profile)
+
+    def test_idle_first_dispatch_is_explicit(self) -> None:
+        core = normalized_text(ORCHESTRATE / "SKILL.md")
+        queues = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
+        codex = normalized_text(ORCHESTRATE / "runtime-codex.md")
+        for text in (core, queues, codex):
+            self.assertIn("publish", text)
+            self.assertIn("idle", text)
+            self.assertIn("running", text)
+            self.assertIn("completion", text)
+            self.assertIn("filler", text)
+        self.assertIn("major finding", queues)
+        self.assertIn("may interrupt", queues)
+
+    def test_gate_evidence_has_explicit_scope_and_baseline_relative_outcome(
+        self,
+    ) -> None:
+        evidence = normalized_text(
+            ORCHESTRATE / "references" / "evidence-and-handoff.md"
+        )
+        for field in (
+            "gate_scope: affected | wave | task",
+            "target_sha:",
+            "target_tree:",
+            "covered_surface:",
+            "baseline_sha:",
+            "outcome: pass | baseline-relative | unusable",
+            "invalidated_by:",
+            "replacement_evidence:",
+        ):
+            self.assertIn(field, evidence)
+        self.assertIn("wave gate is provisional", evidence)
+        self.assertIn("task-scoped gate", evidence)
+        self.assertIn("test-only change invalidates", evidence)
+        self.assertIn("repo-predeclared test-delta policy", evidence)
+
+    def test_baseline_relative_gate_is_never_called_pass(self) -> None:
+        evidence = normalized_text(
+            ORCHESTRATE / "references" / "evidence-and-handoff.md"
+        )
+        self.assertIn("same command on an immutable baseline SHA", evidence)
+        self.assertIn("no new errors or changed error families", evidence)
+        self.assertIn("every changed file", evidence)
+        self.assertIn("successful affected gate", evidence)
+        self.assertIn("extra warnings/errors", evidence)
+        self.assertIn("never called PASS", evidence)
+
+    def test_milestone_delivery_is_prefinal_and_lintable(self) -> None:
+        core = normalized_text(ORCHESTRATE / "SKILL.md")
+        codex = normalized_text(ORCHESTRATE / "runtime-codex.md")
+        self.assertIn("orchestrate packet lint", core)
+        self.assertIn("delivery_phase=milestone", codex)
+        self.assertIn("before the final response", codex)
+        self.assertIn("single-item turn", codex)
+        self.assertIn("pre-final checklist", codex)
+        self.assertIn("does not prove delivery ordering", codex)
+        for agents, suffix in ((CODEX_AGENTS, ".toml"), (CLAUDE_AGENTS, ".md")):
+            for role in ("implementer", "reviewer"):
+                profile = normalized_text(agents / f"{role}{suffix}")
+                self.assertIn("pre-final checklist", profile)
+                self.assertIn("delivery_phase=milestone", profile)
+
+    def test_upgrade_boundary_pins_inflight_role_turns(self) -> None:
+        core = normalized_text(ORCHESTRATE / "SKILL.md")
+        delegation = normalized_text(
+            ORCHESTRATE / "references" / "delegation-and-review.md"
+        )
+        for phrase in (
+            "Pin the loaded orchestrate version",
+            "safe control boundary",
+            "in-flight immutable review",
+            "effective delta",
+            "sub-agents never load orchestrate",
+        ):
+            self.assertIn(phrase, delegation)
+        self.assertIn("diff <old-version> <new-version> --runtime", core)
+
+    def test_profiles_declare_compat_and_review_round_contract(self) -> None:
+        for agents, suffix in ((CODEX_AGENTS, ".toml"), (CLAUDE_AGENTS, ".md")):
+            for name in ("contract-planner", "implementer", "reviewer"):
+                profile = normalized_text(agents / f"{name}{suffix}")
+                self.assertIn("orchestrate_compat", profile)
+                self.assertIn("60", profile)
+            reviewer = normalized_text(agents / f"reviewer{suffix}")
+            for field in (
+                "review_round",
+                "review_kind",
+                "initial-full",
+                "refreshed-full",
+                "focused-closure",
+                "closes_findings",
+                "failure_family",
+                "test_model_revision_required",
+            ):
+                self.assertIn(field, reviewer)
+
+    def test_collect_declares_authorization_without_inferring_review(self) -> None:
+        core = normalized_text(ORCHESTRATE / "SKILL.md")
+        git = normalized_text(ORCHESTRATE / "references" / "git-coordination.md")
+        self.assertIn("--authorized-sha", core)
+        self.assertIn("--review-kind", core)
+        self.assertNotIn("--reviewed-sha", core)
+        self.assertIn("declared authorization", git)
+        self.assertIn("does not infer a verdict", git)
 
     def test_tdd_allows_local_cleanup_after_green(self) -> None:
         text = TDD_SKILL.read_text(encoding="utf-8")

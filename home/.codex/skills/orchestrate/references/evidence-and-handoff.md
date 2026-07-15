@@ -1,11 +1,50 @@
 ---
-orchestrate_compat: 58
+orchestrate_compat: 60
 ---
 
 # Evidence and handoff
 
 Read this reference when a gate aborts/times out/crashes, a task needs durable narrative, or
 the root session must hand off.
+
+## Gate evidence scope
+
+Every gate record states what it proves:
+
+```text
+gate_scope: affected | wave | task
+target_sha: <exact commit>
+target_tree: <exact tree>
+covered_surface: <paths/behaviors/gate rationale>
+baseline_sha: <exact immutable baseline | none>
+outcome: pass | baseline-relative | unusable
+invalidated_by: <later commit/change | none>
+replacement_evidence: <evidence id/command | none>
+```
+
+`affected` covers a changed surface, a **wave gate is provisional** while later waves remain,
+and only a usable `task` gate on the landing candidate is final. A wave boundary needs a
+broader gate only when the repo/risk contract names one; it never masquerades as the final
+task-scoped gate.
+
+Any integrated-tree change invalidates prior task evidence by default; a test-only change
+invalidates it too. It may use delta refresh only under a **repo-predeclared test-delta
+policy** that proves production tree/content identity, excludes shared fixture/config
+changes, and requires every new/affected test to pass. Otherwise rerun the broader gate.
+This conservative default is an intentional safety cost, not an inference from filenames.
+
+## Baseline-relative gates
+
+A deterministic broad-gate failure may be `baseline-relative`, never `pass`, only when:
+
+1. root runs the **same command on an immutable baseline SHA**;
+2. the target has **no new errors or changed error families** relative to that baseline;
+3. **every changed file** is covered by a **successful affected gate**;
+4. all **extra warnings/errors** are explicitly classified; and
+5. the failed broad command is **never called PASS**.
+
+Record exact baseline/target counts and families plus replacement evidence. A target
+regression stays blocking. If the comparison is not like-for-like, the gate is `unusable`.
 
 ## Validation anomalies
 
@@ -45,13 +84,13 @@ review-readiness packet.
   Current State directly.
 - A packet never copies decision text. Rewrite it at lease handoffs/checkpoints and delete it
   when the domain completes; task_plan retains the durable phase history.
-- Reports return in-band. Messages carry milestones, findings, and decisions. Files carry
-  evidence only: disposable bulk payloads under
+- Reports return in-band. Messages carry milestones, findings, and decisions. Outside the
+  closed durable-delivery-spool exception, files carry evidence only: disposable bulk payloads under
   `.agent_state/artifacts/<task>/<agent>-<topic>.md`, durable investigator maps in the plan
   directory. Reports include a digest and path; root reads selectively.
-- A file never signals workflow state, carries an instruction, or replaces a report. If root
-  must read a file merely to know the next action, the control plane is wrong. No mandatory
-  per-agent report files.
+- A spool item may carry already-ready work but never its outcome; every other file remains
+  evidence/narrative only. No file replaces a milestone, infers completion, or acts as a
+  controller. There are no mandatory per-agent report files.
 
 ## Session handoff
 
@@ -66,6 +105,9 @@ When root decides to hand off, stop dispatching. Use remaining context to drain:
 4. Update only domain packet/task_plan Current State with branch topology, live worktrees,
    review debt (announced unsigned SHAs), run-ahead position, finding ledger, and unusable
    evidence anomalies. Do not create a separate orchestrate handoff document.
-5. Remove reviewer temp worktrees; keep needed lane worktrees and list them.
-6. The next session first reconciles narrative against `git worktree list`, branches, status,
-   and exact SHAs before dispatching.
+5. Inspect every task spool generation and record only its lease/path/current item pointers in
+   Current State. The spool does not auto-resume: the next root reconciles each item against
+   Git, milestones, open findings, current authority, and lease generation before any wake.
+6. Remove reviewer temp worktrees; keep needed lane worktrees and list them.
+7. The next session first reconciles narrative and spool against `git worktree list`,
+   branches, status, and exact SHAs before dispatching.

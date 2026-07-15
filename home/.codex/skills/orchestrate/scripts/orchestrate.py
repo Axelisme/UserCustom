@@ -1,27 +1,70 @@
 #!/usr/bin/env python3
-"""Inspect orchestrate releases and apply explicit stateless Git safety guards."""
+"""Inspect orchestrate releases and guard explicit Git and delivery-spool actions."""
 
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
+import os
 import re
 import subprocess
+import sys
+import tempfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Sequence
 
 MANIFEST_SCHEMA = 1
+QUEUE_VERSION = 1
 ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 EXACT_SHA_PATTERN = re.compile(r"^[0-9a-fA-F]{40,64}$")
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 COMPAT_PATTERN = re.compile(r"^orchestrate_compat:\s*(\d+)\s*$", re.MULTILINE)
+PROFILE_COMPAT_PATTERN = re.compile(
+    r"^\s*(?:#\s*|<!--\s*)?orchestrate_compat\s*(?:=|:)\s*(\d+)\s*(?:-->)?\s*$",
+    re.MULTILINE,
+)
 VERSION_PATTERN = re.compile(r"^skill_version:\s*(\d+)\s*$", re.MULTILINE)
 PHASE_ROW_PATTERN = re.compile(
     r"^\|\s*(?P<phase>[^|]+?)\s*\|\s*"
     r"(?P<status>pending|in_progress|blocked|completed)\s*\|"
 )
+CHECKPOINT_KINDS = ("progress", "validated", "review")
+FINDING_CLASSES = (
+    "none",
+    "mechanically-propagatable",
+    "design-invalidating",
+    "dangerous-intermediate",
+    "scope-collision",
+)
+REMAINING_UNCERTAINTIES = (
+    "behavior-only",
+    "structural",
+    "hard-critical",
+    "anomaly",
+)
+REVIEW_OUTCOMES = ("pass", "needs_fix", "blocked", "needs_decision")
+REVIEW_KINDS = ("initial-full", "refreshed-full", "focused-closure")
+COLLECT_REVIEW_KINDS = (
+    "different-identity",
+    "focused",
+    "root-spot",
+    "mechanical",
+)
+QUEUE_ROLES = ("writer", "reviewer")
+QUEUE_FIELDS = {
+    "queue_version",
+    "item_id",
+    "order",
+    "role",
+    "lease_id",
+    "lease_generation",
+    "basis_sha",
+    "hard_critical_axes",
+}
 
 
 class OrchestrateError(RuntimeError):
@@ -135,6 +178,11 @@ def profile_standing_orders(text: str, suffix: str) -> str:
     return text
 
 
+def profile_compat(text: str) -> int | None:
+    match = PROFILE_COMPAT_PATTERN.search(text)
+    return int(match.group(1)) if match else None
+
+
 def document_paths(skill_dir: Path) -> list[Path]:
     paths = [
         skill_dir / "SKILL.md",
@@ -177,13 +225,17 @@ def build_manifest(skill_dir: Path, version: int) -> dict[str, Any]:
             continue
         data = path.read_bytes()
         text = data.decode("utf-8")
-        profiles[path.relative_to(home).as_posix()] = {
+        entry = {
             "bytes": len(data),
             "sha256": sha256_bytes(data),
             "standing_orders_sha256": normalized_sha256(
                 profile_standing_orders(text, path.suffix)
             ),
         }
+        compat = profile_compat(text)
+        if compat is not None:
+            entry["orchestrate_compat"] = compat
+        profiles[path.relative_to(home).as_posix()] = entry
     return {
         "schema_version": MANIFEST_SCHEMA,
         "skill_version": version,
@@ -259,6 +311,12 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
         compat = entry.get("orchestrate_compat")
         if compat is not None and compat != version:
             errors.append(f"compat mismatch: {name}={compat}, expected {version}")
+    for name, entry in observed["profiles"].items():
+        compat = entry.get("orchestrate_compat")
+        if compat != version:
+            errors.append(
+                f"profile compat mismatch: {name}={compat}, expected {version}"
+            )
     if manifest.get("orchestrate_compat") != version:
         errors.append("manifest orchestrate_compat does not match SKILL.md")
     return {
@@ -323,7 +381,28 @@ def command_diff(args: argparse.Namespace) -> dict[str, Any]:
     skill_dir = Path(args.skill_dir).resolve()
     old = load_manifest(skill_dir, args.old_version)
     new = load_manifest(skill_dir, args.new_version)
-    return {"ok": True, **compare_manifests(old, new)}
+    comparison = compare_manifests(old, new)
+    if args.runtime is not None:
+        runtime_document = f"runtime-{args.runtime}.md"
+        profile_prefix = ".codex/" if args.runtime == "codex" else ".claude/"
+        comparison["changed_documents"] = [
+            document
+            for document in comparison["changed_documents"]
+            if not document["path"].startswith("runtime-")
+            or document["path"] == runtime_document
+        ]
+        comparison["must_reread"] = [
+            path
+            for path in comparison["must_reread"]
+            if not path.startswith("runtime-") or path == runtime_document
+        ]
+        comparison["changed_profiles"] = [
+            path
+            for path in comparison["changed_profiles"]
+            if path.startswith(profile_prefix)
+        ]
+        comparison["runtime"] = args.runtime
+    return {"ok": True, **comparison}
 
 
 def command_identity(args: argparse.Namespace) -> dict[str, Any]:
@@ -334,22 +413,31 @@ def command_identity(args: argparse.Namespace) -> dict[str, Any]:
     except OSError as exc:
         raise OrchestrateError(f"cannot read profile {profile}: {exc}") from exc
     text = data.decode("utf-8")
+    profile_hash = sha256_bytes(data)
     same_identity: bool | None = None
     if args.writer_agent_id is not None:
         same_identity = args.agent_id == args.writer_agent_id
+    current_version = skill_version(skill_dir)
+    observed_compat = profile_compat(text)
     profile_manifest_version: int | None = None
+    manifest_profiles = load_manifest(skill_dir, current_version)["profiles"]
     try:
         relative_profile = profile.relative_to(source_home(skill_dir)).as_posix()
-        current_version = skill_version(skill_dir)
-        expected_profile = load_manifest(skill_dir, current_version)["profiles"].get(
-            relative_profile
-        )
-        if expected_profile and expected_profile["sha256"] == sha256_bytes(data):
+        expected_profile = manifest_profiles.get(relative_profile)
+        if expected_profile and expected_profile["sha256"] == profile_hash:
             profile_manifest_version = current_version
     except ValueError:
         pass
+    if profile_manifest_version is None and any(
+        entry["sha256"] == profile_hash for entry in manifest_profiles.values()
+    ):
+        profile_manifest_version = current_version
     different_identity = None if same_identity is None else not same_identity
     requirement_checks: dict[str, bool] = {}
+    requirement_checks["profile_compat"] = observed_compat == current_version
+    requirement_checks["profile_release_match"] = (
+        profile_manifest_version == current_version
+    )
     if args.require_different_identity:
         requirement_checks["different_identity"] = different_identity is True
     return {
@@ -358,8 +446,10 @@ def command_identity(args: argparse.Namespace) -> dict[str, Any]:
         "effective_identity": args.effective,
         "agent_id": args.agent_id,
         "profile": str(profile),
-        "profile_sha256": sha256_bytes(data),
+        "profile_sha256": profile_hash,
         "profile_manifest_version": profile_manifest_version,
+        "profile_compat": observed_compat,
+        "profile_compat_matches_current": observed_compat == current_version,
         "standing_orders_sha256": normalized_sha256(
             profile_standing_orders(text, profile.suffix)
         ),
@@ -373,6 +463,164 @@ def command_identity(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def read_packet(path: str) -> tuple[dict[str, Any], bytes]:
+    try:
+        data = sys.stdin.buffer.read() if path == "-" else Path(path).read_bytes()
+        payload = json.loads(data)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise OrchestrateError(f"cannot read packet JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise OrchestrateError("packet JSON must be an object")
+    return payload, data
+
+
+def require_packet_fields(
+    packet: dict[str, Any], fields: Sequence[str], errors: list[str]
+) -> None:
+    for field in fields:
+        if field not in packet:
+            errors.append(f"missing required field: {field}")
+
+
+def validate_enum(
+    packet: dict[str, Any],
+    field: str,
+    choices: Sequence[str],
+    errors: list[str],
+) -> None:
+    if field in packet and packet[field] not in choices:
+        errors.append(f"{field} must be one of: {', '.join(choices)}")
+
+
+def validate_exact_sha_field(
+    packet: dict[str, Any], field: str, errors: list[str]
+) -> None:
+    value = packet.get(field)
+    if value is not None and (
+        not isinstance(value, str) or not EXACT_SHA_PATTERN.fullmatch(value)
+    ):
+        errors.append(f"{field} must be an exact 40-64 character hexadecimal SHA")
+
+
+def validate_writer_packet(packet: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    require_packet_fields(
+        packet,
+        ("delivery_phase", "checkpoint_kind", "next", "finding_class"),
+        errors,
+    )
+    if packet.get("delivery_phase") != "milestone":
+        errors.append("delivery_phase must be milestone, before the final response")
+    validate_enum(packet, "checkpoint_kind", CHECKPOINT_KINDS, errors)
+    validate_enum(packet, "finding_class", FINDING_CLASSES, errors)
+    checkpoint = packet.get("checkpoint_kind")
+    if checkpoint == "progress":
+        require_packet_fields(packet, ("completion", "stop_reason"), errors)
+        for forbidden in ("sha", "validation", "remaining_uncertainty"):
+            if forbidden in packet:
+                errors.append(f"progress packet must omit {forbidden}")
+    elif checkpoint in ("validated", "review"):
+        require_packet_fields(
+            packet, ("sha", "validation", "remaining_uncertainty"), errors
+        )
+        validate_exact_sha_field(packet, "sha", errors)
+        validate_enum(
+            packet,
+            "remaining_uncertainty",
+            REMAINING_UNCERTAINTIES,
+            errors,
+        )
+        validation = packet.get("validation")
+        if validation is not None and (
+            not isinstance(validation, str) or not validation.strip()
+        ):
+            errors.append("validation must be a non-empty evidence string")
+    return errors
+
+
+def validate_reviewer_packet(packet: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    require_packet_fields(
+        packet,
+        (
+            "delivery_phase",
+            "base_sha",
+            "target_sha",
+            "frozen_contract",
+            "changed_surface",
+            "outcome",
+            "findings",
+            "evidence",
+            "next",
+            "review_round",
+            "review_kind",
+            "closes_findings",
+            "failure_family",
+            "test_model_revision_required",
+        ),
+        errors,
+    )
+    if packet.get("delivery_phase") != "milestone":
+        errors.append("delivery_phase must be milestone, before the final response")
+    for field in ("base_sha", "target_sha"):
+        validate_exact_sha_field(packet, field, errors)
+    for field in ("frozen_contract", "changed_surface", "evidence", "next"):
+        value = packet.get(field)
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            errors.append(f"{field} must be a non-empty string")
+    validate_enum(packet, "outcome", REVIEW_OUTCOMES, errors)
+    validate_enum(packet, "review_kind", REVIEW_KINDS, errors)
+    review_round = packet.get("review_round")
+    if review_round is not None and (
+        isinstance(review_round, bool)
+        or not isinstance(review_round, int)
+        or review_round < 1
+    ):
+        errors.append("review_round must be an integer >= 1")
+    review_kind = packet.get("review_kind")
+    if review_kind == "initial-full" and review_round != 1:
+        errors.append("initial-full requires review_round=1")
+    if review_kind in ("refreshed-full", "focused-closure") and (
+        not isinstance(review_round, int) or review_round < 2
+    ):
+        errors.append(f"{review_kind} requires review_round >= 2")
+    closes = packet.get("closes_findings")
+    if closes is not None and (
+        not isinstance(closes, list)
+        or any(not isinstance(item, str) or not item for item in closes)
+    ):
+        errors.append("closes_findings must be a list of finding ids")
+    if review_kind in ("refreshed-full", "focused-closure") and closes == []:
+        errors.append(f"{review_kind} must name closes_findings")
+    failure_family = packet.get("failure_family")
+    if failure_family is not None and (
+        not isinstance(failure_family, str) or not failure_family.strip()
+    ):
+        errors.append("failure_family must be a non-empty string or 'none'")
+    if "test_model_revision_required" in packet and not isinstance(
+        packet["test_model_revision_required"], bool
+    ):
+        errors.append("test_model_revision_required must be boolean")
+    return errors
+
+
+def command_packet_lint(args: argparse.Namespace) -> dict[str, Any]:
+    packet, data = read_packet(args.input)
+    errors = (
+        validate_writer_packet(packet)
+        if args.role == "writer"
+        else validate_reviewer_packet(packet)
+    )
+    return {
+        "ok": not errors,
+        "operation": "packet-lint",
+        "role": args.role,
+        "input_sha256": sha256_bytes(data),
+        "delivery_inferred": False,
+        "errors": errors,
+    }
+
+
 def common_repo_root(root: Path) -> Path:
     common = Path(
         run_git(
@@ -380,6 +628,476 @@ def common_repo_root(root: Path) -> Path:
         ).stdout.strip()
     )
     return common.parent if common.name == ".git" else common
+
+
+def queue_directory(
+    root: Path,
+    *,
+    task_id: str,
+    lease_id: str,
+    generation: int,
+) -> tuple[Path, Path]:
+    common = common_repo_root(root).resolve()
+    task_id = require_identifier(task_id, label="task-id")
+    lease_id = require_identifier(lease_id, label="lease-id")
+    if generation < 1 or generation > 9999:
+        raise OrchestrateError("generation must be between 1 and 9999")
+    state = common / ".agent_state"
+    paths = (
+        state,
+        state / "orchestrate",
+        state / "orchestrate" / task_id,
+        state / "orchestrate" / task_id / "queues",
+        state / "orchestrate" / task_id / "queues" / lease_id,
+    )
+    for path in paths:
+        if path.is_symlink():
+            raise OrchestrateError(
+                f"queue path component must not be a symlink: {path}"
+            )
+    queue = paths[-1] / f"g{generation:04d}"
+    if queue.is_symlink():
+        raise OrchestrateError(f"queue directory must not be a symlink: {queue}")
+    ignored = run_git(
+        common,
+        "check-ignore",
+        "--no-index",
+        "--quiet",
+        "--",
+        ".agent_state/orchestrate/.queue-probe",
+        check=False,
+    )
+    if ignored.returncode != 0:
+        raise OrchestrateError(
+            ".agent_state/orchestrate must be gitignored before queue use"
+        )
+    return common, queue
+
+
+def read_queue_input(path_value: str) -> tuple[bytes, Path]:
+    supplied = Path(path_value)
+    if supplied.is_symlink():
+        raise OrchestrateError(f"queue input must not be a symlink: {supplied}")
+    path = supplied.resolve()
+    if not path.is_file():
+        raise OrchestrateError(f"queue input must be a regular file: {path}")
+    return path.read_bytes(), path
+
+
+def parse_queue_item(data: bytes, *, root: Path, source: str) -> dict[str, Any]:
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise OrchestrateError(f"queue item is not UTF-8: {source}") from exc
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        raise OrchestrateError(f"queue item requires YAML-style front matter: {source}")
+    try:
+        end = lines.index("---", 1)
+    except ValueError as exc:
+        raise OrchestrateError(
+            f"queue item front matter is not closed: {source}"
+        ) from exc
+    fields: dict[str, str] = {}
+    for line in lines[1:end]:
+        if not line.strip():
+            continue
+        key, separator, value = line.partition(":")
+        key = key.strip()
+        value = value.strip()
+        if not separator or not key or not value:
+            raise OrchestrateError(f"malformed queue front matter line: {line!r}")
+        if key in fields:
+            raise OrchestrateError(f"duplicate queue front matter field: {key}")
+        fields[key] = value
+    missing = sorted(QUEUE_FIELDS - fields.keys())
+    unexpected = sorted(fields.keys() - QUEUE_FIELDS)
+    if missing or unexpected:
+        detail = []
+        if missing:
+            detail.append(f"missing={','.join(missing)}")
+        if unexpected:
+            detail.append(f"unexpected={','.join(unexpected)}")
+        raise OrchestrateError(f"invalid queue front matter ({'; '.join(detail)})")
+    try:
+        queue_version = int(fields["queue_version"])
+        order = int(fields["order"])
+        generation = int(fields["lease_generation"])
+    except ValueError as exc:
+        raise OrchestrateError(
+            "queue_version, order, and lease_generation must be integers"
+        ) from exc
+    if queue_version != QUEUE_VERSION:
+        raise OrchestrateError(
+            f"unsupported queue_version={queue_version}; expected {QUEUE_VERSION}"
+        )
+    if order < 0 or order > 999999:
+        raise OrchestrateError("queue order must be between 0 and 999999")
+    if generation < 1 or generation > 9999:
+        raise OrchestrateError("lease_generation must be between 1 and 9999")
+    item_id = require_identifier(fields["item_id"], label="item-id")
+    lease_id = require_identifier(fields["lease_id"], label="lease-id")
+    role = fields["role"]
+    if role not in QUEUE_ROLES:
+        raise OrchestrateError(
+            f"queue role must be a normal writer/reviewer role: {role!r}"
+        )
+    if fields["hard_critical_axes"] != "none":
+        raise OrchestrateError(
+            "v60 durable queues accept normal writer/reviewer work only; "
+            "hard_critical_axes must be none"
+        )
+    basis_sha = exact_commit(root, fields["basis_sha"], label="basis_sha")
+    if not "\n".join(lines[end + 1 :]).strip():
+        raise OrchestrateError(f"queue item body is empty: {source}")
+    return {
+        "queue_version": queue_version,
+        "item_id": item_id,
+        "order": order,
+        "role": role,
+        "lease_id": lease_id,
+        "lease_generation": generation,
+        "basis_sha": basis_sha,
+        "hard_critical_axes": "none",
+    }
+
+
+def validate_queue_binding(
+    item: dict[str, Any],
+    *,
+    role: str,
+    lease_id: str,
+    generation: int,
+) -> None:
+    expected = {
+        "role": role,
+        "lease_id": lease_id,
+        "lease_generation": generation,
+    }
+    for field, value in expected.items():
+        if item[field] != value:
+            raise OrchestrateError(
+                f"queue item {field}={item[field]!r}, expected {value!r}"
+            )
+
+
+def queue_filename(item: dict[str, Any]) -> str:
+    return f"{item['order']:06d}-{item['item_id']}.md"
+
+
+def queue_item_evidence(
+    item: dict[str, Any], *, path: Path, data: bytes
+) -> dict[str, Any]:
+    return {
+        **item,
+        "path": str(path),
+        "sha256": sha256_bytes(data),
+    }
+
+
+def scan_queue(
+    root: Path,
+    directory: Path,
+    *,
+    role: str,
+    lease_id: str,
+    generation: int,
+) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+    if not directory.exists():
+        return [], [], []
+    if directory.is_symlink() or not directory.is_dir():
+        raise OrchestrateError(f"queue path must be a directory: {directory}")
+    items: list[dict[str, Any]] = []
+    pending: list[str] = []
+    unexpected: list[str] = []
+    seen_ids: set[str] = set()
+    seen_orders: set[int] = set()
+    for path in sorted(directory.iterdir(), key=lambda item: item.name):
+        if path.name.startswith(".") and ".pending-" in path.name:
+            pending.append(path.name)
+            continue
+        if path.suffix != ".md" or path.is_symlink() or not path.is_file():
+            unexpected.append(path.name)
+            continue
+        data = path.read_bytes()
+        item = parse_queue_item(data, root=root, source=str(path))
+        validate_queue_binding(
+            item, role=role, lease_id=lease_id, generation=generation
+        )
+        expected_name = queue_filename(item)
+        if path.name != expected_name:
+            raise OrchestrateError(
+                f"queue filename {path.name!r}, expected {expected_name!r}"
+            )
+        if item["item_id"] in seen_ids:
+            raise OrchestrateError(f"duplicate queue item_id: {item['item_id']}")
+        if item["order"] in seen_orders:
+            raise OrchestrateError(f"duplicate queue order: {item['order']}")
+        seen_ids.add(item["item_id"])
+        seen_orders.add(item["order"])
+        items.append(queue_item_evidence(item, path=path, data=data))
+    items.sort(key=lambda item: (item["order"], item["item_id"]))
+    return items, pending, unexpected
+
+
+def lock_queue_directory(directory: Path, *, exclusive: bool) -> int:
+    descriptor = os.open(directory, os.O_RDONLY)
+    try:
+        fcntl.flock(
+            descriptor,
+            fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH,
+        )
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def unlock_queue_directory(descriptor: int) -> None:
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+    finally:
+        os.close(descriptor)
+
+
+def queue_operation_base(
+    *,
+    operation: str,
+    root: Path,
+    directory: Path,
+    task_id: str,
+    role: str,
+    lease_id: str,
+    generation: int,
+    started: float,
+) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "operation": operation,
+        "root": str(root),
+        "task_id": task_id,
+        "role": role,
+        "lease_id": lease_id,
+        "lease_generation": generation,
+        "queue_path": str(directory),
+        "queue_version": QUEUE_VERSION,
+        "completion_inferred": False,
+        "observed_at": datetime.now(UTC).isoformat(),
+        "duration_ms": round((time.monotonic() - started) * 1000),
+    }
+
+
+def command_queue_inspect(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    requested_root = Path(args.root).resolve()
+    root, directory = queue_directory(
+        requested_root,
+        task_id=args.task_id,
+        lease_id=args.lease_id,
+        generation=args.generation,
+    )
+    if directory.exists():
+        descriptor = lock_queue_directory(directory, exclusive=False)
+        try:
+            items, pending, unexpected = scan_queue(
+                root,
+                directory,
+                role=args.role,
+                lease_id=args.lease_id,
+                generation=args.generation,
+            )
+        finally:
+            unlock_queue_directory(descriptor)
+    else:
+        items, pending, unexpected = [], [], []
+    return {
+        **queue_operation_base(
+            operation="queue-inspect",
+            root=root,
+            directory=directory,
+            task_id=args.task_id,
+            role=args.role,
+            lease_id=args.lease_id,
+            generation=args.generation,
+            started=started,
+        ),
+        "items": items,
+        "pending_artifacts": pending,
+        "unexpected_artifacts": unexpected,
+    }
+
+
+def command_queue_publish(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    requested_root = Path(args.root).resolve()
+    root, directory = queue_directory(
+        requested_root,
+        task_id=args.task_id,
+        lease_id=args.lease_id,
+        generation=args.generation,
+    )
+    candidates: list[tuple[dict[str, Any], bytes]] = []
+    seen_ids: set[str] = set()
+    seen_orders: set[int] = set()
+    for input_path in args.input:
+        data, source = read_queue_input(input_path)
+        item = parse_queue_item(data, root=root, source=str(source))
+        validate_queue_binding(
+            item,
+            role=args.role,
+            lease_id=args.lease_id,
+            generation=args.generation,
+        )
+        if item["item_id"] in seen_ids:
+            raise OrchestrateError(f"duplicate input item_id: {item['item_id']}")
+        if item["order"] in seen_orders:
+            raise OrchestrateError(f"duplicate input order: {item['order']}")
+        seen_ids.add(item["item_id"])
+        seen_orders.add(item["order"])
+        candidates.append((item, data))
+    candidates.sort(
+        key=lambda candidate: (candidate[0]["order"], candidate[0]["item_id"])
+    )
+    directory.mkdir(parents=True, exist_ok=True)
+    if directory.is_symlink():
+        raise OrchestrateError(f"queue directory must not be a symlink: {directory}")
+    descriptor = lock_queue_directory(directory, exclusive=True)
+    try:
+        existing, pending, unexpected = scan_queue(
+            root,
+            directory,
+            role=args.role,
+            lease_id=args.lease_id,
+            generation=args.generation,
+        )
+        if pending or unexpected:
+            raise OrchestrateError(
+                "queue contains unreconciled artifacts; inspect before publishing"
+            )
+        existing_ids = {item["item_id"] for item in existing}
+        existing_orders = {item["order"] for item in existing}
+        for item, _ in candidates:
+            destination = directory / queue_filename(item)
+            if (
+                destination.exists()
+                or item["item_id"] in existing_ids
+                or item["order"] in existing_orders
+            ):
+                raise OrchestrateError(
+                    f"queue item already exists: {item['item_id']} order={item['order']}"
+                )
+        published: list[dict[str, Any]] = []
+        for item, data in candidates:
+            destination = directory / queue_filename(item)
+            handle, temporary_name = tempfile.mkstemp(
+                prefix=f".{destination.name}.pending-",
+                dir=directory,
+            )
+            temporary = Path(temporary_name)
+            try:
+                with os.fdopen(handle, "wb") as stream:
+                    stream.write(data)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                if destination.exists():
+                    raise OrchestrateError(f"queue destination appeared: {destination}")
+                os.replace(temporary, destination)
+                os.fsync(descriptor)
+            finally:
+                if temporary.exists():
+                    temporary.unlink()
+            published.append(queue_item_evidence(item, path=destination, data=data))
+    finally:
+        unlock_queue_directory(descriptor)
+    return {
+        **queue_operation_base(
+            operation="queue-publish",
+            root=root,
+            directory=directory,
+            task_id=args.task_id,
+            role=args.role,
+            lease_id=args.lease_id,
+            generation=args.generation,
+            started=started,
+        ),
+        "items": published,
+        "producer_authority_inferred": False,
+        "readiness_inferred": False,
+    }
+
+
+def command_queue_remove(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    requested_root = Path(args.root).resolve()
+    root, directory = queue_directory(
+        requested_root,
+        task_id=args.task_id,
+        lease_id=args.lease_id,
+        generation=args.generation,
+    )
+    item_id = require_identifier(args.item_id, label="item-id")
+    if args.order < 0 or args.order > 999999:
+        raise OrchestrateError("queue order must be between 0 and 999999")
+    if not SHA256_PATTERN.fullmatch(args.expected_sha256):
+        raise OrchestrateError(
+            "expected-sha256 must be 64 lowercase hexadecimal digits"
+        )
+    stale_reconciliation = bool(args.stale_reconciliation_confirmed)
+    retraction_reason = (args.reason or "").strip()
+    if stale_reconciliation and (
+        not args.consumer_ended_confirmed or not retraction_reason
+    ):
+        raise OrchestrateError(
+            "stale reconciliation requires --consumer-ended-confirmed and --reason"
+        )
+    if not directory.is_dir() or directory.is_symlink():
+        raise OrchestrateError(f"queue directory not found: {directory}")
+    descriptor = lock_queue_directory(directory, exclusive=True)
+    try:
+        destination = directory / f"{args.order:06d}-{item_id}.md"
+        if destination.is_symlink() or not destination.is_file():
+            raise OrchestrateError(f"queue item not found: {destination}")
+        data = destination.read_bytes()
+        observed_sha256 = sha256_bytes(data)
+        if observed_sha256 != args.expected_sha256:
+            raise OrchestrateError(
+                "queue item hash mismatch; retain the item and reconcile before retrying"
+            )
+        item = parse_queue_item(data, root=root, source=str(destination))
+        validate_queue_binding(
+            item,
+            role=args.role,
+            lease_id=args.lease_id,
+            generation=args.generation,
+        )
+        if item["item_id"] != item_id or item["order"] != args.order:
+            raise OrchestrateError("queue item envelope does not match removal request")
+        destination.unlink()
+        os.fsync(descriptor)
+    finally:
+        unlock_queue_directory(descriptor)
+    return {
+        **queue_operation_base(
+            operation="queue-remove",
+            root=root,
+            directory=directory,
+            task_id=args.task_id,
+            role=args.role,
+            lease_id=args.lease_id,
+            generation=args.generation,
+            started=started,
+        ),
+        "item_id": item_id,
+        "order": args.order,
+        "removed_sha256": observed_sha256,
+        "terminal_delivery_declared": bool(args.terminal_delivery_confirmed),
+        "terminal_delivery_inferred": False,
+        "removal_authorization": (
+            "stale-reconciliation" if stale_reconciliation else "terminal-delivery"
+        ),
+        "consumer_ended_declared": bool(args.consumer_ended_confirmed),
+        "retraction_reason": retraction_reason if stale_reconciliation else None,
+    }
 
 
 def managed_worktree_root(root: Path) -> Path:
@@ -551,9 +1269,9 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     require_task_lane_refs(args.task_ref, args.lane_ref)
     expected = exact_commit(root, args.expected_lane_sha, label="expected lane SHA")
-    reviewed = exact_commit(root, args.reviewed_sha, label="reviewed SHA")
-    if expected != reviewed:
-        raise OrchestrateError("reviewed SHA differs from expected lane SHA")
+    authorized = exact_commit(root, args.authorized_sha, label="authorized SHA")
+    if expected != authorized:
+        raise OrchestrateError("authorized SHA differs from expected lane SHA")
     current_branch = run_git(root, "symbolic-ref", "--short", "HEAD").stdout.strip()
     if current_branch != args.task_ref:
         raise OrchestrateError(
@@ -581,7 +1299,9 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
         "operation": "collect",
         "task_ref": args.task_ref,
         "lane_ref": args.lane_ref,
-        "reviewed_sha": reviewed,
+        "authorized_sha": authorized,
+        "declared_review_kind": args.review_kind,
+        "verdict_inferred": False,
         "before": before,
         "preflight_tree": merge_tree,
         **evidence,
@@ -751,6 +1471,7 @@ def build_parser() -> argparse.ArgumentParser:
     diff = commands.add_parser("diff", help="compare two bundled release manifests")
     diff.add_argument("old_version", type=int)
     diff.add_argument("new_version", type=int)
+    diff.add_argument("--runtime", choices=("codex", "claude"))
     diff.set_defaults(handler=command_diff)
 
     identity = commands.add_parser(
@@ -768,6 +1489,58 @@ def build_parser() -> argparse.ArgumentParser:
         default="unknown",
     )
     identity.set_defaults(handler=command_identity)
+
+    packet = commands.add_parser("packet", help="lint supplied role packets")
+    packet_commands = packet.add_subparsers(dest="packet_command", required=True)
+    packet_lint = packet_commands.add_parser("lint")
+    packet_lint.add_argument("--role", choices=("writer", "reviewer"), required=True)
+    packet_lint.add_argument(
+        "--input", required=True, help="packet JSON path, or '-' for stdin"
+    )
+    packet_lint.set_defaults(handler=command_packet_lint)
+
+    queue = commands.add_parser(
+        "queue", help="guard the bounded per-agent durable delivery spool"
+    )
+    queue_commands = queue.add_subparsers(dest="queue_command", required=True)
+
+    def add_queue_binding(command: argparse.ArgumentParser) -> None:
+        add_root(command)
+        command.add_argument("--task-id", required=True)
+        command.add_argument("--role", choices=QUEUE_ROLES, required=True)
+        command.add_argument("--lease-id", required=True)
+        command.add_argument("--generation", type=int, required=True)
+
+    queue_publish = queue_commands.add_parser(
+        "publish", help="atomically publish immutable ready item files"
+    )
+    add_queue_binding(queue_publish)
+    queue_publish.add_argument("--input", action="append", required=True)
+    queue_publish.set_defaults(handler=command_queue_publish)
+
+    queue_inspect = queue_commands.add_parser(
+        "inspect", help="read and validate one lease generation without mutation"
+    )
+    add_queue_binding(queue_inspect)
+    queue_inspect.set_defaults(handler=command_queue_inspect)
+
+    queue_remove = queue_commands.add_parser(
+        "remove", help="remove one exact terminal or root-reconciled stale item"
+    )
+    add_queue_binding(queue_remove)
+    queue_remove.add_argument("--item-id", required=True)
+    queue_remove.add_argument("--order", type=int, required=True)
+    queue_remove.add_argument("--expected-sha256", required=True)
+    removal_authorization = queue_remove.add_mutually_exclusive_group(required=True)
+    removal_authorization.add_argument(
+        "--terminal-delivery-confirmed", action="store_true"
+    )
+    removal_authorization.add_argument(
+        "--stale-reconciliation-confirmed", action="store_true"
+    )
+    queue_remove.add_argument("--consumer-ended-confirmed", action="store_true")
+    queue_remove.add_argument("--reason")
+    queue_remove.set_defaults(handler=command_queue_remove)
 
     status = commands.add_parser(
         "status", help="summarize plan plus observed Git topology"
@@ -806,13 +1579,14 @@ def build_parser() -> argparse.ArgumentParser:
     cleanup.set_defaults(handler=command_review_cleanup)
 
     collect = commands.add_parser(
-        "collect", help="preflight and merge one reviewed exact lane SHA"
+        "collect", help="preflight and merge one explicitly authorized exact lane SHA"
     )
     add_root(collect)
     collect.add_argument("--task-ref", required=True)
     collect.add_argument("--lane-ref", required=True)
     collect.add_argument("--expected-lane-sha", required=True)
-    collect.add_argument("--reviewed-sha", required=True)
+    collect.add_argument("--authorized-sha", required=True)
+    collect.add_argument("--review-kind", choices=COLLECT_REVIEW_KINDS, required=True)
     collect.set_defaults(handler=command_collect)
 
     release = commands.add_parser("release-manifest", help=argparse.SUPPRESS)

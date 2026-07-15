@@ -1,26 +1,26 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 58
+skill_version: 60
 ---
 
 # Orchestrate
 
-Plan, delegate, integrate, and verify repo-wide work. Coordination state lives in exactly
-three native carriers: **Git** (code and branch topology), **agent context** (work in
-progress), and the **plan directory** (cross-session narrative). Never add workflow state
-files, receipts, or an autonomous coordination controller. Read-only inspectors and explicit
-stateless Git safety adapters may expose those native carriers, but never infer review,
-dispatch, phase, or queue transitions. The ephemeral merge slot (`scripts/merge_slot.py`,
-lock + FIFO only) likewise stores no task state.
+Plan, delegate, integrate, and verify repo-wide work. Authority lives in three authoritative
+carriers: **Git** (code/topology), **agent context** (active reasoning), and the **plan
+directory** (cross-session narrative). One closed transport exception is the task-local
+**durable delivery spool**: immutable, already-ready normal writer/reviewer items. It is
+at-least-once delivery, not workflow authority. Queue absence is not completion evidence.
 
-Root is the only control plane. Live planner/writer/reviewer queues stay in agent context;
-Git proves checkpoints and the plan preserves only cross-session conclusions/current state.
-No script advances, dequeues, dispatches, or infers a role queue.
+Root is the only control plane. The spool never represents readiness, validation,
+review, findings, phase, collection, or landing and has no autonomous controller. Read-only
+inspectors and explicit safety adapters may expose or mutate only their named primitive; they
+never infer a transition. The ephemeral merge slot (lock + FIFO) likewise stores no task
+state.
 
 This skill is **root-only**: sub-agents do not load it. Standing role orders live in role
-profiles; task facts (objective, SHA, scope, queue, evidence) live in spawn/follow-up prompts.
-A rule a sub-agent needs belongs in its profile or prompt, never only here.
+profiles; prompts carry the lease/binding and either an in-band item or an absolute spool
+path. A rule a sub-agent needs belongs in its profile or prompt, never only here.
 
 Except for the closed list below, these are defaults rather than a workflow state machine.
 Choose the cheapest route that retires the actual uncertainty and state a non-obvious
@@ -29,8 +29,9 @@ deviation briefly.
 ## Hard rules (this is all of them)
 
 1. A branch that has not passed targeted acceptance is not merged. Only the integration owner
-   runs the **broadest gate required by the repo and risk**; its successful evidence must bind
-   to the final integrated tree. Any later code change invalidates it and requires a new run.
+   runs the **broadest gate required by the repo and risk**; task-scoped `pass` or qualified
+   `baseline-relative` evidence must bind to the final integrated tree. Any later code change
+   invalidates it by default.
    Lanes, writers, and reviewers do not duplicate that gate. If that is not the full suite,
    record the selected broader gate and rationale.
 2. `hard_critical_axes` is the closed list **hardware operation, persistence/migration,
@@ -71,6 +72,7 @@ triggered document completely.
 | create/change task or lane branches, use worktrees, collect/delete lanes, or land | [Git coordination and landing](references/git-coordination.md) |
 | spawn/follow-up/interrupt/wait for agents, assign roles, or request/close review | [Delegation and review](references/delegation-and-review.md), then the matching `runtime-<runtime>.md` before the first agent action |
 | dispatch more than one role item, use planner/writer/reviewer pipelines, a finding ledger, or wave metrics | [Slice queues](references/slice-queues.md) |
+| create, inspect, consume, recover, or rebind a filesystem role queue | [Durable delivery spool](references/durable-delivery-spool.md) plus Slice queues |
 | a gate aborts/times out/crashes, the task needs durable narrative, or the session must hand off | [Evidence and handoff](references/evidence-and-handoff.md) |
 
 Pure Q&A and root-only read work need no reference. A single-writer change reads Git
@@ -92,7 +94,8 @@ coordination only when branch or landing operations are actually needed.
 5. **Verify.** Run targeted evidence and review in proportion to the changed surface. The
    integration owner runs the repo/risk-required broader gate on the final tree; a failure or
    later code change requires a fresh final-tree run. Record the gate/rationale when it is not
-   the full suite. An aborted or unusable gate is never a pass.
+   the full suite. Qualified baseline-relative evidence is usable but never called pass; an
+   aborted or unusable gate is neither.
 6. **Land and close.** Obtain explicit authority before persistence landing, squash once,
    clean task-owned worktrees/branches, update durable narrative/backlog when applicable, and
    report decisions plus evidence.
@@ -110,27 +113,29 @@ coordination only when branch or landing operations are actually needed.
   time; root is the only merger.
 - Git is the database: `git worktree list` is the registry, status is the diagnostic, and
   ancestry/tree identity proves collection. No shadow workflow state.
-- Root issues bounded role queues through spawn/follow-up messages, consumes milestone events,
-  classifies findings, and serializes collection. Item completion is not turn completion;
-  acknowledgment is required only at a frozen gate.
+- Root directly dispatches planner/hard-critical work; for normal writer/reviewer waves it may
+  publish bounded already-ready items to one lease generation. It consumes milestones,
+  classifies findings, and serializes collection. Item completion is not turn completion.
 - Domain continuity is a convention: continue the same identity with a delta-only follow-up
    unless the domain changed, independent identity is required, or genuinely parallel scope
    exists. If the runtime cannot preserve required identity, return `needs_decision`.
 
 ## Inspection and safety aliases
 
-These are pseudo aliases; use `--help` for arguments. Every mutation is an explicit root
-action, emits JSON evidence with observed time/duration, and rechecks Git immediately before
-changing it. No command advances a role queue or writes coordination state.
+These are pseudo aliases; use `--help` for arguments. Every mutation is an explicit authorized
+role action and emits JSON evidence. Git mutations recheck Git immediately. Queue adapters
+validate transport declarations only; they never infer readiness, delivery, or completion.
 
 ```text
 orchestrate := <repo-python> <skill-dir>/scripts/orchestrate.py
-orchestrate doctor | diff <old-version> <new-version>
+orchestrate doctor | diff <old-version> <new-version> --runtime codex|claude
 orchestrate identity --requested <role> --effective <role> --profile <path> --agent-id <id> [--writer-agent-id <id> --require-different-identity] [--park-capability slot-free|slot-held|unknown]
+orchestrate packet lint --role writer|reviewer --input <packet.json|->
+orchestrate queue publish ...; orchestrate queue inspect ...; orchestrate queue remove ...
 orchestrate status --root <repo> --task-id <task>
 orchestrate lane create --root <repo> --task-id <task> --lane <lane> --base <exact-sha>
 orchestrate review checkout <exact-sha> --root <repo> | review cleanup --root <repo> --worktree <path>
-orchestrate collect --root <task-worktree> --task-ref <task-branch> --lane-ref <lane-branch> --expected-lane-sha <sha> --reviewed-sha <sha>
+orchestrate collect --root <task-worktree> --task-ref <task-branch> --lane-ref <lane-branch> --expected-lane-sha <sha> --authorized-sha <sha> --review-kind different-identity|focused|root-spot|mechanical
 orchestrate lane cleanup --root <repo> --task-ref <task-branch> --lane-ref <lane-branch> --worktree <path>
 plan := <repo-python> <planning-skill-dir>/scripts/plan.py --root <repo>
 plan checkpoint <task-id>
@@ -157,11 +162,11 @@ items, per-item readiness, milestone delivery, `continue_without_ack`, and stop 
 They never invent or poll for the next item. After notifying root, a role consumes the next
 already-ready item when policy permits; queue exhaustion ends the turn but retains the lease.
 
-The **recommended turn shape** is one frozen bounded queue per turn: routine work is prepared
-up front, milestones are one-way reports, and the next batch arrives by same-identity
-follow-up after queue exhaustion. This is **not a hard rule**. Root may deliver a mid-turn
-control delta for a confirmed major review finding, retract/stop condition, correction, or a
-predeclared item whose readiness just became true without changing the current item.
+Dispatch is idle-first. For v60 normal writer/reviewer waves, root publishes already-ready
+items, checks status once, wakes an idle consumer, and leaves a running consumer undisturbed;
+it checks again on that identity's completion event to close the lost-wakeup race. Planner,
+hard-critical work, urgent correction, retract, and stop remain direct messages. No ready
+work means idle—never filler or polling. Load the spool reference before using this route.
 
 - **Planner:** in `wave-ahead` mode proposes Wave N+1 while Wave N executes. The proposal
   includes basis/assumptions, target 3–5 slices (tail/final may be 1–2), dependencies, test
@@ -206,15 +211,10 @@ slice-queue reference before using this route.
 ## Durable state boundary
 
 One-shot tasks create no plan. Cross-session, multi-round, or information-heavy work uses
-`planning-with-files`; task_plan is the ledger and an optional domain packet is only its
-current-state cache. Decisions take effect in-band; cross-session work persists conclusions
-or ADR pointers without turning files into instructions or workflow signals. After semantic
-plan updates at wave close, checkpoint, handoff, resume, or closure boundaries, invoke its
-explicit `checkpoint <task-id>` validation/conditional maintenance; it is never a workflow
-transition and produces no semantic content.
+`planning-with-files`; task_plan is the ledger and a domain packet only its current cache.
+Decisions take effect in-band. The spool alone may carry ready work, never decisions/outcomes;
+resume requires root reconciliation. Plan `checkpoint <task-id>` maintenance changes no state.
 
 ## Definition of done
 
-Design settled; targeted evidence passes; review is proportional to the actual changed surface; final-tree broader-gate evidence is current; all
-task-owned lanes, worktrees, and temporary artifacts are cleaned; persistence landing (if
-any) is explicitly authorized and squashed; decisions and evidence are reported.
+Design settled; targeted evidence passes; review/final-tree gate are current; task-owned lanes/worktrees/spool items are clean; authorized landing is squashed; evidence is reported.

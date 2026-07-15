@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 58
+orchestrate_compat: 60
 ---
 
 # Orchestrate — Codex runtime binding
@@ -31,7 +31,10 @@ When root dispatches:
   from the file, never summarized from memory. Either way, follow-ups to the same identity
   never repeat it; with domain leases the cost is once per agent, not per slice.
 - Write the profile name, task boundary, file scope, delivery format, and constraints
-  explicitly into `message`.
+  explicitly into `message`. A v60 normal writer/reviewer spawn also names the absolute queue path,
+  role, lease ID, `lease_generation`, and canonical task name. Its inventory milestone must
+  echo that binding before consumption. Provide the exact `orchestrate queue` adapter command;
+  agents never hand-edit published files. Planner and hard-critical work remain direct.
 - Note `profile_requested=<profile>`, `profile_effective=generic_role_adapter` in the report;
   do not claim a TOML profile took effect.
 - If the task hard-requires a specific model, sandbox, or named-agent identity that the
@@ -49,9 +52,8 @@ profile_requested=<profile>
 profile_effective=generic_role_adapter
 lease: <role/domain; writer scope or reviewer immutable scope>
 wave + basis: <wave id; exact SHA/ADR/contract assumptions>
-ordered items:
-  1. <item; dependencies; readiness; acceptance/output>
-  2. <item; dependencies; readiness; acceptance/output>
+ordered items or spool binding:
+  <direct items, or absolute queue path + role + lease_id + lease_generation>
 continue_without_ack: <qualifying outcome and dependency rule>
 turn queue: <recommended frozen batch; allowed mid-turn control exceptions>
 stop conditions: <when to checkpoint and return needs_decision>
@@ -70,7 +72,7 @@ Writer milestones use:
 milestone delivery:
 - after every completed slice or required stop, before starting any next slice, call
   collaboration.send_message to /root
-- common payload: MILESTONE slice=<id>
+- common payload: MILESTONE delivery_phase=milestone slice=<id>
   checkpoint_kind=<progress|validated|review> next=<current/next slice or final>
 - progress adds: completion=<done/remaining> stop_reason=<none|reason>
   finding_class=<none/mechanically-propagatable/design-invalidating/dangerous-intermediate/scope-collision>
@@ -86,7 +88,12 @@ milestone delivery:
   behavior-only uncertainty authorizes run-ahead; progress never authorizes the next slice;
   hold for structural, hard-critical, or anomaly uncertainty; stop at the wave boundary
 - if send_message is unavailable or fails, end the turn at this boundary; root will use
-  followup_task to continue the same identity
+  followup_task to continue the same identity; retain the current spool file
+- for a spool item, successful terminal milestone delivery precedes exact-hash `queue remove`;
+  progress never removes it. Inspect after inventory, each item boundary, and pre-final only
+- pre-final checklist: `delivery_phase=milestone` was sent before the final response, payload
+  enum/required fields are valid, and root was the recipient. A single-item turn is not
+  exempt; the final response never substitutes for the milestone
 ```
 
 Planner milestones use:
@@ -102,9 +109,13 @@ items=<target=3-5;tail=1-2 slices with dependencies/acceptance/risk/review polic
 Reviewer milestones use:
 
 ```text
-REVIEW_MILESTONE target=<exact SHA> outcome=<pass|needs_fix|blocked|needs_decision>
+REVIEW_MILESTONE delivery_phase=milestone base=<SHA> target=<exact SHA>
+outcome=<pass|needs_fix|blocked|needs_decision>
 findings=<severity/path/behavior/evidence/propagation|none>
 evidence=<source audit/adversarial probes/thin commands> next=<target id|idle|stop>
+review_round=<1..N> review_kind=<initial-full|refreshed-full|focused-closure>
+closes_findings=<ids|[]> failure_family=<family|none>
+test_model_revision_required=<true|false>
 - pass plus a complete queued readiness packet continues without acknowledgment
 - other outcomes stop by default; independent-nonblocking continuation must be pre-authorized
 - confirmed major findings notify root immediately before the routine target verdict
@@ -112,6 +123,8 @@ evidence=<source audit/adversarial probes/thin commands> next=<target id|idle|st
 - queue exhaustion ends the active turn; this runtime does not expose a proven slot-free park,
   so report `park_capability=unknown` and resume by same-identity `followup_task`
 - if send_message is unavailable or fails, end the turn; root resumes by followup_task
+- for a spool target, send the terminal verdict before exact-hash `queue remove`, then inspect
+  the next item; retain malformed, stale, or undelivered items
 ```
 
 Use the actual root canonical task name if it differs from `/root`. This explicit block is the
@@ -149,24 +162,28 @@ probe loops, or use liveness as phase evidence. Do not infer an agent's phase fr
   summaries, stop with `interrupt_agent`, then continue the *same* agent via `followup_task`
   carrying the corrective delta. Its loaded context is an asset; respawning a fresh identity
   throws it away (and, per the skill, needs an articulable reason).
-- **Pipelined roles** — planner/writer/reviewer use the shared lease, ordered items,
-  readiness, milestone, continuation, and stop model in `references/slice-queues.md`. Prefer
-  one frozen batch per turn and do not drip-feed routine work. Roles report every item before
-  continuing, retain only active plus pending items, and never poll Git. Planner stops after
-  one wave proposal; writer continues qualifying normal slices; reviewer continues after
-  PASS when another complete target was already ready. Root remains the only
-  producer/preemptor and never stores a shadow queue.
-- A root-to-role **work-bearing delta** always uses `followup_task`; it works for both running
-  and idle identities and removes the running→idle race. Use it mid-turn only for a confirmed
-  major review finding, retract/stop/correction, or explicitly predeclared readiness—not as
-  routine queue extension. `send_message` is for a pure notification or added context that
-  must not start a turn. For an urgent invalidation, prefer `interrupt_agent`, then resume the
-  same identity with `followup_task`.
+- **Idle-first dispatch** — for normal writer/reviewer work, publish one bounded ready batch,
+  call `list_agents` once, and use `followup_task` only when that consumer is idle. A running
+  consumer sees routine additions at its item boundary. No ready work means idle, never
+  filler. This enqueue-side check is event-driven, not polling.
+- On the identity's completion event, root processes its milestone/stop first, inspects the
+  queue once, and wakes it only when work remains and no unresolved stop exists. This
+  completion-side check closes the running-to-idle race. `running` still proves only liveness.
+- Direct `followup_task` work is reserved for wake-up, planner/hard-critical dispatch, urgent
+  correction, major review finding, retract, or stop. For invalidation, prefer
+  `interrupt_agent` and then corrective follow-up. `send_message` remains pure notification
+  or context that must not start a turn.
 - `running` proves only liveness, not the current phase; root uses repeated event-driven waits
   and does not build a polling loop. If expected milestones arrive only as final responses,
   repeat the runtime contract and degrade that role to one item per turn. The final event plus
   immediate `followup_task` preserves identity. Use this simpler rhythm whenever contract or
   review uncertainty needs steering.
+- Root may run `orchestrate packet lint --role writer|reviewer --input <json|->` against a
+  supplied milestone before accepting its evidence. The linter is stateless and never repairs
+  or advances a queue. It validates the payload declaration only and **does not prove
+  delivery ordering**; root still observes that the milestone arrived before the final event.
+- The spool is at-least-once: delivery followed by a crash before removal may expose the same
+  item again. Reconcile item ID, Git, and milestone evidence; never repeat it blindly.
 
 ## Runtime limits and repo config
 

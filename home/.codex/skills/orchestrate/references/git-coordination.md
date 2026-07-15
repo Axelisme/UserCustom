@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 58
+orchestrate_compat: 60
 ---
 
 # Git coordination and landing
@@ -42,10 +42,13 @@ git merge --no-ff "agent/<task>/<lane>"
 git worktree remove ".agent_state/worktrees/<task>-<lane>"
 ```
 
-Root may use the v58 `orchestrate lane create|cleanup`, `review checkout|cleanup`, and
+Root may use the v59 `orchestrate lane create|cleanup`, `review checkout|cleanup`, and
 `collect` pseudo aliases from the entrypoint instead. They are stateless guards around these
 same operations: exact inputs only, JSON evidence, Git recheck immediately before mutation,
 and Fast Fail on dirty/drifted/unabsorbed state. They never infer a verdict or queue state.
+For collect, `--authorized-sha` plus `--review-kind` with
+`different-identity|focused|root-spot|mechanical` is root's **declared authorization**. The
+adapter reports it but **does not infer a verdict** or claim that a formal reviewer acted.
 
 - Declare each writer's file scope in one sentence. A conflict means the split was poor; fix
   the plan rather than adding machinery.

@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 58
+orchestrate_compat: 60
 ---
 
 # Orchestrate — Claude Code runtime binding
@@ -40,13 +40,17 @@ profile_requested=<subagent_type>
 profile_effective=<selected subagent_type/model/isolation>
 lease: <role/domain; writer scope or reviewer immutable scope>
 wave + basis: <wave id; exact SHA/ADR/contract assumptions>
-ordered items:
-  1. <item; dependencies; readiness; acceptance/output>
-  2. <item; dependencies; readiness; acceptance/output>
+ordered items or spool binding:
+  <direct items, or absolute queue path + role + lease_id + lease_generation>
 continue_without_ack: <qualifying outcome and dependency rule>
 stop conditions: <when to checkpoint and return needs_decision>
 milestone delivery: SendMessage(<role milestone and next>) when available
 ```
+
+For a v60 normal writer/reviewer spool, the spawn prompt also names the canonical agent task
+name and absolute queue path. The inventory milestone echoes role, lease ID, and
+`lease_generation` before consumption. It also provides the exact `orchestrate queue` adapter
+command; agents never hand-edit published files. Planner and hard-critical work remain direct.
 
 `finding_class` is `none`, `mechanically-propagatable`, `design-invalidating`,
 `dangerous-intermediate`, or `scope-collision`; the final three are retract classes.
@@ -58,6 +62,17 @@ run-ahead. Validated/review carry exact `sha`, `finding_class`,
 `remaining_uncertainty=behavior-only|structural|hard-critical|anomaly`.
 `checkpoint_kind=review` freezes its SHA and creates review debt. Validated (or normal review)
 with behavior-only uncertainty may run ahead; progress never authorizes the next slice.
+When `SendMessage` exists, every packet carries `delivery_phase=milestone` and is sent before
+the final response; a single-item turn is not exempt. The pre-final checklist confirms the
+message succeeded and enum/required fields are valid. Without `SendMessage`, root must
+predeclare the one-item final-response fallback; it is capability degradation, not a normal
+milestone.
+For a spool item, a writer removes it only after a delivered terminal validated/review
+milestone; progress retains it. A reviewer removes it only after its terminal verdict is
+delivered. Both inspect after inventory, at each item boundary, and pre-final—not on a timer.
+Malformed, stale, stopped, or undelivered items remain for reconciliation.
+Root may lint a supplied packet, but `delivery_phase` is only a declaration; the linter does
+not prove that `SendMessage` preceded the final response.
 
 Planner reports `PLAN_MILESTONE` with `wave`,
 `planning_mode=contract-resolution|wave-ahead`, basis, invalidators,
@@ -73,6 +88,9 @@ parking only when the current runtime explicitly reports it; otherwise end the t
 resume through same-identity `SendMessage`.
 Report a confirmed major review finding immediately, before finishing the routine target;
 deliver ordinary findings in the target milestone.
+Every review milestone also names `base_sha`, `review_round`,
+`review_kind=initial-full|refreshed-full|focused-closure`, `closes_findings`,
+`failure_family`, and `test_model_revision_required`.
 
 The labels make runtime adaptation visible; they are not a mandatory report schema.
 
@@ -107,16 +125,17 @@ needs no `SendMessage` and is unaffected.)
   stop with `TaskStop`, then continue the *same* agent via a `SendMessage` follow-up carrying
   the corrective delta. Its loaded context is an asset; respawning a fresh identity throws it
   away (and, per the skill, needs an articulable reason).
-- **Pipelined roles** — planner/writer/reviewer use the shared queue contract in
-  `references/slice-queues.md`. The recommended turn shape is one frozen ready batch: each
-  role emits item milestones and consumes the next ready item allowed by policy without
-  routine inbound drip-feeding. This is not a hard rule. Mid-turn `SendMessage` work is
-  reserved for a confirmed major review finding, retract/stop, correction, or predeclared
-  readiness that has just become true. Routine next-batch work waits for queue exhaustion
-  and a same-identity follow-up. When `SendMessage` is unavailable, root may let a fully
-  pre-authorized queue finish in one turn or dispatch one item and stop, depending on
-  steering risk. If the next step requires same-identity continuation, follow the capability
-  rule above and return `needs_decision`; never respawn and call it continuation.
+- **Idle-first dispatch** — for normal writer/reviewer work, publish one bounded ready batch,
+  check task status once, and use `SendMessage` only to wake an idle consumer. A running
+  consumer discovers routine additions at an item boundary. This enqueue-side inspection is
+  event-driven, not polling; no ready work means idle without filler.
+- On the agent's completion event, process its milestone/stop first, inspect the queue once,
+  and wake it only if work remains and no unresolved stop exists. This completion-side check
+  closes the running-to-idle race. Direct messages remain for wake-up, planner/hard-critical
+  work, urgent correction, major finding, retract, and stop.
+- The spool is at-least-once. If delivery succeeded but removal did not, reconcile item ID,
+  Git, and milestone evidence instead of repeating work. When `SendMessage` is unavailable,
+  the same-identity capability rule still applies; never respawn and call it continuation.
 
 ## Fork context policy
 

@@ -1,0 +1,219 @@
+{
+  "documents": {
+    "SKILL.md": {
+      "bytes": 14647,
+      "sections": {
+        "Core coordination model": "438a962f4121d84ea9497c7b6261ecd79579b216ba65d56ccc0a36054ccdb957",
+        "Definition of done": "9cdda0a7e413d55e8ea8665b5aed1a9972fe48aa589fa66d3c20daf71a2639e3",
+        "Durable state boundary": "3b99a070a650f721cf028921986ce169dd3a54391d9ee737e93fc7d679d4eede",
+        "Hard rules (this is all of them)": "cab91633ddc0912b245d479a5ef8200433b14a4f3c75896bbbaaf6259772c36a",
+        "Inspection and safety aliases": "1acafe3fd96a0dd49ed5331b33c1fe397dfd9a23c2df91c96131b927502ca40c",
+        "Load only the branch you need": "c1e390c920dbaaa6465d19a8dfd29b0ee5e1b0fe9af7a8cb9dca1206c103161d",
+        "Operating loop": "c1c3e0498cfea196aee7ddb6b13c72b5239f2cf9077bb7adb9b279a2c07748d1",
+        "Orchestrate": "220ad0b73854480afdc6b123f80ccba65a9ee5a8057a3cce56a7d5536988dfd2",
+        "Review and test ownership": "85ad2fcee49685faaec1138ced1a1406b3944ebfd4333f12a0bef877371f3eb1",
+        "Role pipelines and checkpoints": "734bc6e48104c0f53b26936be616caaecc1751d5823ab0f68c735572add1a82d",
+        "Routing fast paths": "5199e46f6ebbf14b858470347f642f2e70118ba0ec64c3a93c2e8a92ff9079b0"
+      },
+      "sha256": "57dfe09fc01f2bb6e7f526ff672385b51e7361c9ea688d213b677cf5806cc9be"
+    },
+    "references/delegation-and-review.md": {
+      "bytes": 10317,
+      "orchestrate_compat": 59,
+      "sections": {
+        "Delegation and review": "d054238daee01e7e917bcea4c46ed519a2e478681552f8627dfe3aee215bdb8e",
+        "Evidence ownership": "696475b78264e3838c18f3fe29f7bc8ce903075ecbd90a5448853a27c9c13efb",
+        "Persistent agents and roles": "6dda248d8de5f899801ad98f423f875a6b43bfe388ba177c5cd0ac9e8503a6a2",
+        "Re-review and immutable execution": "f2ca325de40fead18c4283d8b7a01c849d7c7599babecb820588de535b198719",
+        "Review depth": "4398f32723fbe72940fcc194bd53a73a91cfb189152aad9d451ead13875c5dc8",
+        "Review-readiness packet": "80bad0de79eecc4cedc29cbbaca0b9f2afc0dfb3e3e243efdfccf6ba23abe701",
+        "Reviewer pipeline": "c229502d88255bf64374a47d806fc10370966f8b6f78f40fd4a16dda304a92cb",
+        "Skill upgrade boundary": "b7ba1765ff527fad69200d188e617f574d44b6db73d0f20f949127d763297b44"
+      },
+      "sha256": "d00aa463d365043457b9976dd95aadf9b42316de54da1a594b458e8a1ddbbae4"
+    },
+    "references/evidence-and-handoff.md": {
+      "bytes": 5830,
+      "orchestrate_compat": 59,
+      "sections": {
+        "Baseline-relative gates": "bf74b44b4d5474e8269242dd68b5470db332b66a3dbf12f107f18dfc7cb5298b",
+        "Durable narrative": "d4cb9aabe7834dfce81bb5b3bac7bced82d16880d1462bd7f8e3f62d864efa50",
+        "Evidence and handoff": "86d9250330d4b46ce8ce5de4554c89008ee89fbba955769fd06453c9d4ffb1f6",
+        "Gate evidence scope": "f01ec10796d52cfd2ac64dc522bba4c1ffaa939a9ca9d95850d1928ca19d6e7f",
+        "Session handoff": "1cb298d8d921e1179e1c5dbb1db05dc74fcd5813402b0d2dc7eb93409d3e0d70",
+        "Validation anomalies": "3feeca78a3052741c01dd8cf318a829d02cbd093e7603ad6554565d21c3b7aa9"
+      },
+      "sha256": "64b529d7df83b389696cdce43101a89d9b32c56e85f5f738f3bd7a2b8fa6612e"
+    },
+    "references/git-coordination.md": {
+      "bytes": 6272,
+      "orchestrate_compat": 59,
+      "sections": {
+        "Git coordination and landing": "be17c1758ece9a5b6883464f9bf55d83a2e964777e2c863a4872e9e5bb055003",
+        "Landing on persistence": "185126cd572d30c83e6428bee0bc6149fdd6c4d5e91882443b05f554613e1278",
+        "Multi-writer parallelism": "14e669910a4f4d8937e4180556cb5d496a40c354a2a4d057ae3542c0baef9388",
+        "Single writer": "cf54e8fbf2fcceddc52976287c5bfadcb1906ec01464de1f0cfa93122f423bc6",
+        "Terms and branch hierarchy": "aede0725a0c1839ec187fc880a86eb761c261b94661aa4c97134de9aaed881a7"
+      },
+      "sha256": "787fa1683d3c63fb6917bb52565a030e6f530c3798dc8ac741a4418362923969"
+    },
+    "references/slice-queues.md": {
+      "bytes": 14832,
+      "orchestrate_compat": 59,
+      "sections": {
+        "Checkpoint taxonomy": "971896aa979ec9f5bb97f501b0df4b1fcb48e96b88448ac168c25dcc421d2970",
+        "Findings, preemption, and retraction": "cb9e7f6f931facefa801b832dbcc0a516e40d496b19086d4c35aeeabe1a82df7",
+        "Per-wave metrics": "f73572c9a7918c1ddd4182b84f11daae74729ba964a32598b9d09dc1bfd0669a",
+        "Pipelining and review targets": "32d9a952a73c47a57892efce6782d6b57b1f8c116711fcc502724175b916e7a2",
+        "Planner rolling horizon": "9b901309a1292079ad9c844490dc121a647e54966504a471511dc273c3dbe8fe",
+        "Review policy": "dce5879ff42a49536d2d43351446dacd8c7fa052db7b3bff7714c510ed82975e",
+        "Reviewer target queue": "cb128b81aedb4c5c1ff65293ac29ba2a2c031c63735ed3872afc468873ac47c9",
+        "Role pipelines and slice queues": "7a350967b925d7fe5ebce4d0cf93b28b500cdfaea76fd84f3edaf6f2cebdb6fb",
+        "Shaping the wave": "b4c3d0f26d1374905dd3c9cba4d37f82786b5ccdc17e882e0bf2e90f01c0b1d6",
+        "Shared Role Pipeline Contract": "097ea1e91afdd46e826d6ccd939ee29310bc5966dd90c270f1f7b6e208573821",
+        "Wave-boundary fix wave": "750d25914e130ad8811e097970dcb4aa8b40b606e40b2f77af6f402ad909a85a",
+        "Wave-boundary narrative maintenance": "1264d557ee08f94fcfb6b2500c59fee5428e39b6ab227ad31310ae0b4404954f"
+      },
+      "sha256": "1df70fc4715c829c47e1d3d11847301144f0c42942de6a60a143f66cc8b57345"
+    },
+    "runtime-claude.md": {
+      "bytes": 9934,
+      "orchestrate_compat": 59,
+      "sections": {
+        "Agent teams: evaluated and not adopted": "2c6eb35616cba414229f097acdbb26ebb82271ae3cad9f61100d6e0fc025d1d6",
+        "Capability flag: same-identity continuation": "b80b44a89b6ca3b597858c1cf8edbfcc2ecf32ff4039edc4065b0f9b38ae42ed",
+        "Flow control": "f9bb3b85651b1a4f783dd9c4c67a4c3c302b9bda249a74c89bfd7d085784149a",
+        "Fork context policy": "3da9a5f623acf3f888ddc40e80056775329f6a3d944315924f34617b40a70ec7",
+        "Model and sandbox mapping": "f2957f35e9975638c0d793395e5765f9ab7af63e54b7dd583319e70335f7137e",
+        "Orchestrate \u2014 Claude Code runtime binding": "31e1ed41a702694591b50fc0c6556b3774efcddb0123e20d669edc973b9f486a",
+        "Tool binding": "04e777611ad1fe8bcb7d5b50b9ee2e6757901fa861cfaf852945f882b0262e0b"
+      },
+      "sha256": "3668890081107219d7ce69ff839f270017d8f7d030bccbb476ec809d00ed5a6e"
+    },
+    "runtime-codex.md": {
+      "bytes": 12228,
+      "orchestrate_compat": 59,
+      "sections": {
+        "Flow control": "b2d218155486a2fd62c051385610ce8af3797ef2959494fe4bb3aab31b03caeb",
+        "Orchestrate \u2014 Codex runtime binding": "391af330099a4a8c38a72d54dc0f6d8232b29fb24b8688247dbfcd522a0cecb1",
+        "Profiles and dispatch": "34f63c76725ddba025ebcfb886134ea885143c06adea65a367db91a55adefe9d",
+        "Runtime limits and repo config": "c515449032e065b730ffe73e055c35067cbb3dfec1933dd7bb84e51e2e5d3eaf",
+        "Tool binding": "dbaabdef05b0961e8b5ab4635f8796d272d507f16096f51e31e7fe00c4997237"
+      },
+      "sha256": "e792643f75d0c8a550e9f1d907278260dfd78b3ecea6127d3093e25df4859c01"
+    },
+    "scripts/merge_slot.py": {
+      "bytes": 14282,
+      "sections": {
+        "__file__": "a2ed4acab952793c557a68b063727f68ad741b26462627fcf8b34135a2b3ac82"
+      },
+      "sha256": "a2ed4acab952793c557a68b063727f68ad741b26462627fcf8b34135a2b3ac82"
+    },
+    "scripts/orchestrate.py": {
+      "bytes": 41286,
+      "sections": {
+        "__file__": "079670a5c1d5449abd8435cc4d828b1777b9cd83b3920019b4664fd92b0bbceb"
+      },
+      "sha256": "079670a5c1d5449abd8435cc4d828b1777b9cd83b3920019b4664fd92b0bbceb"
+    }
+  },
+  "orchestrate_compat": 59,
+  "profiles": {
+    ".claude/agents/contract-planner.md": {
+      "bytes": 2399,
+      "orchestrate_compat": 59,
+      "sha256": "4c65967f23a48adbfbe2c4224a7b2700c70125c114ba956fe3aa5c3894957b77",
+      "standing_orders_sha256": "3bc9b3fdc0e1ffbd5359e410f13a7c6495a5eca57215f154621d0a2a64c2a9b8"
+    },
+    ".claude/agents/implementer.md": {
+      "bytes": 6078,
+      "orchestrate_compat": 59,
+      "sha256": "d880c1cbdd52441fdf58bab55c0fa5ad1d356283198bbeca2a3774afd6de3861",
+      "standing_orders_sha256": "e1d132e862cb39aa78cca6f6ecee7c011fd80626c609960ca956beb28d192ea4"
+    },
+    ".claude/agents/reviewer.md": {
+      "bytes": 7058,
+      "orchestrate_compat": 59,
+      "sha256": "131ea6325eb51fd73a78d42755e96bc173937a51b84817652c9207e1744995d7",
+      "standing_orders_sha256": "b8bf2a53f2be128e1237e342af2508e748905e8f5ace90e6a7beb2e8b97872f9"
+    },
+    ".codex/agents/contract-planner.toml": {
+      "bytes": 2473,
+      "orchestrate_compat": 59,
+      "sha256": "50fe848aa1f73b6d52ad2ae958140247d86f974e5b1829069ad94d6b16682c34",
+      "standing_orders_sha256": "3bc9b3fdc0e1ffbd5359e410f13a7c6495a5eca57215f154621d0a2a64c2a9b8"
+    },
+    ".codex/agents/implementer.toml": {
+      "bytes": 6154,
+      "orchestrate_compat": 59,
+      "sha256": "99da3a6890f2d0b71dab9079c0b9c08cbdeb3df19ee67a34dce9a48d0cb33afc",
+      "standing_orders_sha256": "e1d132e862cb39aa78cca6f6ecee7c011fd80626c609960ca956beb28d192ea4"
+    },
+    ".codex/agents/reviewer.toml": {
+      "bytes": 7133,
+      "orchestrate_compat": 59,
+      "sha256": "30604d90a60e77e72f7b7d754965a98705e21811feaf2a35298da68f99ace9c9",
+      "standing_orders_sha256": "b8bf2a53f2be128e1237e342af2508e748905e8f5ace90e6a7beb2e8b97872f9"
+    }
+  },
+  "release_delta": {
+    "changed_profiles": [
+      ".claude/agents/contract-planner.md",
+      ".claude/agents/implementer.md",
+      ".claude/agents/reviewer.md",
+      ".codex/agents/contract-planner.toml",
+      ".codex/agents/implementer.toml",
+      ".codex/agents/reviewer.toml"
+    ],
+    "changed_sections": {
+      "SKILL.md": [
+        "Definition of done",
+        "Hard rules (this is all of them)",
+        "Inspection and safety aliases",
+        "Operating loop",
+        "Role pipelines and checkpoints"
+      ],
+      "references/delegation-and-review.md": [
+        "Evidence ownership",
+        "Re-review and immutable execution",
+        "Review-readiness packet",
+        "Reviewer pipeline",
+        "Skill upgrade boundary"
+      ],
+      "references/evidence-and-handoff.md": [
+        "Baseline-relative gates",
+        "Gate evidence scope"
+      ],
+      "references/git-coordination.md": [
+        "Multi-writer parallelism"
+      ],
+      "references/slice-queues.md": [
+        "Shaping the wave",
+        "Shared Role Pipeline Contract"
+      ],
+      "runtime-claude.md": [
+        "Flow control",
+        "Tool binding"
+      ],
+      "runtime-codex.md": [
+        "Flow control",
+        "Profiles and dispatch"
+      ],
+      "scripts/orchestrate.py": [
+        "__file__"
+      ]
+    },
+    "from_version": 58,
+    "must_reread": [
+      "SKILL.md",
+      "references/delegation-and-review.md",
+      "references/evidence-and-handoff.md",
+      "references/git-coordination.md",
+      "references/slice-queues.md",
+      "runtime-claude.md",
+      "runtime-codex.md"
+    ]
+  },
+  "schema_version": 1,
+  "skill_version": 59
+}

@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 44
+skill_version: 45
 ---
 
 # Orchestrate
@@ -135,13 +135,11 @@ Do the expensive work **off-slot**; hold the slot only for the final seconds:
   does **not** end ownership.
 - Finding fixes return to the original implementer; closure and refreshed-SHA reviews return
   to the original reviewer.
-- **Warm reviewer lease.** A warmed-up reviewer (failure matrix built, surface understood) is
-  paused and resumed, not respawned: ending its turn after warm-up or a review round is the
-  standard pause; the standard resume is a follow-up carrying only the refreshed target SHA
-  and the finding/evidence delta. An idle or completed state does not end the lease.
-  Warm-up delivers exactly four artifacts — source map, acceptance/adversarial matrix, stop
-  conditions, deletion checklist; the formal review cites that matrix and adds only
-  exact-diff inspection, never a second survey.
+- **Warm reviewer lease.** A warmed-up reviewer is paused and resumed, not respawned: pause =
+  end of turn, resume = follow-up with only the refreshed target SHA and finding/evidence
+  delta; idle or completed does not end the lease. Warm-up delivers exactly four artifacts
+  (source map, acceptance/adversarial matrix, stop conditions, deletion checklist); the
+  formal review cites that matrix and adds only exact-diff inspection.
 - If same-identity continuation is needed but the runtime lacks the capability, report to the
   user for a decision; do not silently respawn a fresh identity and rebuild context.
 - Role profiles: `contract-planner`, `repo-investigator`, `implementer`,
@@ -151,15 +149,12 @@ Do the expensive work **off-slot**; hold the slot only for the final seconds:
   inherently writes (their own detached worktree under `.agent_state/worktrees/`, tool
   caches), so they hold workspace-write with behavioral guardrails — the invariant is the
   immutability of the reviewed SHA, not the absence of writes.
-- **When to delegate planning.** Root plans inline by default — it holds the user's intent.
-  Delegate to `repo-investigator` when the open question is factual (what exists, who calls
-  what); to `contract-planner` when the contract, dependency graph, or write split has not
-  converged **and** one of: converging it needs deep source reading root should not carry;
-  an independent, unanchored derivation is worth having on a critical axis; or the next
-  wave's contract can converge while the current wave implements. Planner output is evidence
-  for root's decision, never the decision itself; a frozen contract dispatches straight to
-  writers, and reviewer is the wrong tool for unconverged contracts — it verifies
-  implementations against contracts, not contracts themselves.
+- **When to delegate planning.** Root plans inline by default. `repo-investigator` when the
+  open question is factual; `contract-planner` when the contract or write split has not
+  converged **and** the reading is too deep for root to carry, an unanchored derivation
+  matters on a critical axis, or the next wave can converge during the current one. Planner
+  output is evidence, never the decision; a frozen contract dispatches straight to writers
+  (reviewer verifies implementations against contracts, never unconverged contracts).
 - Profiles may point a role at **content** skills (vocabulary, checklists, conventions —
   e.g. `codebase-design`, `domain-modeling`) to *read* as reference. Sub-agents never
   *invoke* **coordination** skills (`code-review`, `research` — anything that spawns agents
@@ -215,40 +210,31 @@ not cover the changed surface is never silently promoted into target-SHA sign-of
 closure returns to the same reviewer with only the refreshed target, finding delta, and changed
 evidence.
 
-**Re-review scope is finding-focused by default**: the finding delta plus its high-risk
-adjacent surface. It escalates to a fresh full review only when the rework itself altered
-authority, persistence, public schema, or process lifecycle. A docs-only closure verifies
-current-state wording, links, and negative scans — nothing more.
-
-**Review round budget.** One checkpoint gets one full review plus one focused closure. A new
-P1 in a third round means the contract, source map, or test model is wrong — stop patching,
-return to the design/test-model checkpoint (the blast-radius protocol's contract-level
-branch) instead of buying another round. Relatedly, when two consecutive rounds' findings
-cluster in the same failure family (races, lifecycle ordering), the next move is fixing the
-test model, not widening the production diff.
+**Re-review scope and round budget.** Re-review is finding-focused by default — the finding
+delta plus its high-risk adjacent surface — escalating to a fresh full review only when the
+rework itself altered authority, persistence, public schema, or process lifecycle
+(docs-only closure: current-state wording, links, negative scans — nothing more). One
+checkpoint gets one full review plus one focused closure; a new P1 in a third round means
+the contract, source map, or test model is wrong — stop patching and reset via the
+blast-radius protocol's contract-level branch. When two consecutive rounds' findings
+cluster in one failure family (races, lifecycle ordering), fix the test model before
+widening the production diff.
 
 **Review execution is immutable.** Gates run only from immutable checkouts: `git show` /
 `git diff` for pure reading; a detached temporary worktree at the exact SHA (or a provably
-frozen clean lane) for anything executed — never a checkout with a live writer. Once the
-writer resumes, results from that checkout are void: discard and rerun. Only a **review
-checkpoint** (a clean committed SHA explicitly announced for review) starts a gate; a
-writer's dirty **code checkpoint** (progress, blast-radius, cherry-pick safety) never does.
-Operational detail lives in the reviewer profile; root's job is handing over an immutable
-target and voiding evidence that turns out to be live.
+frozen clean lane) for anything executed — never a checkout with a live writer, and results
+from a checkout that turns out to have been live are void. Only a **review checkpoint** (a
+clean committed SHA announced for review) starts a gate; a writer's dirty **code
+checkpoint** (progress, blast-radius, cherry-pick safety) never does. Operational detail
+lives in the reviewer profile.
 
-Reviews attach to the exact SHA they inspected. After a reviewed lane is collected, the
-orchestrator chooses evidence proportional to the merge:
-
-- When the integration tree is expected to equal the reviewed lane tree,
-  `git diff --quiet <reviewed-lane-sha> <integration-sha>` is a cheap, strong equivalence check;
-  record the reviewed tree identity rather than requesting a ceremonial review of a merge SHA.
-- When the trees differ, decide whether composition or conflict resolution changed the reviewed
-  surface. If a critical surface may have changed or unchanged content cannot be demonstrated,
-  send the integration SHA to the different-identity reviewer. For noncritical composition, a
-  concise root self-review rationale is normally sufficient.
-
-Tree identity is one useful closure strategy, not the only valid proof. A conflict-free merge
-alone does not demonstrate equivalence.
+Reviews attach to the exact SHA they inspected. After a reviewed lane is collected, choose
+closure evidence proportional to the merge: integration tree expected to equal the reviewed
+lane tree → `git diff --quiet <lane-sha> <integration-sha>` and record the tree identity;
+trees differ → if a critical surface may have changed (or unchanged content cannot be
+demonstrated) send the integration SHA to the different-identity reviewer, otherwise a
+concise root self-review rationale suffices. A conflict-free merge alone never demonstrates
+equivalence.
 
 ## Dispatch: slice queue guidance
 
@@ -280,20 +266,17 @@ milestone delivery: <deviations from the standing contract only>
   never invents the next item. Preemption order: stop conditions > contract-affecting review
   findings > next queued item > deferred findings. An exhausted queue ends the turn; the
   lease is retained.
-- Findings route by severity (the reviewer reports it, root decides deferral): a
-  premise-invalidating finding (P1, contract or interface change) preempts immediately —
-  rework compounds with distance. A self-contained finding (naming, minor cleanup, a missing
-  secondary test) goes to the finding ledger for one queue-end cleanup slice, or to the
-  candidate backlog when outside the task.
-- With a warmed-up persistent reviewer consuming announced SHAs, review of slice N pipelines
-  with implementation of N+1: announce N, begin N+1, keep announced commits append-only
-  (follow-up commits only, no rewriting), at most one unreviewed slice ahead — root may
-  tighten or relax against review latency, surface stability, and rework cost.
-- Run-ahead is conditional: N+1 qualifies only if **surface-disjoint** from the SHA under
-  review — not touching its public wire, schema, shared fixtures, or state machine
-  (tests-only cleanup, docs, and independent adapters usually qualify; work on the reviewed
-  contract never does). A finding that may change the next slice's interface, or any
-  P1/contract-level finding, retracts run-ahead to single-writer until resolved.
+- Findings route by severity (the reviewer reports it, root decides deferral):
+  premise-invalidating (P1, contract/interface change) preempts immediately — rework
+  compounds with distance; self-contained findings go to the finding ledger for one
+  queue-end cleanup slice, or to the candidate backlog when outside the task.
+- Pipelining: a warm reviewer consumes announced SHAs while the writer implements N+1 —
+  announced commits stay append-only, at most one unreviewed slice ahead (root may tighten
+  or relax). Run-ahead is conditional: N+1 must be **surface-disjoint** from the SHA under
+  review (not its public wire, schema, shared fixtures, or state machine; tests-only
+  cleanup, docs, and independent adapters usually qualify). A finding that may change the
+  next slice's interface, or any P1/contract-level finding, retracts run-ahead to
+  single-writer until resolved.
 - Before dispatch into an area, check its candidate backlog
   (`candidate-backlog list --area <area> --status inbox`): rider items on the same code may
   fold into a slice at near-zero cost — never as scope expansion. At task closeout, close
@@ -313,15 +296,12 @@ milestone delivery: <deviations from the standing contract only>
 - Wall-clock circuit breakers: a slice with no clean checkpoint after roughly 60–90 minutes
   reports the bottleneck instead of grinding on; a reviewer over budget reports its
   confirmed deterministic findings immediately and finishes the rest as a follow-up.
-- The milestone contract is **standing content**: its fields (recipient, mechanism, payload,
-  boundary timing, no-ack continuation, run-ahead limit, failure fallback) and the standard
-  notification points (**inventory / first-green / failure-cluster / clean-SHA**) live in
-  the role profile and the runtime binding — the spawn prompt states only deviations and
-  task-specific values, never restates them. Delivery is verified, not assumed: the agent's
-  inventory milestone must confirm which profile it loaded; no confirmation → root pastes
-  the contract verbatim (from the profile file) before dispatching further slices. The same
-  rule binds every standing/task split: profiles carry standing stop conditions and report
-  formats; prompt fields carry only the task's additions.
+- **Standing vs delta.** The milestone contract (recipient, mechanism, payload, timing,
+  no-ack, run-ahead limit, fallback) and the notification points (**inventory / first-green
+  / failure-cluster / clean-SHA**) live in the role profile and runtime binding; prompts
+  state only deviations — same for stop conditions and report formats. Delivery is
+  verified, not assumed: the inventory milestone must confirm which profile was loaded; no
+  confirmation → root pastes the contract verbatim before dispatching further slices.
 
 When a problem with announced slice N surfaces during N+1 (a review finding or the
 implementer's own discovery), the implementer checkpoints first — nearest coherent point,
@@ -365,18 +345,15 @@ review-readiness packet.
 - A packet never copies decision text (decisions are recorded once, in task_plan or an ADR).
   It is rewritten whole at lease handoffs or checkpoint boundaries and deleted when the
   domain completes; task_plan keeps its usual phase append-and-compress rules.
-- Agent reports are returned in-band to root by default; root digests what is worth keeping
-  into the domain packet. Only two exceptions write files: artifacts worth reusing across
-  sessions (e.g. an investigator's compact source map — into the plan directory), and
-  cross-terminal agents that cannot return in-band. No mandatory per-agent report files.
-- **Control plane vs data plane.** Messages carry events and decisions (milestones, finding
-  severity, dispatch); files carry evidence bulk (raw logs, long diff analyses, failure
-  matrices, repro output). A large payload goes to
-  `.agent_state/artifacts/<task>/<agent>-<topic>.md` and its report carries the digest plus
-  the path — root reads artifacts selectively (grep/tail), never slurps them into context.
-  Artifacts are disposable evidence, deleted at task close; their existence never signals
-  state, carries an instruction, or substitutes for a report — if root must read a file to
-  know what to do next, that is a bug, not a channel.
+- **Control plane vs data plane.** Reports return in-band; messages carry events and
+  decisions (milestones, finding severity, dispatch). Files carry only evidence: bulk
+  payloads (raw logs, long analyses, failure matrices) go to
+  `.agent_state/artifacts/<task>/<agent>-<topic>.md` — disposable, deleted at task close —
+  while cross-session artifacts (an investigator's source map) go to the plan directory.
+  The report carries the digest plus the path; root reads artifacts selectively
+  (grep/tail). A file never signals state, carries an instruction, or substitutes for a
+  report — if root must read a file to know what to do next, that is a bug. No mandatory
+  per-agent report files.
 
 ## Session handoff (rate-limit or context exhaustion)
 

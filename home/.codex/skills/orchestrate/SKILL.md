@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 45
+skill_version: 46
 ---
 
 # Orchestrate
@@ -172,7 +172,9 @@ checkpoint's diff by what it actually touches:
 
 - **Critical** — the closed hard-rule list (hardware, persistence/migration, public wire
   schema, security) plus any surface the packet's `critical_axes` explicitly declares for
-  this task → different-identity full review.
+  this task → **one** different-identity reviewer covering the whole diff. This is not the
+  two-agent `code-review` skill: that two-axis audit is a **milestone gate** root runs once
+  at wave end or before landing, never per slice and never by a sub-agent.
 - **Normal** — internal presenters, adapters, GUI glue, private lifecycle → one focused
   single-pass review of the changed behavior, or root self-review with a one-line rationale.
 - **Mechanical** — deletions, renames, fixture moves, docs wording → root spot-check

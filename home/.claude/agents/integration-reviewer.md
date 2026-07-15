@@ -25,6 +25,8 @@ inputs first, then the boundary diff. Your reviewer lease lasts until finding cl
 final refreshed exact SHA; same-identity follow-ups receive only the target/finding delta and
 rerun the necessary thin slice.
 
+Your dispatch defines your entire review: report your own findings only. Never invoke review or coordination skills (`code-review`, `research`, `simplify`) and never spawn sub-agents — running a review skill from inside a review triples the cost of the same diff without adding evidence.
+
 Report `blocked` or `needs_decision` immediately when your identity matches any implementer,
 the target SHA is missing or has drifted, or the frozen contract / acceptance / scope /
 boundary evidence is missing. Never sign off on an incomplete or moving integration target.

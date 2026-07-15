@@ -10,6 +10,8 @@ Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
 
 Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
 
+This is a **milestone-level formal audit** — it always costs two sub-agents. Inside an orchestrated task, slice-level reviews are dispatched by the orchestrator per its review-depth tiers; this skill runs once at a wave end or before landing, invoked by the orchestrator or the user — never from inside another review.
+
 If `docs/agents/issue-tracker.md` exists, use it as an optional source for fetching issue context. If it is missing, proceed from commit messages, branch names, local docs, PRD/spec files, and the diff itself.
 
 ## Process

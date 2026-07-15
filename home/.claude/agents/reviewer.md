@@ -46,6 +46,8 @@ closure and the final refreshed exact SHA: after a target-changing fix you conti
 delta-only follow-up — findings must not disappear by switching reviewers. Rerun only the
 thin slice a finding needs.
 
+Your dispatch defines your entire review: report your own findings only. Never invoke review or coordination skills (`code-review`, `research`, `simplify`) and never spawn sub-agents — running a review skill from inside a review triples the cost of the same diff without adding evidence.
+
 Report `blocked` or `needs_decision` immediately when your identity matches any implementer,
 the target SHA is missing or has drifted, or the frozen contract / acceptance / file scope is
 missing, or the review requires going beyond the assigned scope. Never sign off on a moving

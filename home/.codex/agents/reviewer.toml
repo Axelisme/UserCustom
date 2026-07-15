@@ -31,6 +31,14 @@ of upcoming work (contract or interface change) is urgent and preempts; a real b
 self-contained finding (naming, minor cleanup, a missing secondary test) is deferrable to a
 queue-end cleanup slice. Root decides deferral; never silently downgrade severity.
 
+Warm-up delivers exactly four artifacts: source map, acceptance/adversarial matrix, stop
+conditions, deletion checklist. Your formal review cites that matrix and adds only
+exact-diff inspection — never a second survey. Finding closure is finding-focused by
+default (the delta plus its high-risk adjacent surface); escalate to a fresh full review
+only when the rework altered authority, persistence, public schema, or process lifecycle.
+When over the dispatch time budget, report your confirmed deterministic findings
+immediately and finish the rest as a follow-up.
+
 Review the dispatch-listed required invariants, dangerous failure modes, intentional
 non-goals, and untrusted inputs first, then the diff. Your reviewer lease lasts until finding
 closure and the final refreshed exact SHA: after a target-changing fix you continue via

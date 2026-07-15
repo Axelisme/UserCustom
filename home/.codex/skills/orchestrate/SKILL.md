@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 43
+skill_version: 44
 ---
 
 # Orchestrate
@@ -139,6 +139,9 @@ Do the expensive work **off-slot**; hold the slot only for the final seconds:
   paused and resumed, not respawned: ending its turn after warm-up or a review round is the
   standard pause; the standard resume is a follow-up carrying only the refreshed target SHA
   and the finding/evidence delta. An idle or completed state does not end the lease.
+  Warm-up delivers exactly four artifacts — source map, acceptance/adversarial matrix, stop
+  conditions, deletion checklist; the formal review cites that matrix and adds only
+  exact-diff inspection, never a second survey.
 - If same-identity continuation is needed but the runtime lacks the capability, report to the
   user for a decision; do not silently respawn a fresh identity and rebuild context.
 - Role profiles: `contract-planner`, `repo-investigator`, `implementer`,
@@ -169,6 +172,27 @@ Do the expensive work **off-slot**; hold the slot only for the final seconds:
 
 ## Review closure guidance
 
+**Review depth follows the changed surface, not the task's highest global risk.** Label each
+checkpoint's diff by what it actually touches:
+
+- **Critical** — the closed hard-rule list (hardware, persistence/migration, public wire
+  schema, security) plus any surface the packet's `critical_axes` explicitly declares for
+  this task → different-identity full review.
+- **Normal** — internal presenters, adapters, GUI glue, private lifecycle → one focused
+  single-pass review of the changed behavior, or root self-review with a one-line rationale.
+- **Mechanical** — deletions, renames, fixture moves, docs wording → root spot-check
+  (scope, tree identity, a targeted scan); no reviewer dispatch.
+
+A critical *task* does not make every checkpoint critical; only checkpoints whose diff
+crosses a critical surface pay the full gate.
+
+**Evidence ownership is deliberately non-duplicative.** Writer: functional acceptance plus
+affected regression. Reviewer: adversarial repros, finding-specific tests, source audit —
+never a rerun of the writer's suites. Root: identity checks (SHA, parent, scope, tree
+identity) plus at most one thin critical slice. Integration: the single broad gate (hard
+rule 1). Rerunning another role's evidence requires a stated reason (e.g. suspected
+environment skew), not habit.
+
 Before dispatching a frozen diff, root gives the reviewer a compact **review-readiness packet**.
 It is an in-band checklist, not a new file or schema; trim fields that genuinely do not apply:
 
@@ -190,6 +214,18 @@ dangerous failure mode. A review of an old SHA, an aborted suite, or tree equiva
 not cover the changed surface is never silently promoted into target-SHA sign-off. Finding
 closure returns to the same reviewer with only the refreshed target, finding delta, and changed
 evidence.
+
+**Re-review scope is finding-focused by default**: the finding delta plus its high-risk
+adjacent surface. It escalates to a fresh full review only when the rework itself altered
+authority, persistence, public schema, or process lifecycle. A docs-only closure verifies
+current-state wording, links, and negative scans — nothing more.
+
+**Review round budget.** One checkpoint gets one full review plus one focused closure. A new
+P1 in a third round means the contract, source map, or test model is wrong — stop patching,
+return to the design/test-model checkpoint (the blast-radius protocol's contract-level
+branch) instead of buying another round. Relatedly, when two consecutive rounds' findings
+cluster in the same failure family (races, lifecycle ordering), the next move is fixing the
+test model, not widening the production diff.
 
 **Review execution is immutable.** Gates run only from immutable checkouts: `git show` /
 `git diff` for pure reading; a detached temporary worktree at the exact SHA (or a provably
@@ -269,6 +305,14 @@ milestone delivery: <deviations from the standing contract only>
   operation lifecycle or frontend projection) → default to splitting, foundation first then
   vertical remainder; keeping it whole requires a stated reason. File count is only a warning
   signal; axes, boundary count, and independent acceptance determine the shape.
+- The opposite bound holds too: prefer a **medium vertical slice** — one authoritative
+  contract, one real consumer, end-to-end acceptance, and the old path's deletion in the
+  same checkpoint — over micro-checkpoints whose review overhead exceeds their isolation
+  benefit. A shared foundation earns its own checkpoint and review only when multiple later
+  slices genuinely consume it.
+- Wall-clock circuit breakers: a slice with no clean checkpoint after roughly 60–90 minutes
+  reports the bottleneck instead of grinding on; a reviewer over budget reports its
+  confirmed deterministic findings immediately and finishes the rest as a follow-up.
 - The milestone contract is **standing content**: its fields (recipient, mechanism, payload,
   boundary timing, no-ack continuation, run-ahead limit, failure fallback) and the standard
   notification points (**inventory / first-green / failure-cluster / clean-SHA**) live in

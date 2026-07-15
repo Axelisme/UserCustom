@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 53
+orchestrate_compat: 54
 ---
 
 # Orchestrate — Codex runtime binding
@@ -63,7 +63,10 @@ milestone delivery:
   collaboration.send_message to /root
 - common payload: MILESTONE slice=<id>
   checkpoint_kind=<progress|validated|review> next=<current/next slice or final>
-- progress adds only: completion=<done/remaining> stop_reason=<none|reason>; omit SHA/tests
+- progress adds: completion=<done/remaining> stop_reason=<none|reason>
+  finding_class=<none/mechanically-propagatable/design-invalidating/dangerous-intermediate/scope-collision>
+  diagnostics=<optional provisional commands/results|none>; omit SHA/validation
+  diagnostics are non-gating, non-review evidence and never authorize run-ahead
 - validated/review add: sha=<exact clean SHA>
   validation=<tdd-green(red=<test/reason>;green=<same test + regression>)|targeted-acceptance(<commands/results>)>
   remaining_uncertainty=<behavior-only|structural|hard-critical|anomaly>

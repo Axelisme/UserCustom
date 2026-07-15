@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 53
+orchestrate_compat: 54
 ---
 
 # Orchestrate — Claude Code runtime binding
@@ -45,7 +45,9 @@ milestone delivery: SendMessage(slice, checkpoint_kind, kind-specific evidence, 
 `finding_class` is `none`, `mechanically-propagatable`, `design-invalidating`,
 `dangerous-intermediate`, or `scope-collision`; the final three are retract classes.
 `checkpoint_kind` is `progress`, `validated`, or `review`. Progress carries `completion`,
-`stop_reason`, and `next` only, omitting SHA/tests. Validated/review carry exact `sha`, `finding_class`,
+`stop_reason`, `finding_class`, and `next`, plus optional provisional `diagnostics`, while
+omitting SHA/validation. Diagnostics are non-gating, non-review evidence and never authorize
+run-ahead. Validated/review carry exact `sha`, `finding_class`,
 `validation=tdd-green(...)|targeted-acceptance(...)`, and
 `remaining_uncertainty=behavior-only|structural|hard-critical|anomaly`.
 `checkpoint_kind=review` freezes its SHA and creates review debt. Validated (or normal review)

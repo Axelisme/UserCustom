@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 53
+skill_version: 54
 ---
 
 # Orchestrate
@@ -126,7 +126,8 @@ a clean commit; do not message root for every red/green transition.
 
 Every milestone declares `checkpoint_kind`:
 
-- **progress** — dirty or incomplete progress; not reviewable and not run-ahead evidence;
+- **progress** — dirty or incomplete progress; may carry provisional diagnostics, but is not
+  reviewable or run-ahead evidence;
 - **validated** — clean exact SHA plus targeted acceptance; eligible for normal run-ahead;
 - **review** — a validated checkpoint explicitly frozen as the exact review target; creates
   review debt and stays immutable through closure.
@@ -144,8 +145,8 @@ One-shot tasks create no plan. Cross-session, multi-round, or information-heavy 
 `planning-with-files`; task_plan is the ledger and an optional domain packet is only its
 current-state cache. Decisions take effect in-band; cross-session work persists conclusions
 or ADR pointers without turning files into instructions or workflow signals. After semantic
-plan updates at checkpoint, handoff, resume, or closure boundaries, invoke its explicit
-`compact <task-id>` maintenance; compaction is never a workflow transition.
+plan updates at wave close, checkpoint, handoff, resume, or closure boundaries, invoke its
+explicit `compact <task-id>` maintenance; compaction is never a workflow transition.
 
 ## Definition of done
 

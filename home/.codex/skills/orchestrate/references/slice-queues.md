@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 53
+orchestrate_compat: 54
 ---
 
 # Slice queues
@@ -38,8 +38,10 @@ plus a clean commit. Report compact red/green evidence at the slice boundary, no
 
 Every milestone declares one `checkpoint_kind`:
 
-- **progress** — dirty/incomplete; report completion, stop reason, and next step. It has no
-  review target and does not authorize run-ahead.
+- **progress** — dirty/incomplete; report completion, stop reason, `finding_class`, and next
+  step, plus optional provisional `diagnostics` (commands/results). Diagnostics are
+  non-gating, non-review evidence; progress has no review target and does not authorize
+  run-ahead.
 - **validated** — clean exact SHA with targeted acceptance, validation subtype, and remaining
   uncertainty. It may authorize behavior-dependent normal run-ahead.
 - **review** — validated plus explicitly frozen as an immutable exact-SHA review target. It
@@ -139,11 +141,29 @@ when there is no plan:
 wave N — mode=<route> work=<slices> handoff=<count> wall=<observed, e.g. ~18m|unknown>
 wait=<observed review/gate/resource/decision time, e.g. unknown>
 ledger=<findings>(<retract-class>) rework=<fixes/time>
-review=<count/time> re-verify=<count/time> rounds=<n>
+review=<initial reviews/time> re-review=<closure or refreshed-SHA reviews/time>
+re-verify=<writer/root fix checks/time> rounds=<n>
 ```
 
 Use only runtime timestamps or durations explicitly reported by an agent/tool. `wall=~18m`
 and `wait=unknown` are valid. Never reconstruct or guess timing after the fact. Parallel
-durations may overlap. This is disposable tuning telemetry for communication cost,
-rework/re-review, parallelism, wave size, and retract boundaries — not coordination state or
-a machine-read schema.
+durations may overlap. `review` counts initial reviews, `re-review` counts closure or
+refreshed-SHA reviews, and `re-verify` counts writer/root fix checks. Never infer re-review
+from rounds. This is disposable tuning telemetry for communication cost, review
+amplification, parallelism, wave size, and retract boundaries — not coordination state or a
+machine-read schema.
+
+## Wave-boundary narrative maintenance
+
+At every wave close when a plan exists:
+
+1. reconcile Current State against Git branches, worktrees, status, and exact SHAs;
+2. keep only open/deferred review findings in the active Finding ledger;
+3. append the per-wave metrics above;
+4. collapse closed review findings into counts plus evidence pointers;
+5. after those semantic updates, run `planning-with-files compact <task-id>`; and
+6. remove disposable artifacts only when their evidence is summarized and no unresolved
+   finding points to them.
+
+This maintenance records and compacts narrative only. It never dispatches work or changes
+decision, validation, review, or merge state.

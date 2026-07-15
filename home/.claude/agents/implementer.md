@@ -40,8 +40,10 @@ surfaces): hold at that boundary until its review clears. Never rewrite an annou
 stays yours.
 
 Milestone notifications follow the dispatch contract and always name
-`checkpoint_kind=progress|validated|review`. Progress is dirty/incomplete and reports only
-completion, stop reason, and next step; it is never reviewable or next-slice authorization.
+`checkpoint_kind=progress|validated|review`. Progress is dirty/incomplete and reports
+completion, stop reason, `finding_class`, and next step; it may add provisional `diagnostics`
+from commands/results. Diagnostics are non-gating, non-review evidence, and progress remains
+neither reviewable nor next-slice authorization.
 Validated/review checkpoints report exact SHA, targeted acceptance, validation subtype, and
 remaining uncertainty. `validation=tdd-green(...)` carries red/green evidence;
 `validation=targeted-acceptance(...)` covers non-TDD work. Only `checkpoint_kind=review`

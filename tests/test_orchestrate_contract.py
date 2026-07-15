@@ -52,7 +52,7 @@ class OrchestrateContractTests(unittest.TestCase):
 
     def test_core_defines_checkpoint_taxonomy_and_run_ahead(self) -> None:
         text = normalized_text(ORCHESTRATE / "SKILL.md")
-        self.assertIn("skill_version: 53", text)
+        self.assertIn("skill_version: 54", text)
         self.assertIn("## Routing fast paths", text)
         self.assertIn("checkpoint_kind", text)
         self.assertIn("progress", text)
@@ -116,6 +116,9 @@ class OrchestrateContractTests(unittest.TestCase):
                 self.assertIn("structural", text)
                 self.assertIn("hard-critical", text)
                 self.assertIn("anomaly", text)
+                self.assertIn("diagnostics", text)
+                self.assertIn("non-gating", text)
+                self.assertIn("non-review evidence", text)
                 self.assertNotIn("review_target", text)
 
     def test_disclosed_files_match_entrypoint_compatibility(self) -> None:
@@ -127,7 +130,7 @@ class OrchestrateContractTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path.name):
                 self.assertIn(
-                    "orchestrate_compat: 53", path.read_text(encoding="utf-8")
+                    "orchestrate_compat: 54", path.read_text(encoding="utf-8")
                 )
 
     def test_codex_wait_is_event_driven_not_single_shot(self) -> None:
@@ -143,6 +146,19 @@ class OrchestrateContractTests(unittest.TestCase):
         self.assertIn("wall=~18m", text)
         self.assertIn("wait=unknown", text)
         self.assertIn("Never reconstruct or guess timing", text)
+        self.assertIn("review=<initial reviews/time>", text)
+        self.assertIn("re-review=<closure or refreshed-SHA reviews/time>", text)
+        self.assertIn("re-verify=<writer/root fix checks/time>", text)
+        self.assertIn("Never infer re-review from rounds", text)
+
+    def test_wave_close_maintains_durable_narrative(self) -> None:
+        text = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
+        self.assertIn("## Wave-boundary narrative maintenance", text)
+        self.assertIn("reconcile Current State against Git", text)
+        self.assertIn("only open/deferred review findings", text)
+        self.assertIn("counts plus evidence pointers", text)
+        self.assertIn("compact <task-id>", text)
+        self.assertIn("no unresolved finding", text)
 
     def test_durable_decisions_separate_effect_from_recording(self) -> None:
         text = normalized_text(ORCHESTRATE / "references" / "evidence-and-handoff.md")
@@ -164,6 +180,9 @@ class OrchestrateContractTests(unittest.TestCase):
                 )
                 self.assertIn("permanent executable tests", implementer)
                 self.assertIn("checkpoint_kind=progress|validated|review", implementer)
+                self.assertIn("finding_class", implementer)
+                self.assertIn("diagnostics", implementer)
+                self.assertIn("non-gating, non-review evidence", implementer)
                 self.assertNotIn("review_target", implementer)
                 self.assertIn("permanent regression test", reviewer)
                 self.assertIn("checkpoint_kind=review", reviewer)

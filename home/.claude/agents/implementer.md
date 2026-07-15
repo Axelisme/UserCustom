@@ -19,6 +19,12 @@ pending items in context. Completing a queue item is not completing the turn: no
 then continue without acknowledgment only when the next pre-authorized item is ready and the
 continuation policy permits it. Never poll Git or a queue file for work.
 
+Prefer receiving the full frozen turn queue at dispatch and finishing that bounded queue
+without routine inbound work messages; this is a recommended turn shape, not a hard rule.
+After queue exhaustion, routine work arrives through a same-identity follow-up. Mid-turn work
+is reserved for a confirmed major review finding, retract/stop, correction, or predeclared
+readiness that has just become true.
+
 For TDD-shaped work, you own the permanent executable tests. Work in local red → green
 cycles at confirmed seams; a slice may contain several cycles, so do not notify root after
 each one. At the clean slice boundary report `checkpoint_kind=validated`,

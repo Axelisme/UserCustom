@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Act as the repo-wide orchestrator — plan, delegate to specialized agents, coordinate parallel worktrees, and integrate with verification proportional to risk.
-skill_version: 57
+skill_version: 58
 ---
 
 # Orchestrate
@@ -28,10 +28,11 @@ deviation briefly.
 
 ## Hard rules (this is all of them)
 
-1. A branch that has not passed targeted acceptance is not merged. The final integrated tree
-   runs the **broadest gate required by the repo and risk** once; lanes, writers, and reviewers
-   do not duplicate it. If that is not the full suite, record the selected broader gate and
-   rationale.
+1. A branch that has not passed targeted acceptance is not merged. Only the integration owner
+   runs the **broadest gate required by the repo and risk**; its successful evidence must bind
+   to the final integrated tree. Any later code change invalidates it and requires a new run.
+   Lanes, writers, and reviewers do not duplicate that gate. If that is not the full suite,
+   record the selected broader gate and rationale.
 2. `hard_critical_axes` is the closed list **hardware operation, persistence/migration,
    public wire schema, security**; such diffs require different-identity review.
    `named_review_risks` are task-scoped review shaping and may choose the same depth, but they
@@ -48,7 +49,7 @@ deviation briefly.
 | Q&A, read-only research, one-round review | root only; no branch or plan | none |
 | mechanical batch | one writer and targeted checks | root spot-check; one final gate |
 | normal single writer | task branch in the main checkout | root self-review unless a named risk justifies a reviewer |
-| normal 3–5-slice wave | planner may draft one wave ahead; writer consumes a pre-authorized queue | validated writer run-ahead; cumulative/selected reviewer pipeline |
+| normal multi-slice wave (target 3–5; tail 1–2) | planner may draft one wave ahead; writer consumes a pre-authorized queue | validated writer run-ahead; cumulative/selected reviewer pipeline |
 | structure-dependent foundation or named review risk | freeze one foundation checkpoint when needed | risk-shaped review/waiting |
 | hard-critical diff | freeze one foundation checkpoint | review-before-next-slice; different identity required |
 
@@ -88,9 +89,10 @@ coordination only when branch or landing operations are actually needed.
 4. **Execute.** Preserve user changes; keep useful work committed at coherent checkpoints.
    Root merges lanes serially. Findings return to their original implementer; refreshed-SHA
    closure returns to the original reviewer.
-5. **Verify.** Run targeted evidence, review in proportion to the changed surface, and run
-   the repo/risk-required broader gate once on the final integrated tree. Record the gate and
-   rationale when it is not the full suite. An aborted or unusable gate is never a pass.
+5. **Verify.** Run targeted evidence and review in proportion to the changed surface. The
+   integration owner runs the repo/risk-required broader gate on the final tree; a failure or
+   later code change requires a fresh final-tree run. Record the gate/rationale when it is not
+   the full suite. An aborted or unusable gate is never a pass.
 6. **Land and close.** Obtain explicit authority before persistence landing, squash once,
    clean task-owned worktrees/branches, update durable narrative/backlog when applicable, and
    report decisions plus evidence.
@@ -145,8 +147,8 @@ Evidence ownership is non-duplicative. Root/planner freezes seams, examples, ind
 oracles, and dangerous failures. The writer owns permanent executable tests, functional
 acceptance, and affected regression. The reviewer owns the adversarial matrix, temporary
 reproducers, finding probes, and source audit. A missing-behavior finding returns to the
-writer for a failing permanent regression before the fix. Integration owns the one broad
-gate. Reviews bind to the exact immutable SHA they inspected.
+writer for a failing permanent regression before the fix. Integration owns broad-gate
+execution/final successful evidence. Reviews bind to the exact immutable SHA they inspected.
 
 ## Role pipelines and checkpoints
 
@@ -155,10 +157,17 @@ items, per-item readiness, milestone delivery, `continue_without_ack`, and stop 
 They never invent or poll for the next item. After notifying root, a role consumes the next
 already-ready item when policy permits; queue exhaustion ends the turn but retains the lease.
 
+The **recommended turn shape** is one frozen bounded queue per turn: routine work is prepared
+up front, milestones are one-way reports, and the next batch arrives by same-identity
+follow-up after queue exhaustion. This is **not a hard rule**. Root may deliver a mid-turn
+control delta for a confirmed major review finding, retract/stop condition, correction, or a
+predeclared item whose readiness just became true without changing the current item.
+
 - **Planner:** in `wave-ahead` mode proposes Wave N+1 while Wave N executes. The proposal
-  includes basis/assumptions, 3–5 slices, dependencies, test oracles, risk/review policy, and
-  invalidators. It is not dispatch authority; root reconciles and freezes it at the wave
-  boundary. Planner never advances to N+2 until N+1 is frozen.
+  includes basis/assumptions, target 3–5 slices (tail/final may be 1–2), dependencies, test
+  oracles, risk/review policy, and invalidators. It is not dispatch authority; root
+  reconciles and freezes it at the wave boundary. Planner never advances to N+2 until N+1 is
+  frozen.
 - **Writer:** consumes implementation slices and emits progress/validated/review checkpoints.
   Normal behavior-dependent validation may continue without acknowledgment.
 - **Reviewer:** consumes complete exact-SHA readiness packets. After each verdict it notifies
@@ -206,7 +215,6 @@ transition and produces no semantic content.
 
 ## Definition of done
 
-Design settled; targeted evidence passes; review is proportional to the actual changed
-surface; the final integrated tree receives the one repo/risk-required broader gate; all
+Design settled; targeted evidence passes; review is proportional to the actual changed surface; final-tree broader-gate evidence is current; all
 task-owned lanes, worktrees, and temporary artifacts are cleaned; persistence landing (if
 any) is explicitly authorized and squashed; decisions and evidence are reported.

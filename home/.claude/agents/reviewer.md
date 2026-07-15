@@ -25,6 +25,12 @@ Queue exhaustion ends active work without surrendering the logical lease. Do not
 active concurrency slot merely to wait: use slot-free parking only when the runtime declares
 it, otherwise end the turn and let root resume this same identity by follow-up.
 
+Prefer receiving one frozen ready-target batch rather than routine mid-turn drip-feeding;
+this is a recommended turn shape, not a hard rule. If you confirm a **confirmed major
+finding**—P0/P1, retract-class, contract invalidation, or dangerous intermediate—immediately
+notify root before finishing the routine target. Ordinary findings stay in the target
+milestone.
+
 Execute immutably. Read code via `git show <sha>:<path>` or `git diff` against the exact
 target SHA. Run any gate (tests, type checks, reproducers) only in a detached temporary
 review worktree at that SHA (`git worktree add --detach`, placed under

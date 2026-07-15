@@ -1,0 +1,210 @@
+{
+  "documents": {
+    "SKILL.md": {
+      "bytes": 14477,
+      "sections": {
+        "Core coordination model": "438a962f4121d84ea9497c7b6261ecd79579b216ba65d56ccc0a36054ccdb957",
+        "Definition of done": "8c7cfa7757061a133124fb9eed88c8f9c5b1017772e5cf919ca9e5524b5a516f",
+        "Durable state boundary": "3b99a070a650f721cf028921986ce169dd3a54391d9ee737e93fc7d679d4eede",
+        "Hard rules (this is all of them)": "fba48b51afa33d9481d5d4be5499012533e9915f6fa094bc8924ba0fa4847b36",
+        "Inspection and safety aliases": "02fcf7005e3b2bb63d9862045ff5bf6f7caff5bad4d68806b55245984930cc17",
+        "Load only the branch you need": "c1e390c920dbaaa6465d19a8dfd29b0ee5e1b0fe9af7a8cb9dca1206c103161d",
+        "Operating loop": "d63a918c47d778a49a4bcba5c257113b3da569af997b880f2aee889f16f37318",
+        "Orchestrate": "220ad0b73854480afdc6b123f80ccba65a9ee5a8057a3cce56a7d5536988dfd2",
+        "Review and test ownership": "85ad2fcee49685faaec1138ced1a1406b3944ebfd4333f12a0bef877371f3eb1",
+        "Role pipelines and checkpoints": "69b870b2f0359d99f411b93fe8baff21822eea511d38beede46da4ce1d4e5405",
+        "Routing fast paths": "5199e46f6ebbf14b858470347f642f2e70118ba0ec64c3a93c2e8a92ff9079b0"
+      },
+      "sha256": "5dd58c8658d16e662bd146b69db41c21b71b49b5cf663d3ed94a7b339a593246"
+    },
+    "references/delegation-and-review.md": {
+      "bytes": 8892,
+      "orchestrate_compat": 58,
+      "sections": {
+        "Delegation and review": "d054238daee01e7e917bcea4c46ed519a2e478681552f8627dfe3aee215bdb8e",
+        "Evidence ownership": "115912f79fd6259cf545e300cde892025b904eb0d48c734ea307660440d89c43",
+        "Persistent agents and roles": "6dda248d8de5f899801ad98f423f875a6b43bfe388ba177c5cd0ac9e8503a6a2",
+        "Re-review and immutable execution": "1b4f4cc86efbaa2efb372369fa375d24d83f89e0f5dbe272b467986fcf699cc7",
+        "Review depth": "4398f32723fbe72940fcc194bd53a73a91cfb189152aad9d451ead13875c5dc8",
+        "Review-readiness packet": "0efd2acdab0406cfff18cd2a58a82784282816c1f07f5453a195f197088af434",
+        "Reviewer pipeline": "a6c4d084d9cb5f902a62808fa1c2dc35c8ae40c808a785711ab54583bb71b3c1"
+      },
+      "sha256": "34b1ded2a0745cf5f59b43b2cb9ab25644268cdf4a369ad332588d9c8b653916"
+    },
+    "references/evidence-and-handoff.md": {
+      "bytes": 4049,
+      "orchestrate_compat": 58,
+      "sections": {
+        "Durable narrative": "d4cb9aabe7834dfce81bb5b3bac7bced82d16880d1462bd7f8e3f62d864efa50",
+        "Evidence and handoff": "86d9250330d4b46ce8ce5de4554c89008ee89fbba955769fd06453c9d4ffb1f6",
+        "Session handoff": "1cb298d8d921e1179e1c5dbb1db05dc74fcd5813402b0d2dc7eb93409d3e0d70",
+        "Validation anomalies": "3feeca78a3052741c01dd8cf318a829d02cbd093e7603ad6554565d21c3b7aa9"
+      },
+      "sha256": "87f1d4d6c5ad20fdf44623c6988c3875347f8319bbb66283ccce19e8ce8d91c1"
+    },
+    "references/git-coordination.md": {
+      "bytes": 6031,
+      "orchestrate_compat": 58,
+      "sections": {
+        "Git coordination and landing": "be17c1758ece9a5b6883464f9bf55d83a2e964777e2c863a4872e9e5bb055003",
+        "Landing on persistence": "185126cd572d30c83e6428bee0bc6149fdd6c4d5e91882443b05f554613e1278",
+        "Multi-writer parallelism": "167577a4e0791e6c8a8e58488762868c05a3d9b57304aae433391bfdf453ae38",
+        "Single writer": "cf54e8fbf2fcceddc52976287c5bfadcb1906ec01464de1f0cfa93122f423bc6",
+        "Terms and branch hierarchy": "aede0725a0c1839ec187fc880a86eb761c261b94661aa4c97134de9aaed881a7"
+      },
+      "sha256": "6c2a84a0364f2dcba299bcbb0491340dd771135ef8ca8adc443eb86951b68dc9"
+    },
+    "references/slice-queues.md": {
+      "bytes": 14642,
+      "orchestrate_compat": 58,
+      "sections": {
+        "Checkpoint taxonomy": "971896aa979ec9f5bb97f501b0df4b1fcb48e96b88448ac168c25dcc421d2970",
+        "Findings, preemption, and retraction": "cb9e7f6f931facefa801b832dbcc0a516e40d496b19086d4c35aeeabe1a82df7",
+        "Per-wave metrics": "f73572c9a7918c1ddd4182b84f11daae74729ba964a32598b9d09dc1bfd0669a",
+        "Pipelining and review targets": "32d9a952a73c47a57892efce6782d6b57b1f8c116711fcc502724175b916e7a2",
+        "Planner rolling horizon": "9b901309a1292079ad9c844490dc121a647e54966504a471511dc273c3dbe8fe",
+        "Review policy": "dce5879ff42a49536d2d43351446dacd8c7fa052db7b3bff7714c510ed82975e",
+        "Reviewer target queue": "cb128b81aedb4c5c1ff65293ac29ba2a2c031c63735ed3872afc468873ac47c9",
+        "Role pipelines and slice queues": "7a350967b925d7fe5ebce4d0cf93b28b500cdfaea76fd84f3edaf6f2cebdb6fb",
+        "Shaping the wave": "1fbf1b32c0efc3722464c6191ee6964f5bd8b37283b9ae0a445ce08e09fd8f03",
+        "Shared Role Pipeline Contract": "2413352f68eba9e330a336785ac4496a925591ab55851a8a0647873e93da5362",
+        "Wave-boundary fix wave": "750d25914e130ad8811e097970dcb4aa8b40b606e40b2f77af6f402ad909a85a",
+        "Wave-boundary narrative maintenance": "1264d557ee08f94fcfb6b2500c59fee5428e39b6ab227ad31310ae0b4404954f"
+      },
+      "sha256": "127cb33886c9c6ad58e72839605ee4496391d9f5fa6e51aee10c915e180f2f8f"
+    },
+    "runtime-claude.md": {
+      "bytes": 9366,
+      "orchestrate_compat": 58,
+      "sections": {
+        "Agent teams: evaluated and not adopted": "2c6eb35616cba414229f097acdbb26ebb82271ae3cad9f61100d6e0fc025d1d6",
+        "Capability flag: same-identity continuation": "b80b44a89b6ca3b597858c1cf8edbfcc2ecf32ff4039edc4065b0f9b38ae42ed",
+        "Flow control": "c1be376b18f8faa52b317fa38ba414516c6a6c5f7b178afd7d966cc63813d003",
+        "Fork context policy": "3da9a5f623acf3f888ddc40e80056775329f6a3d944315924f34617b40a70ec7",
+        "Model and sandbox mapping": "f2957f35e9975638c0d793395e5765f9ab7af63e54b7dd583319e70335f7137e",
+        "Orchestrate \u2014 Claude Code runtime binding": "31e1ed41a702694591b50fc0c6556b3774efcddb0123e20d669edc973b9f486a",
+        "Tool binding": "4abda606e02d19aaac130a1163edaf9da9679b993626446153019c700412ecbb"
+      },
+      "sha256": "1bcbca9081cb29ad84d45b70365ccf5e7a0ab74dddc2f6bae42c5b93b3b53ce5"
+    },
+    "runtime-codex.md": {
+      "bytes": 11510,
+      "orchestrate_compat": 58,
+      "sections": {
+        "Flow control": "83fd73409b95a91a9e022e79a9bc3861cdfc329283ca12123c7cdcae63ebfad4",
+        "Orchestrate \u2014 Codex runtime binding": "391af330099a4a8c38a72d54dc0f6d8232b29fb24b8688247dbfcd522a0cecb1",
+        "Profiles and dispatch": "0d362ed1017a0c896db2a44e0661c8e11b47757052a22371d9d10dbff4ff2eb3",
+        "Runtime limits and repo config": "c515449032e065b730ffe73e055c35067cbb3dfec1933dd7bb84e51e2e5d3eaf",
+        "Tool binding": "dbaabdef05b0961e8b5ab4635f8796d272d507f16096f51e31e7fe00c4997237"
+      },
+      "sha256": "cd932101368c4a6c804407d2083532630efee0176da1511274e7ea59391cfa63"
+    },
+    "scripts/merge_slot.py": {
+      "bytes": 14282,
+      "sections": {
+        "__file__": "a2ed4acab952793c557a68b063727f68ad741b26462627fcf8b34135a2b3ac82"
+      },
+      "sha256": "a2ed4acab952793c557a68b063727f68ad741b26462627fcf8b34135a2b3ac82"
+    },
+    "scripts/orchestrate.py": {
+      "bytes": 31991,
+      "sections": {
+        "__file__": "0494dae677d296a71a6fb65c5bab7652371bb686ef74a187d91743a0c5d90df2"
+      },
+      "sha256": "0494dae677d296a71a6fb65c5bab7652371bb686ef74a187d91743a0c5d90df2"
+    }
+  },
+  "orchestrate_compat": 58,
+  "profiles": {
+    ".claude/agents/contract-planner.md": {
+      "bytes": 2374,
+      "sha256": "4a92dd6732b69834f556331c38fe836a6d646a9c39caee4b5fe609245d6c8678",
+      "standing_orders_sha256": "3bc9b3fdc0e1ffbd5359e410f13a7c6495a5eca57215f154621d0a2a64c2a9b8"
+    },
+    ".claude/agents/implementer.md": {
+      "bytes": 5792,
+      "sha256": "5651fe371228461a52a5b826be40395f89899f0a4ce3067e5aad32159c31ea3c",
+      "standing_orders_sha256": "9bc1f5709aa652215db8dcd93e5295a2f66e89eef42df700cb5a525d96ea3ad0"
+    },
+    ".claude/agents/reviewer.md": {
+      "bytes": 6344,
+      "sha256": "2358486a10704258cb98fa93dbe9dd761a67f9c95ba79bf4ea2927cfdcc246b7",
+      "standing_orders_sha256": "d1a7235e4c911537fbc6e4901f75ebb7c31203895a7eddf54e9c88dade840dbd"
+    },
+    ".codex/agents/contract-planner.toml": {
+      "bytes": 2448,
+      "sha256": "c2b28405db4d7f9d78b20fee8638b67e5268a94bdc79e1756ff5219aaf8b1116",
+      "standing_orders_sha256": "3bc9b3fdc0e1ffbd5359e410f13a7c6495a5eca57215f154621d0a2a64c2a9b8"
+    },
+    ".codex/agents/implementer.toml": {
+      "bytes": 5868,
+      "sha256": "3e6105afee6d9e41b171dd16c3309f147b957e239ffe6f1a783d64e5a2a7c8f3",
+      "standing_orders_sha256": "9bc1f5709aa652215db8dcd93e5295a2f66e89eef42df700cb5a525d96ea3ad0"
+    },
+    ".codex/agents/reviewer.toml": {
+      "bytes": 6419,
+      "sha256": "a56872d15549e504669002fadf657ffa9466df2a2ed2b7eb8793d9564e5ed25a",
+      "standing_orders_sha256": "d1a7235e4c911537fbc6e4901f75ebb7c31203895a7eddf54e9c88dade840dbd"
+    }
+  },
+  "release_delta": {
+    "changed_profiles": [
+      ".claude/agents/contract-planner.md",
+      ".claude/agents/implementer.md",
+      ".claude/agents/reviewer.md",
+      ".codex/agents/contract-planner.toml",
+      ".codex/agents/implementer.toml",
+      ".codex/agents/reviewer.toml"
+    ],
+    "changed_sections": {
+      "SKILL.md": [
+        "Definition of done",
+        "Hard rules (this is all of them)",
+        "Operating loop",
+        "Review and test ownership",
+        "Role pipelines and checkpoints",
+        "Routing fast paths"
+      ],
+      "references/delegation-and-review.md": [
+        "Persistent agents and roles",
+        "Reviewer pipeline"
+      ],
+      "references/evidence-and-handoff.md": [],
+      "references/git-coordination.md": [
+        "Landing on persistence",
+        "Multi-writer parallelism",
+        "Single writer"
+      ],
+      "references/slice-queues.md": [
+        "Per-wave metrics",
+        "Pipelining and review targets",
+        "Planner rolling horizon",
+        "Review policy",
+        "Reviewer target queue",
+        "Shared Role Pipeline Contract"
+      ],
+      "runtime-claude.md": [
+        "Flow control",
+        "Tool binding"
+      ],
+      "runtime-codex.md": [
+        "Flow control",
+        "Profiles and dispatch"
+      ],
+      "scripts/merge_slot.py": [
+        "__file__"
+      ]
+    },
+    "from_version": 57,
+    "must_reread": [
+      "SKILL.md",
+      "references/delegation-and-review.md",
+      "references/git-coordination.md",
+      "references/slice-queues.md",
+      "runtime-claude.md",
+      "runtime-codex.md"
+    ]
+  },
+  "schema_version": 1,
+  "skill_version": 58
+}

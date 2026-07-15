@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 57
+orchestrate_compat: 58
 ---
 
 # Orchestrate — Claude Code runtime binding
@@ -60,9 +60,9 @@ run-ahead. Validated/review carry exact `sha`, `finding_class`,
 with behavior-only uncertainty may run ahead; progress never authorizes the next slice.
 
 Planner reports `PLAN_MILESTONE` with `wave`,
-`planning_mode=contract-resolution|wave-ahead`, basis, invalidators, proposed 3–5 items, and
-`outcome=proposal|needs_decision`. Wave-ahead stops after N+1 and never freezes, dispatches, or
-plans N+2.
+`planning_mode=contract-resolution|wave-ahead`, basis, invalidators,
+`items=<target=3-5;tail=1-2 natural slices>`, and `outcome=proposal|needs_decision`.
+Wave-ahead stops after N+1 and never freezes, dispatches, or plans N+2.
 
 Reviewer reports `REVIEW_MILESTONE` with exact target, `outcome=pass|needs_fix|blocked|
 needs_decision`, findings/evidence, and next. PASS plus a complete queued readiness packet may
@@ -71,6 +71,8 @@ non-retract finding requires a pre-authorized independent/surface-disjoint next 
 ready packet means idle, never Git polling. Queue exhaustion ends active work. Claim slot-free
 parking only when the current runtime explicitly reports it; otherwise end the turn and
 resume through same-identity `SendMessage`.
+Report a confirmed major review finding immediately, before finishing the routine target;
+deliver ordinary findings in the target milestone.
 
 The labels make runtime adaptation visible; they are not a mandatory report schema.
 
@@ -106,10 +108,12 @@ needs no `SendMessage` and is unaffected.)
   the corrective delta. Its loaded context is an asset; respawning a fresh identity throws it
   away (and, per the skill, needs an articulable reason).
 - **Pipelined roles** — planner/writer/reviewer use the shared queue contract in
-  `references/slice-queues.md`. With `SendMessage`, each role emits an item milestone and
-  consumes the next ready item allowed by policy: planner stops after one wave proposal,
-  writer continues qualifying normal slices, reviewer continues after PASS. Root alone
-  appends/preempts queues. When `SendMessage` is unavailable, root may let a fully
+  `references/slice-queues.md`. The recommended turn shape is one frozen ready batch: each
+  role emits item milestones and consumes the next ready item allowed by policy without
+  routine inbound drip-feeding. This is not a hard rule. Mid-turn `SendMessage` work is
+  reserved for a confirmed major review finding, retract/stop, correction, or predeclared
+  readiness that has just become true. Routine next-batch work waits for queue exhaustion
+  and a same-identity follow-up. When `SendMessage` is unavailable, root may let a fully
   pre-authorized queue finish in one turn or dispatch one item and stop, depending on
   steering risk. If the next step requires same-identity continuation, follow the capability
   rule above and return `needs_decision`; never respawn and call it continuation.

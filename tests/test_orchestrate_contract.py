@@ -52,7 +52,7 @@ class OrchestrateContractTests(unittest.TestCase):
 
     def test_core_defines_checkpoint_taxonomy_and_run_ahead(self) -> None:
         text = normalized_text(ORCHESTRATE / "SKILL.md")
-        self.assertIn("skill_version: 57", text)
+        self.assertIn("skill_version: 58", text)
         self.assertIn("## Routing fast paths", text)
         self.assertIn("checkpoint_kind", text)
         self.assertIn("progress", text)
@@ -134,7 +134,7 @@ class OrchestrateContractTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path.name):
                 self.assertIn(
-                    "orchestrate_compat: 57", path.read_text(encoding="utf-8")
+                    "orchestrate_compat: 58", path.read_text(encoding="utf-8")
                 )
 
     def test_role_pipeline_keeps_live_queue_in_context(self) -> None:
@@ -280,6 +280,62 @@ class OrchestrateContractTests(unittest.TestCase):
             reviewer = (agents / f"reviewer{suffix}").read_text(encoding="utf-8")
             self.assertIn("without surrendering the logical lease", reviewer)
             self.assertIn("active concurrency slot", reviewer)
+
+    def test_turn_queue_freeze_is_recommended_not_mandatory(self) -> None:
+        core = normalized_text(ORCHESTRATE / "SKILL.md")
+        queues = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
+        self.assertIn("recommended turn shape", core)
+        self.assertIn("frozen bounded queue", core)
+        self.assertIn("not a hard rule", core)
+        self.assertIn("routine work is not drip-fed", queues)
+        self.assertIn("major review finding", queues)
+        self.assertIn("immediate notification", queues)
+        self.assertIn("predeclared readiness", queues)
+
+    def test_work_bearing_delta_uses_followup_without_status_branch(self) -> None:
+        runtime = normalized_text(ORCHESTRATE / "runtime-codex.md")
+        self.assertIn("work-bearing delta", runtime)
+        self.assertIn("always uses `followup_task`", runtime)
+        self.assertIn("running→idle race", runtime)
+        self.assertIn("pure notification", runtime)
+        self.assertNotIn(
+            "running role receives an appended ready item by `send_message`/`followup_task`",
+            runtime,
+        )
+
+    def test_tail_wave_does_not_pad_to_three_slices(self) -> None:
+        core = normalized_text(ORCHESTRATE / "SKILL.md")
+        queues = normalized_text(ORCHESTRATE / "references" / "slice-queues.md")
+        runtime = normalized_text(ORCHESTRATE / "runtime-codex.md")
+        self.assertIn("target 3–5 slices", core)
+        self.assertIn("tail/final wave may contain 1–2", queues)
+        self.assertIn("never pad", queues)
+        self.assertIn("tail=1-2", runtime)
+
+    def test_every_persistence_landing_is_fenced_and_tree_proved(self) -> None:
+        core = normalized_text(ORCHESTRATE / "SKILL.md")
+        git = normalized_text(ORCHESTRATE / "references" / "git-coordination.md")
+        self.assertIn("Every persistence landing claims", git)
+        self.assertIn("owner token", git)
+        self.assertIn("status=acquired", git)
+        self.assertIn("verify <task>", git)
+        self.assertIn("git diff --quiet task/<task> <landed-commit>", git)
+        self.assertIn(
+            "successful evidence must bind to the final integrated tree", core
+        )
+        self.assertIn("Any later code change invalidates it", core)
+        self.assertNotIn("broadest gate required by the repo and risk** once", core)
+
+    def test_major_review_finding_is_reported_before_target_completion(self) -> None:
+        delegation = normalized_text(
+            ORCHESTRATE / "references" / "delegation-and-review.md"
+        )
+        self.assertIn("confirmed major review finding", delegation)
+        self.assertIn("immediately", delegation)
+        for agents, suffix in ((CODEX_AGENTS, ".toml"), (CLAUDE_AGENTS, ".md")):
+            reviewer = normalized_text(agents / f"reviewer{suffix}")
+            self.assertIn("confirmed major finding", reviewer)
+            self.assertIn("immediately notify root", reviewer)
 
     def test_role_profiles_assign_permanent_tests_to_implementer(self) -> None:
         for agents, suffix in ((CODEX_AGENTS, ".toml"), (CLAUDE_AGENTS, ".md")):

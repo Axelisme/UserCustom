@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 57
+orchestrate_compat: 58
 ---
 
 # Orchestrate — Codex runtime binding
@@ -53,6 +53,7 @@ ordered items:
   1. <item; dependencies; readiness; acceptance/output>
   2. <item; dependencies; readiness; acceptance/output>
 continue_without_ack: <qualifying outcome and dependency rule>
+turn queue: <recommended frozen batch; allowed mid-turn control exceptions>
 stop conditions: <when to checkpoint and return needs_decision>
 milestone delivery: send_message(<role milestone and next>), then continue when authorized
 ```
@@ -93,7 +94,7 @@ Planner milestones use:
 ```text
 PLAN_MILESTONE wave=<N+1> planning_mode=<contract-resolution|wave-ahead>
 outcome=<proposal|needs_decision> basis=<SHA/ADRs> invalidators=<conditions>
-items=<3-5 slices with dependencies/acceptance/risk/review policy> next=<idle|stop>
+items=<target=3-5;tail=1-2 slices with dependencies/acceptance/risk/review policy> next=<idle|stop>
 - wave-ahead proposes one wave only; it never freezes/dispatches or advances to N+2
 - notify root, then end the turn and retain the planner lease
 ```
@@ -106,6 +107,7 @@ findings=<severity/path/behavior/evidence/propagation|none>
 evidence=<source audit/adversarial probes/thin commands> next=<target id|idle|stop>
 - pass plus a complete queued readiness packet continues without acknowledgment
 - other outcomes stop by default; independent-nonblocking continuation must be pre-authorized
+- confirmed major findings notify root immediately before the routine target verdict
 - no ready packet means idle; never poll Git
 - queue exhaustion ends the active turn; this runtime does not expose a proven slot-free park,
   so report `park_capability=unknown` and resume by same-identity `followup_task`
@@ -148,13 +150,18 @@ probe loops, or use liveness as phase evidence. Do not infer an agent's phase fr
   carrying the corrective delta. Its loaded context is an asset; respawning a fresh identity
   throws it away (and, per the skill, needs an articulable reason).
 - **Pipelined roles** — planner/writer/reviewer use the shared lease, ordered items,
-  readiness, milestone, continuation, and stop model in `references/slice-queues.md`. A
-  running role receives an appended ready item by `send_message`/`followup_task` at a message
-  boundary; an idle role requires `followup_task` because `send_message` does not start a
-  turn. Roles report every item before continuing, retain only active plus pending items, and
-  never poll Git. Planner stops after one wave proposal; writer continues qualifying normal
-  slices; reviewer continues after PASS when another complete target is ready. Root remains
-  the only producer/preemptor and never stores a shadow queue.
+  readiness, milestone, continuation, and stop model in `references/slice-queues.md`. Prefer
+  one frozen batch per turn and do not drip-feed routine work. Roles report every item before
+  continuing, retain only active plus pending items, and never poll Git. Planner stops after
+  one wave proposal; writer continues qualifying normal slices; reviewer continues after
+  PASS when another complete target was already ready. Root remains the only
+  producer/preemptor and never stores a shadow queue.
+- A root-to-role **work-bearing delta** always uses `followup_task`; it works for both running
+  and idle identities and removes the running→idle race. Use it mid-turn only for a confirmed
+  major review finding, retract/stop/correction, or explicitly predeclared readiness—not as
+  routine queue extension. `send_message` is for a pure notification or added context that
+  must not start a turn. For an urgent invalidation, prefer `interrupt_agent`, then resume the
+  same identity with `followup_task`.
 - `running` proves only liveness, not the current phase; root uses repeated event-driven waits
   and does not build a polling loop. If expected milestones arrive only as final responses,
   repeat the runtime contract and degrade that role to one item per turn. The final event plus

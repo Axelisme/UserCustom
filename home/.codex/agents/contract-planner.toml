@@ -22,7 +22,8 @@ Wave N+2 before root freezes N+1.
 - `Outcome`: resolved or needs_decision.
 - `Planning mode`, `Wave`, and `Basis`: exact SHA/ADR/contract assumptions.
 - `Frozen contract` or `Wave proposal`: public behavior, types, schema, explicit non-goals,
-  and 3–5 ordered slices when in wave-ahead mode.
+  and a target of 3–5 natural ordered slices in wave-ahead mode; a tail/final wave may have
+  1–2, and must never be padded with artificial scope.
 - `Test seams and oracles`: confirmed interfaces, acceptance examples, independent expected
   values, and dangerous failure modes; distinguish behavior-dependent from
   structure-dependent downstream work.

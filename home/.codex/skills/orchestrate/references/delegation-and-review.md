@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 57
+orchestrate_compat: 58
 ---
 
 # Delegation and review
@@ -11,9 +11,10 @@ is available.
 
 ## Persistent agents and roles
 
-- **Root control plane.** Root alone issues/appends/preempts role queues, freezes planner
-  proposals, classifies finding deferral, and serializes collection. Agents notify root at
-  every item boundary; an item milestone is not a request for routine acknowledgment.
+- **Root control plane.** Root alone issues/preempts role queues, freezes planner proposals,
+  classifies finding deferral, and serializes collection. Prefer one complete bounded queue
+  at turn start instead of drip-feeding routine work. Agents notify root at every item
+  boundary; an item milestone is not a request for routine acknowledgment.
 - **Domain lease.** The next slice in the same domain returns to the same agent by default as
   a follow-up carrying only the delta: current SHA, finding/next slice, and scope changes.
   Spawning a new identity requires a reason: independent review, changed domain, or genuinely
@@ -119,6 +120,12 @@ dependency map proves the next target surface-disjoint; reviewer still reports i
 and never decides whether the finding itself defers. If no ready packet exists, end the turn
 and retain the lease; never poll Git. Queue exhaustion, stop, or inability to notify root ends
 the turn. Finding closure and refreshed-SHA review stay with the same reviewer.
+
+A **confirmed major review finding**—P0/P1, retract-class, contract invalidation, or a
+dangerous intermediate—must be reported to root immediately, without waiting for target
+completion or the routine verdict milestone. Root may then interrupt affected running work.
+Other findings remain in the current review and are reported at its normal milestone so they
+do not create avoidable inbound interruptions.
 
 ## Re-review and immutable execution
 

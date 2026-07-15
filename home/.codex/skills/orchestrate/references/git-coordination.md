@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 57
+orchestrate_compat: 58
 ---
 
 # Git coordination and landing
@@ -23,8 +23,8 @@ collecting or deleting lanes, or landing on a persistence branch. The hard rules
 
 Single-writer code changes work directly on the task branch with no lane and normally no
 worktree: create `task/<task>` in the main checkout, implement, run targeted acceptance and
-the repo/risk-required broader gate with the real environment, then land and delete the task
-branch. Use a worktree for one writer only when the main checkout must stay available or
+the repo/risk-required broader gate with the real environment, then land, prove tree
+identity, and delete the task branch. Use a worktree for one writer only when the main checkout must stay available or
 user-owned dirty state would conflict. Q&A, read-only research, and one-round review create
 no branch.
 
@@ -42,7 +42,7 @@ git merge --no-ff "agent/<task>/<lane>"
 git worktree remove ".agent_state/worktrees/<task>-<lane>"
 ```
 
-Root may use the v57 `orchestrate lane create|cleanup`, `review checkout|cleanup`, and
+Root may use the v58 `orchestrate lane create|cleanup`, `review checkout|cleanup`, and
 `collect` pseudo aliases from the entrypoint instead. They are stateless guards around these
 same operations: exact inputs only, JSON evidence, Git recheck immediately before mutation,
 and Fast Fail on dirty/drifted/unabsorbed state. They never infer a verdict or queue state.
@@ -65,28 +65,44 @@ and Fast Fail on dirty/drifted/unabsorbed state. They never infer a verdict or q
 
 ## Landing on persistence
 
-Landing is one squash commit with explicit user authority. After landing, delete the task
-branch and remaining lanes; squash shares no ancestry with integration, so the task branch
-has no further purpose.
+Landing is one squash commit with explicit user authority. Every persistence landing claims
+the merge slot, even when no contention is currently visible. After the squash commit, prove
+`git diff --quiet task/<task> <landed-commit>` before deleting the task branch; squash shares
+no ancestry, so content identity—not ancestry—is the deletion authority.
 
-Multi-task contention uses the merge slot (`../scripts/merge_slot.py`), an ephemeral lock +
-FIFO queue and never task state. Reset `.agent_state/merge-slot/` only while quiescent: no
-command running and no holder in the landing critical section. Deleting/recreating its flock
-file while active can admit concurrent holders.
+The merge slot (`../scripts/merge_slot.py`) is an ephemeral claimant-scoped FIFO queue plus
+owner-token lease, never task state. `status` is read-only; claim/renew use atomic lock
+replacement. Reset `.agent_state/merge-slot/` only while quiescent: no command running and no
+holder in the landing critical section. Deleting/recreating its flock file while active can
+admit concurrent holders.
 
 ```bash
-<repo-python> "$SKILL_DIR/scripts/merge_slot.py" --root <repo> \
-  status | claim <task> [--wait N] | renew <task> | release <task> | yield <task>
+merge-slot := <repo-python> "$SKILL_DIR/scripts/merge_slot.py" --root <repo>
+merge-slot status
+merge-slot claim <task> [--owner-token <token>] [--wait N]
+merge-slot verify <task> --owner-token <token>
+merge-slot renew|release|yield <task> --owner-token <token>
 ```
+
+`claim` generates and returns an owner token when omitted. Preserve it only in root context;
+do not write it to task_plan or logs. Only `status=acquired` authorizes entry to the critical
+section. `already_acquired` and `queued` never do. Every later operation must present the
+same token; a second session with the same task-id is a distinct FIFO claimant.
 
 Keep expensive work off-slot:
 
-1. Rebase `task/<task>` onto the persistence tip, run the repo/risk-required broader gate
-   once, record the command/rationale and that tip.
-2. Claim the slot and re-read the persistence tip.
-3. Tip unchanged: squash-merge and release.
-4. Tip moved: use `git merge-tree --write-tree`. Only when conflict-free **and** new commits
-   are path-disjoint from this task may root rebase in place, run thin checks, merge, and
-   release (`renew` if needed). Otherwise `yield` and restart from step 1.
+1. Rebase `task/<task>` onto the persistence tip. The integration owner runs the
+   repo/risk-required broader gate and records command/rationale plus exact tree. A failed
+   gate followed by code changes invalidates the old evidence and requires a fresh run.
+2. Claim the slot, retain the returned owner token, and proceed only on `status=acquired`.
+3. Immediately before persistence mutation, run `verify <task> --owner-token <token>` and
+   re-read the persistence tip.
+4. Tip unchanged: squash-merge, commit, prove task/landed tree identity, then release with the
+   owner token.
+5. Tip moved: `yield`; never adapt the candidate inside the landing critical section. Use
+   `git merge-tree --write-tree` off-slot. When conflict-free **and** new commits are
+   path-disjoint, rebase, rerun the repo/risk-required broader gate on that new final tree,
+   then reclaim from step 2. Otherwise restart from step 1 and resolve explicitly.
 
-Expired holders have lost both lock and queue position and cannot `renew` or `yield`.
+Expired holders have lost both lock and claimant-specific queue position and cannot
+`verify`, `renew`, `release`, or `yield`.

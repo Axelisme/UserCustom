@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 57
+orchestrate_compat: 58
 ---
 
 # Role pipelines and slice queues
@@ -27,6 +27,13 @@ Item completion is not turn completion. A role first sends its milestone, then c
 next already-ready item when policy permits. It never invents or polls for work. Queue
 exhaustion ends the turn but retains the lease; root resumes the same identity with a delta.
 
+The recommended, not mandatory, turn shape freezes one bounded queue at dispatch; routine
+work is not drip-fed into a running role. Milestones flow outward without acknowledgment,
+then root sends the next batch after turn completion. Mid-turn inbound control remains valid
+for a confirmed major review finding, retract/stop/correction, or a predeclared readiness
+change that does not alter the current item. Count these exceptions as
+`mid-turn-inbound=<n>`; zero is preferred, not required.
+
 The live queue exists only in agent context (spawn plus follow-up messages). Across sessions,
 the domain packet records the current item, bounded pending items, exact checkpoint, and next
 gate so root can reconcile against Git and resend a delta. Never create a queue file, queue
@@ -40,8 +47,10 @@ The planner profile supports `planning_mode=contract-resolution|wave-ahead`:
 
 - `contract-resolution` settles an uncertain contract/dependency split before writers start.
 - `wave-ahead` proposes exactly Wave N+1 while frozen Wave N executes. It includes basis and
-  assumptions, 3–5 proposed slices, behavior/structure dependencies, test seams/oracles,
-  write scopes, hard axes, named risks, review policy, and invalidation triggers.
+  assumptions, target 3–5 proposed slices, behavior/structure dependencies, test
+  seams/oracles, write scopes, hard axes, named risks, review policy, and invalidation
+  triggers. A tail/final wave may contain 1–2 natural slices; never pad, split, or add scope
+  merely to reach three.
 
 A wave-ahead proposal is evidence, not authority. Root reconciles it with integrated Git,
 review verdicts, and open findings at the Wave N boundary, then freezes it or sends the same
@@ -98,11 +107,14 @@ default. Root may pre-authorize continuation after a non-retract finding only wh
 target is explicitly independent and surface-disjoint; the reviewer still reports the
 finding immediately and never decides its deferral.
 
-If the next packet arrives while the reviewer is running, the runtime delivers it as a queue
-delta. If the reviewer is already idle, root uses same-identity follow-up. No ready packet
-means idle, not Git polling. A runtime-declared slot-free park may retain the logical identity
-without occupying concurrency; otherwise the turn ends and follow-up resumes it. Finding
-closure and refreshed-SHA review return to the same reviewer lease.
+Prefer dispatching a bounded batch of packets that are already ready. A newly ready routine
+target waits for same-identity follow-up after queue exhaustion; a predeclared readiness-only
+append may be delivered mid-turn when overlap materially helps and the current review cannot
+change. No ready packet means idle, not Git polling. A runtime-declared slot-free park may
+retain the logical identity without occupying concurrency; otherwise the turn ends and
+follow-up resumes it. Finding closure and refreshed-SHA review return to the same reviewer
+lease. A confirmed major review finding gets immediate notification to root before the
+target's routine verdict so affected work can be stopped.
 
 ## Review policy
 
@@ -124,7 +136,8 @@ review_continuation: pass-only | independent-nonblocking
 
 Exploratory mode has planner/investigator work only. Direct mode uses root planning and no
 role pipeline. Normal mode runs planner one wave ahead, writer slices, and cumulative/selected
-review targets concurrently. Foundation-gated mode pauses the writer until the foundation
+review targets concurrently. The normal writer turn targets one frozen wave; reviewer turns
+consume ready target batches. Foundation-gated mode pauses the writer until the foundation
 review releases dependent items. Hard-critical mode remains serial across dependent
 writer/reviewer items. Parallel-domain mode may have separate writer leases and one ordered
 reviewer queue, but root still collects serially and plans only one wave beyond the critical
@@ -163,9 +176,10 @@ Normal validated checkpoints need not create per-slice review debt. Root follows
 cadence: promote selected SHAs to `checkpoint_kind=review`, or create one cumulative
 wave-boundary review/self-review. A warm reviewer consumes only complete review targets and
 may pipeline PASS results. Announced commits stay append-only while the writer runs ahead;
-the 3–5-slice wave bounds both implementation and review accumulation.
+the target 3–5-slice wave (tail/final 1–2) bounds implementation and review accumulation.
 
-Hard-critical slices do not pipeline. Building on an unreviewed
+Hard-critical slices do not pipeline and normally use one writer slice plus one reviewer
+target per turn. Building on an unreviewed
 persistence/wire/security/hardware change is the compounding risk the model rejects. Named
 review risks pipeline or wait according to their frozen treatment. Planner one-wave-ahead is
 allowed here only as a conditional proposal, never as dependent writer authorization.
@@ -209,7 +223,8 @@ At wave close, append one compact line to task_plan current state, or state it i
 when there is no plan:
 
 ```text
-wave N — mode=<route> work=<slices> handoff=<count> [wall=<observed, e.g. ~18m|unknown>]
+wave N — mode=<route> work=<slices> turns=<count> handoff=<count> mid-turn-inbound=<count>
+[wall=<observed, e.g. ~18m|unknown>]
 [wait=<observed review/gate/resource/decision time, e.g. unknown>]
 ledger=<findings>(<retract-class>) rework=<fixes/time>
 review=<initial reviews/time> re-review=<closure or refreshed-SHA reviews/time>

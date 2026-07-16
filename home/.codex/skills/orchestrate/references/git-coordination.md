@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 65
+orchestrate_compat: 66
 ---
 
 # Git coordination and landing
@@ -55,8 +55,13 @@ adapter reports it but **does not infer a verdict** or claim that a formal revie
 - Same-file or same public interface/schema/fixture work is serial in one worktree.
 - Root collects in batches: several accepted lanes in one integration pass, merged serially
   inside it. Shared foundation lands on integration first; dependent lanes start from that SHA.
-- A writer may stack its next lane on its own announced unreviewed SHA; a later finding lands
-  as a follow-up fix commit on top. Never rewrite an announced SHA that later work stacks on.
+- A writer may stack its next lane on **its own** announced unreviewed SHA; a later finding
+  lands as a follow-up fix commit on top. Never rewrite an announced SHA that later work
+  stacks on.
+- **Cross-identity work bases only on a seam-ready SHA**: the commit where the writer declared
+  the frozen public seam stable (`Seam-Ready: true` trailer, or the slice's terminal validated
+  SHA). Working-progress SHAs are visibility, never a base for another identity — the seam may
+  still move under them.
 - Never copy, create, or repair environments (`.venv`, `node_modules`, caches) in worktrees.
   Point the main checkout's toolchain at worktree sources; for Python, a common shape is
   `PYTHONPATH=<worktree>/<pkg-root> <main>/.venv/bin/python -m pytest ...`. Follow repo docs

@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 65
+orchestrate_compat: 66
 ---
 
 # Orchestrate — Codex runtime binding
@@ -39,8 +39,9 @@ immediate action; file existence alone is inert.
 
 Send one semantic envelope to root at every observable boundary — **for a writer, after every
 commit** (`state=progress`); after each item or when the declared cadence passes; and one
-terminal envelope per item. Per-commit progress is what lets dependent lanes pipeline on the
-announced SHA and lets root answer the user without touching the assignee:
+terminal envelope per item. Per-commit progress gives root real-time position without
+touching the assignee; **cross-identity pipelining bases only on a SHA the writer declared
+seam-ready**, never on every progress SHA:
 
 ```text
 event=milestone
@@ -53,14 +54,33 @@ findings=<ids or []>
 next=continue|idle|stop
 ```
 
-Use the resolved message capability for this event. Run `orchestrate milestone lint` when
-machine validation is useful. Delivery is **at-least-once, deduplicated by `item_id`**: a
-milestone counts as delivered only when root acknowledged it or its receipt is otherwise
-observable. Until then, repeat the full envelope verbatim in the final response — a repeated
-envelope is cheap, a lost terminal envelope (findings, verdicts) is the one thing this
-protocol must never drop. The runtime completion event means only turn completion. If
-milestone delivery fails, end the turn with the envelope in the final response and retain any
-spool item.
+Run `orchestrate milestone lint` when machine validation is useful. Delivery is
+**at-least-once, deduplicated by `item_id`**: a milestone counts as delivered only when root
+acknowledged it or its receipt is otherwise observable. Until then, repeat the full envelope
+verbatim in the final response — a repeated envelope is cheap, a lost terminal envelope
+(findings, verdicts) is the one thing this protocol must never drop. The runtime completion
+event means only turn completion.
+
+### v2 transport — real-time messages
+
+Workers hold a mid-turn message tool: send each progress and terminal envelope through it as
+the boundary happens, and send a confirmed major finding immediately. If a send fails, end
+the turn with the envelope in the final response and retain any spool item.
+
+### v1 transport — git-carried progress
+
+Workers cannot message root mid-turn; the terminal envelope arrives only in the final
+response. Do not pretend otherwise:
+
+- **A writer's commit is its progress milestone.** Envelope semantics travel as commit
+  trailers (`Item: <id>`, `Seam-Ready: true`); no separate outbox file duplicates them.
+- Root harvests position by **event-driven read-only reads of lane branches** — when a user
+  question or a scheduling decision needs it. This touches no identity and is not the
+  forbidden fixed-interval status polling; the liveness cadence trigger is measured the same
+  way (no new commit across the declared cadence within root's wall-clock bound).
+- A reviewer or other non-writing role that confirms a **retract-class finding stops work and
+  ends the turn immediately** — the terminal envelope is the immediate report. Auditing on
+  past the finding delays the stop root must issue.
 
 ## Tool binding
 

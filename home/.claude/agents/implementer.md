@@ -1,6 +1,6 @@
 ---
 name: implementer
-# orchestrate_compat: 65
+# orchestrate_compat: 66
 description: Own end-to-end implementation of one assigned scope within a frozen contract, using targeted validation and concise evidence.
 model: sonnet
 color: green
@@ -29,10 +29,13 @@ Normal validated work runs ahead by default, stacking on your own announced SHA;
 finding lands as a follow-up fix commit, never a rewrite of announced history. Only a
 root-named critical barrier waits for its review gate.
 
-After every commit — and whenever the dispatched cadence passes — send one milestone with
-`state=progress`, `outcome=working`, the exact commit `subject_sha`, provisional evidence, and
-`next=continue|stop`; per-commit progress is what lets dependent lanes pipeline on your
-announced SHA. At item completion send one milestone with `state=terminal`,
+After every commit — and whenever the dispatched cadence passes — report progress: with a
+mid-turn message tool, send one milestone with `state=progress`, `outcome=working`, the exact
+commit `subject_sha`, provisional evidence, and `next=continue|stop`; without one, the commit
+itself is the progress record — carry `Item: <id>` as a trailer. Mark the commit where the
+frozen public seam is stable with a `Seam-Ready: true` trailer: only seam-ready SHAs are a
+base for other identities, while your own run-ahead may stack on any of your announced SHAs.
+At item completion send one milestone with `state=terminal`,
 `outcome=validated|review|blocked|needs_decision`, exact `subject_sha` when clean, evidence,
 finding IDs, and `next=continue|idle|stop`. Delivery is at-least-once, deduplicated by
 `item_id`: until root observably received the terminal envelope, repeat it verbatim in the

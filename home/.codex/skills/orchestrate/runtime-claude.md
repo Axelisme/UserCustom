@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 65
+orchestrate_compat: 66
 ---
 
 # Orchestrate — Claude Code runtime binding
@@ -28,7 +28,8 @@ role, lease, generation, and adapter command.
 When `SendMessage` exists, send an envelope at every observable boundary — for a writer,
 after every commit (`state=progress`) — and one terminal envelope per item. Cadence is
 declared in discrete units (commits, items, sub-steps), never wall-clock, which a subagent
-cannot observe; root measures wall-clock itself while waiting:
+cannot observe; root measures wall-clock itself while waiting. Cross-identity pipelining
+bases only on a SHA the writer declared seam-ready, never on every progress SHA:
 
 ```text
 event=milestone

@@ -1,175 +1,90 @@
 ---
-orchestrate_compat: 60
+orchestrate_compat: 61
 ---
 
 # Delegation and review
 
-Read this reference before the first agent action, assigning roles, or requesting/closing a
-review. Then read `../runtime-<runtime>.md` completely for the current runtime's actual
-spawn/follow-up/interrupt/wait capabilities. Runtime tools, not config files, determine what
-is available.
+Read this before the first agent action or review decision, then read the matching runtime
+binding. Runtime tools—not config files or this reference—define available identity,
+continuation, parking, retirement, model, and sandbox capabilities.
 
-## Persistent agents and roles
+## Roles and continuity
 
-- **Root control plane.** Root alone freezes and publishes ready items, preempts queues,
-  freezes planner proposals, classifies finding deferral, and serializes collection. v60 may
-  use a durable delivery spool only for normal writer/reviewer work; planner and hard-critical
-  work remain direct. Agents notify root at every item boundary.
-- **Domain lease.** Bind a stable lease ID and generation to one canonical agent task name,
-  runtime agent ID, role, domain, and absolute queue path. The next same-domain slice returns
-  to that lease. Spawning/rebinding a new identity requires a reason and the spool generation
-  rules; a completed turn or commit does not end ownership.
-- Finding fixes return to the original implementer. Finding closure and refreshed-SHA review
-  return to the original reviewer.
-- **Reviewer queue lease.** Pause and resume a warmed reviewer; do not respawn it. Root is the
-  only producer of its exact-SHA packets and that lease is the only consumer. Warm-up
-  produces exactly four artifacts: source map, acceptance/adversarial matrix, stop conditions,
-  and deletion checklist. Formal review reuses them and adds exact-diff inspection. A PASS
-  verdict may continue directly to the next complete ready target in its pre-authorized queue.
-- A logical reviewer lease does not justify occupying an active concurrency slot while no
-  packet is ready. If the runtime explicitly supports slot-free parking, park it; otherwise
-  end the turn and resume the same identity by follow-up. Record capability as
-  `slot-free|slot-held|unknown` instead of assuming.
-- If same-identity continuation is needed but the runtime cannot provide it, return
-  `needs_decision`; never silently rebuild context in a fresh identity.
-- Roles: `contract-planner`, `repo-investigator`, `implementer`,
-  `mechanical-implementer`, `reviewer`, `integration-reviewer`; `web-researcher` and
-  `mcp-skill-tester` as needed. Read-only discipline is behavioral. A reviewer may need a
-  detached workspace-write checkout for gates; the invariant is reviewed-SHA immutability.
-- Root plans inline by default. Use `repo-investigator` for a deep factual question. The
-  `contract-planner` profile accepts `planning_mode=contract-resolution` when contract/write
-  split has not converged, or `planning_mode=wave-ahead` on long tasks to propose exactly the
-  next wave while the current frozen wave executes. Planner output is evidence; root alone
-  reconciles and freezes it, and no planner advances two waves ahead.
-- Profiles may read content skills such as `codebase-design` or `domain-modeling`. They never
-  invoke coordination skills that spawn agents or re-derive dispatch inputs. Root names any
-  desired coordination lens in `reviewer_focus`.
+Root alone freezes work, grants authority, classifies deferral, and integrates. A role gets a
+bounded objective, workdir/scope, basis, acceptance, stop conditions, checkpoint budget, and
+either inline content, a dispatch-packet path/hash, or a spool binding.
 
-## Skill upgrade boundary
+Keep the same identity for the same domain when the runtime supports it. Finding fixes return
+to the original implementer; finding closure and refreshed-SHA review return to the original
+reviewer. Spawn a new identity for independent review, a changed domain, or genuine parallel
+scope—not merely because a turn ended. Role switching requires a new profile bootstrap and
+cannot make an identity independent from work it implemented.
 
-- **Pin the loaded orchestrate version** for each current role turn. Root adopts a newer
-  compatible version only at a **safe control boundary**: before dispatch, after a milestone,
-  or after turn completion.
-- An **in-flight immutable review** need not restart unless the release diff changes hard
-  rules, review semantics, or readiness requirements that apply to its target.
-- Root sends only the **effective delta** to running roles; **sub-agents never load
-  orchestrate**. Their pinned profile/prompt remains authoritative until the boundary.
-
-## Review depth
-
-Classify the checkpoint's changed surface, not the task's maximum global risk:
-
-- **Hard-critical** — a diff crossing `hard_critical_axes` (hardware,
-  persistence/migration, public wire schema, security): one mandatory different-identity
-  reviewer over that diff.
-- **Named review risk** — a task-scoped `named_review_risk`: root explicitly chooses extra
-  depth, identity, and waiting. It may mirror hard-critical treatment but never expands the
-  closed list.
-- **Normal** — internal presenters, adapters, GUI glue, private lifecycle: one focused review
-  or a root self-review with a one-line rationale.
-- **Mechanical** — deletion, rename, fixture move, docs wording: root spot-checks scope, tree
-  identity, and a targeted scan; no reviewer dispatch.
-
-The two-agent `code-review` skill is a Standards/Spec milestone audit that root runs only
-when requested or materially justified, never automatically per slice or by a sub-agent.
-
-Review cadence is separate from depth: `none|cumulative|selected|per-slice`; waiting is
-`async|before-dependent|before-next`; reviewer continuation is
-`pass-only|independent-nonblocking`. Freeze all three with the wave. A reviewer queue never
-creates review debt by itself; only the writer's announced `checkpoint_kind=review` does.
+Planner output is advice: contract resolution or one conditional wave ahead. Root freezes it.
+Writers own scoped implementation. Reviewers are read-only with respect to the reviewed tree;
+workspace write exists only for detached worktrees and test caches. Agents never spawn
+coordination sub-agents or decide landing/finding deferral.
 
 ## Evidence ownership
 
-Root/planner freezes test seams, acceptance examples, independent oracles, and dangerous
-failure modes. Writer owns permanent executable tests, functional acceptance, and affected
-regression. Reviewer owns the adversarial matrix, temporary reproducers, finding-specific
-probes, and source audit — not a parallel permanent-test lane or habitual rerun of writer
-suites. A missing behavior returns to the writer for a failing permanent regression before
-the fix. Root owns SHA/parent/scope/tree-identity checks and at most one thin critical slice.
-Integration owns broader-gate execution; only the current task-scoped result is landing
-evidence, while any wave-scoped result is provisional. Duplicate evidence needs a stated
-reason such as suspected environment skew.
+Evidence is intentionally non-duplicative:
 
-## Review-readiness packet
+- Root/planner freezes seams, acceptance examples, independent oracles, and dangerous failure
+  modes.
+- **Writer owns permanent executable tests**, functional acceptance, and affected regression.
+- **Reviewer owns** source audit, adversarial matrix, temporary reproducers, and
+  finding-specific probes—not a second permanent-test lane or habitual suite rerun.
+- **Integration owns** SHA/parent/tree checks and the final repo/risk-required broader gate.
 
-Before dispatching a frozen diff, root sends a compact in-band **review-readiness packet**;
-trim only fields that truly do not apply:
+A missing behavior returns to the writer for a failing permanent regression before the fix.
+Duplicate evidence needs a reason, such as suspected environment skew.
 
-```text
-base_sha: <review base>
-target_sha: <exact immutable SHA>
-frozen_contract: <task-plan / ADR pointer plus required invariants>
-hard_critical_axes: <hardware / persistence / public wire / security / none>
-named_review_risks: <task-scoped risks plus chosen depth/identity/waiting / none>
-changed_surface: <paths, seams, lifecycle or wire behavior>
-acceptance_and_evidence: <targeted commands and results>
-known_anomalies: <exact failed command, classification, replacement evidence>
-invalid_substitutes: <old-SHA reviews, partial suites, unproved tree equivalence>
-reviewer_focus: <dangerous failures and explicit non-goals>
-review_round: <1..N>
-review_kind: <initial-full | refreshed-full | focused-closure>
-closes_findings: <finding ids | []>
-failure_family: <family | none>
-test_model_revision_required: <true | false>
-```
+## Review depth and readiness
 
-Missing base/target SHA, frozen contract, or changed surface is a readiness failure, not an
-invitation for the reviewer to reconstruct the task. Name the dangerous failure for every
-hard-critical axis and named review risk. Old-SHA review, aborted suites, or incomplete
-tree-equivalence proof never become target-SHA sign-off.
+Review the checkpoint's changed surface:
 
-## Reviewer pipeline
+| surface | default depth |
+|---|---|
+| mechanical | root scope/tree spot-check |
+| normal internal behavior | root self-review or focused reviewer |
+| named review risk | explicitly chosen depth/identity/waiting |
+| critical boundary | enter [Critical review](critical-review.md) |
 
-Each reviewer item is one complete readiness packet, either direct or an immutable v60 spool
-file. After inspecting its immutable target, the reviewer sends root a verdict milestone
-before removing that file or touching any next item:
+Review cadence is independent: none, cumulative, selected, or per-slice. Wait only where the
+dependency or frozen risk treatment requires it. A queue entry never creates review debt;
+root creates a review target by authorizing an exact immutable SHA.
 
-```text
-delivery_phase: milestone
-base_sha: <review base>
-target_sha: <reviewed exact SHA>
-outcome: pass | needs_fix | blocked | needs_decision
-findings: <severity + path + behavior + evidence + propagation class | none>
-evidence: <source audit, adversarial probes, thin commands/results>
-next: <ready target id | idle | stop>
-review_round: <1..N>
-review_kind: <initial-full | refreshed-full | focused-closure>
-closes_findings: <finding ids | []>
-failure_family: <family | none>
-test_model_revision_required: <true | false>
-```
+A readiness packet—inline or via [dispatch packet](dispatch-packets.md)—names at least:
 
-`pass` plus a ready packet permits continuation without acknowledgment. Other outcomes stop
-by default. Root may pre-authorize `independent-nonblocking` continuation only when the
-dependency map proves the next target surface-disjoint; reviewer still reports immediately
-and never decides whether the finding itself defers. If no ready packet exists, end the turn
-and retain the lease; never poll Git. Queue exhaustion, stop, or inability to notify root ends
-the turn. Finding closure and refreshed-SHA review stay with the same reviewer.
+- base and exact target SHA;
+- frozen contract/invariants and changed surface;
+- hard axes/named risks and dangerous failures;
+- acceptance evidence and known anomalies;
+- reviewer focus/non-goals;
+- findings/round context when closing prior review.
 
-A **confirmed major review finding**—P0/P1, retract-class, contract invalidation, or a
-dangerous intermediate—must be reported to root immediately, without waiting for target
-completion or the routine verdict milestone. Root may then interrupt affected running work.
-Other findings remain in the current review and are reported at its normal milestone so they
-do not create avoidable inbound interruptions.
+Missing target, contract, scope, or dangerous oracle is a readiness failure. Old-SHA review,
+aborted suites, and unproved tree equivalence are invalid substitutes.
 
-## Re-review and immutable execution
+## Reviewer mental model
 
-- Re-review is finding-focused: the finding delta plus its high-risk adjacent surface. Start
-  a fresh full review only when rework changes authority, persistence, public schema, or
-  process lifecycle. Docs-only closure checks current wording, links, and negative scans.
-- One stable target gets one `initial-full` review and one focused closure by default.
-  Authority/schema/lifecycle rework inserts a `refreshed-full` round before closure. A new P1
-  in round three means the contract, source map, or test model is wrong: stop and re-freeze.
-  Two rounds of one failure family likewise trigger a test-model correction. Count the first
-  pass as `review_round=1`, any authority/schema/lifecycle refresh as
-  `review_kind=refreshed-full`, and narrow verification as `focused-closure`; always name the
-  closed findings/family and whether test-model revision is required.
-- Execute review gates only from immutable checkouts: `git show`/`git diff` for reading, or a
-  detached temporary worktree at the exact SHA. A live-writer checkout voids the evidence.
-  Only an announced clean **review checkpoint** starts a gate; a dirty progress/code
-  checkpoint does not.
-- Reviews attach to exact SHAs. After collection, if the integration tree should equal the
-  reviewed lane, prove it with `git diff --quiet <lane-sha> <integration-sha>`. If trees
-  differ and a critical surface may have changed (or unchanged content cannot be proved),
-  review the integration SHA; otherwise record a concise root self-review rationale. A
-  conflict-free merge alone is not equivalence.
+Inspect source/diff first. Run only thin adversarial commands from a detached checkout at the
+target SHA; a live-writer checkout voids evidence. Challenge the oracle, ownership, lifecycle,
+scope, and dangerous failures—green tests prove behavior, not that the seam is correct.
+
+Report findings with severity, path, observable behavior, evidence, and propagation shape.
+Root decides deferral. A confirmed major finding (P0/P1, contract invalidation, retract class,
+or dangerous intermediate) is sent immediately so root can stop affected work; ordinary
+findings stay in the target's one terminal milestone.
+
+Normal re-review is finding-focused. Critical hostile proof, refreshed-review criteria, and
+dependent-work release live together in [Critical review](critical-review.md). After collection,
+prove reviewed/integration tree identity or review the integration SHA when reviewed content
+may differ.
+
+## Skill upgrades
+
+Pin a role turn to the profile/dispatch it loaded. Adopt a new orchestrate version at a safe
+boundary—before dispatch, after a milestone, or after turn completion. An immutable review
+restarts only when the release changes an applicable hard rule, readiness condition, or
+review meaning. Sub-agents never load orchestrate; root sends only the effective delta.

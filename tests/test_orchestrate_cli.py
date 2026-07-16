@@ -61,19 +61,19 @@ class OrchestrateCliTests(unittest.TestCase):
         self.assertEqual(doctor.returncode, 0, doctor.stderr)
         payload = json.loads(doctor.stdout)
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["skill_version"], 60)
+        self.assertEqual(payload["skill_version"], 61)
         self.assertEqual(payload["profiles"], 6)
         manifest = json.loads(
-            (SKILL / "manifests" / "60.json").read_text(encoding="utf-8")
+            (SKILL / "manifests" / "61.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(manifest["release_delta"]["from_version"], 59)
+        self.assertEqual(manifest["release_delta"]["from_version"], 60)
         self.assertIn("SKILL.md", manifest["release_delta"]["changed_sections"])
         self.assertIn("SKILL.md", manifest["release_delta"]["must_reread"])
 
-        diff = run_cli("diff", "51", "60", "--runtime", "codex")
+        diff = run_cli("diff", "51", "61", "--runtime", "codex")
         self.assertEqual(diff.returncode, 0, diff.stderr)
         payload = json.loads(diff.stdout)
-        self.assertEqual(payload["compat"], [51, 60])
+        self.assertEqual(payload["compat"], [51, 61])
         self.assertEqual(payload["runtime"], "codex")
         self.assertIn("SKILL.md", payload["must_reread"])
         self.assertNotIn("runtime-claude.md", payload["must_reread"])
@@ -107,8 +107,8 @@ class OrchestrateCliTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertTrue(payload["different_identity"])
         self.assertTrue(payload["requirements_satisfied"])
-        self.assertEqual(payload["profile_manifest_version"], 60)
-        self.assertEqual(payload["profile_compat"], 60)
+        self.assertEqual(payload["profile_manifest_version"], 61)
+        self.assertEqual(payload["profile_compat"], 61)
         self.assertTrue(payload["profile_compat_matches_current"])
         self.assertEqual(payload["park_capability"], "unknown")
         self.assertEqual(len(payload["profile_sha256"]), 64)
@@ -273,168 +273,109 @@ class OrchestrateCliTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             payload = json.loads(result.stdout)
-            self.assertEqual(payload["profile_manifest_version"], 60)
-            self.assertEqual(payload["profile_compat"], 60)
+            self.assertEqual(payload["profile_manifest_version"], 61)
+            self.assertEqual(payload["profile_compat"], 61)
 
-    def test_packet_lint_accepts_valid_writer_milestone(self) -> None:
+    def test_milestone_lint_accepts_one_role_neutral_envelope(self) -> None:
+        cases = {
+            "writer": ("validated", "a" * 40),
+            "reviewer": ("pass", "b" * 40),
+            "planner": ("proposal", None),
+        }
         with tempfile.TemporaryDirectory() as temporary:
-            packet = write_packet(
-                Path(temporary),
-                {
-                    "delivery_phase": "milestone",
-                    "checkpoint_kind": "validated",
-                    "next": "slice-2",
-                    "finding_class": "none",
-                    "sha": "a" * 40,
-                    "validation": "targeted-acceptance(pytest: pass)",
-                    "remaining_uncertainty": "behavior-only",
-                },
-            )
+            root = Path(temporary)
+            for role, (outcome, subject_sha) in cases.items():
+                payload: dict[str, object] = {
+                    "event": "milestone",
+                    "item_id": f"{role}-item",
+                    "state": "terminal",
+                    "outcome": outcome,
+                    "evidence": "targeted evidence or artifact pointer",
+                    "findings": [],
+                    "next": "idle",
+                }
+                if subject_sha is not None:
+                    payload["subject_sha"] = subject_sha
+                path = root / f"{role}.json"
+                path.write_text(json.dumps(payload), encoding="utf-8")
 
-            result = run_cli(
-                "packet", "lint", "--role", "writer", "--input", str(packet)
-            )
+                result = run_cli(
+                    "milestone", "lint", "--role", role, "--input", str(path)
+                )
 
-            self.assertEqual(result.returncode, 0, result.stderr)
-            payload = json.loads(result.stdout)
-            self.assertTrue(payload["ok"])
-            self.assertEqual(payload["role"], "writer")
-            self.assertFalse(payload["delivery_inferred"])
-            self.assertEqual(payload["errors"], [])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                linted = json.loads(result.stdout)
+                self.assertTrue(linted["ok"])
+                self.assertFalse(linted["delivery_inferred"])
 
-    def test_packet_lint_rejects_illegal_checkpoint_and_final_only_delivery(
-        self,
-    ) -> None:
+    def test_milestone_lint_rejects_old_duplicate_schema(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             packet = write_packet(
                 Path(temporary),
                 {
                     "delivery_phase": "final",
-                    "checkpoint_kind": "integration-fix",
-                    "next": "done",
-                    "finding_class": "none",
+                    "checkpoint_kind": "validated",
+                    "sha": "a" * 40,
                 },
             )
 
             result = run_cli(
-                "packet", "lint", "--role", "writer", "--input", str(packet)
+                "milestone", "lint", "--role", "writer", "--input", str(packet)
             )
 
             self.assertEqual(result.returncode, 1, result.stderr)
             errors = " ".join(json.loads(result.stdout)["errors"])
-            self.assertIn("checkpoint_kind", errors)
-            self.assertIn("delivery_phase", errors)
-
-    def test_packet_lint_checks_checkpoint_specific_fields(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            missing_evidence = write_packet(
-                root,
-                {
-                    "delivery_phase": "milestone",
-                    "checkpoint_kind": "validated",
-                    "next": "done",
-                    "finding_class": "unknown",
-                },
-            )
-            validated = run_cli(
-                "packet",
-                "lint",
-                "--role",
-                "writer",
-                "--input",
-                str(missing_evidence),
-            )
-            self.assertEqual(validated.returncode, 1, validated.stderr)
-            errors = " ".join(json.loads(validated.stdout)["errors"])
             for field in (
-                "finding_class",
-                "sha",
-                "validation",
-                "remaining_uncertainty",
+                "event",
+                "item_id",
+                "state",
+                "outcome",
+                "evidence",
+                "findings",
+                "next",
             ):
                 self.assertIn(field, errors)
 
-            progress_path = root / "progress.json"
-            progress_path.write_text(
+    def test_milestone_lint_checks_progress_and_subject_sha(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            invalid = write_packet(
+                root,
+                {
+                    "event": "milestone",
+                    "item_id": "slice-a",
+                    "state": "terminal",
+                    "outcome": "validated",
+                    "evidence": "pytest pass",
+                    "findings": [],
+                    "next": "continue",
+                },
+            )
+            result = run_cli(
+                "milestone", "lint", "--role", "writer", "--input", str(invalid)
+            )
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("subject_sha", result.stdout)
+
+            progress = root / "progress.json"
+            progress.write_text(
                 json.dumps(
                     {
-                        "delivery_phase": "milestone",
-                        "checkpoint_kind": "progress",
-                        "next": "slice-1",
-                        "finding_class": "none",
-                        "completion": "half",
-                        "stop_reason": "none",
-                        "sha": "a" * 40,
+                        "event": "milestone",
+                        "item_id": "slice-a",
+                        "state": "progress",
+                        "outcome": "working",
+                        "evidence": "budget checkpoint: investigating parser",
+                        "findings": [],
+                        "next": "continue",
                     }
                 ),
                 encoding="utf-8",
             )
-            progress = run_cli(
-                "packet", "lint", "--role", "writer", "--input", str(progress_path)
+            accepted = run_cli(
+                "milestone", "lint", "--role", "writer", "--input", str(progress)
             )
-            self.assertEqual(progress.returncode, 1, progress.stderr)
-            self.assertIn("progress packet must omit sha", progress.stdout)
-
-    def test_packet_lint_requires_review_context_and_round_model(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            packet = write_packet(
-                Path(temporary),
-                {
-                    "delivery_phase": "milestone",
-                    "outcome": "pass",
-                    "findings": "none",
-                    "evidence": "source audit",
-                    "next": "idle",
-                },
-            )
-
-            result = run_cli(
-                "packet", "lint", "--role", "reviewer", "--input", str(packet)
-            )
-
-            self.assertEqual(result.returncode, 1, result.stderr)
-            errors = " ".join(json.loads(result.stdout)["errors"])
-            for field in (
-                "base_sha",
-                "target_sha",
-                "frozen_contract",
-                "review_round",
-                "review_kind",
-                "closes_findings",
-                "failure_family",
-                "test_model_revision_required",
-            ):
-                self.assertIn(field, errors)
-
-    def test_packet_lint_accepts_focused_closure(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            packet = write_packet(
-                Path(temporary),
-                {
-                    "delivery_phase": "milestone",
-                    "base_sha": "a" * 40,
-                    "target_sha": "b" * 40,
-                    "frozen_contract": "ADR-0042",
-                    "changed_surface": "runtime lifecycle",
-                    "outcome": "pass",
-                    "findings": "none",
-                    "evidence": "focused probe: pass",
-                    "next": "idle",
-                    "review_round": 3,
-                    "review_kind": "focused-closure",
-                    "closes_findings": ["F3"],
-                    "failure_family": "lifecycle",
-                    "test_model_revision_required": False,
-                },
-            )
-
-            result = run_cli(
-                "packet", "lint", "--role", "reviewer", "--input", str(packet)
-            )
-
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertTrue(json.loads(result.stdout)["ok"])
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
 
     def test_collect_help_exposes_authorization_not_review_claim(self) -> None:
         result = run_cli("collect", "--help")

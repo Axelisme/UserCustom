@@ -1,170 +1,75 @@
 ---
-orchestrate_compat: 60
+orchestrate_compat: 61
 ---
 
 # Orchestrate — Claude Code runtime binding
 
-This file is the hand-written **Claude Code** companion for the `orchestrate` skill. It maps
-the skill's abstract capabilities (spawn / follow-up / interrupt / wait / status) to the tools
-actually exposed in this runtime. It is hand-maintained and lives inside the skill directory
-as `runtime-claude.md`; the Codex counterpart is `runtime-codex.md`.
+Current tool availability is authoritative. Claude subagents start fresh; their prompt must
+carry the objective, workdir/scope, basis, acceptance, authority, stop conditions, checkpoint
+budget, and artifact pointers.
 
-## Tool binding
+## Tool and profile binding
 
-| skill capability | Claude Code tool |
+| capability | Claude tool |
 |---|---|
-| spawn | `Agent` (`prompt` carries the full context; `subagent_type` selects the profile; `model`, `isolation:"worktree"`, `run_in_background`) |
-| message (add context) | `SendMessage` (by agent id/name) — **see capability flag below** |
-| follow-up (same identity, next slice) | `SendMessage` (same agent id/name; context preserved) — **see capability flag below** |
+| spawn | `Agent` with the requested `subagent_type`; fall back explicitly to `general-purpose` |
+| milestone / follow-up | `SendMessage`, only when currently exposed |
 | interrupt | `TaskStop` |
-| wait / event | subagents run in the background by default and notify the lead on completion; use `Monitor` for active waiting |
-| status | `TaskList` / `TaskGet` / `TaskOutput` |
-| ephemeral worktree isolation | `Agent` with `isolation:"worktree"` (single-agent, auto-cleanup). Durable / cross-terminal worktrees use plain Git or the entrypoint's explicit guarded aliases per `references/git-coordination.md` |
+| wait/status | background completion plus `Monitor`, `TaskList`, `TaskGet`, `TaskOutput` |
+| ephemeral isolation | `Agent(isolation="worktree")` |
 
-Profiles map to `Agent`'s `subagent_type`: `contract-planner`, `repo-investigator`,
-`web-researcher`, `implementer`, `mechanical-implementer`, `reviewer`, `integration-reviewer`,
-`mcp-skill-tester` (registered as user-level Claude Code agent types in `~/.claude/agents/`;
-a repo may override or extend them with its own `.claude/agents/`). If a profile is not
-registered in the current session, fall back to `general-purpose` and say so.
+Profile names map to registered user/repo agents. A selected profile/model/worktree is an
+observed capability, not something config alone proves. For a long direct contract, send an
+immutable dispatch-packet absolute path and SHA-256; for a spool consumer, send queue path,
+role, lease, generation, and adapter command.
 
-When different identity or a warm reviewer matters, use the entrypoint's `orchestrate
-identity` pseudo command with the runtime-observed agent id, selected profile, writer id, and
-`park_capability=slot-free|slot-held|unknown`. The hash report proves profile content, not
-that the runtime selected or parked it; capability still comes from current tools.
+## One milestone
 
-For any pipelined role, use the same compact contract. Omit fields that add no value for a
-small or exploratory task:
+When `SendMessage` exists, every item sends one envelope before continuing or ending:
 
 ```text
-profile_requested=<subagent_type>
-profile_effective=<selected subagent_type/model/isolation>
-lease: <role/domain; writer scope or reviewer immutable scope>
-wave + basis: <wave id; exact SHA/ADR/contract assumptions>
-ordered items or spool binding:
-  <direct items, or absolute queue path + role + lease_id + lease_generation>
-continue_without_ack: <qualifying outcome and dependency rule>
-stop conditions: <when to checkpoint and return needs_decision>
-milestone delivery: SendMessage(<role milestone and next>) when available
+event=milestone
+item_id=<stable id>
+state=progress|terminal
+outcome=<role-specific outcome>
+subject_sha=<exact SHA when applicable>
+evidence=<compact result or artifact pointer>
+findings=<ids or []>
+next=continue|idle|stop
 ```
 
-For a v60 normal writer/reviewer spool, the spawn prompt also names the canonical agent task
-name and absolute queue path. The inventory milestone echoes role, lease ID, and
-`lease_generation` before consumption. It also provides the exact `orchestrate queue` adapter
-command; agents never hand-edit published files. Planner and hard-critical work remain direct.
-
-`finding_class` is `none`, `mechanically-propagatable`, `design-invalidating`,
-`dangerous-intermediate`, or `scope-collision`; the final three are retract classes.
-`checkpoint_kind` is `progress`, `validated`, or `review`. Progress carries `completion`,
-`stop_reason`, `finding_class`, and `next`, plus optional provisional `diagnostics`, while
-omitting SHA/validation. Diagnostics are non-gating, non-review evidence and never authorize
-run-ahead. Validated/review carry exact `sha`, `finding_class`,
-`validation=tdd-green(...)|targeted-acceptance(...)`, and
-`remaining_uncertainty=behavior-only|structural|hard-critical|anomaly`.
-`checkpoint_kind=review` freezes its SHA and creates review debt. Validated (or normal review)
-with behavior-only uncertainty may run ahead; progress never authorizes the next slice.
-When `SendMessage` exists, every packet carries `delivery_phase=milestone` and is sent before
-the final response; a single-item turn is not exempt. The pre-final checklist confirms the
-message succeeded and enum/required fields are valid. Without `SendMessage`, root must
-predeclare the one-item final-response fallback; it is capability degradation, not a normal
-milestone.
-For a spool item, a writer removes it only after a delivered terminal validated/review
-milestone; progress retains it. A reviewer removes it only after its terminal verdict is
-delivered. Both inspect after inventory, at each item boundary, and pre-final—not on a timer.
-Malformed, stale, stopped, or undelivered items remain for reconciliation.
-Root may lint a supplied packet, but `delivery_phase` is only a declaration; the linter does
-not prove that `SendMessage` preceded the final response.
-
-Planner reports `PLAN_MILESTONE` with `wave`,
-`planning_mode=contract-resolution|wave-ahead`, basis, invalidators,
-`items=<target=3-5;tail=1-2 natural slices>`, and `outcome=proposal|needs_decision`.
-Wave-ahead stops after N+1 and never freezes, dispatches, or plans N+2.
-
-Reviewer reports `REVIEW_MILESTONE` with exact target, `outcome=pass|needs_fix|blocked|
-needs_decision`, findings/evidence, and next. PASS plus a complete queued readiness packet may
-continue without acknowledgment. Other outcomes stop by default; continuation after a
-non-retract finding requires a pre-authorized independent/surface-disjoint next target. No
-ready packet means idle, never Git polling. Queue exhaustion ends active work. Claim slot-free
-parking only when the current runtime explicitly reports it; otherwise end the turn and
-resume through same-identity `SendMessage`.
-Report a confirmed major review finding immediately, before finishing the routine target;
-deliver ordinary findings in the target milestone.
-Every review milestone also names `base_sha`, `review_round`,
-`review_kind=initial-full|refreshed-full|focused-closure`, `closes_findings`,
-`failure_family`, and `test_model_revision_required`.
-
-The labels make runtime adaptation visible; they are not a mandatory report schema.
-
-## Capability flag: same-identity continuation
-
-`SendMessage` is the only implementation of follow-up / domain-lease continuation.
-
-- **Official `claude` CLI**: `SendMessage` is gated behind `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`,
-  and the gate is deliberate. With the flag off (default) the tool does not exist and no
-  subagent can be continued.
-- **This build** may expose `SendMessage` directly. **Do not assume** — check whether
-  `SendMessage` is in the currently available tool list.
-
-**When absent (hard rule, overrides any auto-degradation):** if same-identity continuation is
-needed and `SendMessage` is unavailable → stop and report `needs_decision` to the user. Do
-**not** silently respawn a fresh identity and rebuild context from reports, and do not guess
-tool names. (One-shot fan-out — spawn → background → completion notification → collect —
-needs no `SendMessage` and is unaffected.)
+The final response does not duplicate it; runtime completion means only that the turn ended.
+If `SendMessage` is absent, root must predeclare a one-item final-response fallback. When
+same-identity continuation is required and `SendMessage` is absent, return `needs_decision`;
+never respawn and call it continuity.
 
 ## Flow control
 
-- Subagents run in the background by default and notify the lead on completion — never build
-  polling loops. Spawn independent agents in a single message so they actually run in
-  parallel.
-- **Warm-up = early background spawn of read-only roles.** While the contract is still being
-  discussed, an investigator can already build its source map in the background — speculative
-  read-only work costs nothing to discard. Writers are never spawned speculatively; they
-  start only after the contract is frozen.
-- **Slice long work vertically.** Deliver in reviewable slices with an event per finished
-  slice, so root integrates early and steers — never wait for one giant black-box delivery.
-- **Stalls: interrupt, then correct — don't respawn.** Inspect with `TaskOutput`/`Monitor`,
-  stop with `TaskStop`, then continue the *same* agent via a `SendMessage` follow-up carrying
-  the corrective delta. Its loaded context is an asset; respawning a fresh identity throws it
-  away (and, per the skill, needs an articulable reason).
-- **Idle-first dispatch** — for normal writer/reviewer work, publish one bounded ready batch,
-  check task status once, and use `SendMessage` only to wake an idle consumer. A running
-  consumer discovers routine additions at an item boundary. This enqueue-side inspection is
-  event-driven, not polling; no ready work means idle without filler.
-- On the agent's completion event, process its milestone/stop first, inspect the queue once,
-  and wake it only if work remains and no unresolved stop exists. This completion-side check
-  closes the running-to-idle race. Direct messages remain for wake-up, planner/hard-critical
-  work, urgent correction, major finding, retract, and stop.
-- The spool is at-least-once. If delivery succeeded but removal did not, reconcile item ID,
-  Git, and milestone evidence instead of repeating work. When `SendMessage` is unavailable,
-  the same-identity capability rule still applies; never respawn and call it continuation.
+- Spawn independent background agents together, then advance on completion events—not polls.
+- Ready direct work wakes an idle identity. Running spool consumers discover routine additions
+  at item boundaries; root also inspects once on their completion event to avoid lost wakeup.
+- Major finding, retract, correction, and stop remain direct. Use `TaskStop` for urgent
+  invalidation, then continue the same identity when possible.
+- Pass may continue to a complete pre-authorized review target; other outcomes stop unless
+  independent continuation was frozen. Hard-critical dependent work waits.
 
-## Fork context policy
+## Stalled work
 
-Claude Code subagents are **always fresh** — they inherit none of the lead's conversation
-history. The spawn `prompt` must therefore carry everything: objective, workdir, file scope,
-frozen decisions, acceptance commands, stop conditions, and artifact pointers.
+Dispatch declares a task-appropriate checkpoint budget. A period without tool activity while
+the model reasons is not proof of a stall. After the budget passes without a milestone:
 
-## Model and sandbox mapping
+1. inspect runtime activity/waiting metadata when available, without Git/process polling;
+2. send one liveness ping asking for progress, blocker, or a coherent checkpoint;
+3. without a response, interrupt and resume the same identity with a recovery delta. Use a
+   replacement only for unavailable continuity, a changed domain, or required independence.
 
-- **Model tier**: use `Agent`'s `model` — high → `opus`, mid → `sonnet`, low → `haiku`
-  (omit to inherit the session model).
-- **Sandbox**: Claude Code does not enforce per-agent read-only. Read-only roles are
-  approximated by the agent definition's tools allowlist (no `Edit`/`Write`/`NotebookEdit`);
-  regardless of enforcement, a read-only role writing files is a behavioral violation.
-- **Nesting**: workers must not spawn sub-agents (skill policy, stricter than the runtime).
+## Capability boundaries
 
-## Agent teams: evaluated and not adopted
+Official Claude `SendMessage` may require an experimental flag; check the live tool list.
+Parking, retirement, slot accounting, and role switching are runtime capabilities, not skill
+assumptions. A role switch reloads the profile and never makes an implementer an independent
+reviewer. Workers do not spawn sub-agents. Read-only roles remain behaviorally read-only even
+when the runtime cannot enforce a separate sandbox.
 
-Claude Code's experimental agent teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) were
-evaluated and rejected for this skill; the binding stays on native subagents. Reasons:
-
-- Teams coordinate through state files (`~/.claude/tasks/{team}/`, mailbox JSONs under
-  `~/.claude/teams/`) — exactly the workflow-state machinery the skill forbids; that state
-  also lives outside Git, so `/resume` cannot restore it (crash recovery breaks).
-- Teammates self-claim tasks and message each other without the lead, bypassing root's
-  steering points: write-scope declaration, run-ahead retraction, severity-routed
-  preemption.
-- Experimental reliability (task-status lag, unmarked completions) and ~3–4× token cost.
-
-Native `Agent` + `SendMessage` already covers the load-bearing needs: same-identity
-follow-up (domain lease), background execution with completion events, parallel read-only
-fan-out. Revisit only if teams gain a root-mediated mode and Git-recoverable state.
+Experimental agent teams remain outside this binding because their autonomous task/mailbox
+state bypasses root authority. Reconsider only if they gain root-mediated, recoverable state.

@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 60
+orchestrate_compat: 61
 ---
 
 # Evidence and handoff
@@ -82,15 +82,16 @@ review-readiness packet.
   concurrent domains justify `domains/<domain>.md` (owner/reviewer, current SHA, pointers and
   one-line summaries of frozen decisions, next step). Single-domain tasks use task_plan's
   Current State directly.
-- A packet never copies decision text. Rewrite it at lease handoffs/checkpoints and delete it
-  when the domain completes; task_plan retains the durable phase history.
+- A **domain packet** never copies decision text. Rewrite it at lease handoffs/checkpoints and
+  delete it when the domain completes; task_plan retains the durable phase history. An
+  immutable dispatch packet is separate frozen input and is authorized only by a direct
+  message naming its path/hash.
 - Reports return in-band. Messages carry milestones, findings, and decisions. Outside the
-  closed durable-delivery-spool exception, files carry evidence only: disposable bulk payloads under
+  closed spool/dispatch-packet transports, files carry evidence only: disposable bulk payloads under
   `.agent_state/artifacts/<task>/<agent>-<topic>.md`, durable investigator maps in the plan
   directory. Reports include a digest and path; root reads selectively.
-- A spool item may carry already-ready work but never its outcome; every other file remains
-  evidence/narrative only. No file replaces a milestone, infers completion, or acts as a
-  controller. There are no mandatory per-agent report files.
+- Spool/dispatch files may carry frozen work but never outcomes. No file replaces a milestone,
+  infers completion, or acts as a controller. There are no mandatory per-agent report files.
 
 ## Session handoff
 

@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 60
+orchestrate_compat: 61
 ---
 
 # Git coordination and landing
@@ -42,7 +42,7 @@ git merge --no-ff "agent/<task>/<lane>"
 git worktree remove ".agent_state/worktrees/<task>-<lane>"
 ```
 
-Root may use the v59 `orchestrate lane create|cleanup`, `review checkout|cleanup`, and
+Root may use `orchestrate lane create|cleanup`, `review checkout|cleanup`, and
 `collect` pseudo aliases from the entrypoint instead. They are stateless guards around these
 same operations: exact inputs only, JSON evidence, Git recheck immediately before mutation,
 and Fast Fail on dirty/drifted/unabsorbed state. They never infer a verdict or queue state.
@@ -78,6 +78,11 @@ owner-token lease, never task state. `status` is read-only; claim/renew use atom
 replacement. Reset `.agent_state/merge-slot/` only while quiescent: no command running and no
 holder in the landing critical section. Deleting/recreating its flock file while active can
 admit concurrent holders.
+
+State-entering guards run manifest/compat preflight before lane/review creation, collection,
+packet/queue publication, or merge-slot claim. Status and cleanup/recovery remain available
+without a remembered session flag. This mechanizes compatibility instead of relying on root
+to remember `doctor`.
 
 ```bash
 merge-slot := <repo-python> "$SKILL_DIR/scripts/merge_slot.py" --root <repo>

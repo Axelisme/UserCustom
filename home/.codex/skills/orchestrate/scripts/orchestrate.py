@@ -19,6 +19,7 @@ from typing import Any, Sequence
 
 MANIFEST_SCHEMA = 1
 QUEUE_VERSION = 1
+DISPATCH_PACKET_VERSION = 1
 ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 EXACT_SHA_PATTERN = re.compile(r"^[0-9a-fA-F]{40,64}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -32,22 +33,24 @@ PHASE_ROW_PATTERN = re.compile(
     r"^\|\s*(?P<phase>[^|]+?)\s*\|\s*"
     r"(?P<status>pending|in_progress|blocked|completed)\s*\|"
 )
-CHECKPOINT_KINDS = ("progress", "validated", "review")
-FINDING_CLASSES = (
-    "none",
-    "mechanically-propagatable",
-    "design-invalidating",
-    "dangerous-intermediate",
-    "scope-collision",
-)
-REMAINING_UNCERTAINTIES = (
-    "behavior-only",
-    "structural",
-    "hard-critical",
-    "anomaly",
-)
-REVIEW_OUTCOMES = ("pass", "needs_fix", "blocked", "needs_decision")
-REVIEW_KINDS = ("initial-full", "refreshed-full", "focused-closure")
+MILESTONE_STATES = ("progress", "terminal")
+MILESTONE_NEXT = ("continue", "idle", "stop")
+MILESTONE_OUTCOMES = {
+    "planner": ("proposal", "needs_decision"),
+    "writer": ("validated", "review", "blocked", "needs_decision"),
+    "reviewer": ("pass", "needs_fix", "blocked", "needs_decision"),
+}
+MILESTONE_FIELDS = {
+    "event",
+    "item_id",
+    "state",
+    "outcome",
+    "subject_sha",
+    "evidence",
+    "findings",
+    "next",
+    "details",
+}
 COLLECT_REVIEW_KINDS = (
     "different-identity",
     "focused",
@@ -65,6 +68,24 @@ QUEUE_FIELDS = {
     "basis_sha",
     "hard_critical_axes",
 }
+DISPATCH_ROLES = ("planner", "writer", "reviewer")
+HARD_CRITICAL_AXES = ("hardware", "persistence", "security", "atomic-cutover")
+DISPATCH_FIELDS = {
+    "dispatch_packet_version",
+    "packet_id",
+    "role",
+    "basis_sha",
+    "hard_critical_axes",
+}
+DISPATCH_SECTIONS = (
+    "Authority",
+    "Acceptance",
+    "Non-goals",
+    "Exact literals",
+    "Oracles",
+    "Review policy",
+    "Stop conditions",
+)
 
 
 class OrchestrateError(RuntimeError):
@@ -287,8 +308,8 @@ def command_release_manifest(args: argparse.Namespace) -> dict[str, Any]:
     return {"ok": True, "output": str(output), "skill_version": args.version}
 
 
-def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
-    skill_dir = Path(args.skill_dir).resolve()
+def verify_release(skill_dir: Path) -> dict[str, Any]:
+    skill_dir = skill_dir.resolve()
     version = skill_version(skill_dir)
     manifest = load_manifest(skill_dir, version)
     observed = build_manifest(skill_dir, version)
@@ -327,6 +348,22 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
         "documents": len(observed["documents"]),
         "profiles": len(observed["profiles"]),
         "errors": errors,
+    }
+
+
+def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
+    return verify_release(Path(args.skill_dir))
+
+
+def require_release_preflight(skill_dir: Path) -> dict[str, Any]:
+    result = verify_release(skill_dir)
+    if not result["ok"]:
+        raise OrchestrateError(
+            "release preflight failed: " + "; ".join(result["errors"])
+        )
+    return {
+        "skill_version": result["skill_version"],
+        "orchestrate_compat": result["orchestrate_compat"],
     }
 
 
@@ -463,157 +500,106 @@ def command_identity(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def read_packet(path: str) -> tuple[dict[str, Any], bytes]:
+def read_json_object(path: str, *, label: str) -> tuple[dict[str, Any], bytes]:
     try:
         data = sys.stdin.buffer.read() if path == "-" else Path(path).read_bytes()
         payload = json.loads(data)
     except (OSError, json.JSONDecodeError) as exc:
-        raise OrchestrateError(f"cannot read packet JSON: {exc}") from exc
+        raise OrchestrateError(f"cannot read {label} JSON: {exc}") from exc
     if not isinstance(payload, dict):
-        raise OrchestrateError("packet JSON must be an object")
+        raise OrchestrateError(f"{label} JSON must be an object")
     return payload, data
 
 
-def require_packet_fields(
-    packet: dict[str, Any], fields: Sequence[str], errors: list[str]
+def require_json_fields(
+    payload: dict[str, Any], fields: Sequence[str], errors: list[str]
 ) -> None:
     for field in fields:
-        if field not in packet:
+        if field not in payload:
             errors.append(f"missing required field: {field}")
 
 
-def validate_enum(
-    packet: dict[str, Any],
+def validate_json_enum(
+    payload: dict[str, Any],
     field: str,
     choices: Sequence[str],
     errors: list[str],
 ) -> None:
-    if field in packet and packet[field] not in choices:
+    if field in payload and payload[field] not in choices:
         errors.append(f"{field} must be one of: {', '.join(choices)}")
 
 
 def validate_exact_sha_field(
-    packet: dict[str, Any], field: str, errors: list[str]
+    payload: dict[str, Any], field: str, errors: list[str]
 ) -> None:
-    value = packet.get(field)
+    value = payload.get(field)
     if value is not None and (
         not isinstance(value, str) or not EXACT_SHA_PATTERN.fullmatch(value)
     ):
         errors.append(f"{field} must be an exact 40-64 character hexadecimal SHA")
 
 
-def validate_writer_packet(packet: dict[str, Any]) -> list[str]:
+def validate_milestone(payload: dict[str, Any], *, role: str) -> list[str]:
     errors: list[str] = []
-    require_packet_fields(
-        packet,
-        ("delivery_phase", "checkpoint_kind", "next", "finding_class"),
+    required = ("event", "item_id", "state", "outcome", "evidence", "findings", "next")
+    require_json_fields(
+        payload,
+        required,
         errors,
     )
-    if packet.get("delivery_phase") != "milestone":
-        errors.append("delivery_phase must be milestone, before the final response")
-    validate_enum(packet, "checkpoint_kind", CHECKPOINT_KINDS, errors)
-    validate_enum(packet, "finding_class", FINDING_CLASSES, errors)
-    checkpoint = packet.get("checkpoint_kind")
-    if checkpoint == "progress":
-        require_packet_fields(packet, ("completion", "stop_reason"), errors)
-        for forbidden in ("sha", "validation", "remaining_uncertainty"):
-            if forbidden in packet:
-                errors.append(f"progress packet must omit {forbidden}")
-    elif checkpoint in ("validated", "review"):
-        require_packet_fields(
-            packet, ("sha", "validation", "remaining_uncertainty"), errors
+    unexpected = sorted(payload.keys() - MILESTONE_FIELDS)
+    if unexpected:
+        errors.append(f"unexpected fields: {', '.join(unexpected)}")
+    if payload.get("event") != "milestone":
+        errors.append("event must be milestone")
+    item_id = payload.get("item_id")
+    if item_id is not None and (
+        not isinstance(item_id, str) or not ID_PATTERN.fullmatch(item_id)
+    ):
+        errors.append("item_id must be a stable identifier")
+    validate_json_enum(payload, "state", MILESTONE_STATES, errors)
+    validate_json_enum(payload, "next", MILESTONE_NEXT, errors)
+    evidence = payload.get("evidence")
+    if evidence is not None and (not isinstance(evidence, str) or not evidence.strip()):
+        errors.append("evidence must be a non-empty string")
+    findings = payload.get("findings")
+    if findings is not None and (
+        not isinstance(findings, list)
+        or any(not isinstance(item, str) or not item.strip() for item in findings)
+    ):
+        errors.append("findings must be a list of non-empty ids")
+    details = payload.get("details")
+    if details is not None and not isinstance(details, dict):
+        errors.append("details must be an object when supplied")
+    validate_exact_sha_field(payload, "subject_sha", errors)
+
+    state = payload.get("state")
+    outcome = payload.get("outcome")
+    if state == "progress":
+        if outcome != "working":
+            errors.append("progress requires outcome=working")
+        if "subject_sha" in payload:
+            errors.append("progress must omit subject_sha")
+    elif state == "terminal":
+        if outcome not in MILESTONE_OUTCOMES[role]:
+            errors.append(
+                f"terminal {role} outcome must be one of: "
+                + ", ".join(MILESTONE_OUTCOMES[role])
+            )
+        sha_required = (role == "writer" and outcome in ("validated", "review")) or (
+            role == "reviewer" and outcome in ("pass", "needs_fix")
         )
-        validate_exact_sha_field(packet, "sha", errors)
-        validate_enum(
-            packet,
-            "remaining_uncertainty",
-            REMAINING_UNCERTAINTIES,
-            errors,
-        )
-        validation = packet.get("validation")
-        if validation is not None and (
-            not isinstance(validation, str) or not validation.strip()
-        ):
-            errors.append("validation must be a non-empty evidence string")
+        if sha_required and "subject_sha" not in payload:
+            errors.append(f"{role} outcome={outcome} requires subject_sha")
     return errors
 
 
-def validate_reviewer_packet(packet: dict[str, Any]) -> list[str]:
-    errors: list[str] = []
-    require_packet_fields(
-        packet,
-        (
-            "delivery_phase",
-            "base_sha",
-            "target_sha",
-            "frozen_contract",
-            "changed_surface",
-            "outcome",
-            "findings",
-            "evidence",
-            "next",
-            "review_round",
-            "review_kind",
-            "closes_findings",
-            "failure_family",
-            "test_model_revision_required",
-        ),
-        errors,
-    )
-    if packet.get("delivery_phase") != "milestone":
-        errors.append("delivery_phase must be milestone, before the final response")
-    for field in ("base_sha", "target_sha"):
-        validate_exact_sha_field(packet, field, errors)
-    for field in ("frozen_contract", "changed_surface", "evidence", "next"):
-        value = packet.get(field)
-        if value is not None and (not isinstance(value, str) or not value.strip()):
-            errors.append(f"{field} must be a non-empty string")
-    validate_enum(packet, "outcome", REVIEW_OUTCOMES, errors)
-    validate_enum(packet, "review_kind", REVIEW_KINDS, errors)
-    review_round = packet.get("review_round")
-    if review_round is not None and (
-        isinstance(review_round, bool)
-        or not isinstance(review_round, int)
-        or review_round < 1
-    ):
-        errors.append("review_round must be an integer >= 1")
-    review_kind = packet.get("review_kind")
-    if review_kind == "initial-full" and review_round != 1:
-        errors.append("initial-full requires review_round=1")
-    if review_kind in ("refreshed-full", "focused-closure") and (
-        not isinstance(review_round, int) or review_round < 2
-    ):
-        errors.append(f"{review_kind} requires review_round >= 2")
-    closes = packet.get("closes_findings")
-    if closes is not None and (
-        not isinstance(closes, list)
-        or any(not isinstance(item, str) or not item for item in closes)
-    ):
-        errors.append("closes_findings must be a list of finding ids")
-    if review_kind in ("refreshed-full", "focused-closure") and closes == []:
-        errors.append(f"{review_kind} must name closes_findings")
-    failure_family = packet.get("failure_family")
-    if failure_family is not None and (
-        not isinstance(failure_family, str) or not failure_family.strip()
-    ):
-        errors.append("failure_family must be a non-empty string or 'none'")
-    if "test_model_revision_required" in packet and not isinstance(
-        packet["test_model_revision_required"], bool
-    ):
-        errors.append("test_model_revision_required must be boolean")
-    return errors
-
-
-def command_packet_lint(args: argparse.Namespace) -> dict[str, Any]:
-    packet, data = read_packet(args.input)
-    errors = (
-        validate_writer_packet(packet)
-        if args.role == "writer"
-        else validate_reviewer_packet(packet)
-    )
+def command_milestone_lint(args: argparse.Namespace) -> dict[str, Any]:
+    payload, data = read_json_object(args.input, label="milestone")
+    errors = validate_milestone(payload, role=args.role)
     return {
         "ok": not errors,
-        "operation": "packet-lint",
+        "operation": "milestone-lint",
         "role": args.role,
         "input_sha256": sha256_bytes(data),
         "delivery_inferred": False,
@@ -628,6 +614,242 @@ def common_repo_root(root: Path) -> Path:
         ).stdout.strip()
     )
     return common.parent if common.name == ".git" else common
+
+
+def require_gitignored_agent_state(root: Path) -> None:
+    ignored = run_git(
+        root,
+        "check-ignore",
+        "--no-index",
+        "--quiet",
+        "--",
+        ".agent_state/orchestrate/.probe",
+        check=False,
+    )
+    if ignored.returncode != 0:
+        raise OrchestrateError(
+            ".agent_state/orchestrate must be gitignored before transport use"
+        )
+
+
+def read_regular_input(path_value: str, *, label: str) -> tuple[bytes, Path]:
+    supplied = Path(path_value)
+    if supplied.is_symlink():
+        raise OrchestrateError(f"{label} input must not be a symlink: {supplied}")
+    path = supplied.resolve()
+    if not path.is_file():
+        raise OrchestrateError(f"{label} input must be a regular file: {path}")
+    return path.read_bytes(), path
+
+
+def dispatch_packet_directory(root: Path, *, task_id: str) -> tuple[Path, Path]:
+    common = common_repo_root(root).resolve()
+    task_id = require_identifier(task_id, label="task-id")
+    state = common / ".agent_state"
+    paths = (
+        state,
+        state / "orchestrate",
+        state / "orchestrate" / task_id,
+        state / "orchestrate" / task_id / "packets",
+    )
+    for path in paths:
+        if path.is_symlink():
+            raise OrchestrateError(
+                f"dispatch packet path component must not be a symlink: {path}"
+            )
+    require_gitignored_agent_state(common)
+    return common, paths[-1]
+
+
+def parse_dispatch_packet(data: bytes, *, root: Path, source: str) -> dict[str, Any]:
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise OrchestrateError(f"dispatch packet is not UTF-8: {source}") from exc
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        raise OrchestrateError(
+            f"dispatch packet requires YAML-style front matter: {source}"
+        )
+    try:
+        end = lines.index("---", 1)
+    except ValueError as exc:
+        raise OrchestrateError(
+            f"dispatch packet front matter is not closed: {source}"
+        ) from exc
+    fields: dict[str, str] = {}
+    for line in lines[1:end]:
+        if not line.strip():
+            continue
+        key, separator, value = line.partition(":")
+        key = key.strip()
+        value = value.strip()
+        if not separator or not key or not value:
+            raise OrchestrateError(
+                f"malformed dispatch packet front matter line: {line!r}"
+            )
+        if key in fields:
+            raise OrchestrateError(
+                f"duplicate dispatch packet front matter field: {key}"
+            )
+        fields[key] = value
+    missing = sorted(DISPATCH_FIELDS - fields.keys())
+    unexpected = sorted(fields.keys() - DISPATCH_FIELDS)
+    if missing or unexpected:
+        detail = []
+        if missing:
+            detail.append(f"missing={','.join(missing)}")
+        if unexpected:
+            detail.append(f"unexpected={','.join(unexpected)}")
+        raise OrchestrateError(
+            f"invalid dispatch packet front matter ({'; '.join(detail)})"
+        )
+    try:
+        version = int(fields["dispatch_packet_version"])
+    except ValueError as exc:
+        raise OrchestrateError("dispatch_packet_version must be an integer") from exc
+    if version != DISPATCH_PACKET_VERSION:
+        raise OrchestrateError(
+            f"unsupported dispatch_packet_version={version}; "
+            f"expected {DISPATCH_PACKET_VERSION}"
+        )
+    packet_id = require_identifier(fields["packet_id"], label="packet-id")
+    role = fields["role"]
+    if role not in DISPATCH_ROLES:
+        raise OrchestrateError(
+            f"dispatch packet role must be one of: {', '.join(DISPATCH_ROLES)}"
+        )
+    raw_axes = fields["hard_critical_axes"]
+    axes = [] if raw_axes == "none" else [axis.strip() for axis in raw_axes.split(",")]
+    if (
+        any(axis not in HARD_CRITICAL_AXES for axis in axes)
+        or len(axes) != len(set(axes))
+        or any(not axis for axis in axes)
+    ):
+        raise OrchestrateError(
+            "hard_critical_axes must be none or a unique comma-separated subset of: "
+            + ", ".join(HARD_CRITICAL_AXES)
+        )
+    basis_sha = exact_commit(root, fields["basis_sha"], label="basis_sha")
+    for heading in DISPATCH_SECTIONS:
+        if not section_text(text, f"## {heading}"):
+            raise OrchestrateError(
+                f"dispatch packet missing or empty required section: {heading}"
+            )
+    return {
+        "dispatch_packet_version": version,
+        "packet_id": packet_id,
+        "role": role,
+        "basis_sha": basis_sha,
+        "hard_critical_axes": axes,
+    }
+
+
+def dispatch_packet_evidence(
+    *,
+    root: Path,
+    directory: Path,
+    path: Path,
+    data: bytes,
+    envelope: dict[str, Any],
+    started: float,
+) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "operation": "packet-inspect",
+        "root": str(root),
+        "packet_directory": str(directory),
+        "path": str(path),
+        "sha256": sha256_bytes(data),
+        "envelope": envelope,
+        "authority_inferred": False,
+        "dispatch_inferred": False,
+        "observed_at": datetime.now(UTC).isoformat(),
+        "duration_ms": round((time.monotonic() - started) * 1000),
+    }
+
+
+def command_packet_publish(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    requested_root = Path(args.root).resolve()
+    root, directory = dispatch_packet_directory(requested_root, task_id=args.task_id)
+    data, source = read_regular_input(args.input, label="dispatch packet")
+    envelope = parse_dispatch_packet(data, root=root, source=str(source))
+    digest = sha256_bytes(data)
+    destination = directory / f"{digest}.md"
+    directory.mkdir(parents=True, exist_ok=True)
+    if directory.is_symlink():
+        raise OrchestrateError(
+            f"dispatch packet directory must not be a symlink: {directory}"
+        )
+    descriptor = lock_queue_directory(directory, exclusive=True)
+    try:
+        if destination.exists():
+            if destination.is_symlink() or not destination.is_file():
+                raise OrchestrateError(
+                    f"dispatch packet destination is not a regular file: {destination}"
+                )
+            if destination.read_bytes() != data:
+                raise OrchestrateError(
+                    f"content-address collision or tampered packet: {destination}"
+                )
+            created = False
+        else:
+            handle, temporary_name = tempfile.mkstemp(
+                prefix=f".{destination.name}.pending-", dir=directory
+            )
+            temporary = Path(temporary_name)
+            try:
+                with os.fdopen(handle, "wb") as stream:
+                    stream.write(data)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                if destination.exists():
+                    raise OrchestrateError(
+                        f"dispatch packet destination appeared: {destination}"
+                    )
+                os.replace(temporary, destination)
+                os.fsync(descriptor)
+            finally:
+                temporary.unlink(missing_ok=True)
+            created = True
+    finally:
+        unlock_queue_directory(descriptor)
+    return {
+        **dispatch_packet_evidence(
+            root=root,
+            directory=directory,
+            path=destination,
+            data=data,
+            envelope=envelope,
+            started=started,
+        ),
+        "operation": "packet-publish",
+        "created": created,
+    }
+
+
+def command_packet_inspect(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    if not SHA256_PATTERN.fullmatch(args.sha256):
+        raise OrchestrateError("sha256 must be 64 lowercase hexadecimal digits")
+    requested_root = Path(args.root).resolve()
+    root, directory = dispatch_packet_directory(requested_root, task_id=args.task_id)
+    path = directory / f"{args.sha256}.md"
+    if path.is_symlink() or not path.is_file():
+        raise OrchestrateError(f"dispatch packet not found: {path}")
+    data = path.read_bytes()
+    if sha256_bytes(data) != args.sha256:
+        raise OrchestrateError(f"dispatch packet hash mismatch: {path}")
+    envelope = parse_dispatch_packet(data, root=root, source=str(path))
+    return dispatch_packet_evidence(
+        root=root,
+        directory=directory,
+        path=path,
+        data=data,
+        envelope=envelope,
+        started=started,
+    )
 
 
 def queue_directory(
@@ -658,30 +880,12 @@ def queue_directory(
     queue = paths[-1] / f"g{generation:04d}"
     if queue.is_symlink():
         raise OrchestrateError(f"queue directory must not be a symlink: {queue}")
-    ignored = run_git(
-        common,
-        "check-ignore",
-        "--no-index",
-        "--quiet",
-        "--",
-        ".agent_state/orchestrate/.queue-probe",
-        check=False,
-    )
-    if ignored.returncode != 0:
-        raise OrchestrateError(
-            ".agent_state/orchestrate must be gitignored before queue use"
-        )
+    require_gitignored_agent_state(common)
     return common, queue
 
 
 def read_queue_input(path_value: str) -> tuple[bytes, Path]:
-    supplied = Path(path_value)
-    if supplied.is_symlink():
-        raise OrchestrateError(f"queue input must not be a symlink: {supplied}")
-    path = supplied.resolve()
-    if not path.is_file():
-        raise OrchestrateError(f"queue input must be a regular file: {path}")
-    return path.read_bytes(), path
+    return read_regular_input(path_value, label="queue")
 
 
 def parse_queue_item(data: bytes, *, root: Path, source: str) -> dict[str, Any]:
@@ -744,7 +948,7 @@ def parse_queue_item(data: bytes, *, root: Path, source: str) -> dict[str, Any]:
         )
     if fields["hard_critical_axes"] != "none":
         raise OrchestrateError(
-            "v60 durable queues accept normal writer/reviewer work only; "
+            "durable queues accept normal writer/reviewer work only; "
             "hard_critical_axes must be none"
         )
     basis_sha = exact_commit(root, fields["basis_sha"], label="basis_sha")
@@ -1490,14 +1694,37 @@ def build_parser() -> argparse.ArgumentParser:
     )
     identity.set_defaults(handler=command_identity)
 
-    packet = commands.add_parser("packet", help="lint supplied role packets")
-    packet_commands = packet.add_subparsers(dest="packet_command", required=True)
-    packet_lint = packet_commands.add_parser("lint")
-    packet_lint.add_argument("--role", choices=("writer", "reviewer"), required=True)
-    packet_lint.add_argument(
-        "--input", required=True, help="packet JSON path, or '-' for stdin"
+    packet = commands.add_parser(
+        "packet", help="publish or inspect immutable direct-dispatch packets"
     )
-    packet_lint.set_defaults(handler=command_packet_lint)
+    packet_commands = packet.add_subparsers(dest="packet_command", required=True)
+    packet_publish = packet_commands.add_parser(
+        "publish", help="validate and atomically publish content-addressed work"
+    )
+    add_root(packet_publish)
+    packet_publish.add_argument("--task-id", required=True)
+    packet_publish.add_argument("--input", required=True)
+    packet_publish.set_defaults(
+        handler=command_packet_publish, requires_release_preflight=True
+    )
+    packet_inspect = packet_commands.add_parser(
+        "inspect", help="read and verify one exact content-addressed packet"
+    )
+    add_root(packet_inspect)
+    packet_inspect.add_argument("--task-id", required=True)
+    packet_inspect.add_argument("--sha256", required=True)
+    packet_inspect.set_defaults(handler=command_packet_inspect)
+
+    milestone = commands.add_parser("milestone", help="lint one semantic role event")
+    milestone_commands = milestone.add_subparsers(
+        dest="milestone_command", required=True
+    )
+    milestone_lint = milestone_commands.add_parser("lint")
+    milestone_lint.add_argument("--role", choices=DISPATCH_ROLES, required=True)
+    milestone_lint.add_argument(
+        "--input", required=True, help="milestone JSON path, or '-' for stdin"
+    )
+    milestone_lint.set_defaults(handler=command_milestone_lint)
 
     queue = commands.add_parser(
         "queue", help="guard the bounded per-agent durable delivery spool"
@@ -1516,7 +1743,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_queue_binding(queue_publish)
     queue_publish.add_argument("--input", action="append", required=True)
-    queue_publish.set_defaults(handler=command_queue_publish)
+    queue_publish.set_defaults(
+        handler=command_queue_publish, requires_release_preflight=True
+    )
 
     queue_inspect = queue_commands.add_parser(
         "inspect", help="read and validate one lease generation without mutation"
@@ -1557,7 +1786,9 @@ def build_parser() -> argparse.ArgumentParser:
     lane_create.add_argument("--lane", required=True)
     lane_create.add_argument("--base", required=True)
     lane_create.add_argument("--worktree")
-    lane_create.set_defaults(handler=command_lane_create)
+    lane_create.set_defaults(
+        handler=command_lane_create, requires_release_preflight=True
+    )
     lane_cleanup = lane_commands.add_parser("cleanup")
     add_root(lane_cleanup)
     lane_cleanup.add_argument("--task-ref", required=True)
@@ -1572,7 +1803,9 @@ def build_parser() -> argparse.ArgumentParser:
     checkout.add_argument("sha")
     checkout.add_argument("--label")
     checkout.add_argument("--worktree")
-    checkout.set_defaults(handler=command_review_checkout)
+    checkout.set_defaults(
+        handler=command_review_checkout, requires_release_preflight=True
+    )
     cleanup = review_commands.add_parser("cleanup")
     add_root(cleanup)
     cleanup.add_argument("--worktree", required=True)
@@ -1587,7 +1820,7 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--expected-lane-sha", required=True)
     collect.add_argument("--authorized-sha", required=True)
     collect.add_argument("--review-kind", choices=COLLECT_REVIEW_KINDS, required=True)
-    collect.set_defaults(handler=command_collect)
+    collect.set_defaults(handler=command_collect, requires_release_preflight=True)
 
     release = commands.add_parser("release-manifest", help=argparse.SUPPRESS)
     release.add_argument("--version", required=True, type=int)
@@ -1601,7 +1834,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        release_preflight = None
+        if getattr(args, "requires_release_preflight", False):
+            release_preflight = require_release_preflight(Path(args.skill_dir))
         payload = args.handler(args)
+        if release_preflight is not None:
+            payload["release_preflight"] = release_preflight
     except (OSError, UnicodeError, OrchestrateError) as exc:
         parser.exit(2, f"orchestrate error: {exc}\n")
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True))

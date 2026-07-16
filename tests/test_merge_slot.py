@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -16,6 +17,20 @@ SCRIPT = (
     / "scripts"
     / "merge_slot.py"
 )
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def copy_release_home(root: Path) -> Path:
+    home = root / "home"
+    skill = home / ".codex" / "skills" / "orchestrate"
+    shutil.copytree(ROOT / "home" / ".codex" / "skills" / "orchestrate", skill)
+    for runtime, suffix in ((".codex", ".toml"), (".claude", ".md")):
+        agents = home / runtime / "agents"
+        agents.mkdir(parents=True, exist_ok=True)
+        source = ROOT / "home" / runtime / "agents"
+        for role in ("contract-planner", "implementer", "reviewer"):
+            shutil.copy2(source / f"{role}{suffix}", agents / f"{role}{suffix}")
+    return skill
 
 
 class MergeSlotCliTests(unittest.TestCase):
@@ -30,6 +45,38 @@ class MergeSlotCliTests(unittest.TestCase):
             text=True,
         )
 
+    def test_claim_fails_release_preflight_before_creating_slot_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            temporary = Path(tmp)
+            skill = copy_release_home(temporary / "release")
+            runtime = skill / "runtime-codex.md"
+            runtime.write_text(
+                runtime.read_text(encoding="utf-8") + "\ntampered\n",
+                encoding="utf-8",
+            )
+            root = temporary / "repo"
+            root.mkdir()
+
+            claim = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--skill-dir",
+                    str(skill),
+                    "--root",
+                    str(root),
+                    "claim",
+                    "task-a",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(claim.returncode, 2)
+            self.assertIn("release preflight failed", claim.stderr)
+            self.assertFalse((root / ".agent_state").exists())
+
     def test_expired_holder_cannot_renew(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -38,6 +85,7 @@ class MergeSlotCliTests(unittest.TestCase):
             self.assertEqual(claim.returncode, 0, claim.stderr)
             claim_payload = json.loads(claim.stdout)
             self.assertEqual(claim_payload["status"], "acquired")
+            self.assertTrue(claim_payload["owner_token"].startswith("owner_"))
 
             renew = self.run_slot(
                 root,

@@ -31,6 +31,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from orchestrate import verify_release
+
 DEFAULT_LEASE_SECONDS = 600.0
 WAIT_POLL_SECONDS = 2.0
 TASK_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -267,15 +269,24 @@ def _require_holder(
 
 
 def command_claim(args: argparse.Namespace) -> dict[str, Any]:
+    preflight = verify_release(Path(args.skill_dir))
+    if not preflight["ok"]:
+        raise SlotError("release preflight failed: " + "; ".join(preflight["errors"]))
     _validate_task_id(args.task)
-    owner_token = args.owner_token or secrets.token_urlsafe(32)
+    owner_token = args.owner_token or f"owner_{secrets.token_urlsafe(32)}"
     _validate_owner_token(owner_token)
     deadline = time.time() + args.wait
     while True:
         with Slot(args.root) as slot:
             result = _claim_once(slot, args.task, owner_token, args.lease)
         if result["status"] != "queued" or time.time() >= deadline:
-            return result
+            return {
+                **result,
+                "release_preflight": {
+                    "skill_version": preflight["skill_version"],
+                    "orchestrate_compat": preflight["orchestrate_compat"],
+                },
+            }
         time.sleep(min(WAIT_POLL_SECONDS, max(deadline - time.time(), 0.0)))
 
 
@@ -352,6 +363,11 @@ def _add_required_owner_token(command: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--skill-dir",
+        default=str(Path(__file__).resolve().parent.parent),
+        help="orchestrate skill directory for claim preflight",
+    )
     parser.add_argument("--root", type=Path, required=True, help="repo root")
     commands = parser.add_subparsers(dest="command", required=True)
 

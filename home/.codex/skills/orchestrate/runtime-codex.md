@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 62
+orchestrate_compat: 63
 ---
 
 # Orchestrate — Codex runtime binding
@@ -68,11 +68,17 @@ tight Git/status probes, and phase inference from `running` are not.
 
 ## Stalled work
 
-Dispatch declares a checkpoint budget appropriate to the task; there is no universal timer.
-No tool call or filesystem change during model reasoning is not proof of a stall. When the
-budget passes without a milestone:
+Liveness recovery has exactly three triggers: the runtime reports the agent `errored` or a
+model/capacity failure; the runtime declares its lease expired; or the dispatch-declared
+checkpoint budget passes with no milestone. Everything else is healthy: `running` with no
+tool/filesystem activity is model reasoning, a `wait_agent` timeout is normal silence to wait
+on again, and fixed 30/60-second status polling of a sub-agent is forbidden. There is no
+universal timer. Updating the user never requires touching the assignee — report from the
+last milestone, read-only Git, and the frozen dispatch.
 
-1. use available runtime activity/waiting metadata, if any, without guessing from `ps`/Git;
+When a trigger fires:
+
+1. read available runtime activity/waiting metadata first, without guessing from `ps`/Git;
 2. send one liveness ping asking for progress, blocker, or the nearest coherent checkpoint;
 3. if no response, interrupt and resume the same identity with a recovery delta; the worktree
    remains evidence. Spawn a replacement only when identity continuity is unavailable or the

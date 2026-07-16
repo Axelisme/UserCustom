@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 62
+orchestrate_compat: 63
 ---
 
 # Evidence and handoff
@@ -108,7 +108,9 @@ When root decides to hand off, stop dispatching. Use remaining context to drain:
    losing findings.
 4. Update only domain packet/task_plan Current State with branch topology, live worktrees,
    review debt (announced unsigned SHAs), run-ahead position, finding ledger, and unusable
-   evidence anomalies. Do not create a separate orchestrate handoff document.
+   evidence anomalies. Do not create a separate orchestrate handoff document; when a generic
+   handoff skill demands its own file, that file holds only a pointer to task_plan Current
+   State — task_plan stays the single handoff authority and content is never duplicated.
 5. Inspect every task spool generation and record only its lease/path/current item pointers in
    Current State. The spool does not auto-resume: the next root reconciles each item against
    Git, milestones, open findings, current authority, and lease generation before any wake.

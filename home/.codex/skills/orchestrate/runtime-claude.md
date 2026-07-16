@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 62
+orchestrate_compat: 63
 ---
 
 # Orchestrate — Claude Code runtime binding
@@ -55,8 +55,15 @@ never respawn and call it continuity.
 
 ## Stalled work
 
-Dispatch declares a task-appropriate checkpoint budget. A period without tool activity while
-the model reasons is not proof of a stall. After the budget passes without a milestone:
+Liveness recovery has exactly three triggers: the runtime reports the task errored or a
+model/capacity failure; the runtime declares its lease/continuation lost; or the
+dispatch-declared checkpoint budget passes with no milestone. Everything else is healthy: a
+running task with no tool activity is model reasoning, a `Monitor`/wait timeout is normal
+silence to wait on again, and fixed-interval status polling of a sub-agent is forbidden.
+There is no universal timer. Updating the user never requires touching the assignee — report
+from the last milestone, read-only Git, and the frozen dispatch.
+
+When a trigger fires:
 
 1. inspect runtime activity/waiting metadata when available, without Git/process polling;
 2. send one liveness ping asking for progress, blocker, or a coherent checkpoint;

@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 62
+orchestrate_compat: 63
 ---
 
 # Delegation and review
@@ -26,6 +26,18 @@ decision inside the frozen seam, reporting notable ones in the milestone for pos
 recording. Reviewers are read-only with respect to the reviewed tree;
 workspace write exists only for detached worktrees and test caches. Agents never spawn
 coordination sub-agents or decide landing/finding deferral.
+
+## Root contact discipline
+
+After dispatch, root MUST NOT send progress or status prompts to a running assignee. Root
+contacts it only for a public-contract correction, confirmed major finding, user override/stop,
+or a liveness failure the runtime binding explicitly identifies. Short absence of tool or
+filesystem activity is model reasoning, not a stall signal; the runtime binding owns liveness
+recovery and its triggers are closed. Commentary obligations to the user never justify
+contacting the assignee — report from the last milestone, read-only Git state, and the frozen
+dispatch description. Dispatch a frozen bounded turn rather than drip-feeding a running
+identity; routine additions merge into one spool batch, and only major finding, correction,
+retract, or stop may interrupt directly.
 
 ## Evidence ownership
 

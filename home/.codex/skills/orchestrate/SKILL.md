@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 62
+skill_version: 63
 ---
 
 # Orchestrate
@@ -28,7 +28,7 @@ user authority.
 | **1. Observe** | Read repo instructions and relevant decisions; inspect Git, worktrees, user dirt, current narrative, and existing evidence. | The authoritative tree, user-owned changes, live task state, and largest unresolved uncertainty are named. |
 | **2. Freeze** | Freeze only the public seam of the next bounded outcome: objective, public contract, acceptance, non-goals, write scope, exact base, and any named review risk. Internal design is writer discretion, recorded after the fact. | The assignee can act without guessing the public contract, ownership, or acceptance; everything inside the seam is theirs to decide. |
 | **3. Shape** | Choose the cheapest pipeline that retires the uncertainty; when freeze+dispatch+harvest overhead would exceed the work itself, root does the work directly. Serialize shared files, contracts, schemas, fixtures, and authority. | Every ready item has an owner, base, scope, acceptance, dependency, and any named review barrier; conflicting authority is serialized. |
-| **4. Dispatch** | Issue only ready, self-contained work with a bounded lease and explicit discretion/stop boundary. | The consumer can act without chat history and knows when it may run ahead or must stop. |
+| **4. Dispatch** | Issue only ready, self-contained work with a bounded lease and explicit discretion/stop boundary. After dispatch, root contacts a running assignee only for a public-contract correction, confirmed major finding, user override/stop, or a liveness failure identified by the runtime binding — never for progress or status. | The consumer can act without chat history and knows when it may run ahead or must stop. |
 | **5. Harvest** | Classify the returned milestone as progress, validated state, review verdict, or decision stop; batch routine harvests rather than reacting per slice. | Conclusions bind to the actual exact SHA/tree; tests/anomalies are usable and each finding has an owner. |
 | **6. Integrate** | Collect accepted work in batches of a few slices — one preflight, serial merges inside the batch — after any named review risk is resolved. | Ancestry/tree identity is proved, every lane change is accounted for, and the integration checkout is clean. |
 | **7. Re-observe or close** | Integration changes reality: repeat from Observe, or close against the final integrated tree. | Necessary final gates/review, user authority, cleanup, and durable narrative are current rather than inherited from an older tree. |

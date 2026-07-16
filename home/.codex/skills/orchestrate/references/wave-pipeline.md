@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 62
+orchestrate_compat: 63
 ---
 
 # Wave pipeline
@@ -28,10 +28,8 @@ contain several progress observations without creating several review checkpoint
   exact SHA, and a later finding lands as a follow-up fix commit — announced history is never
   rewritten. Only a declared dependency or root-named critical barrier waits for review.
 - A completed micro-step is not itself a reason to stop, commit, switch identity, or ask root.
-- Dispatch a frozen bounded turn rather than drip-feeding a running identity. Routine additions
-  use the spool; major finding, correction, retract, or stop may interrupt directly.
-- Root observes delivered events. Short absence of tool/fs activity is model reasoning, not
-  evidence of a stall; the runtime binding owns liveness recovery.
+- Root observes delivered events; contact rules are the root contact discipline in
+  [Delegation and review](delegation-and-review.md).
 
 ## Writer, reviewer, and root
 

@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 66
+orchestrate_compat: 67
 ---
 
 # Git coordination and landing
@@ -49,6 +49,9 @@ and Fast Fail on dirty/drifted/unabsorbed state. They never infer a verdict or q
 For collect, `--authorized-sha` plus `--review-kind` with
 `different-identity|focused|root-spot|mechanical` is root's **declared authorization**. The
 adapter reports it but **does not infer a verdict** or claim that a formal reviewer acted.
+Preferably pass `--receipt <path>` instead: the reviewer-written review receipt is validated
+and its exact SHA, review kind, and profile acknowledgment are consumed directly, with no
+root retranscription; only `verdict=pass` authorizes.
 
 - Declare each writer's file scope in one sentence. A conflict means the split was poor; fix
   the plan rather than adding machinery.

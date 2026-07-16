@@ -77,6 +77,41 @@ DISPATCH_FIELDS = {
     "basis_sha",
     "hard_critical_axes",
 }
+RECEIPT_VERSION = 1
+RECEIPT_KINDS = ("review", "contract-adjustment")
+REVIEW_RECEIPT_REQUIRED = (
+    "receipt_version",
+    "kind",
+    "item_id",
+    "subject_sha",
+    "reviewer_agent_id",
+    "profile_requested",
+    "profile_effective",
+    "review_kind",
+    "verdict",
+    "findings",
+    "checkout_detached",
+    "checkout_clean",
+    "evidence",
+)
+REVIEW_RECEIPT_FIELDS = set(REVIEW_RECEIPT_REQUIRED) | {
+    "subject_tree",
+    "checkout_head",
+    "details",
+}
+CONTRACT_RECEIPT_REQUIRED = (
+    "receipt_version",
+    "kind",
+    "adjustment_id",
+    "original_contract",
+    "contradiction_evidence",
+    "adjusted_contract",
+    "authority",
+    "affected_reviewed_shas",
+    "refreshed_review_scope",
+)
+CONTRACT_RECEIPT_FIELDS = set(CONTRACT_RECEIPT_REQUIRED) | {"details"}
+CONTRACT_AUTHORITIES = ("user", "root")
 DISPATCH_SECTIONS = (
     "Authority",
     "Acceptance",
@@ -606,6 +641,119 @@ def validate_milestone(payload: dict[str, Any], *, role: str) -> list[str]:
         if sha_required and "subject_sha" not in payload:
             errors.append(f"{role} outcome={outcome} requires subject_sha")
     return errors
+
+
+def require_nonempty_string_fields(
+    payload: dict[str, Any], fields: Sequence[str], errors: list[str]
+) -> None:
+    for field in fields:
+        value = payload.get(field)
+        if field in payload and (not isinstance(value, str) or not value.strip()):
+            errors.append(f"{field} must be a non-empty string")
+
+
+def validate_review_receipt(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    require_json_fields(payload, REVIEW_RECEIPT_REQUIRED, errors)
+    unexpected = sorted(payload.keys() - REVIEW_RECEIPT_FIELDS)
+    if unexpected:
+        errors.append(f"unexpected fields: {', '.join(unexpected)}")
+    if payload.get("receipt_version") != RECEIPT_VERSION:
+        errors.append(f"receipt_version must be {RECEIPT_VERSION}")
+    if payload.get("kind") != "review":
+        errors.append("kind must be review")
+    item_id = payload.get("item_id")
+    if item_id is not None and (
+        not isinstance(item_id, str) or not ID_PATTERN.fullmatch(item_id)
+    ):
+        errors.append("item_id must be a stable identifier")
+    validate_exact_sha_field(payload, "subject_sha", errors)
+    validate_exact_sha_field(payload, "subject_tree", errors)
+    validate_exact_sha_field(payload, "checkout_head", errors)
+    require_nonempty_string_fields(
+        payload,
+        ("reviewer_agent_id", "profile_requested", "profile_effective", "evidence"),
+        errors,
+    )
+    validate_json_enum(payload, "review_kind", COLLECT_REVIEW_KINDS, errors)
+    validate_json_enum(payload, "verdict", MILESTONE_OUTCOMES["reviewer"], errors)
+    findings = payload.get("findings")
+    if findings is not None and (
+        not isinstance(findings, list)
+        or any(not isinstance(item, str) or not item.strip() for item in findings)
+    ):
+        errors.append("findings must be a list of non-empty ids")
+    for field in ("checkout_detached", "checkout_clean"):
+        if field in payload and not isinstance(payload[field], bool):
+            errors.append(f"{field} must be a boolean")
+    details = payload.get("details")
+    if details is not None and not isinstance(details, dict):
+        errors.append("details must be an object when supplied")
+    verdict = payload.get("verdict")
+    if verdict == "pass" and not (
+        payload.get("checkout_detached") is True
+        and payload.get("checkout_clean") is True
+    ):
+        errors.append("verdict=pass requires checkout_detached and checkout_clean")
+    if verdict == "needs_fix" and not payload.get("findings"):
+        errors.append("verdict=needs_fix requires at least one finding id")
+    return errors
+
+
+def validate_contract_adjustment_receipt(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    require_json_fields(payload, CONTRACT_RECEIPT_REQUIRED, errors)
+    unexpected = sorted(payload.keys() - CONTRACT_RECEIPT_FIELDS)
+    if unexpected:
+        errors.append(f"unexpected fields: {', '.join(unexpected)}")
+    if payload.get("receipt_version") != RECEIPT_VERSION:
+        errors.append(f"receipt_version must be {RECEIPT_VERSION}")
+    if payload.get("kind") != "contract-adjustment":
+        errors.append("kind must be contract-adjustment")
+    adjustment_id = payload.get("adjustment_id")
+    if adjustment_id is not None and (
+        not isinstance(adjustment_id, str) or not ID_PATTERN.fullmatch(adjustment_id)
+    ):
+        errors.append("adjustment_id must be a stable identifier")
+    require_nonempty_string_fields(
+        payload,
+        (
+            "original_contract",
+            "contradiction_evidence",
+            "adjusted_contract",
+            "refreshed_review_scope",
+        ),
+        errors,
+    )
+    validate_json_enum(payload, "authority", CONTRACT_AUTHORITIES, errors)
+    affected = payload.get("affected_reviewed_shas")
+    if affected is not None and (
+        not isinstance(affected, list)
+        or any(
+            not isinstance(item, str) or not EXACT_SHA_PATTERN.fullmatch(item)
+            for item in affected
+        )
+    ):
+        errors.append("affected_reviewed_shas must be a list of exact SHAs")
+    details = payload.get("details")
+    if details is not None and not isinstance(details, dict):
+        errors.append("details must be an object when supplied")
+    return errors
+
+
+def command_receipt_lint(args: argparse.Namespace) -> dict[str, Any]:
+    payload, data = read_json_object(args.input, label="receipt")
+    if args.kind == "review":
+        errors = validate_review_receipt(payload)
+    else:
+        errors = validate_contract_adjustment_receipt(payload)
+    return {
+        "ok": not errors,
+        "operation": "receipt-lint",
+        "kind": args.kind,
+        "input_sha256": sha256_bytes(data),
+        "errors": errors,
+    }
 
 
 def command_milestone_lint(args: argparse.Namespace) -> dict[str, Any]:
@@ -1512,12 +1660,50 @@ def command_review_cleanup(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def collect_authorization(args: argparse.Namespace) -> tuple[str, str, dict[str, Any]]:
+    """Resolve collect authority from a review receipt or an explicit declaration."""
+    if args.receipt:
+        if args.authorized_sha or args.review_kind:
+            raise OrchestrateError(
+                "--receipt replaces --authorized-sha/--review-kind; pass exactly one"
+                " authorization source"
+            )
+        payload, data = read_json_object(args.receipt, label="review receipt")
+        errors = validate_review_receipt(payload)
+        if errors:
+            raise OrchestrateError("invalid review receipt: " + "; ".join(errors))
+        if payload["verdict"] != "pass":
+            raise OrchestrateError(
+                f"review receipt verdict is {payload['verdict']};"
+                " only pass authorizes collection"
+            )
+        return (
+            payload["subject_sha"],
+            payload["review_kind"],
+            {
+                "authorization_source": "receipt",
+                "receipt_sha256": sha256_bytes(data),
+                "receipt_item_id": payload["item_id"],
+                "reviewer_agent_id": payload["reviewer_agent_id"],
+                "profile_requested": payload["profile_requested"],
+                "profile_effective": payload["profile_effective"],
+            },
+        )
+    if not (args.authorized_sha and args.review_kind):
+        raise OrchestrateError(
+            "collect requires either --receipt or both --authorized-sha and"
+            " --review-kind"
+        )
+    return args.authorized_sha, args.review_kind, {"authorization_source": "declared"}
+
+
 def command_collect(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
     root = Path(args.root).resolve()
     require_task_lane_refs(args.task_ref, args.lane_ref)
+    authorized_value, review_kind, authorization = collect_authorization(args)
     expected = exact_commit(root, args.expected_lane_sha, label="expected lane SHA")
-    authorized = exact_commit(root, args.authorized_sha, label="authorized SHA")
+    authorized = exact_commit(root, authorized_value, label="authorized SHA")
     if expected != authorized:
         raise OrchestrateError("authorized SHA differs from expected lane SHA")
     current_branch = run_git(root, "symbolic-ref", "--short", "HEAD").stdout.strip()
@@ -1548,8 +1734,9 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
         "task_ref": args.task_ref,
         "lane_ref": args.lane_ref,
         "authorized_sha": authorized,
-        "declared_review_kind": args.review_kind,
+        "declared_review_kind": review_kind,
         "verdict_inferred": False,
+        **authorization,
         "before": before,
         "preflight_tree": merge_tree,
         **evidence,
@@ -1770,6 +1957,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     milestone_lint.set_defaults(handler=command_milestone_lint)
 
+    receipt = commands.add_parser(
+        "receipt", help="lint one hand-written verdict or contract receipt"
+    )
+    receipt_commands = receipt.add_subparsers(dest="receipt_command", required=True)
+    receipt_lint = receipt_commands.add_parser("lint")
+    receipt_lint.add_argument("--kind", choices=RECEIPT_KINDS, required=True)
+    receipt_lint.add_argument(
+        "--input", required=True, help="receipt JSON path, or '-' for stdin"
+    )
+    receipt_lint.set_defaults(handler=command_receipt_lint)
+
     queue = commands.add_parser(
         "queue", help="guard the bounded per-agent durable delivery spool"
     )
@@ -1862,8 +2060,11 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--task-ref", required=True)
     collect.add_argument("--lane-ref", required=True)
     collect.add_argument("--expected-lane-sha", required=True)
-    collect.add_argument("--authorized-sha", required=True)
-    collect.add_argument("--review-kind", choices=COLLECT_REVIEW_KINDS, required=True)
+    collect.add_argument("--authorized-sha")
+    collect.add_argument("--review-kind", choices=COLLECT_REVIEW_KINDS)
+    collect.add_argument(
+        "--receipt", help="review receipt JSON path replacing the two flags above"
+    )
     collect.set_defaults(handler=command_collect, requires_release_preflight=True)
 
     release = commands.add_parser("release-manifest", help=argparse.SUPPRESS)

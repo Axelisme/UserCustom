@@ -31,7 +31,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from orchestrate import verify_release
+from orchestrate import OrchestrateError, check_version_pin, verify_release
 
 DEFAULT_LEASE_SECONDS = 600.0
 WAIT_POLL_SECONDS = 2.0
@@ -272,6 +272,10 @@ def command_claim(args: argparse.Namespace) -> dict[str, Any]:
     preflight = verify_release(Path(args.skill_dir))
     if not preflight["ok"]:
         raise SlotError("release preflight failed: " + "; ".join(preflight["errors"]))
+    try:
+        check_version_pin(Path(args.root).resolve(), preflight["skill_version"])
+    except OrchestrateError as exc:
+        raise SlotError(str(exc)) from exc
     _validate_task_id(args.task)
     owner_token = args.owner_token or f"owner_{secrets.token_urlsafe(32)}"
     _validate_owner_token(owner_token)

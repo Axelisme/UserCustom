@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 68
+orchestrate_compat: 69
 ---
 
 # Evidence and handoff
@@ -85,6 +85,12 @@ review-readiness packet.
   concurrent domains justify `domains/<domain>.md` (owner/reviewer, current SHA, pointers and
   one-line summaries of frozen decisions, next step). Single-domain tasks use task_plan's
   Current State directly.
+- **Active state and history are separate files.** Current State carries only live authority:
+  current exact SHA, owner, gate state, next transition, open findings. Sealed review rounds,
+  closed leases, and superseded decisions move at any checkpoint to
+  `.agent_state/plans/<task-id>/history.md` or their evidence artifacts, leaving a one-line
+  pointer. Move sealed detail out whenever the byte budget nears — never rewrite or truncate
+  active authority narrative to fit, and never wait for a phase-count boundary to compact.
 - A **domain packet** never copies decision text. Rewrite it at lease handoffs/checkpoints and
   delete it when the domain completes; task_plan retains the durable phase history. An
   immutable dispatch packet is separate frozen input and is authorized only by a direct

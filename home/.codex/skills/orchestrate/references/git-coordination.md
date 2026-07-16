@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 68
+orchestrate_compat: 69
 ---
 
 # Git coordination and landing
@@ -102,7 +102,9 @@ admit concurrent holders.
 State-entering guards run manifest/compat preflight before lane/review creation, collection,
 packet/queue publication, or merge-slot claim. Status and cleanup/recovery remain available
 without a remembered session flag. This mechanizes compatibility instead of relying on root
-to remember `doctor`. Profile identity is the standing orders (normalized
+to remember `doctor`. A task-level version pin (`orchestrate pin set|status|migrate`, a plain
+JSON file under `.agent_state/orchestrate/`) makes a mid-task skill upgrade an explicit
+migration at a root-chosen boundary rather than a surprise preflight failure. Profile identity is the standing orders (normalized
 `developer_instructions`); retuning a profile's model or reasoning effort never fails
 preflight.
 

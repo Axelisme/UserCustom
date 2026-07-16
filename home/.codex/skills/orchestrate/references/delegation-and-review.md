@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 68
+orchestrate_compat: 69
 ---
 
 # Delegation and review
@@ -129,7 +129,11 @@ may differ.
 
 ## Skill upgrades
 
-Pin a role turn to the profile/dispatch it loaded. Adopt a new orchestrate version at a safe
-boundary—before dispatch, after a milestone, or after turn completion. An immutable review
+Pin a role turn to the profile/dispatch it loaded. Pin the task itself at task start with
+`orchestrate pin set`; state-entering guards then fail fast if the installed skill moves
+mid-task, instead of an unexplained hash mismatch. Adopt a new orchestrate version at a safe
+boundary—before dispatch, after a milestone, or after turn completion—by running
+`orchestrate pin migrate`, which repins and reports the manifest delta so root re-reads
+exactly the changed documents. An immutable review
 restarts only when the release changes an applicable hard rule, readiness condition, or
 review meaning. Sub-agents never load orchestrate; root sends only the effective delta.

@@ -404,16 +404,161 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
     return verify_release(Path(args.skill_dir))
 
 
-def require_release_preflight(skill_dir: Path) -> dict[str, Any]:
+def version_pin_path(root: Path) -> Path:
+    return common_repo_root(root) / ".agent_state" / "orchestrate" / "version-pin.json"
+
+
+def read_version_pin(root: Path) -> dict[str, Any] | None:
+    path = version_pin_path(root)
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_bytes())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise OrchestrateError(f"cannot read version pin: {exc}") from exc
+    if not isinstance(payload, dict) or not isinstance(
+        payload.get("skill_version"), int
+    ):
+        raise OrchestrateError(f"invalid version pin: {path}")
+    return payload
+
+
+def check_version_pin(root: Path, current_version: int) -> dict[str, Any] | None:
+    """Fail fast when the installed skill moved past the task's pinned release."""
+    pin = read_version_pin(root)
+    if pin is None:
+        return None
+    pinned = pin["skill_version"]
+    if pinned != current_version:
+        raise OrchestrateError(
+            f"task is pinned to orchestrate v{pinned} but the installed skill is"
+            f" v{current_version}: adopt the release at a safe boundary with"
+            " `orchestrate pin migrate --root <repo>`, then rerun"
+        )
+    return {"pinned_version": pinned}
+
+
+def write_version_pin(root: Path, version: int, compat: Any) -> Path:
+    path = version_pin_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "pin_version": 1,
+        "skill_version": version,
+        "orchestrate_compat": compat,
+        "pinned_at": datetime.now(UTC).isoformat(),
+    }
+    with tempfile.NamedTemporaryFile(
+        "w", dir=path.parent, delete=False, encoding="utf-8"
+    ) as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        temp_name = handle.name
+    os.replace(temp_name, path)
+    return path
+
+
+def require_verified_release(skill_dir: Path) -> dict[str, Any]:
     result = verify_release(skill_dir)
     if not result["ok"]:
         raise OrchestrateError(
             "release preflight failed: " + "; ".join(result["errors"])
         )
+    return result
+
+
+def command_pin_status(args: argparse.Namespace) -> dict[str, Any]:
+    root = Path(args.root).resolve()
+    current = skill_version(Path(args.skill_dir))
+    pin = read_version_pin(root)
     return {
+        "ok": True,
+        "operation": "pin-status",
+        "read_only": True,
+        "current_version": current,
+        "pinned_version": pin["skill_version"] if pin else None,
+        "aligned": bool(pin) and pin["skill_version"] == current,
+        "pin_path": str(version_pin_path(root)),
+    }
+
+
+def command_pin_set(args: argparse.Namespace) -> dict[str, Any]:
+    root = Path(args.root).resolve()
+    result = require_verified_release(Path(args.skill_dir))
+    pin = read_version_pin(root)
+    if pin is not None:
+        if pin["skill_version"] == result["skill_version"]:
+            return {
+                "ok": True,
+                "operation": "pin-set",
+                "recovered": "already-pinned",
+                "pinned_version": pin["skill_version"],
+            }
+        raise OrchestrateError(
+            f"task is already pinned to v{pin['skill_version']}; adopt"
+            f" v{result['skill_version']} with `pin migrate` instead"
+        )
+    path = write_version_pin(
+        root, result["skill_version"], result["orchestrate_compat"]
+    )
+    return {
+        "ok": True,
+        "operation": "pin-set",
+        "pinned_version": result["skill_version"],
+        "pin_path": str(path),
+    }
+
+
+def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
+    root = Path(args.root).resolve()
+    skill_dir = Path(args.skill_dir)
+    result = require_verified_release(skill_dir)
+    pin = read_version_pin(root)
+    if pin is None:
+        raise OrchestrateError("no version pin to migrate; use `pin set` first")
+    old_version = pin["skill_version"]
+    new_version = result["skill_version"]
+    if old_version == new_version:
+        return {
+            "ok": True,
+            "operation": "pin-migrate",
+            "recovered": "already-current",
+            "pinned_version": old_version,
+        }
+    delta: dict[str, Any] | None
+    try:
+        delta = compare_manifests(
+            load_manifest(skill_dir, old_version),
+            load_manifest(skill_dir, new_version),
+        )
+    except OrchestrateError:
+        delta = None
+    write_version_pin(root, new_version, result["orchestrate_compat"])
+    return {
+        "ok": True,
+        "operation": "pin-migrate",
+        "from_version": old_version,
+        "to_version": new_version,
+        "delta": delta,
+        "delta_note": (
+            None
+            if delta is not None
+            else f"manifest for v{old_version} unavailable; reread all documents"
+        ),
+    }
+
+
+def require_release_preflight(
+    skill_dir: Path, root: str | None = None
+) -> dict[str, Any]:
+    result = require_verified_release(skill_dir)
+    payload = {
         "skill_version": result["skill_version"],
         "orchestrate_compat": result["orchestrate_compat"],
     }
+    if root is not None:
+        pin_info = check_version_pin(Path(root).resolve(), result["skill_version"])
+        if pin_info is not None:
+            payload.update(pin_info)
+    return payload
 
 
 def compare_manifests(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
@@ -2411,6 +2556,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     slice_status.set_defaults(handler=command_slice_status)
 
+    pin = commands.add_parser(
+        "pin", help="pin a task to the installed orchestrate release"
+    )
+    pin_commands = pin.add_subparsers(dest="pin_command", required=True)
+    pin_status_cmd = pin_commands.add_parser("status")
+    add_root(pin_status_cmd)
+    pin_status_cmd.set_defaults(handler=command_pin_status)
+    pin_set = pin_commands.add_parser("set")
+    add_root(pin_set)
+    pin_set.set_defaults(handler=command_pin_set)
+    pin_migrate = pin_commands.add_parser("migrate")
+    add_root(pin_migrate)
+    pin_migrate.set_defaults(handler=command_pin_migrate)
+
     release = commands.add_parser("release-manifest", help=argparse.SUPPRESS)
     release.add_argument("--version", required=True, type=int)
     release.add_argument("--previous-version", type=int)
@@ -2425,7 +2584,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         release_preflight = None
         if getattr(args, "requires_release_preflight", False):
-            release_preflight = require_release_preflight(Path(args.skill_dir))
+            release_preflight = require_release_preflight(
+                Path(args.skill_dir), root=getattr(args, "root", None)
+            )
         payload = args.handler(args)
         if release_preflight is not None:
             payload["release_preflight"] = release_preflight

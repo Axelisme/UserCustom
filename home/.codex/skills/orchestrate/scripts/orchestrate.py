@@ -1527,6 +1527,35 @@ def worktree_evidence(path: Path, *, started: float) -> dict[str, Any]:
     }
 
 
+SEAM_READY_PATTERN = re.compile(r"^Seam-Ready:\s*true\s*$", re.IGNORECASE | re.MULTILINE)
+
+
+def lane_absorption(root: Path, lane_sha: str, task_sha: str) -> str | None:
+    if (
+        run_git(
+            root, "merge-base", "--is-ancestor", lane_sha, task_sha, check=False
+        ).returncode
+        == 0
+    ):
+        return "ancestor"
+    if run_git(root, "diff", "--quiet", lane_sha, task_sha, check=False).returncode == 0:
+        return "tree-identity"
+    return None
+
+
+def worktree_metadata_writability_preflight(root: Path) -> None:
+    # A sandbox that can delete the directory but not .git/worktrees leaves
+    # half-removed state; refuse before any mutation.
+    metadata_dir = (
+        root / run_git(root, "rev-parse", "--git-common-dir").stdout.strip()
+    ).resolve() / "worktrees"
+    if metadata_dir.exists() and not os.access(metadata_dir, os.W_OK):
+        raise OrchestrateError(
+            f"worktree metadata is not writable: {metadata_dir}; grant write"
+            " access before cleanup — nothing was removed"
+        )
+
+
 def command_lane_create(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
     root = Path(args.root).resolve()
@@ -1534,13 +1563,6 @@ def command_lane_create(args: argparse.Namespace) -> dict[str, Any]:
     lane = require_identifier(args.lane, label="lane")
     base = exact_commit(root, args.base, label="base")
     branch = f"agent/{task_id}/{lane}"
-    if (
-        run_git(
-            root, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}", check=False
-        ).returncode
-        == 0
-    ):
-        raise OrchestrateError(f"lane branch already exists: {branch}")
     target = require_managed_worktree(
         root,
         (
@@ -1550,9 +1572,52 @@ def command_lane_create(args: argparse.Namespace) -> dict[str, Any]:
         ),
         kind="lane",
     )
+    branch_exists = (
+        run_git(
+            root, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}", check=False
+        ).returncode
+        == 0
+    )
+    record = next(
+        (
+            record
+            for record in worktree_records(root)
+            if record.get("branch") == f"refs/heads/{branch}"
+        ),
+        None,
+    )
+    if record is not None:
+        # A prior run completed; rerunning after an abort reports instead of failing.
+        existing = Path(str(record.get("worktree"))).resolve()
+        if existing != target:
+            raise OrchestrateError(
+                f"lane branch is already checked out elsewhere: {existing}"
+            )
+        return {
+            "ok": True,
+            "operation": "lane-create",
+            "base": base,
+            "recovered": "already-created",
+            **worktree_evidence(target, started=started),
+        }
     if target.exists():
         raise OrchestrateError(f"worktree path already exists: {target}")
     target.parent.mkdir(parents=True, exist_ok=True)
+    if branch_exists:
+        # Branch landed but the worktree add aborted: reuse it only at the exact base.
+        head = run_git(root, "rev-parse", f"refs/heads/{branch}").stdout.strip()
+        if head != base:
+            raise OrchestrateError(
+                f"lane branch already exists at {head}, not the requested base"
+            )
+        run_git(root, "worktree", "add", str(target), branch)
+        return {
+            "ok": True,
+            "operation": "lane-create",
+            "base": base,
+            "recovered": "reused-existing-branch",
+            **worktree_evidence(target, started=started),
+        }
     run_git(root, "worktree", "add", "-b", branch, str(target), base)
     return {
         "ok": True,
@@ -1631,16 +1696,7 @@ def command_review_cleanup(args: argparse.Namespace) -> dict[str, Any]:
             raise OrchestrateError(f"not a registered worktree: {target}")
         result["recovered"] = "already-removed"
     else:
-        # Preflight metadata writability before any mutation: a sandbox that can
-        # delete the directory but not .git/worktrees leaves half-removed state.
-        metadata_dir = (
-            root / run_git(root, "rev-parse", "--git-common-dir").stdout.strip()
-        ).resolve() / "worktrees"
-        if metadata_dir.exists() and not os.access(metadata_dir, os.W_OK):
-            raise OrchestrateError(
-                f"worktree metadata is not writable: {metadata_dir}; grant write"
-                " access before cleanup — nothing was removed"
-            )
+        worktree_metadata_writability_preflight(root)
         if not target.exists():
             run_git(root, "worktree", "prune")
             result["recovered"] = "pruned-stale-metadata"
@@ -1706,6 +1762,34 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
     authorized = exact_commit(root, authorized_value, label="authorized SHA")
     if expected != authorized:
         raise OrchestrateError("authorized SHA differs from expected lane SHA")
+    task_head = run_git(root, "rev-parse", f"{args.task_ref}^{{commit}}").stdout.strip()
+    if (
+        run_git(
+            root, "merge-base", "--is-ancestor", expected, task_head, check=False
+        ).returncode
+        == 0
+    ):
+        # A prior run merged this exact SHA; rerunning after an abort reports it.
+        return {
+            "ok": True,
+            "operation": "collect",
+            "recovered": "already-collected",
+            "task_ref": args.task_ref,
+            "lane_ref": args.lane_ref,
+            "authorized_sha": authorized,
+            "declared_review_kind": review_kind,
+            "verdict_inferred": False,
+            **authorization,
+            "task_sha": task_head,
+            "observed_at": datetime.now(UTC).isoformat(),
+            "duration_ms": round((time.monotonic() - started) * 1000),
+        }
+    git_dir = Path(run_git(root, "rev-parse", "--absolute-git-dir").stdout.strip())
+    if (git_dir / "MERGE_HEAD").exists():
+        raise OrchestrateError(
+            "unfinished merge in progress: resolve it or run `git merge --abort`,"
+            " then rerun collect"
+        )
     current_branch = run_git(root, "symbolic-ref", "--short", "HEAD").stdout.strip()
     if current_branch != args.task_ref:
         raise OrchestrateError(
@@ -1748,45 +1832,276 @@ def command_lane_cleanup(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     require_task_lane_refs(args.task_ref, args.lane_ref)
     target = require_managed_worktree(root, Path(args.worktree).resolve(), kind="lane")
-    record = require_registered_worktree(root, target)
-    branch = str(record.get("branch", "")).removeprefix("refs/heads/")
-    if branch != args.lane_ref:
-        raise OrchestrateError(
-            f"worktree branch is {branch!r}, expected {args.lane_ref!r}"
-        )
-    if run_git(target, "status", "--porcelain").stdout.strip():
-        raise OrchestrateError("lane worktree is dirty")
-    lane_sha = run_git(root, "rev-parse", f"{args.lane_ref}^{{commit}}").stdout.strip()
+    record = next(
+        (
+            record
+            for record in worktree_records(root)
+            if record.get("worktree") == str(target)
+        ),
+        None,
+    )
     task_sha = run_git(root, "rev-parse", f"{args.task_ref}^{{commit}}").stdout.strip()
-    ancestor = (
+    branch_exists = (
         run_git(
             root,
-            "merge-base",
-            "--is-ancestor",
-            lane_sha,
-            task_sha,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            f"refs/heads/{args.lane_ref}",
             check=False,
         ).returncode
         == 0
     )
-    tree_equal = (
-        run_git(root, "diff", "--quiet", lane_sha, task_sha, check=False).returncode
-        == 0
-    )
-    if not (ancestor or tree_equal):
-        raise OrchestrateError(
-            "lane is not absorbed by task ref (ancestry or tree identity)"
-        )
-    run_git(root, "worktree", "remove", str(target))
-    run_git(root, "branch", "-D", args.lane_ref)
-    return {
+    result: dict[str, Any] = {
         "ok": True,
         "operation": "lane-cleanup",
         "lane_ref": args.lane_ref,
-        "lane_sha": lane_sha,
         "task_ref": args.task_ref,
         "task_sha": task_sha,
-        "absorption": "ancestor" if ancestor else "tree-identity",
+        "path": str(target),
+    }
+
+    def drop_absorbed_branch() -> None:
+        lane_sha = run_git(
+            root, "rev-parse", f"{args.lane_ref}^{{commit}}"
+        ).stdout.strip()
+        absorption = lane_absorption(root, lane_sha, task_sha)
+        if absorption is None:
+            raise OrchestrateError(
+                "lane is not absorbed by task ref (ancestry or tree identity)"
+            )
+        run_git(root, "branch", "-D", args.lane_ref)
+        result["lane_sha"] = lane_sha
+        result["absorption"] = absorption
+
+    if record is None:
+        if target.exists():
+            raise OrchestrateError(f"not a registered worktree: {target}")
+        if branch_exists:
+            drop_absorbed_branch()
+            result["recovered"] = "removed-stale-branch"
+        else:
+            result["recovered"] = "already-removed"
+    else:
+        worktree_metadata_writability_preflight(root)
+        if not target.exists():
+            run_git(root, "worktree", "prune")
+            if branch_exists:
+                drop_absorbed_branch()
+            result["recovered"] = "pruned-stale-metadata"
+        else:
+            branch = str(record.get("branch", "")).removeprefix("refs/heads/")
+            if branch != args.lane_ref:
+                raise OrchestrateError(
+                    f"worktree branch is {branch!r}, expected {args.lane_ref!r}"
+                )
+            if run_git(target, "status", "--porcelain").stdout.strip():
+                raise OrchestrateError("lane worktree is dirty")
+            lane_sha = run_git(
+                root, "rev-parse", f"{args.lane_ref}^{{commit}}"
+            ).stdout.strip()
+            absorption = lane_absorption(root, lane_sha, task_sha)
+            if absorption is None:
+                raise OrchestrateError(
+                    "lane is not absorbed by task ref (ancestry or tree identity)"
+                )
+            run_git(root, "worktree", "remove", str(target))
+            run_git(root, "branch", "-D", args.lane_ref)
+            result["lane_sha"] = lane_sha
+            result["absorption"] = absorption
+    return {
+        **result,
+        "observed_at": datetime.now(UTC).isoformat(),
+        "duration_ms": round((time.monotonic() - started) * 1000),
+    }
+
+
+def command_cleanup_absorbed(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    root = Path(args.root).resolve()
+    if not args.absorbed:
+        raise OrchestrateError("pass --absorbed to authorize the sweep")
+    if not args.dry_run:
+        worktree_metadata_writability_preflight(root)
+    managed = managed_worktree_root(root).resolve()
+    entries: list[dict[str, Any]] = []
+    for record in worktree_records(root):
+        raw = record.get("worktree")
+        if not isinstance(raw, str):
+            continue
+        path = Path(raw)
+        try:
+            relative = path.resolve().relative_to(managed)
+        except ValueError:
+            continue
+        if len(relative.parts) != 1:
+            continue
+        entry: dict[str, Any] = {"path": str(path)}
+        entries.append(entry)
+        if "detached" in record:
+            entry["kind"] = "review"
+            if not path.exists():
+                entry.update(
+                    action="rejected",
+                    reason="directory missing; run review cleanup to prune metadata",
+                )
+            elif run_git(path, "status", "--porcelain").stdout.strip():
+                entry.update(action="rejected", reason="worktree is dirty")
+            else:
+                entry["head"] = run_git(path, "rev-parse", "HEAD").stdout.strip()
+                if args.dry_run:
+                    entry["action"] = "eligible"
+                else:
+                    run_git(root, "worktree", "remove", str(path))
+                    entry["action"] = "removed"
+            continue
+        branch = str(record.get("branch", "")).removeprefix("refs/heads/")
+        entry["kind"] = "lane"
+        entry["branch"] = branch
+        match = re.fullmatch(r"agent/([^/]+)/[^/]+", branch)
+        if match is None:
+            entry.update(action="rejected", reason="not an agent lane branch")
+            continue
+        task_ref = f"task/{match.group(1)}"
+        if (
+            run_git(
+                root,
+                "show-ref",
+                "--verify",
+                "--quiet",
+                f"refs/heads/{task_ref}",
+                check=False,
+            ).returncode
+            != 0
+        ):
+            entry.update(
+                action="rejected", reason=f"missing integration branch {task_ref}"
+            )
+            continue
+        if not path.exists():
+            entry.update(
+                action="rejected",
+                reason="directory missing; run lane cleanup to recover",
+            )
+            continue
+        if run_git(path, "status", "--porcelain").stdout.strip():
+            entry.update(action="rejected", reason="worktree is dirty")
+            continue
+        lane_sha = run_git(root, "rev-parse", f"{branch}^{{commit}}").stdout.strip()
+        task_sha = run_git(root, "rev-parse", f"{task_ref}^{{commit}}").stdout.strip()
+        absorption = lane_absorption(root, lane_sha, task_sha)
+        if absorption is None:
+            entry.update(action="rejected", reason=f"not absorbed by {task_ref}")
+            continue
+        entry.update(lane_sha=lane_sha, task_ref=task_ref, absorption=absorption)
+        if args.dry_run:
+            entry["action"] = "eligible"
+        else:
+            run_git(root, "worktree", "remove", str(path))
+            run_git(root, "branch", "-D", branch)
+            entry["action"] = "removed"
+    return {
+        "ok": True,
+        "operation": "cleanup-absorbed",
+        "dry_run": bool(args.dry_run),
+        "entries": entries,
+        "removed": sum(1 for entry in entries if entry.get("action") == "removed"),
+        "rejected": sum(1 for entry in entries if entry.get("action") == "rejected"),
+        "observed_at": datetime.now(UTC).isoformat(),
+        "duration_ms": round((time.monotonic() - started) * 1000),
+    }
+
+
+def load_review_receipts(
+    directory: Path,
+) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    by_sha: dict[str, dict[str, Any]] = {}
+    invalid: list[str] = []
+    if not directory.is_dir():
+        return by_sha, invalid
+    for path in sorted(directory.glob("*.json")):
+        try:
+            payload = json.loads(path.read_bytes())
+        except (OSError, json.JSONDecodeError):
+            invalid.append(str(path))
+            continue
+        if not isinstance(payload, dict) or payload.get("kind") != "review":
+            continue
+        if validate_review_receipt(payload):
+            invalid.append(str(path))
+            continue
+        by_sha[payload["subject_sha"].lower()] = {
+            "path": str(path),
+            "item_id": payload["item_id"],
+            "review_kind": payload["review_kind"],
+            "verdict": payload["verdict"],
+        }
+    return by_sha, invalid
+
+
+def command_slice_status(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    root = Path(args.root).resolve()
+    task_ref = args.task_ref
+    if not task_ref.startswith("task/") or task_ref.count("/") != 1:
+        raise OrchestrateError(f"task ref must use task/<task>: {task_ref!r}")
+    task_id = require_identifier(task_ref.split("/", 1)[1], label="task ref id")
+    task_sha = run_git(root, "rev-parse", f"{task_ref}^{{commit}}").stdout.strip()
+    receipts_dir = (
+        Path(args.receipts_dir).resolve()
+        if args.receipts_dir
+        else common_repo_root(root) / ".agent_state" / "orchestrate" / "receipts"
+    )
+    receipts, invalid = load_review_receipts(receipts_dir)
+    worktrees = {
+        str(record.get("branch", "")).removeprefix("refs/heads/"): record
+        for record in worktree_records(root)
+        if isinstance(record.get("branch"), str)
+    }
+    lanes: list[dict[str, Any]] = []
+    refs = run_git(
+        root,
+        "for-each-ref",
+        "--format=%(refname:short) %(objectname)",
+        f"refs/heads/agent/{task_id}/",
+    ).stdout
+    for line in refs.splitlines():
+        branch, _, head = line.strip().partition(" ")
+        entry: dict[str, Any] = {"lane_ref": branch, "head": head}
+        record = worktrees.get(branch)
+        if record is not None:
+            worktree_path = Path(str(record.get("worktree")))
+            entry["worktree"] = str(worktree_path)
+            entry["dirty"] = (
+                bool(run_git(worktree_path, "status", "--porcelain").stdout.strip())
+                if worktree_path.exists()
+                else None
+            )
+        body = run_git(root, "log", "-1", "--format=%B", head).stdout
+        entry["seam_ready"] = bool(SEAM_READY_PATTERN.search(body))
+        absorption = lane_absorption(root, head, task_sha)
+        receipt = receipts.get(head.lower())
+        if receipt is not None:
+            entry["receipt"] = receipt
+        if absorption is not None:
+            entry["state"] = "absorbed"
+            entry["absorption"] = absorption
+        elif receipt is not None and receipt["verdict"] == "pass":
+            entry["state"] = "authorized_to_collect"
+        elif receipt is not None and receipt["verdict"] == "needs_fix":
+            entry["state"] = "needs_fix"
+        else:
+            entry["state"] = "writing"
+        lanes.append(entry)
+    return {
+        "ok": True,
+        "operation": "slice-status",
+        "read_only": True,
+        "task_ref": task_ref,
+        "task_sha": task_sha,
+        "receipts_dir": str(receipts_dir),
+        "invalid_receipts": invalid,
+        "lanes": lanes,
         "observed_at": datetime.now(UTC).isoformat(),
         "duration_ms": round((time.monotonic() - started) * 1000),
     }
@@ -2056,7 +2371,13 @@ def build_parser() -> argparse.ArgumentParser:
     collect = commands.add_parser(
         "collect", help="preflight and merge one explicitly authorized exact lane SHA"
     )
-    add_root(collect)
+    collect.add_argument(
+        "--integration-worktree",
+        "--root",
+        dest="root",
+        required=True,
+        help="integration checkout on the task ref (--root is a deprecated alias)",
+    )
     collect.add_argument("--task-ref", required=True)
     collect.add_argument("--lane-ref", required=True)
     collect.add_argument("--expected-lane-sha", required=True)
@@ -2066,6 +2387,29 @@ def build_parser() -> argparse.ArgumentParser:
         "--receipt", help="review receipt JSON path replacing the two flags above"
     )
     collect.set_defaults(handler=command_collect, requires_release_preflight=True)
+
+    sweep = commands.add_parser(
+        "cleanup", help="sweep absorbed lanes and clean detached review worktrees"
+    )
+    add_root(sweep)
+    sweep.add_argument(
+        "--absorbed", action="store_true", help="authorize the sweep (required)"
+    )
+    sweep.add_argument("--dry-run", action="store_true")
+    sweep.set_defaults(handler=command_cleanup_absorbed)
+
+    slice_parser = commands.add_parser(
+        "slice", help="derive read-only slice states from Git plus receipts"
+    )
+    slice_commands = slice_parser.add_subparsers(dest="slice_command", required=True)
+    slice_status = slice_commands.add_parser("status")
+    add_root(slice_status)
+    slice_status.add_argument("--task-ref", required=True)
+    slice_status.add_argument(
+        "--receipts-dir",
+        help="review receipt directory (default .agent_state/orchestrate/receipts)",
+    )
+    slice_status.set_defaults(handler=command_slice_status)
 
     release = commands.add_parser("release-manifest", help=argparse.SUPPRESS)
     release.add_argument("--version", required=True, type=int)

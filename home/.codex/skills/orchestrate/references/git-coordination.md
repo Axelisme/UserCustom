@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 67
+orchestrate_compat: 68
 ---
 
 # Git coordination and landing
@@ -46,6 +46,16 @@ Root may use `orchestrate lane create|cleanup`, `review checkout|cleanup`, and
 `collect` pseudo aliases from the entrypoint instead. They are stateless guards around these
 same operations: exact inputs only, JSON evidence, Git recheck immediately before mutation,
 and Fast Fail on dirty/drifted/unabsorbed state. They never infer a verdict or queue state.
+Every guard is idempotent: after an aborted turn, rerun the same command — it reports what a
+prior run already applied (`recovered: already-created|already-collected|already-removed|…`)
+instead of failing, so reconciliation is the rerun itself. `collect` takes
+`--integration-worktree` (`--root` remains a deprecated alias) because it requires the
+integration checkout, not the repository root. `orchestrate cleanup --absorbed [--dry-run]`
+sweeps managed worktrees in one pass — absorbed lanes and clean detached review checkouts are
+removed, everything dirty or unabsorbed is rejected per entry. `orchestrate slice status
+--task-ref task/<t>` derives each lane's state read-only from Git plus receipts
+(`writing|needs_fix|authorized_to_collect|absorbed`, with seam-ready and dirty flags); it
+stores nothing and decides nothing — Git remains the only topology truth carrier.
 For collect, `--authorized-sha` plus `--review-kind` with
 `different-identity|focused|root-spot|mechanical` is root's **declared authorization**. The
 adapter reports it but **does not infer a verdict** or claim that a formal reviewer acted.

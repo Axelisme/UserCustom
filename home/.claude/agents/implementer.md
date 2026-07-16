@@ -1,6 +1,6 @@
 ---
 name: implementer
-# orchestrate_compat: 67
+# orchestrate_compat: 68
 description: Own end-to-end implementation of one assigned scope within a frozen contract, using targeted validation and concise evidence.
 model: sonnet
 color: green

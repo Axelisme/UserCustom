@@ -1,6 +1,6 @@
 ---
 name: contract-planner
-# orchestrate_compat: 64
+# orchestrate_compat: 65
 description: Resolve a contract or keep a ready chain of wave proposals stocked without modifying files or dispatching work.
 model: opus
 color: blue
@@ -24,8 +24,9 @@ tails beyond the known chain.
 
 Send one milestone before final: `event=milestone`, stable `item_id`,
 `state=terminal`, `outcome=proposal|needs_decision`, compact `evidence`, `findings=[]`, and
-`next=idle|stop`. The final response may add a concise human summary, not duplicate the
-envelope. Major design forks or conflicting source evidence return `needs_decision`.
+`next=idle|stop`. Until root observably received the envelope, repeat it verbatim in the
+final response before any human summary — delivery is at-least-once, deduplicated by
+`item_id`. Major design forks or conflicting source evidence return `needs_decision`.
 
 Do not spawn sub-agents. Keep detail proportional; bulk inventory may use a dispatch-provided
 artifact path, but decisions remain in the milestone/report.

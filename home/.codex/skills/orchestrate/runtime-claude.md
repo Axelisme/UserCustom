@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 64
+orchestrate_compat: 65
 ---
 
 # Orchestrate — Claude Code runtime binding
@@ -23,9 +23,12 @@ observed capability, not something config alone proves. For a long direct contra
 immutable dispatch-packet absolute path and SHA-256; for a spool consumer, send queue path,
 role, lease, generation, and adapter command.
 
-## One milestone
+## Milestones
 
-When `SendMessage` exists, every item sends one envelope before continuing or ending:
+When `SendMessage` exists, send an envelope at every observable boundary — for a writer,
+after every commit (`state=progress`) — and one terminal envelope per item. Cadence is
+declared in discrete units (commits, items, sub-steps), never wall-clock, which a subagent
+cannot observe; root measures wall-clock itself while waiting:
 
 ```text
 event=milestone
@@ -38,7 +41,9 @@ findings=<ids or []>
 next=continue|idle|stop
 ```
 
-The final response does not duplicate it; runtime completion means only that the turn ended.
+Delivery is at-least-once, deduplicated by `item_id`: until root has observably received the
+terminal envelope, repeat it verbatim in the final response — a duplicate is cheap, lost
+findings are not. Runtime completion means only that the turn ended.
 If `SendMessage` is absent, root must predeclare a one-item final-response fallback. When
 same-identity continuation is required and `SendMessage` is absent, return `needs_decision`;
 never respawn and call it continuity.

@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 64
+skill_version: 65
 ---
 
 # Orchestrate
@@ -56,7 +56,7 @@ surface and is not inherited by the plumbing that feeds it.
 Read a reference completely only when its branch fires:
 
 - Before creating a branch/worktree, collecting, or landing, read [Git coordination](references/git-coordination.md).
-- Before the first agent dispatch, identity decision, or review, read [Delegation and review](references/delegation-and-review.md) and the matching `runtime-<runtime>.md`.
+- Before the first agent dispatch, identity decision, or review, read [Delegation and review](references/delegation-and-review.md) and the matching runtime binding at the skill root — [runtime-codex.md](runtime-codex.md) or [runtime-claude.md](runtime-claude.md), not under `references/`.
 - Before dispatching two or more ready slices concurrently, read [Wave pipeline](references/wave-pipeline.md).
 - Before freezing a critical checkpoint or closing its findings, read [Critical review](references/critical-review.md).
 - Before using a filesystem queue, read [Durable delivery spool](references/durable-delivery-spool.md).

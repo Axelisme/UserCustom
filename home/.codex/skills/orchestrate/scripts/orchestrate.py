@@ -120,7 +120,18 @@ def run_git(
 
 def exact_commit(root: Path, value: str, *, label: str) -> str:
     if not EXACT_SHA_PATTERN.fullmatch(value):
-        raise OrchestrateError(f"{label} must be an exact hexadecimal commit SHA")
+        probe = run_git(
+            root, "rev-parse", "--verify", "--quiet", f"{value}^{{commit}}", check=False
+        )
+        resolved = probe.stdout.strip()
+        hint = (
+            f"; resolved full SHA: {resolved} — retry with this value"
+            if probe.returncode == 0 and resolved
+            else ""
+        )
+        raise OrchestrateError(
+            f"{label} must be an exact hexadecimal commit SHA{hint}"
+        )
     resolved = run_git(
         root, "rev-parse", "--verify", f"{value}^{{commit}}"
     ).stdout.strip()
@@ -1454,18 +1465,48 @@ def command_review_cleanup(args: argparse.Namespace) -> dict[str, Any]:
     )
     if not target.name.startswith("review-"):
         raise OrchestrateError("review worktree name must start with 'review-'")
-    record = require_registered_worktree(root, target)
-    if "detached" not in record:
-        raise OrchestrateError("review cleanup only removes detached worktrees")
-    if run_git(target, "status", "--porcelain").stdout.strip():
-        raise OrchestrateError("review worktree is dirty")
-    head = run_git(target, "rev-parse", "HEAD").stdout.strip()
-    run_git(root, "worktree", "remove", str(target))
-    return {
+    record = next(
+        (
+            record
+            for record in worktree_records(root)
+            if record.get("worktree") == str(target)
+        ),
+        None,
+    )
+    result: dict[str, Any] = {
         "ok": True,
         "operation": "review-cleanup",
         "path": str(target),
-        "head": head,
+    }
+    if record is None:
+        if target.exists():
+            raise OrchestrateError(f"not a registered worktree: {target}")
+        result["recovered"] = "already-removed"
+    else:
+        # Preflight metadata writability before any mutation: a sandbox that can
+        # delete the directory but not .git/worktrees leaves half-removed state.
+        metadata_dir = (
+            root / run_git(root, "rev-parse", "--git-common-dir").stdout.strip()
+        ).resolve() / "worktrees"
+        if metadata_dir.exists() and not os.access(metadata_dir, os.W_OK):
+            raise OrchestrateError(
+                f"worktree metadata is not writable: {metadata_dir}; grant write"
+                " access before cleanup — nothing was removed"
+            )
+        if not target.exists():
+            run_git(root, "worktree", "prune")
+            result["recovered"] = "pruned-stale-metadata"
+        else:
+            if "detached" not in record:
+                raise OrchestrateError(
+                    "review cleanup only removes detached worktrees"
+                )
+            if run_git(target, "status", "--porcelain").stdout.strip():
+                raise OrchestrateError("review worktree is dirty")
+            result["head"] = run_git(target, "rev-parse", "HEAD").stdout.strip()
+            run_git(root, "worktree", "remove", str(target))
+    return {
+        **result,
         "observed_at": datetime.now(UTC).isoformat(),
         "duration_ms": round((time.monotonic() - started) * 1000),
     }

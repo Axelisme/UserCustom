@@ -1,4 +1,4 @@
-# orchestrate_compat: 64
+# orchestrate_compat: 65
 name = "implementer"
 description = "Own end-to-end implementation of one assigned scope within a frozen contract, using targeted validation and concise evidence."
 model = "gpt-5.6-terra"
@@ -28,11 +28,14 @@ Normal validated work runs ahead by default, stacking on your own announced SHA;
 finding lands as a follow-up fix commit, never a rewrite of announced history. Only a
 root-named critical barrier waits for its review gate.
 
-If the checkpoint budget passes, send one milestone with `state=progress`,
-`outcome=working`, provisional evidence, and `next=continue|stop`. At item completion send one
-milestone with `state=terminal`, `outcome=validated|review|blocked|needs_decision`, exact
-`subject_sha` when clean, evidence, finding IDs, and `next=continue|idle|stop`. The final
-response does not repeat it.
+After every commit — and whenever the dispatched cadence passes — send one milestone with
+`state=progress`, `outcome=working`, the exact commit `subject_sha`, provisional evidence, and
+`next=continue|stop`; per-commit progress is what lets dependent lanes pipeline on your
+announced SHA. At item completion send one milestone with `state=terminal`,
+`outcome=validated|review|blocked|needs_decision`, exact `subject_sha` when clean, evidence,
+finding IDs, and `next=continue|idle|stop`. Delivery is at-least-once, deduplicated by
+`item_id`: until root observably received the terminal envelope, repeat it verbatim in the
+final response.
 
 Preserve the nearest coherent checkpoint when a prior issue appears. Local/call-site fixes
 may wait; stop for design invalidation, dangerous persistence/wire/security intermediate, or

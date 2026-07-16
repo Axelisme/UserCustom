@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 64
+orchestrate_compat: 65
 ---
 
 # Delegation and review
@@ -12,7 +12,16 @@ continuation, parking, retirement, model, and sandbox capabilities.
 
 Root alone freezes work, grants authority, classifies deferral, and integrates. A role gets a
 bounded objective, workdir/scope, basis, acceptance, stop conditions, checkpoint budget, and
-either inline content, a dispatch-packet path/hash, or a spool binding.
+either inline content, a dispatch-packet path/hash, or a spool binding. The budget's
+worker-facing cadence is declared in discrete observable units (commits, items, sub-steps),
+never wall-clock. Keep the dispatch lean: stable boilerplate — profile standing orders, the
+milestone schema, tool recipes — is referenced by pointer, and root writes only the contract,
+risk axes, acceptance, and non-goals.
+
+Root does the work itself instead of dispatching when the next result directly gates the next
+decision; when the scope is one file, one invariant, or smaller than its own readiness packet;
+or when the blocker is urgent and delegating would leave root idle. Delegate what is genuinely
+parallel with disjoint write sets.
 
 Keep the same identity for the same domain when the runtime supports it. Finding fixes return
 to the original implementer; finding closure and refreshed-SHA review return to the original
@@ -80,6 +89,12 @@ A readiness packet—inline or via [dispatch packet](dispatch-packets.md)—name
 
 Missing target, contract, scope, or dangerous oracle is a readiness failure. Old-SHA review,
 aborted suites, and unproved tree equivalence are invalid substitutes.
+
+Word review dispatches in neutral engineering vocabulary — correctness, negative path,
+boundary probe, lifecycle probe, transaction safety — and reserve hostile/adversarial/security
+framing for surfaces that genuinely cross a security boundary. A platform-classifier abort is
+**unusable review evidence**, never a verdict: reword the dispatch and rerun with a fresh
+identity.
 
 ## Reviewer mental model
 

@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 61
+orchestrate_compat: 62
 ---
 
 # Evidence and handoff
@@ -27,11 +27,12 @@ and only a usable `task` gate on the landing candidate is final. A wave boundary
 broader gate only when the repo/risk contract names one; it never masquerades as the final
 task-scoped gate.
 
-Any integrated-tree change invalidates prior task evidence by default; a test-only change
-invalidates it too. It may use delta refresh only under a **repo-predeclared test-delta
-policy** that proves production tree/content identity, excludes shared fixture/config
-changes, and requires every new/affected test to pass. Otherwise rerun the broader gate.
-This conservative default is an intentional safety cost, not an inference from filenames.
+Evidence invalidation is **surface-scoped**: a later change invalidates only evidence whose
+`covered_surface` intersects the changed paths/behaviors. Shared fixtures, config, and build
+inputs count as intersecting everything they feed. Disjoint evidence stays valid — record the
+non-intersection claim in `invalidated_by: none` reasoning rather than asserting it silently.
+Two gates stay whole-tree regardless: any gate the repo/risk contract names as whole-tree, and
+the final `task` gate, which always runs on the exact landing-candidate tree.
 
 ## Baseline-relative gates
 
@@ -78,7 +79,9 @@ review-readiness packet.
   decision, review, or merge state.
 - Cross-session, multi-round, or information-heavy tasks use `planning-with-files` at
   `.agent_state/plans/<task-id>/`; one-shot tasks create nothing.
-- **task_plan is the ledger; a domain packet is its current-state cache.** Only several
+- **task_plan is the ledger; a domain packet is its current-state cache.** The ledger holds
+  active decisions and one-line pointers only; a closed decision's detail lives in its ADR or
+  evidence artifact, collapsed at wave close. Only several
   concurrent domains justify `domains/<domain>.md` (owner/reviewer, current SHA, pointers and
   one-line summaries of frozen decisions, next step). Single-domain tasks use task_plan's
   Current State directly.

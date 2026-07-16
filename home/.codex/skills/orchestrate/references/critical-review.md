@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 61
+orchestrate_compat: 62
 ---
 
 # Critical review
@@ -8,6 +8,11 @@ Use this branch when failure can cross security/capability/authentication, hardw
 ownership, persistence/migration, or an atomic cutover. Ordinary HTTP composition, codec
 wiring, client adapters, tests, typing, formatting, documentation, and mechanical refactors stay
 normal unless their actual failure crosses one of those boundaries.
+
+**Carve the critical core out of its normal shell.** Critical identity attaches to the
+boundary surface itself — the admission gate, the capability mint, the cutover switch — and is
+not inherited by the plumbing that feeds it. Freeze the core as its own small slice behind this
+barrier and let the shell flow as normal verticals; a batch is never critical wholesale.
 
 ## Freeze the barrier
 

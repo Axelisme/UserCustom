@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 61
+orchestrate_compat: 62
 ---
 
 # Delegation and review
@@ -20,8 +20,10 @@ reviewer. Spawn a new identity for independent review, a changed domain, or genu
 scope—not merely because a turn ended. Role switching requires a new profile bootstrap and
 cannot make an identity independent from work it implemented.
 
-Planner output is advice: contract resolution or one conditional wave ahead. Root freezes it.
-Writers own scoped implementation. Reviewers are read-only with respect to the reviewed tree;
+Planner output is advice: contract resolution or a stocked chain of conditional wave
+proposals. Root freezes it. Writers own scoped implementation and every internal design
+decision inside the frozen seam, reporting notable ones in the milestone for post-hoc
+recording. Reviewers are read-only with respect to the reviewed tree;
 workspace write exists only for detached worktrees and test caches. Agents never spawn
 coordination sub-agents or decide landing/finding deferral.
 
@@ -45,14 +47,15 @@ Review the checkpoint's changed surface:
 
 | surface | default depth |
 |---|---|
-| mechanical | root scope/tree spot-check |
-| normal internal behavior | root self-review or focused reviewer |
-| named review risk | explicitly chosen depth/identity/waiting |
+| mechanical | none, or root scope/tree spot-check |
+| normal internal behavior | writer self-review + root spot-check — no independent identity |
+| named review risk | cumulative independent review at explicitly chosen depth/waiting |
 | critical boundary | enter [Critical review](critical-review.md) |
 
-Review cadence is independent: none, cumulative, selected, or per-slice. Wait only where the
-dependency or frozen risk treatment requires it. A queue entry never creates review debt;
-root creates a review target by authorizing an exact immutable SHA.
+Cadence defaults to **cumulative**: one review closes a coherent surface or selected batch.
+Per-slice review is the exception root must justify. Wait only where a declared dependency or
+named critical barrier requires it; normal work runs ahead unreviewed. A queue entry never
+creates review debt; root creates a review target by authorizing an exact immutable SHA.
 
 A readiness packet—inline or via [dispatch packet](dispatch-packets.md)—names at least:
 

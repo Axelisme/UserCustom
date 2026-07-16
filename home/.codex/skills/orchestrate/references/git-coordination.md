@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 61
+orchestrate_compat: 62
 ---
 
 # Git coordination and landing
@@ -53,8 +53,10 @@ adapter reports it but **does not infer a verdict** or claim that a formal revie
 - Declare each writer's file scope in one sentence. A conflict means the split was poor; fix
   the plan rather than adding machinery.
 - Same-file or same public interface/schema/fixture work is serial in one worktree.
-- Root merges serially. Shared foundation lands on integration first; dependent lanes start
-  from that SHA.
+- Root collects in batches: several accepted lanes in one integration pass, merged serially
+  inside it. Shared foundation lands on integration first; dependent lanes start from that SHA.
+- A writer may stack its next lane on its own announced unreviewed SHA; a later finding lands
+  as a follow-up fix commit on top. Never rewrite an announced SHA that later work stacks on.
 - Never copy, create, or repair environments (`.venv`, `node_modules`, caches) in worktrees.
   Point the main checkout's toolchain at worktree sources; for Python, a common shape is
   `PYTHONPATH=<worktree>/<pkg-root> <main>/.venv/bin/python -m pytest ...`. Follow repo docs

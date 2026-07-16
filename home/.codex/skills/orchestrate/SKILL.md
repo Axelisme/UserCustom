@@ -1,13 +1,14 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 61
+skill_version: 62
 ---
 
 # Orchestrate
 
-Run a control loop that retires the most consequential uncertainty with the smallest safe
-move. Keep three truth carriers consistent: **Git** for code/topology, **active reasoning**
+Run a control loop that retires the most consequential uncertainty with the **largest move
+you can still prove safe**; the smallest safe move is reserved for critical boundaries.
+Keep three truth carriers consistent: **Git** for code/topology, **active reasoning**
 for current hypotheses, and **durable narrative** for cross-session decisions. Transport
 files carry frozen input; root remains the decision and integration authority.
 
@@ -25,11 +26,11 @@ user authority.
 | step | action | completion criterion |
 |---|---|---|
 | **1. Observe** | Read repo instructions and relevant decisions; inspect Git, worktrees, user dirt, current narrative, and existing evidence. | The authoritative tree, user-owned changes, live task state, and largest unresolved uncertainty are named. |
-| **2. Freeze** | Freeze the next bounded outcome: objective, acceptance, non-goals, write scope, exact base, test oracle, and risk/review boundary. | The assignee can act without guessing the public contract, ownership, or acceptance. |
-| **3. Shape** | Choose the cheapest pipeline that retires the uncertainty; serialize shared files, contracts, schemas, fixtures, and authority. | Every ready item has an owner, base, scope, acceptance, dependency, and review barrier; conflicting authority is serialized. |
+| **2. Freeze** | Freeze only the public seam of the next bounded outcome: objective, public contract, acceptance, non-goals, write scope, exact base, and any named review risk. Internal design is writer discretion, recorded after the fact. | The assignee can act without guessing the public contract, ownership, or acceptance; everything inside the seam is theirs to decide. |
+| **3. Shape** | Choose the cheapest pipeline that retires the uncertainty; when freeze+dispatch+harvest overhead would exceed the work itself, root does the work directly. Serialize shared files, contracts, schemas, fixtures, and authority. | Every ready item has an owner, base, scope, acceptance, dependency, and any named review barrier; conflicting authority is serialized. |
 | **4. Dispatch** | Issue only ready, self-contained work with a bounded lease and explicit discretion/stop boundary. | The consumer can act without chat history and knows when it may run ahead or must stop. |
-| **5. Harvest** | Classify the returned milestone as progress, validated state, review verdict, or decision stop. | Conclusions bind to the actual exact SHA/tree; tests/anomalies are usable and each finding has an owner. |
-| **6. Integrate** | Serially collect accepted work after its risk-proportional review debt is resolved. | Ancestry/tree identity is proved, every lane change is accounted for, and the integration checkout is clean. |
+| **5. Harvest** | Classify the returned milestone as progress, validated state, review verdict, or decision stop; batch routine harvests rather than reacting per slice. | Conclusions bind to the actual exact SHA/tree; tests/anomalies are usable and each finding has an owner. |
+| **6. Integrate** | Collect accepted work in batches of a few slices — one preflight, serial merges inside the batch — after any named review risk is resolved. | Ancestry/tree identity is proved, every lane change is accounted for, and the integration checkout is clean. |
 | **7. Re-observe or close** | Integration changes reality: repeat from Observe, or close against the final integrated tree. | Necessary final gates/review, user authority, cleanup, and durable narrative are current rather than inherited from an older tree. |
 
 ## Pipeline shapes
@@ -38,14 +39,17 @@ user authority.
 |---|---|---|
 | **root-only** | Root can retire the uncertainty more cheaply than a handoff. | inspect/change → targeted evidence |
 | **single writer** | One coherent surface dominates and an independent identity adds little. | freeze → write one coherent vertical slice → targeted gates → root review → integrate |
-| **normal wave** | Two or more ready slices are genuinely independent. | Planner N+1 advises → root freezes → Writer N produces a validated exact SHA → Reviewer N audits selected/cumulative slices → root serial collect → final integrated gate |
-| **critical checkpoint** | Security/capability/auth, hardware or process ownership, persistence, or atomic cutover makes failure costly. | freeze → writer checkpoint → different-identity adversarial review → finding returns to the writer → focused closure or refreshed exact-state review → release dependent work |
+| **normal wave** | Two or more ready slices are genuinely independent, or a known chain can be stacked writer-ahead. | planner keeps the ready chain stocked → root freezes seams → writers produce validated exact SHAs and run ahead on their own work → root spot-checks and batch-collects → cumulative review only where root named a risk → final integrated gate |
+| **critical checkpoint** | The **critical core** — an admission gate, capability mint, hardware/process ownership change, persistence cutover — where failure is costly. | freeze → writer checkpoint → different-identity adversarial review → finding returns to the writer → focused closure or refreshed exact-state review → release dependent work |
 
 Optimize **critical-path lead time**, not agent utilization. A milestone is non-blocking; a
-checkpoint is a review barrier. Let one writer retain a coherent vertical slice and run only
-targeted gates during development. Use focused re-review for localized findings; perform one
-full slice review and the repo/risk-required broader gate at integration. Treat ordinary
-HTTP/codec/client wiring as a normal vertical unless it crosses a critical boundary.
+checkpoint is a review barrier, and only a root-named risk creates one. The default posture
+is **throughput**: a writer keeps a coherent vertical slice, runs targeted gates only,
+self-reviews against its contract, and stacks its next slice on its own unreviewed SHA; a
+later finding lands as a follow-up fix, not a rewrite. Treat ordinary HTTP/codec/client
+wiring as a normal vertical; when a critical boundary appears, carve the critical core into
+its own small slice and keep the shell normal — critical identity attaches to the boundary
+surface and is not inherited by the plumbing that feeds it.
 
 ## Context pointers
 

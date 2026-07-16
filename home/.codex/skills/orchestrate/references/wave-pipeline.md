@@ -1,20 +1,20 @@
 ---
-orchestrate_compat: 61
+orchestrate_compat: 62
 ---
 
 # Wave pipeline
 
-Use a wave only when two or more ready slices are genuinely independent. Optimize
-**critical-path lead time**, not agent utilization: idle capacity is cheaper than blocking the
-main writer with handoffs, repeated context loading, and duplicate gates.
+Use a wave when two or more ready slices are genuinely independent, or when a known chain can
+be stacked writer-ahead. Idle capacity is cheaper than blocking the main writer with handoffs,
+repeated context loading, and duplicate gates.
 
 ## Freeze the wave
 
 Root freezes one natural wave, commonly a few coherent items and sometimes a one-item tail.
 Each item is self-contained: objective, exact base, write authority, acceptance/oracle,
-dependencies, discretion, and any real review barrier. Contract or same-file authority is
-serialized. Planner may advise Wave N+1 while N runs; root alone freezes it, and planning stops
-one wave ahead.
+dependencies, discretion, and any root-named review barrier. Contract or same-file authority
+is serialized. Planner keeps the whole known dependency chain stocked with ready proposals
+while N runs; root alone freezes and releases them, wave by wave.
 
 Prefer one writer for a coherent vertical slice. Split at independently verifiable ownership
 or dependency seams, not at each parser, field, callback, or mechanical edit. A slice may
@@ -24,8 +24,10 @@ contain several progress observations without creating several review checkpoint
 
 - A **non-blocking milestone** reports observed progress/evidence; an authorized writer
   continues immediately. The runtime/profile owns its transport and schema.
-- A checkpoint blocks only for a declared dependency or critical review barrier. A completed
-  micro-step is not itself a reason to stop, commit, switch identity, or ask root.
+- A writer **runs ahead by default**: it stacks the next slice on its own announced unreviewed
+  exact SHA, and a later finding lands as a follow-up fix commit — announced history is never
+  rewritten. Only a declared dependency or root-named critical barrier waits for review.
+- A completed micro-step is not itself a reason to stop, commit, switch identity, or ask root.
 - Dispatch a frozen bounded turn rather than drip-feeding a running identity. Routine additions
   use the spool; major finding, correction, retract, or stop may interrupt directly.
 - Root observes delivered events. Short absence of tool/fs activity is model reasoning, not
@@ -34,24 +36,30 @@ contain several progress observations without creating several review checkpoint
 ## Writer, reviewer, and root
 
 Writer runs targeted tests and affected type/lint checks during development, retains context
-across the whole slice, and stops only at its declared barrier or genuine decision boundary.
+across the whole slice, self-reviews against the frozen contract before its terminal
+milestone, and stops only at its declared barrier or genuine decision boundary. For normal
+work the writer is the default reviewer.
 
-Reviewer consumes complete exact-state targets. For normal work, review one coherent slice or
-a cumulative/selected batch rather than every small commit. It may continue to an already-ready
-independent target after pass. Idle review time may prepare a stable spec audit, hostile oracle,
-or source inventory; it does not justify blocking the writer or implementing against an
-unstable interface.
+An independent reviewer exists only where root named a risk at freeze. It consumes complete
+exact-state targets **cumulatively**: one review closes a coherent surface or selected batch,
+never each small commit. It may continue to an already-ready independent target after pass;
+idle review time never justifies blocking the writer or implementing against an unstable
+interface.
 
-Root harvests milestones, assigns findings, and serially collects accepted work. Localized
-finding fixes get a **focused re-review**; one full slice review closes the coherent surface.
-Only integration runs the repo/risk-required **broader gate**, whose evidence binds to the final
-tree. Any later code change invalidates the affected evidence.
+Root harvests milestones, assigns findings, and collects accepted work in batches of a few
+slices — one preflight, serial merges inside the batch, one narrative update. Localized
+finding fixes get a **focused re-review**; one full review closes a named-risk surface.
+Only integration runs the repo/risk-required **broader gate**, whose evidence binds to the
+final tree.
 
 ## Wave close
 
-Reconcile Git and the durable narrative, retain open/deferred findings, and collapse closed
-details into evidence pointers. Record lightweight counts only when they help tune slice size,
-handoffs, review amplification, or wait; omit timings the runtime did not observe.
+Reconcile Git and the durable narrative, retain open/deferred findings, and collapse every
+closed decision into a one-line ADR/evidence pointer — task_plan carries active items and
+pointers only. Record lightweight counts (findings per review, review rounds, wait) and tune
+**review amplification** with them: two consecutive reviews yielding only minor findings drop
+the next wave's default depth one level (focused → root spot-check → none); any major finding
+restores named-risk review immediately.
 
 Normal queue mechanics live in [Durable delivery spool](durable-delivery-spool.md). A boundary
 that needs independent adversarial proof leaves this branch for [Critical review](critical-review.md).

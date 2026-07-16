@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 63
+orchestrate_compat: 64
 ---
 
 # Git coordination and landing
@@ -84,7 +84,9 @@ admit concurrent holders.
 State-entering guards run manifest/compat preflight before lane/review creation, collection,
 packet/queue publication, or merge-slot claim. Status and cleanup/recovery remain available
 without a remembered session flag. This mechanizes compatibility instead of relying on root
-to remember `doctor`.
+to remember `doctor`. Profile identity is the standing orders (normalized
+`developer_instructions`); retuning a profile's model or reasoning effort never fails
+preflight.
 
 ```bash
 merge-slot := <repo-python> "$SKILL_DIR/scripts/merge_slot.py" --root <repo>

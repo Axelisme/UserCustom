@@ -317,12 +317,15 @@ def verify_release(skill_dir: Path) -> dict[str, Any]:
     for category in ("documents", "profiles"):
         expected_items = manifest[category]
         observed_items = observed[category]
+        # Profile identity is the standing orders, not the file: model/effort
+        # tuning outside developer_instructions must not fail a release check.
+        digest = "sha256" if category == "documents" else "standing_orders_sha256"
         for name in sorted(set(expected_items) | set(observed_items)):
             if name not in expected_items:
                 errors.append(f"unexpected {category[:-1]}: {name}")
             elif name not in observed_items:
                 errors.append(f"missing {category[:-1]}: {name}")
-            elif expected_items[name]["sha256"] != observed_items[name]["sha256"]:
+            elif expected_items[name][digest] != observed_items[name][digest]:
                 errors.append(f"hash mismatch: {name}")
     for name, entry in observed["documents"].items():
         if name.endswith(".md") and entry["bytes"] > 16_384:

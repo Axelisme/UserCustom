@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 77
+skill_version: 78
 ---
 
 # Orchestrate
@@ -49,22 +49,37 @@ self-reviews against its contract, and stacks its next slice on its own unreview
 later finding lands as a follow-up fix, not a rewrite. When a checkpoint qualifies as
 critical, carve the core into its own small slice and keep the shell normal.
 
-## Rigor presets
+## Machinery triggers
 
-Every adapter is optional; a preset is the declared default for how much of that optional
-machinery this task invokes, chosen at contract freeze and escalated mid-task only by naming
-a new risk:
+Every adapter and artifact is optional and exists for exactly one trigger. **When no listed
+trigger fired, creating the artifact is a defect, not caution** — unused machinery does not
+add safety, it ratchets into ritual.
 
-- **light** — root-only or single writer: scope in one sentence, targeted gates, root
-  review, land under the declared policy. UI tweaks, docs, mechanical changes.
-- **standard** — multi-lane wave: scope manifests on adjacent surfaces, a gate receipt for
-  the final gate, review receipts only where root named a risk. The feature-work default.
-- **critical** — adds different-identity review with profile acknowledgment, dispatch-packet
-  or spool hashes, and per-checkpoint immutable review — only for surfaces passing the
-  critical two-feature test.
+| artifact | sole trigger |
+|---|---|
+| task branch | any orchestrated code change (Q&A, research, one-round review: none) |
+| lane branch + worktree | a second concurrent writer |
+| scope manifest (+`scope amend`) | two or more lanes touching adjacent surfaces |
+| dispatch packet | a hard-critical or exact-SHA dispatch, or a wave of 2+ slices whose inline contracts would each run long |
+| delivery spool | queued cross-turn delivery the runtime binding names |
+| review receipt | an independent reviewer identity closes review |
+| gate receipt (+`gate compare`) | a gate with exclusions, skips, blocks, or baseline-relative anomalies |
+| contract-adjustment receipt | evidence overturns a frozen contract |
+| landing declaration | the task will land on a persistence branch |
+| merge slot | every persistence landing |
+| version pin | a task expected to outlive one session or skill release |
+| task_plan | cross-session, multi-round, or information-heavy work |
+| independent reviewer | a root-named review risk |
+| critical review barrier | the critical two-feature test |
 
-Landing rules never scale down: the declared landing policy, merge slot, and tree-identity
-proof apply to every persistence landing regardless of preset.
+Read-only commands (`status`, `slice status`, `land status`, `review verdict`, the lints,
+`doctor`) create nothing and are free whenever they answer a live question. A **preset** is
+shorthand for the rows a task expects to fire, declared at freeze and escalated only by
+naming a new risk: **light** (nothing beyond the task branch), **standard** (scope
+manifests, final gate receipt, named-risk review receipts), **critical** (adds profile
+acknowledgment, packet hashes, per-checkpoint immutable review). Landing rules never scale
+down. At task close, count artifacts created against triggers fired — the excess is ritual;
+recalibrate the next freeze rather than defending it.
 
 ## Context pointers
 

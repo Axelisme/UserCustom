@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 77
+orchestrate_compat: 78
 ---
 
 # Evidence and handoff
@@ -101,7 +101,7 @@ review-readiness packet.
   `planning-with-files` command `checkpoint <task-id>`. It validates current schemas and
   compacts only when required; `status remains read-only`, and maintenance never changes
   decision, review, or merge state.
-- Cross-session, multi-round, or information-heavy tasks use `planning-with-files` at
+- A task firing the task_plan trigger uses `planning-with-files` at
   `.agent_state/plans/<task-id>/`; one-shot tasks create nothing.
 - **task_plan is the ledger; a domain packet is its current-state cache.** The ledger holds
   active decisions and one-line pointers only; a closed decision's detail lives in its ADR or

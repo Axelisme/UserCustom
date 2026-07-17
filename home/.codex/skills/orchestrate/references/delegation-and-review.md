@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 77
+orchestrate_compat: 78
 ---
 
 # Delegation and review
@@ -18,10 +18,9 @@ never wall-clock. Keep the dispatch lean: stable boilerplate — profile standin
 milestone schema, tool recipes — is referenced by pointer, and root writes only the contract,
 risk axes, acceptance, and non-goals.
 
-Root does the work itself instead of dispatching when the next result directly gates the next
-decision; when the scope is one file, one invariant, or smaller than its own readiness packet;
-or when the blocker is urgent and delegating would leave root idle. Delegate what is genuinely
-parallel with disjoint write sets.
+Root does the work itself when the next result directly gates the next decision, the scope
+is smaller than its own readiness packet, or delegating would leave root idle. Delegate what
+is genuinely parallel with disjoint write sets.
 
 Keep the same identity for the same domain when the runtime supports it. Finding fixes return
 to the original implementer; finding closure and refreshed-SHA review return to the original

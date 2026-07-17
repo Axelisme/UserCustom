@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 77
+orchestrate_compat: 78
 ---
 
 # Orchestrate — Codex runtime binding

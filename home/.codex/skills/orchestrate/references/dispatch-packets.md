@@ -1,15 +1,13 @@
 ---
-orchestrate_compat: 77
+orchestrate_compat: 78
 ---
 
 # Immutable dispatch packets
 
-Use a packet when an inline frozen contract would obscure the immediate action — a
-hard-critical slice, an exact-SHA review, or a routine wave of two or more slices whose
-inline contracts would each run long. The packet carries only task-specific content; standing
-orders, milestone schema, and tool recipes stay pointers. This is prompt indirection, not a
-new control plane: the direct collaboration message grants authority and names the packet;
-file existence does not authorize execution.
+The trigger is the SKILL machinery-triggers row. A packet carries only task-specific
+content; standing orders, milestone schema, and tool recipes stay pointers. This is prompt
+indirection, not a new control plane: the direct collaboration message grants authority and
+names the packet; file existence does not authorize execution.
 
 ## Boundary
 

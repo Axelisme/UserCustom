@@ -1,12 +1,11 @@
 ---
-orchestrate_compat: 77
+orchestrate_compat: 78
 ---
 
 # Wave pipeline
 
-Use a wave when two or more ready slices are genuinely independent, or when a known chain can
-be stacked writer-ahead. Idle capacity is cheaper than blocking the main writer with handoffs,
-repeated context loading, and duplicate gates.
+The trigger is the SKILL pipeline-shapes row. Idle capacity is cheaper than blocking the
+main writer with handoffs, repeated context loading, and duplicate gates.
 
 ## Freeze the wave
 

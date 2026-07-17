@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 77
+orchestrate_compat: 78
 ---
 
 # Git coordination and landing
@@ -24,9 +24,8 @@ collecting or deleting lanes, or landing on a persistence branch. The hard rules
 Single-writer code changes work directly on the task branch with no lane and normally no
 worktree: create `task/<task>` in the main checkout, implement, run targeted acceptance and
 the repo/risk-required broader gate with the real environment, then land, prove tree
-identity, and delete the task branch. Use a worktree for one writer only when the main checkout must stay available or
-user-owned dirty state would conflict. Q&A, read-only research, and one-round review create
-no branch.
+identity, and delete the task branch. Use a worktree for one writer only when the main
+checkout must stay available or user-owned dirty state would conflict.
 
 ## Multi-writer parallelism
 
@@ -72,8 +71,8 @@ never infer a verdict or queue state; Git remains the only topology truth carrie
 
 - Declare each writer's file scope in one sentence, or as a hand-written scope manifest JSON
   (`owned_paths`/`excluded_paths`/`shared_read_only_paths`) checked by `scope check` and
-  `collect --scope` when lanes touch adjacent surfaces. A conflict still means the split was
-  poor; fix the plan rather than adding machinery.
+  `collect --scope`. A conflict still means the split was poor; fix the plan rather than
+  adding machinery.
 - A writer who must grow its scope (a missing test, a shared fixture) proposes
   `scope amend --manifest <cur> --add-owned <pattern> --reason <why> --output <new>`: a new
   manifest file carrying the amendment lineage (previous manifest SHA-256, patterns, reason).
@@ -112,9 +111,8 @@ Declare the **landing policy** at contract freeze in a hand-written landing decl
 (`{landing_version: 1, task_id, policy, target_ref}`): `validate-only` (the task ends at a
 validated task branch), `land-with-confirmation` (finish needs one explicit user
 confirmation), `commit-authorized` (land locally), or `publish-authorized` (land plus push).
-The declaration carries the user's landing authority for step 7, so the close never stalls at
-"validated but unlanded" waiting for a question nobody froze, and status always names which
-branch holds the result.
+The declaration carries the user's landing authority for step 7; the close never stalls at
+"validated but unlanded".
 
 `land status --root <checkout> --task-ref task/<t> --declaration <path> [--gate-receipt <p>]`
 reports the finish chain read-only — final gate, landing authority, merge slot, squash

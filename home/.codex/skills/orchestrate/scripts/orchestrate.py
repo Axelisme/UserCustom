@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import fnmatch
 import hashlib
 import json
 import os
@@ -112,10 +113,19 @@ CONTRACT_RECEIPT_REQUIRED = (
 )
 CONTRACT_RECEIPT_FIELDS = set(CONTRACT_RECEIPT_REQUIRED) | {"details"}
 CONTRACT_AUTHORITIES = ("user", "root")
+SCOPE_MANIFEST_VERSION = 1
+SCOPE_REQUIRED = ("scope_version", "item_id", "owned_paths")
+SCOPE_FIELDS = set(SCOPE_REQUIRED) | {
+    "excluded_paths",
+    "shared_read_only_paths",
+    "details",
+}
 DISPATCH_SECTIONS = (
     "Authority",
     "Acceptance",
     "Non-goals",
+    "Write scope",
+    "Dependencies",
     "Exact literals",
     "Oracles",
     "Review policy",
@@ -894,6 +904,108 @@ def validate_contract_adjustment_receipt(payload: dict[str, Any]) -> list[str]:
     if details is not None and not isinstance(details, dict):
         errors.append("details must be an object when supplied")
     return errors
+
+
+def validate_scope_manifest(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    require_json_fields(payload, SCOPE_REQUIRED, errors)
+    unexpected = sorted(payload.keys() - SCOPE_FIELDS)
+    if unexpected:
+        errors.append(f"unexpected fields: {', '.join(unexpected)}")
+    if payload.get("scope_version") != SCOPE_MANIFEST_VERSION:
+        errors.append(f"scope_version must be {SCOPE_MANIFEST_VERSION}")
+    item_id = payload.get("item_id")
+    if item_id is not None and (
+        not isinstance(item_id, str) or not ID_PATTERN.fullmatch(item_id)
+    ):
+        errors.append("item_id must be a stable identifier")
+    for field in ("owned_paths", "excluded_paths", "shared_read_only_paths"):
+        value = payload.get(field)
+        if field not in payload:
+            continue
+        if not isinstance(value, list) or any(
+            not isinstance(item, str) or not item.strip() for item in value
+        ):
+            errors.append(f"{field} must be a list of non-empty path patterns")
+    owned = payload.get("owned_paths")
+    if isinstance(owned, list) and not owned:
+        errors.append("owned_paths must name at least one pattern")
+    details = payload.get("details")
+    if details is not None and not isinstance(details, dict):
+        errors.append("details must be an object when supplied")
+    return errors
+
+
+def scope_pattern_match(path: str, pattern: str) -> bool:
+    pattern = pattern.rstrip("/")
+    if fnmatch.fnmatch(path, pattern):
+        return True
+    return path.startswith(pattern + "/")
+
+
+def scope_violations(
+    paths: Sequence[str], manifest: dict[str, Any]
+) -> list[dict[str, str]]:
+    owned = manifest["owned_paths"]
+    excluded = manifest.get("excluded_paths") or []
+    shared = manifest.get("shared_read_only_paths") or []
+    violations: list[dict[str, str]] = []
+    for path in paths:
+        if any(scope_pattern_match(path, pattern) for pattern in excluded):
+            violations.append({"path": path, "reason": "excluded"})
+        elif any(scope_pattern_match(path, pattern) for pattern in shared):
+            violations.append({"path": path, "reason": "shared-read-only"})
+        elif not any(scope_pattern_match(path, pattern) for pattern in owned):
+            violations.append({"path": path, "reason": "outside-owned"})
+    return violations
+
+
+def read_scope_manifest(path: str) -> tuple[dict[str, Any], bytes]:
+    payload, data = read_json_object(path, label="scope manifest")
+    errors = validate_scope_manifest(payload)
+    if errors:
+        raise OrchestrateError("invalid scope manifest: " + "; ".join(errors))
+    return payload, data
+
+
+def changed_paths_since_fork(root: Path, base: str, head: str) -> list[str]:
+    fork = run_git(root, "merge-base", base, head).stdout.strip()
+    output = run_git(root, "diff", "--name-only", fork, head).stdout
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def command_scope_lint(args: argparse.Namespace) -> dict[str, Any]:
+    payload, data = read_json_object(args.input, label="scope manifest")
+    errors = validate_scope_manifest(payload)
+    return {
+        "ok": not errors,
+        "operation": "scope-lint",
+        "input_sha256": sha256_bytes(data),
+        "errors": errors,
+    }
+
+
+def command_scope_check(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    root = Path(args.root).resolve()
+    manifest, data = read_scope_manifest(args.manifest)
+    base = exact_commit(root, args.base, label="base")
+    head = exact_commit(root, args.head, label="head")
+    changed = changed_paths_since_fork(root, base, head)
+    violations = scope_violations(changed, manifest)
+    return {
+        "ok": not violations,
+        "operation": "scope-check",
+        "read_only": True,
+        "item_id": manifest["item_id"],
+        "manifest_sha256": sha256_bytes(data),
+        "base": base,
+        "head": head,
+        "changed_paths": changed,
+        "violations": violations,
+        "observed_at": datetime.now(UTC).isoformat(),
+        "duration_ms": round((time.monotonic() - started) * 1000),
+    }
 
 
 def command_receipt_lint(args: argparse.Namespace) -> dict[str, Any]:
@@ -1977,6 +2089,23 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
     lane_head = run_git(root, "rev-parse", f"{args.lane_ref}^{{commit}}").stdout.strip()
     if lane_head != expected:
         raise OrchestrateError(f"lane target drifted: {lane_head} != {expected}")
+    scope_evidence: dict[str, Any] = {}
+    if args.scope:
+        manifest, manifest_data = read_scope_manifest(args.scope)
+        changed = changed_paths_since_fork(root, task_head, expected)
+        violations = scope_violations(changed, manifest)
+        if violations:
+            raise OrchestrateError(
+                "lane writes leave the declared scope: "
+                + ", ".join(
+                    f"{item['path']} ({item['reason']})" for item in violations[:20]
+                )
+            )
+        scope_evidence = {
+            "scope_item_id": manifest["item_id"],
+            "scope_manifest_sha256": sha256_bytes(manifest_data),
+            "scope_changed_paths": len(changed),
+        }
     before = run_git(root, "rev-parse", "HEAD").stdout.strip()
     preflight = run_git(root, "merge-tree", "--write-tree", before, expected)
     merge_tree = preflight.stdout.splitlines()[0].strip()
@@ -1998,6 +2127,7 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
         "declared_review_kind": review_kind,
         "verdict_inferred": False,
         **authorization,
+        **scope_evidence,
         "before": before,
         "preflight_tree": merge_tree,
         **evidence,
@@ -2236,6 +2366,7 @@ def command_slice_status(args: argparse.Namespace) -> dict[str, Any]:
         if isinstance(record.get("branch"), str)
     }
     lanes: list[dict[str, Any]] = []
+    lane_changed: dict[str, set[str]] = {}
     refs = run_git(
         root,
         "for-each-ref",
@@ -2256,6 +2387,9 @@ def command_slice_status(args: argparse.Namespace) -> dict[str, Any]:
             )
         body = run_git(root, "log", "-1", "--format=%B", head).stdout
         entry["seam_ready"] = bool(SEAM_READY_PATTERN.search(body))
+        changed = changed_paths_since_fork(root, task_sha, head)
+        entry["changed_path_count"] = len(changed)
+        lane_changed[branch] = set(changed)
         absorption = lane_absorption(root, head, task_sha)
         receipt = receipts.get(head.lower())
         if receipt is not None:
@@ -2270,6 +2404,13 @@ def command_slice_status(args: argparse.Namespace) -> dict[str, Any]:
         else:
             entry["state"] = "writing"
         lanes.append(entry)
+    overlaps: list[dict[str, Any]] = []
+    names = sorted(lane_changed)
+    for index, first in enumerate(names):
+        for second in names[index + 1 :]:
+            shared_paths = sorted(lane_changed[first] & lane_changed[second])
+            if shared_paths:
+                overlaps.append({"lanes": [first, second], "paths": shared_paths})
     return {
         "ok": True,
         "operation": "slice-status",
@@ -2278,6 +2419,7 @@ def command_slice_status(args: argparse.Namespace) -> dict[str, Any]:
         "task_sha": task_sha,
         "receipts_dir": str(receipts_dir),
         "invalid_receipts": invalid,
+        "write_set_overlaps": overlaps,
         "lanes": lanes,
         "observed_at": datetime.now(UTC).isoformat(),
         "duration_ms": round((time.monotonic() - started) * 1000),
@@ -2567,7 +2709,27 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument(
         "--receipt", help="review receipt JSON path replacing the two flags above"
     )
+    collect.add_argument(
+        "--scope",
+        help="lane scope manifest JSON; writes outside the declared scope fail collect",
+    )
     collect.set_defaults(handler=command_collect, requires_release_preflight=True)
+
+    scope = commands.add_parser(
+        "scope", help="validate a declared write scope against the actual diff"
+    )
+    scope_commands = scope.add_subparsers(dest="scope_command", required=True)
+    scope_lint = scope_commands.add_parser("lint")
+    scope_lint.add_argument(
+        "--input", required=True, help="scope manifest JSON path, or '-' for stdin"
+    )
+    scope_lint.set_defaults(handler=command_scope_lint)
+    scope_check = scope_commands.add_parser("check")
+    add_root(scope_check)
+    scope_check.add_argument("--base", required=True)
+    scope_check.add_argument("--head", required=True)
+    scope_check.add_argument("--manifest", required=True)
+    scope_check.set_defaults(handler=command_scope_check)
 
     sweep = commands.add_parser(
         "cleanup", help="sweep absorbed lanes and clean detached review worktrees"

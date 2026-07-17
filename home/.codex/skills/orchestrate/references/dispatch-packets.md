@@ -1,13 +1,15 @@
 ---
-orchestrate_compat: 70
+orchestrate_compat: 71
 ---
 
 # Immutable dispatch packets
 
-Use a packet when an inline frozen contract would obscure the immediate action, especially
-for a hard-critical slice or exact-SHA review. This is prompt indirection, not a new control
-plane: the direct collaboration message grants authority and names the packet; file existence
-does not authorize execution.
+Use a packet when an inline frozen contract would obscure the immediate action — a
+hard-critical slice, an exact-SHA review, or a routine wave of two or more slices whose
+inline contracts would each run long. The packet carries only task-specific content; standing
+orders, milestone schema, and tool recipes stay pointers. This is prompt indirection, not a
+new control plane: the direct collaboration message grants authority and names the packet;
+file existence does not authorize execution.
 
 ## Boundary
 
@@ -45,6 +47,9 @@ The Markdown body contains these headings, each with concise task-specific conte
 - `## Authority` — what the role may write/decide and what remains root/user-owned.
 - `## Acceptance` — externally observable completion conditions and commands.
 - `## Non-goals` — explicit exclusions that prevent scope growth.
+- `## Write scope` — owned/excluded/shared-read-only path patterns (or a scope manifest
+  path), or `none`.
+- `## Dependencies` — upstream slices/SHAs this work waits on or stacks from, or `none`.
 - `## Exact literals` — schema names, status codes, protocol values, or `none`.
 - `## Oracles` — independent expected values and dangerous failure probes.
 - `## Review policy` — hard axes, named risks, cadence/waiting, or `none`.

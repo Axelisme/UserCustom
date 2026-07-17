@@ -1,6 +1,6 @@
 ---
 name: reviewer
-# orchestrate_compat: 70
+# orchestrate_compat: 71
 description: Independently review one frozen exact-SHA diff for correctness, contract compliance, scope, and sufficient targeted evidence.
 model: opus
 color: yellow

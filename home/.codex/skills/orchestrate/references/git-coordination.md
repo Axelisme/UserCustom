@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 70
+orchestrate_compat: 71
 ---
 
 # Git coordination and landing
@@ -66,8 +66,12 @@ Preferably pass `--receipt <path>` instead: the reviewer-written review receipt 
 and its exact SHA, review kind, and profile acknowledgment are consumed directly, with no
 root retranscription; only `verdict=pass` authorizes.
 
-- Declare each writer's file scope in one sentence. A conflict means the split was poor; fix
-  the plan rather than adding machinery.
+- Declare each writer's file scope in one sentence, or as a hand-written scope manifest JSON
+  (`owned_paths`/`excluded_paths`/`shared_read_only_paths`) when lanes touch adjacent
+  surfaces. `orchestrate scope check` compares the actual diff against it, `collect --scope`
+  fails on out-of-scope writes, and `slice status` reports cross-lane write-set overlap from
+  the actual diffs. A conflict still means the split was poor; fix the plan rather than
+  adding machinery.
 - Same-file or same public interface/schema/fixture work is serial in one worktree.
 - Root collects in batches: several accepted lanes in one integration pass, merged serially
   inside it. Shared foundation lands on integration first; dependent lanes start from that SHA.

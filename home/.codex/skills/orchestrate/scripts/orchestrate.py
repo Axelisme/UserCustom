@@ -144,6 +144,15 @@ SCOPE_FIELDS = set(SCOPE_REQUIRED) | {
     "shared_read_only_paths",
     "details",
 }
+LANDING_VERSION = 1
+LANDING_POLICIES = (
+    "validate-only",
+    "land-with-confirmation",
+    "commit-authorized",
+    "publish-authorized",
+)
+LANDING_REQUIRED = ("landing_version", "task_id", "policy", "target_ref")
+LANDING_FIELDS = set(LANDING_REQUIRED) | {"details"}
 DISPATCH_SECTIONS = (
     "Authority",
     "Acceptance",
@@ -1044,6 +1053,43 @@ def read_scope_manifest(path: str) -> tuple[dict[str, Any], bytes]:
     errors = validate_scope_manifest(payload)
     if errors:
         raise OrchestrateError("invalid scope manifest: " + "; ".join(errors))
+    return payload, data
+
+
+def validate_landing_declaration(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    require_json_fields(payload, LANDING_REQUIRED, errors)
+    unexpected = sorted(payload.keys() - LANDING_FIELDS)
+    if unexpected:
+        errors.append(f"unexpected fields: {', '.join(unexpected)}")
+    if payload.get("landing_version") != LANDING_VERSION:
+        errors.append(f"landing_version must be {LANDING_VERSION}")
+    task_id = payload.get("task_id")
+    if task_id is not None and (
+        not isinstance(task_id, str) or not ID_PATTERN.fullmatch(task_id)
+    ):
+        errors.append("task_id must be a stable identifier")
+    validate_json_enum(payload, "policy", LANDING_POLICIES, errors)
+    target = payload.get("target_ref")
+    if target is not None and (
+        not isinstance(target, str)
+        or not target.strip()
+        or target.startswith(("task/", "agent/"))
+    ):
+        errors.append(
+            "target_ref must name a persistence branch, never task/ or agent/"
+        )
+    details = payload.get("details")
+    if details is not None and not isinstance(details, dict):
+        errors.append("details must be an object when supplied")
+    return errors
+
+
+def read_landing_declaration(path: str) -> tuple[dict[str, Any], bytes]:
+    payload, data = read_json_object(path, label="landing declaration")
+    errors = validate_landing_declaration(payload)
+    if errors:
+        raise OrchestrateError("invalid landing declaration: " + "; ".join(errors))
     return payload, data
 
 
@@ -2086,6 +2132,54 @@ def command_review_cleanup(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def command_review_verdict(args: argparse.Namespace) -> dict[str, Any]:
+    payload, data = read_json_object(args.receipt, label="review receipt")
+    errors = validate_review_receipt(payload)
+    if not errors and args.subject_sha:
+        if not EXACT_SHA_PATTERN.fullmatch(args.subject_sha):
+            raise OrchestrateError(
+                "subject-sha must be an exact hexadecimal commit SHA"
+            )
+        if payload["subject_sha"].lower() != args.subject_sha.lower():
+            errors.append(
+                f"receipt binds {payload['subject_sha']}, not the expected subject"
+                f" {args.subject_sha}"
+            )
+    receipt_path = str(Path(args.receipt).resolve()) if args.receipt != "-" else "-"
+    result: dict[str, Any] = {
+        "ok": not errors,
+        "operation": "review-verdict",
+        "read_only": True,
+        "receipt": receipt_path,
+        "receipt_sha256": sha256_bytes(data),
+        "errors": errors,
+    }
+    if errors:
+        result["next_action"] = "unusable-evidence"
+        return result
+    verdict = payload["verdict"]
+    result.update(
+        item_id=payload["item_id"],
+        subject_sha=payload["subject_sha"],
+        review_kind=payload["review_kind"],
+        verdict=verdict,
+        findings=payload["findings"],
+        authorizes_collect=verdict == "pass",
+    )
+    if verdict == "pass":
+        result["next_action"] = "collect"
+        result["collect_hint"] = (
+            "collect --integration-worktree <task checkout> --task-ref task/<task>"
+            f" --lane-ref <lane> --expected-lane-sha {payload['subject_sha']}"
+            f" --receipt {receipt_path}"
+        )
+    elif verdict == "needs_fix":
+        result["next_action"] = "return-findings-to-original-writer"
+    else:
+        result["next_action"] = "root-adjudication"
+    return result
+
+
 def collect_authorization(args: argparse.Namespace) -> tuple[str, str, dict[str, Any]]:
     """Resolve collect authority from a review receipt or an explicit declaration."""
     if args.receipt:
@@ -2212,6 +2306,291 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
         "before": before,
         "preflight_tree": merge_tree,
         **evidence,
+    }
+
+
+def landing_task_id(task_ref: str, declaration: dict[str, Any]) -> str:
+    if not task_ref.startswith("task/") or task_ref.count("/") != 1:
+        raise OrchestrateError(f"task ref must use task/<task>: {task_ref!r}")
+    task_id = task_ref.split("/", 1)[1]
+    if task_id != declaration["task_id"]:
+        raise OrchestrateError(
+            f"declaration task_id is {declaration['task_id']!r},"
+            f" but --task-ref names {task_id!r}"
+        )
+    return task_id
+
+
+def landing_checkout_dirt(root: Path) -> tuple[list[str], list[str]]:
+    """Split porcelain status into staged paths and user-owned dirty paths."""
+    staged: list[str] = []
+    dirty: list[str] = []
+    for line in run_git(root, "status", "--porcelain").stdout.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:].split(" -> ")[-1].strip()
+        if line[0] not in " ?":
+            staged.append(path)
+        else:
+            dirty.append(path)
+    return staged, dirty
+
+
+def landing_gate_state(
+    gate_receipt: str | None, task_sha: str
+) -> dict[str, Any]:
+    if not gate_receipt:
+        return {
+            "state": "missing",
+            "hint": "write a gate receipt for the final gate bound to the task head",
+        }
+    payload, data = read_json_object(gate_receipt, label="gate receipt")
+    errors = validate_gate_receipt(payload)
+    if errors:
+        return {"state": "invalid", "errors": errors}
+    bound = payload["subject_sha"].lower() == task_sha.lower()
+    if not bound:
+        state = "stale-subject"
+    elif payload["status"] == "passed":
+        state = "passed"
+    else:
+        state = payload["status"]
+    return {
+        "state": state,
+        "status": payload["status"],
+        "subject_sha": payload["subject_sha"],
+        "receipt_sha256": sha256_bytes(data),
+    }
+
+
+def command_land_status(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    root = Path(args.root).resolve()
+    declaration, decl_data = read_landing_declaration(args.declaration)
+    task_id = landing_task_id(args.task_ref, declaration)
+    policy = declaration["policy"]
+    target_ref = declaration["target_ref"]
+    task_sha = run_git(root, "rev-parse", f"{args.task_ref}^{{commit}}").stdout.strip()
+    target_sha = run_git(root, "rev-parse", f"{target_ref}^{{commit}}").stdout.strip()
+    gate = landing_gate_state(args.gate_receipt, task_sha)
+    branch = run_git(root, "symbolic-ref", "--quiet", "--short", "HEAD", check=False)
+    on_target = branch.returncode == 0 and branch.stdout.strip() == target_ref
+    staged, dirty = landing_checkout_dirt(root)
+    changed = [
+        line.strip()
+        for line in run_git(
+            root, "diff", "--name-only", target_sha, task_sha
+        ).stdout.splitlines()
+        if line.strip()
+    ]
+    dirty_overlap = sorted(set(dirty) & set(changed))
+    landed = (
+        run_git(root, "diff", "--quiet", task_sha, target_sha, check=False).returncode
+        == 0
+    )
+    based = (
+        run_git(
+            root, "merge-base", "--is-ancestor", target_sha, task_sha, check=False
+        ).returncode
+        == 0
+    )
+    lanes = [
+        line.strip()
+        for line in run_git(
+            root,
+            "for-each-ref",
+            "--format=%(refname:short)",
+            f"refs/heads/agent/{task_id}/",
+        ).stdout.splitlines()
+        if line.strip()
+    ]
+    authority_state = (
+        "forbidden"
+        if policy == "validate-only"
+        else "requires-user-confirmation"
+        if policy == "land-with-confirmation"
+        else "authorized"
+    )
+    steps = {
+        "final_gate": gate,
+        "landing_authority": {"policy": policy, "state": authority_state},
+        "merge_slot": {
+            "state": "declared-at-finish",
+            "hint": (
+                "claim via scripts/merge_slot.py, then pass --merge-slot-held"
+                " to land finish"
+            ),
+        },
+        "squash_landing": {
+            "state": "done" if landed else "pending",
+            "based_on_target": based,
+            "on_target_checkout": on_target,
+            "staged_paths": staged,
+            "dirty_overlap": dirty_overlap,
+        },
+        "tree_identity": {"state": "proved" if landed else "pending"},
+        "lane_cleanup": {
+            "state": "done" if not lanes else "pending",
+            "remaining_lanes": lanes,
+        },
+    }
+    if policy == "validate-only":
+        next_step = (
+            "policy is validate-only: report the validated task branch; landing"
+            " needs a new user-authorized declaration"
+        )
+    elif landed and lanes:
+        next_step = "cleanup --absorbed, then delete the task branch"
+    elif landed:
+        next_step = "delete the task branch (tree identity already holds)"
+    elif gate["state"] != "passed":
+        next_step = "final gate: produce a passed gate receipt bound to the task head"
+    elif not based:
+        next_step = "rebase the task onto the target tip off-slot, rerun the gate"
+    else:
+        next_step = "claim the merge slot, then land finish"
+    return {
+        "ok": True,
+        "operation": "land-status",
+        "read_only": True,
+        "task_ref": args.task_ref,
+        "target_ref": target_ref,
+        "policy": policy,
+        "task_sha": task_sha,
+        "target_sha": target_sha,
+        "declaration_sha256": sha256_bytes(decl_data),
+        "steps": steps,
+        "next": next_step,
+        "observed_at": datetime.now(UTC).isoformat(),
+        "duration_ms": round((time.monotonic() - started) * 1000),
+    }
+
+
+def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    root = Path(args.root).resolve()
+    declaration, decl_data = read_landing_declaration(args.declaration)
+    task_id = landing_task_id(args.task_ref, declaration)
+    policy = declaration["policy"]
+    if policy == "validate-only":
+        raise OrchestrateError(
+            "declared landing policy is validate-only: landing is out of contract;"
+            " get user authority and write a new declaration first"
+        )
+    if policy == "land-with-confirmation" and not args.confirmed:
+        raise OrchestrateError(
+            "policy land-with-confirmation requires --confirmed after an explicit"
+            " user confirmation for this landing"
+        )
+    target_ref = declaration["target_ref"]
+    expected = exact_commit(root, args.task_sha, label="task SHA")
+    task_head = run_git(root, "rev-parse", f"{args.task_ref}^{{commit}}").stdout.strip()
+    if task_head != expected:
+        raise OrchestrateError(f"task head drifted: {task_head} != {expected}")
+    gate = landing_gate_state(args.gate_receipt, expected)
+    if gate["state"] != "passed":
+        raise OrchestrateError(
+            f"gate receipt state is {gate['state']}"
+            + ("; " + "; ".join(gate["errors"]) if "errors" in gate else "")
+            + " — only a passed receipt bound to the task head authorizes landing"
+        )
+    evidence = {
+        "operation": "land-finish",
+        "task_ref": args.task_ref,
+        "target_ref": target_ref,
+        "policy": policy,
+        "task_sha": expected,
+        "declaration_sha256": sha256_bytes(decl_data),
+        "gate_receipt_sha256": gate["receipt_sha256"],
+        "merge_slot_held": "declared" if args.merge_slot_held else "not-declared",
+    }
+    target_sha = run_git(root, "rev-parse", f"{target_ref}^{{commit}}").stdout.strip()
+    if (
+        run_git(root, "diff", "--quiet", expected, target_sha, check=False).returncode
+        == 0
+    ):
+        return {
+            "ok": True,
+            "recovered": "already-landed",
+            "landed_sha": target_sha,
+            "tree_identity": True,
+            **evidence,
+            "observed_at": datetime.now(UTC).isoformat(),
+            "duration_ms": round((time.monotonic() - started) * 1000),
+        }
+    git_dir = Path(run_git(root, "rev-parse", "--absolute-git-dir").stdout.strip())
+    if (git_dir / "MERGE_HEAD").exists():
+        raise OrchestrateError(
+            "unfinished merge in progress: resolve it or run `git merge --abort`,"
+            " then rerun land finish"
+        )
+    current_branch = run_git(root, "symbolic-ref", "--short", "HEAD").stdout.strip()
+    if current_branch != target_ref:
+        raise OrchestrateError(
+            f"landing checkout is {current_branch}, expected {target_ref}"
+        )
+    staged, dirty = landing_checkout_dirt(root)
+    if staged:
+        raise OrchestrateError(
+            "staged changes present in the landing checkout would leak into the"
+            " squash commit: " + ", ".join(staged[:20])
+        )
+    changed = [
+        line.strip()
+        for line in run_git(
+            root, "diff", "--name-only", target_sha, expected
+        ).stdout.splitlines()
+        if line.strip()
+    ]
+    dirty_overlap = sorted(set(dirty) & set(changed))
+    if dirty_overlap:
+        raise OrchestrateError(
+            "user-owned dirty paths overlap the landing diff: "
+            + ", ".join(dirty_overlap[:20])
+        )
+    if not args.merge_slot_held:
+        raise OrchestrateError(
+            "claim the merge slot first (scripts/merge_slot.py claim/verify), then"
+            " pass --merge-slot-held; the flag is recorded as declared, not verified"
+        )
+    if (
+        run_git(
+            root, "merge-base", "--is-ancestor", target_sha, expected, check=False
+        ).returncode
+        != 0
+    ):
+        raise OrchestrateError(
+            "task head is not based on the current target tip: rebase off-slot,"
+            " rerun the final gate on the new tree, then rerun land finish"
+        )
+    message = args.message or f"land {task_id}: squash of {expected[:12]}"
+    run_git(root, "merge", "--squash", args.task_ref)
+    run_git(root, "commit", "-m", message)
+    landed = run_git(root, "rev-parse", "HEAD").stdout.strip()
+    if (
+        run_git(root, "diff", "--quiet", expected, landed, check=False).returncode
+        != 0
+    ):
+        raise OrchestrateError(
+            f"tree identity proof failed after squash: {expected} vs {landed};"
+            " do not delete the task branch — investigate"
+        )
+    next_steps = [
+        "release the merge slot with the owner token",
+        "cleanup --absorbed to sweep lanes and review checkouts",
+        f"git branch -D {args.task_ref} (authorized by this tree identity proof)",
+    ]
+    if policy == "publish-authorized":
+        next_steps.append(f"git push <remote> {target_ref}")
+    return {
+        "ok": True,
+        "landed_sha": landed,
+        "tree_identity": True,
+        "message": message,
+        "next": next_steps,
+        **evidence,
+        "observed_at": datetime.now(UTC).isoformat(),
+        "duration_ms": round((time.monotonic() - started) * 1000),
     }
 
 
@@ -2771,6 +3150,50 @@ def build_parser() -> argparse.ArgumentParser:
         help="fail fast when the checkout HEAD drifted from this reviewed SHA",
     )
     cleanup.set_defaults(handler=command_review_cleanup)
+    review_verdict = review_commands.add_parser("verdict")
+    review_verdict.add_argument(
+        "--receipt", required=True, help="review receipt JSON path, or '-' for stdin"
+    )
+    review_verdict.add_argument(
+        "--subject-sha",
+        help="fail when the receipt binds a different subject SHA",
+    )
+    review_verdict.set_defaults(handler=command_review_verdict)
+
+    land = commands.add_parser(
+        "land", help="declared-policy squash landing with tree-identity proof"
+    )
+    land_commands = land.add_subparsers(dest="land_command", required=True)
+    land_status = land_commands.add_parser("status")
+    add_root(land_status)
+    land_status.add_argument("--task-ref", required=True)
+    land_status.add_argument(
+        "--declaration", required=True, help="landing declaration JSON path"
+    )
+    land_status.add_argument("--gate-receipt")
+    land_status.set_defaults(handler=command_land_status)
+    land_finish = land_commands.add_parser("finish")
+    add_root(land_finish)
+    land_finish.add_argument("--task-ref", required=True)
+    land_finish.add_argument("--task-sha", required=True)
+    land_finish.add_argument(
+        "--declaration", required=True, help="landing declaration JSON path"
+    )
+    land_finish.add_argument("--gate-receipt", required=True)
+    land_finish.add_argument(
+        "--merge-slot-held",
+        action="store_true",
+        help="declare that the merge slot is claimed and verified",
+    )
+    land_finish.add_argument(
+        "--confirmed",
+        action="store_true",
+        help="record the explicit user confirmation land-with-confirmation requires",
+    )
+    land_finish.add_argument("--message")
+    land_finish.set_defaults(
+        handler=command_land_finish, requires_release_preflight=True
+    )
 
     collect = commands.add_parser(
         "collect", help="preflight and merge one explicitly authorized exact lane SHA"

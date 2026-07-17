@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 74
+orchestrate_compat: 75
 ---
 
 # Git coordination and landing
@@ -53,6 +53,10 @@ never infer a verdict or queue state; Git remains the only topology truth carrie
 - `review checkout|cleanup` — detached exact-SHA review worktrees. Checkout reports the
   expected receipt path so the dispatch can name it verbatim; `cleanup --subject-sha <sha>`
   fails fast on a drifted HEAD — drifted evidence is void.
+- `review verdict --receipt <path> [--subject-sha <sha>]` — validates and routes a receipt
+  without judging it: `pass` reports the exact collect authorization, `needs_fix` returns
+  findings to the original writer, `blocked|needs_decision` returns to root, and an invalid
+  or wrong-subject receipt is reported as unusable evidence.
 - `collect --integration-worktree <path>` (`--root` is a deprecated alias; it requires the
   integration checkout, not the repository root) merges one authorized exact lane SHA.
   Preferably pass `--receipt <path>`: the reviewer-written receipt's exact SHA, review kind,
@@ -95,6 +99,24 @@ Landing is one squash commit with explicit user authority. Every persistence lan
 the merge slot, even when no contention is currently visible. After the squash commit, prove
 `git diff --quiet task/<task> <landed-commit>` before deleting the task branch; squash shares
 no ancestry, so content identity—not ancestry—is the deletion authority.
+
+Declare the **landing policy** at contract freeze in a hand-written landing declaration JSON
+(`{landing_version: 1, task_id, policy, target_ref}`): `validate-only` (the task ends at a
+validated task branch), `land-with-confirmation` (finish needs one explicit user
+confirmation), `commit-authorized` (land locally), or `publish-authorized` (land plus push).
+The declaration carries the user's landing authority for step 7, so the close never stalls at
+"validated but unlanded" waiting for a question nobody froze, and status always names which
+branch holds the result.
+
+`land status --root <checkout> --task-ref task/<t> --declaration <path> [--gate-receipt <p>]`
+reports the finish chain read-only — final gate, landing authority, merge slot, squash
+landing, tree identity, lane cleanup — and names the first missing step. `land finish` adds
+`--task-sha` (exact), a **passed** gate receipt bound to that SHA, `--merge-slot-held`
+(recorded as declared after a real merge-slot claim), and `--confirmed` under
+land-with-confirmation; it Fast Fails on staged changes or user-owned dirty paths that
+overlap the landing diff, squash-merges, commits, proves task/landed tree identity, and
+reports the remaining cleanup — plus the push, under publish-authorized — as next steps.
+Both are aliases over the sequence below and the git commands stay valid on their own.
 
 The merge slot (`../scripts/merge_slot.py`) is an ephemeral claimant-scoped FIFO queue plus
 owner-token lease, never task state. `status` is read-only; claim/renew use atomic lock

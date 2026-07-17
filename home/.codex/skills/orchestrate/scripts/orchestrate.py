@@ -79,7 +79,31 @@ DISPATCH_FIELDS = {
     "hard_critical_axes",
 }
 RECEIPT_VERSION = 1
-RECEIPT_KINDS = ("review", "contract-adjustment")
+RECEIPT_KINDS = ("review", "contract-adjustment", "gate")
+GATE_STATUSES = (
+    "passed",
+    "failed_current",
+    "failed_baseline",
+    "environment_blocked",
+    "unverified",
+)
+GATE_RECEIPT_REQUIRED = (
+    "receipt_version",
+    "kind",
+    "item_id",
+    "subject_sha",
+    "command",
+    "status",
+    "exclusions",
+)
+GATE_RECEIPT_FIELDS = set(GATE_RECEIPT_REQUIRED) | {"subject_tree", "details"}
+GATE_EXCLUSION_REQUIRED = (
+    "test_id",
+    "reason",
+    "baseline_evidence",
+    "affects_acceptance",
+    "follow_up",
+)
 REVIEW_RECEIPT_REQUIRED = (
     "receipt_version",
     "kind",
@@ -906,6 +930,61 @@ def validate_contract_adjustment_receipt(payload: dict[str, Any]) -> list[str]:
     return errors
 
 
+def validate_gate_receipt(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    require_json_fields(payload, GATE_RECEIPT_REQUIRED, errors)
+    unexpected = sorted(payload.keys() - GATE_RECEIPT_FIELDS)
+    if unexpected:
+        errors.append(f"unexpected fields: {', '.join(unexpected)}")
+    if payload.get("receipt_version") != RECEIPT_VERSION:
+        errors.append(f"receipt_version must be {RECEIPT_VERSION}")
+    if payload.get("kind") != "gate":
+        errors.append("kind must be gate")
+    item_id = payload.get("item_id")
+    if item_id is not None and (
+        not isinstance(item_id, str) or not ID_PATTERN.fullmatch(item_id)
+    ):
+        errors.append("item_id must be a stable identifier")
+    validate_exact_sha_field(payload, "subject_sha", errors)
+    validate_exact_sha_field(payload, "subject_tree", errors)
+    require_nonempty_string_fields(payload, ("command",), errors)
+    validate_json_enum(payload, "status", GATE_STATUSES, errors)
+    exclusions = payload.get("exclusions")
+    if exclusions is not None and not isinstance(exclusions, list):
+        errors.append("exclusions must be a list")
+        exclusions = []
+    affects_acceptance = False
+    for index, exclusion in enumerate(exclusions or []):
+        if not isinstance(exclusion, dict):
+            errors.append(f"exclusions[{index}] must be an object")
+            continue
+        missing = sorted(set(GATE_EXCLUSION_REQUIRED) - exclusion.keys())
+        extra = sorted(exclusion.keys() - set(GATE_EXCLUSION_REQUIRED))
+        if missing:
+            errors.append(f"exclusions[{index}] missing: {', '.join(missing)}")
+        if extra:
+            errors.append(f"exclusions[{index}] unexpected: {', '.join(extra)}")
+        for field in ("test_id", "reason", "baseline_evidence", "follow_up"):
+            value = exclusion.get(field)
+            if field in exclusion and (
+                not isinstance(value, str) or not value.strip()
+            ):
+                errors.append(f"exclusions[{index}].{field} must be a non-empty string")
+        flag = exclusion.get("affects_acceptance")
+        if "affects_acceptance" in exclusion and not isinstance(flag, bool):
+            errors.append(f"exclusions[{index}].affects_acceptance must be a boolean")
+        if flag is True:
+            affects_acceptance = True
+    if payload.get("status") == "passed" and affects_acceptance:
+        errors.append(
+            "an exclusion with affects_acceptance=true cannot report status=passed"
+        )
+    details = payload.get("details")
+    if details is not None and not isinstance(details, dict):
+        errors.append("details must be an object when supplied")
+    return errors
+
+
 def validate_scope_manifest(payload: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     require_json_fields(payload, SCOPE_REQUIRED, errors)
@@ -1012,6 +1091,8 @@ def command_receipt_lint(args: argparse.Namespace) -> dict[str, Any]:
     payload, data = read_json_object(args.input, label="receipt")
     if args.kind == "review":
         errors = validate_review_receipt(payload)
+    elif args.kind == "gate":
+        errors = validate_gate_receipt(payload)
     else:
         errors = validate_contract_adjustment_receipt(payload)
     return {

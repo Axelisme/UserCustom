@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 71
+orchestrate_compat: 72
 ---
 
 # Delegation and review
@@ -116,7 +116,9 @@ acknowledgment fields cannot authorize collection; `profile_effective` discloses
 adapter when the runtime loaded no profile. A frozen contract overturned by evidence gets a
 **contract-adjustment receipt** — original contract, contradiction evidence, adjusted
 contract, authority, affected reviewed SHAs, refreshed-review scope — separating a local
-reversible adjustment from a divergence that must return to the user.
+reversible adjustment from a divergence that must return to the user. A **gate receipt**
+([Evidence and handoff](evidence-and-handoff.md)) classifies a test run's status and every
+exclusion, so a deselected test can never pass silently.
 
 ## Reviewer mental model
 

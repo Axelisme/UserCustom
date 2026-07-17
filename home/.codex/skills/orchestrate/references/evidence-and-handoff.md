@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 71
+orchestrate_compat: 72
 ---
 
 # Evidence and handoff
@@ -21,6 +21,15 @@ outcome: pass | baseline-relative | unusable
 invalidated_by: <later commit/change | none>
 replacement_evidence: <evidence id/command | none>
 ```
+
+A gate run may also close as a hand-written **gate receipt**
+(`orchestrate receipt lint --kind gate`): exact subject SHA, the exact command, one status —
+`passed | failed_current | failed_baseline | environment_blocked | unverified` — and an
+explicit `exclusions` list. Every deselected, skipped, or excluded test carries its exact
+test node id, reason, baseline comparison evidence, whether it affects acceptance, and a
+follow-up pointer; a receipt with an acceptance-affecting exclusion can never report
+`passed`. An unclassified deselection is an anomaly, not a pass — "169 passed, 1 deselected"
+is green only when that one is classified.
 
 `affected` covers a changed surface, a **wave gate is provisional** while later waves remain,
 and only a usable `task` gate on the landing candidate is final. A wave boundary needs a
@@ -70,6 +79,11 @@ review-readiness packet.
 
 ## Durable narrative
 
+- **One fact, one carrier.** Git carries code and exact SHAs; receipts carry
+  machine-checkable authorization and gate evidence; task_plan carries active decisions,
+  open findings, and the next gate; a progress log is not created by default — open one only
+  when a cross-session audit genuinely needs it. `orchestrate slice status` rebuilds current
+  lane state from Git plus receipts; never hand-copy that state into narrative.
 - Decisions take effect in the in-band control plane. When cross-session durability is
   needed, persist the conclusion or ADR pointer in task_plan; the plan records the decision
   but never dispatches work or triggers a state transition.

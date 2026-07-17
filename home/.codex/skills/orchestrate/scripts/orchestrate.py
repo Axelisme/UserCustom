@@ -144,6 +144,10 @@ SCOPE_FIELDS = set(SCOPE_REQUIRED) | {
     "shared_read_only_paths",
     "details",
 }
+GATE_RUN_VERSION = 1
+GATE_RUN_TEST_STATUSES = ("passed", "failed", "error", "skipped", "blocked")
+GATE_RUN_REQUIRED = ("run_version", "subject_sha", "command", "results")
+GATE_RUN_FIELDS = set(GATE_RUN_REQUIRED) | {"details"}
 LANDING_VERSION = 1
 LANDING_POLICIES = (
     "validate-only",
@@ -1054,6 +1058,201 @@ def read_scope_manifest(path: str) -> tuple[dict[str, Any], bytes]:
     if errors:
         raise OrchestrateError("invalid scope manifest: " + "; ".join(errors))
     return payload, data
+
+
+def validate_gate_run(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    require_json_fields(payload, GATE_RUN_REQUIRED, errors)
+    unexpected = sorted(payload.keys() - GATE_RUN_FIELDS)
+    if unexpected:
+        errors.append(f"unexpected fields: {', '.join(unexpected)}")
+    if payload.get("run_version") != GATE_RUN_VERSION:
+        errors.append(f"run_version must be {GATE_RUN_VERSION}")
+    validate_exact_sha_field(payload, "subject_sha", errors)
+    require_nonempty_string_fields(payload, ("command",), errors)
+    results = payload.get("results")
+    if results is not None:
+        if not isinstance(results, dict) or not results:
+            errors.append("results must be a non-empty object of test_id -> status")
+        else:
+            if any(
+                not isinstance(test_id, str) or not test_id.strip()
+                for test_id in results
+            ):
+                errors.append("results keys must be non-empty test ids")
+            invalid = sorted(
+                {
+                    str(status)
+                    for status in results.values()
+                    if status not in GATE_RUN_TEST_STATUSES
+                }
+            )
+            if invalid:
+                errors.append(
+                    "results statuses must be one of "
+                    + "|".join(GATE_RUN_TEST_STATUSES)
+                    + f"; got: {', '.join(invalid[:5])}"
+                )
+    details = payload.get("details")
+    if details is not None and not isinstance(details, dict):
+        errors.append("details must be an object when supplied")
+    return errors
+
+
+def read_gate_run(path: str, *, label: str) -> tuple[dict[str, Any], bytes]:
+    payload, data = read_json_object(path, label=label)
+    errors = validate_gate_run(payload)
+    if errors:
+        raise OrchestrateError(f"invalid {label}: " + "; ".join(errors))
+    return payload, data
+
+
+def command_gate_compare(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    item_id = require_identifier(args.item_id, label="item-id")
+    baseline, baseline_data = read_gate_run(args.baseline, label="baseline run")
+    current, current_data = read_gate_run(args.current, label="current run")
+    if baseline["command"] != current["command"]:
+        raise OrchestrateError(
+            "baseline and current runs used different commands, so the comparison"
+            f" is not like-for-like: {baseline['command']!r} vs"
+            f" {current['command']!r}"
+        )
+    failing = {"failed", "error"}
+    base_results = baseline["results"]
+    cur_results = current["results"]
+    regressions: list[str] = []
+    baseline_equal: list[str] = []
+    blocked: list[str] = []
+    skipped: list[str] = []
+    fixed: list[str] = []
+    for test_id in sorted(cur_results):
+        status = cur_results[test_id]
+        base_status = base_results.get(test_id)
+        if status == "passed":
+            if base_status in failing:
+                fixed.append(test_id)
+        elif status in failing:
+            if base_status in failing:
+                baseline_equal.append(test_id)
+            else:
+                regressions.append(test_id)
+        elif status == "blocked":
+            blocked.append(test_id)
+        else:
+            skipped.append(test_id)
+    missing = sorted(set(base_results) - set(cur_results))
+    baseline_sha = baseline["subject_sha"]
+
+    def draft_exclusion(test_id: str, reason: str) -> dict[str, Any]:
+        return {
+            "test_id": test_id,
+            "reason": reason,
+            "baseline_evidence": (
+                f"baseline {baseline_sha}: {base_results.get(test_id, 'absent')}"
+            ),
+            "affects_acceptance": True,
+            "follow_up": (
+                "root: classify this exclusion and set affects_acceptance"
+            ),
+        }
+
+    exclusions = (
+        [
+            draft_exclusion(
+                test_id,
+                f"{cur_results[test_id]} in current run and already failing at"
+                " the baseline",
+            )
+            for test_id in baseline_equal
+        ]
+        + [
+            draft_exclusion(test_id, "environment blocked in current run")
+            for test_id in blocked
+        ]
+        + [
+            draft_exclusion(test_id, "skipped in current run")
+            for test_id in skipped
+        ]
+        + [
+            draft_exclusion(
+                test_id,
+                "present at baseline but missing from current run"
+                " (silent deselection)",
+            )
+            for test_id in missing
+        ]
+    )
+    if regressions:
+        status = "failed_current"
+    elif blocked:
+        status = "environment_blocked"
+    elif baseline_equal:
+        status = "failed_baseline"
+    elif exclusions:
+        status = "unverified"
+    else:
+        status = "passed"
+    draft = {
+        "receipt_version": RECEIPT_VERSION,
+        "kind": "gate",
+        "item_id": item_id,
+        "subject_sha": current["subject_sha"],
+        "command": current["command"],
+        "status": status,
+        "exclusions": exclusions,
+        "details": {
+            "baseline_sha": baseline_sha,
+            "baseline_run_sha256": sha256_bytes(baseline_data),
+            "current_run_sha256": sha256_bytes(current_data),
+            "regressions": regressions,
+            "fixed": fixed,
+        },
+    }
+    draft_errors = validate_gate_receipt(draft)
+    result: dict[str, Any] = {
+        "ok": not draft_errors,
+        "operation": "gate-compare",
+        "read_only": not args.output,
+        "item_id": item_id,
+        "baseline_sha": baseline_sha,
+        "current_sha": current["subject_sha"],
+        "command": current["command"],
+        "status": status,
+        "counts": {
+            "current_total": len(cur_results),
+            "regressions": len(regressions),
+            "baseline_equal_failures": len(baseline_equal),
+            "environment_blocked": len(blocked),
+            "skipped": len(skipped),
+            "missing_in_current": len(missing),
+            "fixed": len(fixed),
+        },
+        "regressions": regressions,
+        "baseline_equal_failures": baseline_equal,
+        "environment_blocked": blocked,
+        "skipped": skipped,
+        "missing_in_current": missing,
+        "fixed": fixed,
+        "receipt_draft": draft,
+        "draft_errors": draft_errors,
+        "observed_at": datetime.now(UTC).isoformat(),
+        "duration_ms": round((time.monotonic() - started) * 1000),
+    }
+    if args.output:
+        output = Path(args.output).resolve()
+        if output.exists():
+            raise OrchestrateError(
+                f"output already exists: {output}; a possibly edited receipt is"
+                " never overwritten — remove it explicitly first"
+            )
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(draft, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        result["draft_written"] = str(output)
+    return result
 
 
 def validate_landing_declaration(payload: dict[str, Any]) -> list[str]:
@@ -3050,6 +3249,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--input", required=True, help="milestone JSON path, or '-' for stdin"
     )
     milestone_lint.set_defaults(handler=command_milestone_lint)
+
+    gate = commands.add_parser(
+        "gate", help="baseline-relative comparison of two gate run summaries"
+    )
+    gate_commands = gate.add_subparsers(dest="gate_command", required=True)
+    gate_compare = gate_commands.add_parser("compare")
+    gate_compare.add_argument(
+        "--baseline", required=True, help="baseline gate run summary JSON path"
+    )
+    gate_compare.add_argument(
+        "--current", required=True, help="current gate run summary JSON path"
+    )
+    gate_compare.add_argument("--item-id", required=True)
+    gate_compare.add_argument(
+        "--output", help="write the receipt draft here (never overwrites)"
+    )
+    gate_compare.set_defaults(handler=command_gate_compare)
 
     receipt = commands.add_parser(
         "receipt", help="lint one hand-written verdict or contract receipt"

@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 75
+orchestrate_compat: 76
 ---
 
 # Evidence and handoff
@@ -55,6 +55,16 @@ A deterministic broad-gate failure may be `baseline-relative`, never `pass`, onl
 
 Record exact baseline/target counts and families plus replacement evidence. A target
 regression stays blocking. If the comparison is not like-for-like, the gate is `unusable`.
+
+The per-test comparison is mechanized: summarize each side as a hand-written **gate run
+summary** JSON (`{run_version: 1, subject_sha, command, results: {<test_id>:
+passed|failed|error|skipped|blocked}}`), then `orchestrate gate compare --baseline <a>
+--current <b> --item-id <id> [--output <receipt>]` classifies every test baseline-relatively
+— a regression yields `failed_current`; baseline-equal failures, blocked, skipped, and
+silently deselected tests become prefilled exclusions citing the baseline SHA — and emits a
+lint-valid gate receipt draft. Drafted exclusions default to `affects_acceptance: true`;
+deciding an exclusion does *not* affect acceptance stays root's judgment, recorded by editing
+the draft. Different commands on the two sides Fast Fail as not like-for-like.
 
 ## Validation anomalies
 

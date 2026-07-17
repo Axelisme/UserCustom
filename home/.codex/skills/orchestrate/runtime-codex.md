@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 78
+orchestrate_compat: 79
 ---
 
 # Orchestrate — Codex runtime binding
@@ -36,20 +36,19 @@ alone is inert.
 ## Milestones
 
 Send one semantic envelope to root at every observable boundary — **for a writer, after every
-commit** (`state=progress`); after each item or when the declared cadence passes; and one
+commit** (`outcome=working`); after each item or when the declared cadence passes; and one
 terminal envelope per item. Per-commit progress gives root real-time position without
 touching the assignee; **cross-identity pipelining bases only on a seam-ready SHA**
-([Git coordination](references/git-coordination.md)):
+([Git coordination](references/git-coordination.md)). The core is three fields; everything
+else is optional and validated only when present:
 
 ```text
-event=milestone
 item_id=<stable id>
-state=progress|terminal
-outcome=<role-specific outcome>
-subject_sha=<exact SHA when applicable>
+outcome=working | <role terminal outcome>
 evidence=<compact result or artifact pointer>
-findings=<ids or []>
-next=continue|idle|stop
+subject_sha=<exact SHA when the outcome binds to one; required for
+            validated|review|pass|needs_fix>
+findings=<ids; required for needs_fix>
 ```
 
 Run `orchestrate milestone lint` when machine validation is useful. Delivery is

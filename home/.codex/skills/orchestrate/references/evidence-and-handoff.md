@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 78
+orchestrate_compat: 79
 ---
 
 # Evidence and handoff
@@ -9,27 +9,15 @@ the root session must hand off.
 
 ## Gate evidence scope
 
-Every gate record states what it proves:
-
-```text
-gate_scope: affected | wave | task
-target_sha: <exact commit>
-target_tree: <exact tree>
-covered_surface: <paths/behaviors/gate rationale>
-baseline_sha: <exact immutable baseline | none>
-outcome: pass | baseline-relative | unusable
-invalidated_by: <later commit/change | none>
-replacement_evidence: <evidence id/command | none>
-```
-
-A gate run may also close as a hand-written **gate receipt**
-(`orchestrate receipt lint --kind gate`): exact subject SHA, the exact command, one status —
-`passed | failed_current | failed_baseline | environment_blocked | unverified` — and an
-explicit `exclusions` list. Every deselected, skipped, or excluded test carries its exact
-test node id, reason, baseline comparison evidence, whether it affects acceptance, and a
-follow-up pointer; a receipt with an acceptance-affecting exclusion can never report
-`passed`. An unclassified deselection is an anomaly, not a pass — "169 passed, 1 deselected"
-is green only when that one is classified.
+Gate evidence has one carrier: the hand-written **gate receipt**
+(`orchestrate receipt lint --kind gate`) — exact subject SHA, the exact command, one status
+(`passed | failed_current | failed_baseline | environment_blocked | unverified`), and an
+explicit `exclusions` list; scope (`affected|wave|task`), covered surface, baseline SHA, and
+invalidation notes go in `details` when they matter. Every deselected, skipped, or excluded
+test carries its exact test node id, reason, baseline comparison evidence, whether it
+affects acceptance, and a follow-up pointer; a receipt with an acceptance-affecting
+exclusion can never report `passed`. An unclassified deselection is an anomaly, not a pass —
+"169 passed, 1 deselected" is green only when that one is classified.
 
 `affected` covers a changed surface, a **wave gate is provisional** while later waves remain,
 and only a usable `task` gate on the landing candidate is final. A wave boundary needs a
@@ -37,15 +25,15 @@ broader gate only when the repo/risk contract names one; it never masquerades as
 task-scoped gate.
 
 Evidence invalidation is **surface-scoped**: a later change invalidates only evidence whose
-`covered_surface` intersects the changed paths/behaviors. Shared fixtures, config, and build
+covered surface intersects the changed paths/behaviors. Shared fixtures, config, and build
 inputs count as intersecting everything they feed. Disjoint evidence stays valid — record the
-non-intersection claim in `invalidated_by: none` reasoning rather than asserting it silently.
+non-intersection claim in the receipt's details rather than asserting it silently.
 Two gates stay whole-tree regardless: any gate the repo/risk contract names as whole-tree, and
 the final `task` gate, which always runs on the exact landing-candidate tree.
 
 ## Baseline-relative gates
 
-A deterministic broad-gate failure may be `baseline-relative`, never `pass`, only when:
+A deterministic broad-gate failure may close as `failed_baseline`, never `passed`, only when:
 
 1. root runs the **same command on an immutable baseline SHA**;
 2. the target has **no new errors or changed error families** relative to that baseline;
@@ -54,7 +42,7 @@ A deterministic broad-gate failure may be `baseline-relative`, never `pass`, onl
 5. the failed broad command is **never called PASS**.
 
 Record exact baseline/target counts and families plus replacement evidence. A target
-regression stays blocking. If the comparison is not like-for-like, the gate is `unusable`.
+regression stays blocking. If the comparison is not like-for-like, the gate is `unverified`.
 
 The per-test comparison is mechanized: summarize each side as a hand-written **gate run
 summary** JSON (`{run_version: 1, subject_sha, command, results: {<test_id>:
@@ -91,39 +79,26 @@ review-readiness packet.
 
 - **One fact, one carrier.** Git carries code and exact SHAs; receipts carry
   machine-checkable authorization and gate evidence; task_plan carries active decisions,
-  open findings, and the next gate; a progress log is not created by default — open one only
-  when a cross-session audit genuinely needs it. `orchestrate slice status` rebuilds current
-  lane state from Git plus receipts; never hand-copy that state into narrative.
-- Decisions take effect in the in-band control plane. When cross-session durability is
-  needed, persist the conclusion or ADR pointer in task_plan; the plan records the decision
-  but never dispatches work or triggers a state transition.
-- After semantic plan updates at checkpoint, handoff, resume, or closure boundaries, run the
-  `planning-with-files` command `checkpoint <task-id>`. It validates current schemas and
-  compacts only when required; `status remains read-only`, and maintenance never changes
-  decision, review, or merge state.
+  open findings, and the next gate. A progress log is opt-in, only for a genuine
+  cross-session audit. `orchestrate slice status` rebuilds current lane state from Git plus
+  receipts; never hand-copy that state into narrative.
 - A task firing the task_plan trigger uses `planning-with-files` at
-  `.agent_state/plans/<task-id>/`; one-shot tasks create nothing.
-- **task_plan is the ledger; a domain packet is its current-state cache.** The ledger holds
-  active decisions and one-line pointers only; a closed decision's detail lives in its ADR or
-  evidence artifact, collapsed at wave close. Only several
-  concurrent domains justify `domains/<domain>.md` (owner/reviewer, current SHA, pointers and
-  one-line summaries of frozen decisions, next step). Single-domain tasks use task_plan's
-  Current State directly.
-- **Sealed detail moves out at any checkpoint** — sealed review rounds, closed leases, and
-  superseded decisions go to `.agent_state/plans/<task-id>/history.md` or their evidence
-  artifacts, leaving a one-line pointer. Move it whenever the byte budget nears; never
-  rewrite or truncate active authority narrative to fit, and never wait for a phase-count
-  boundary to compact.
-- A **domain packet** never copies decision text. Rewrite it at lease handoffs/checkpoints and
-  delete it when the domain completes; task_plan retains the durable phase history. An
-  immutable dispatch packet is separate frozen input and is authorized only by a direct
-  message naming its path/hash.
-- Reports return in-band. Messages carry milestones, findings, and decisions. Outside the
-  closed spool/dispatch-packet transports, files carry evidence only: disposable bulk payloads under
-  `.agent_state/artifacts/<task>/<agent>-<topic>.md`, durable investigator maps in the plan
-  directory. Reports include a digest and path; root reads selectively.
-- Spool/dispatch files may carry frozen work but never outcomes. No file replaces a milestone,
-  infers completion, or acts as a controller. There are no mandatory per-agent report files.
+  `.agent_state/plans/<task-id>/`; one-shot tasks create nothing. Decisions take effect
+  in-band — the plan records conclusions and ADR pointers but never dispatches work or
+  triggers a state transition. After semantic plan updates at checkpoint/handoff/resume/
+  closure boundaries, run `checkpoint <task-id>`; maintenance never changes decision,
+  review, or merge state.
+- **task_plan is the ledger**: active decisions and one-line pointers only. Sealed detail —
+  closed review rounds, closed leases, superseded decisions — moves to `history.md` or its
+  evidence artifact at any checkpoint, leaving a one-line pointer; never rewrite active
+  authority narrative to fit a byte budget. Only several concurrent domains justify
+  `domains/<domain>.md` caches (owner, current SHA, pointers, next step); a cache never
+  copies decision text and is deleted when the domain completes.
+- Reports return in-band; outside the closed spool/dispatch-packet transports, files carry
+  evidence only — disposable bulk under `.agent_state/artifacts/<task>/<agent>-<topic>.md`,
+  durable investigator maps in the plan directory — with a digest and path in the message.
+  No file replaces a milestone, infers completion, or acts as a controller; there are no
+  mandatory per-agent report files.
 
 ## Session handoff
 

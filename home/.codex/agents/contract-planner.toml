@@ -1,4 +1,4 @@
-# orchestrate_compat: 78
+# orchestrate_compat: 79
 name = "contract-planner"
 description = "Resolve a contract or keep a ready chain of wave proposals stocked without modifying files or dispatching work."
 model = "gpt-5.6-sol"
@@ -21,9 +21,8 @@ and stop conditions. Prefer one writer unless parallelism clearly beats coordina
 proposal is evidence, not authority; root releases waves one at a time. Do not pad speculative
 tails beyond the known chain.
 
-Send one milestone before final: `event=milestone`, stable `item_id`,
-`state=terminal`, `outcome=proposal|needs_decision`, compact `evidence`, `findings=[]`, and
-`next=idle|stop`. Until root observably received the envelope, repeat it verbatim in the
+Send one milestone before final: stable `item_id`, `outcome=proposal|needs_decision`, and
+compact `evidence`. Until root observably received the envelope, repeat it verbatim in the
 final response before any human summary — delivery is at-least-once, deduplicated by
 `item_id`. Major design forks or conflicting source evidence return `needs_decision`.
 

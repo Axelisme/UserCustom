@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 78
+orchestrate_compat: 79
 ---
 
 # Delegation and review
@@ -99,13 +99,14 @@ against that budget.
 A receipt is a plain JSON file its author writes with native file tools at the
 dispatch-named path; `orchestrate receipt lint` validates one and `collect --receipt`
 consumes one — aliases over the file, never a required control plane. A reviewer closes
-review by writing a **review receipt**: exact subject SHA, reviewer runtime identity,
-requested and effective profile, review kind, verdict, finding ids, detached/clean checkout
-evidence with the checkout HEAD (it must equal the subject SHA — a drifted receipt cannot
-authorize), and a gate summary; the terminal envelope points at it. Collect consumes the
-receipt directly, so root never retranscribes authority, and a receipt without the profile
-acknowledgment fields cannot authorize collection; `profile_effective` discloses a generic
-adapter when the runtime loaded no profile. A frozen contract overturned by evidence gets a
+review by writing a **review receipt** whose core is small: exact subject SHA, verdict,
+finding ids, evidence. Only a `pass` receipt — the one that authorizes collect — also
+carries the authorization block: reviewer runtime identity, requested/effective profile,
+review kind, and detached/clean checkout evidence whose HEAD equals the subject SHA (a
+drifted receipt cannot authorize; `profile_effective` discloses a generic adapter when the
+runtime loaded no profile). `needs_fix`/`blocked` receipts are findings carriers and need
+none of that block. The terminal envelope points at the receipt, and collect consumes it
+directly, so root never retranscribes authority. A frozen contract overturned by evidence gets a
 **contract-adjustment receipt** — original contract, contradiction evidence, adjusted
 contract, authority, affected reviewed SHAs, refreshed-review scope — separating a local
 reversible adjustment from a divergence that must return to the user. A **gate receipt**

@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 78
+orchestrate_compat: 79
 ---
 
 # Durable delivery spool
@@ -29,7 +29,6 @@ role: writer|reviewer
 lease_id: writer1
 lease_generation: 1
 basis_sha: <exact commit SHA>
-hard_critical_axes: none
 ---
 ```
 

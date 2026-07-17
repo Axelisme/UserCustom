@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 78
+orchestrate_compat: 79
 ---
 
 # Immutable dispatch packets
@@ -39,19 +39,18 @@ hard_critical_axes: none|hardware|persistence|security|atomic-cutover[, ...]
 ---
 ```
 
-The Markdown body contains these headings, each with concise task-specific content or
-`none`:
+The Markdown body requires five headings with concise task-specific content or `none`:
 
 - `## Authority` — what the role may write/decide and what remains root/user-owned.
 - `## Acceptance` — externally observable completion conditions and commands.
 - `## Non-goals` — explicit exclusions that prevent scope growth.
-- `## Write scope` — owned/excluded/shared-read-only path patterns (or a scope manifest
-  path), or `none`.
-- `## Dependencies` — upstream slices/SHAs this work waits on or stacks from, or `none`.
-- `## Exact literals` — schema names, status codes, protocol values, or `none`.
-- `## Oracles` — independent expected values and dangerous failure probes.
-- `## Review policy` — hard axes, named risks, cadence/waiting, or `none`.
+- `## Write scope` — owned/excluded/shared-read-only path patterns or a scope manifest path.
 - `## Stop conditions` — when to report instead of improvising.
+
+Four more are optional; absence means none: `## Dependencies` (upstream SHAs this work
+stacks from), `## Exact literals` (schema names, status codes, protocol values),
+`## Oracles` (independent expected values and dangerous failure probes), `## Review policy`
+(hard axes, named risks, cadence/waiting).
 
 For a security hard-critical packet, `Oracles` should state the adversary capability and
 containment level: public API, serialization, or in-process reachability. Name whether private

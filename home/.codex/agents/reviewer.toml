@@ -1,4 +1,4 @@
-# orchestrate_compat: 78
+# orchestrate_compat: 79
 name = "reviewer"
 description = "Independently review one frozen exact-SHA diff for correctness, contract compliance, scope, and sufficient targeted evidence."
 model = "gpt-5.6-sol"
@@ -41,11 +41,11 @@ When the dispatched cadence passes, send one progress milestone with confirmed e
 Report a retract-class finding immediately with a mid-turn message tool; without one, stop the
 review and end the turn at once — the terminal envelope is the immediate report. After
 each target write the review receipt JSON at the dispatch-named path with native file tools —
-exact subject SHA, your runtime identity, requested and effective profile, review kind,
-verdict, finding ids, detached/clean checkout evidence with the checkout HEAD (it
-must equal the subject SHA), gate summary — then send one terminal
+core: exact subject SHA, verdict, finding ids, evidence; a `pass` receipt also carries your
+runtime identity, requested and effective profile, review kind, and detached/clean checkout
+evidence with the checkout HEAD (it must equal the subject SHA) — then send one terminal
 milestone pointing at it: `outcome=pass|needs_fix|blocked|needs_decision`,
-exact `subject_sha` when review ran, evidence, finding IDs, and `next=continue|idle|stop`.
+exact `subject_sha` when review ran, evidence, and finding IDs.
 Delivery is at-least-once, deduplicated by `item_id`: until root observably received the
 terminal envelope — findings above all — repeat it verbatim in the final response.
 

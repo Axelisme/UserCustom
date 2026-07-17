@@ -59,7 +59,7 @@ COLLECT_REVIEW_KINDS = (
     "mechanical",
 )
 QUEUE_ROLES = ("writer", "reviewer")
-QUEUE_FIELDS = {
+QUEUE_REQUIRED = {
     "queue_version",
     "item_id",
     "order",
@@ -67,8 +67,8 @@ QUEUE_FIELDS = {
     "lease_id",
     "lease_generation",
     "basis_sha",
-    "hard_critical_axes",
 }
+QUEUE_FIELDS = QUEUE_REQUIRED | {"hard_critical_axes"}
 DISPATCH_ROLES = ("planner", "writer", "reviewer")
 HARD_CRITICAL_AXES = ("hardware", "persistence", "security", "atomic-cutover")
 DISPATCH_FIELDS = {
@@ -109,21 +109,26 @@ REVIEW_RECEIPT_REQUIRED = (
     "kind",
     "item_id",
     "subject_sha",
+    "verdict",
+    "findings",
+    "evidence",
+)
+# The authorization block: required only on verdict=pass, the receipt that
+# authorizes collect. Findings-carrier receipts stay small.
+REVIEW_RECEIPT_PASS_REQUIRED = (
     "reviewer_agent_id",
     "profile_requested",
     "profile_effective",
     "review_kind",
-    "verdict",
-    "findings",
     "checkout_detached",
     "checkout_clean",
-    "evidence",
-)
-REVIEW_RECEIPT_FIELDS = set(REVIEW_RECEIPT_REQUIRED) | {
-    "subject_tree",
     "checkout_head",
-    "details",
-}
+)
+REVIEW_RECEIPT_FIELDS = (
+    set(REVIEW_RECEIPT_REQUIRED)
+    | set(REVIEW_RECEIPT_PASS_REQUIRED)
+    | {"subject_tree", "details"}
+)
 CONTRACT_RECEIPT_REQUIRED = (
     "receipt_version",
     "kind",
@@ -162,11 +167,14 @@ DISPATCH_SECTIONS = (
     "Acceptance",
     "Non-goals",
     "Write scope",
+    "Stop conditions",
+)
+# Optional headings: absence means none.
+DISPATCH_SECTIONS_OPTIONAL = (
     "Dependencies",
     "Exact literals",
     "Oracles",
     "Review policy",
-    "Stop conditions",
 )
 
 
@@ -781,18 +789,14 @@ def validate_exact_sha_field(
 
 
 def validate_milestone(payload: dict[str, Any], *, role: str) -> list[str]:
+    """Core is three fields; state derives from outcome, the rest is optional."""
     errors: list[str] = []
-    required = ("event", "item_id", "state", "outcome", "evidence", "findings", "next")
-    require_json_fields(
-        payload,
-        required,
-        errors,
-    )
+    require_json_fields(payload, ("item_id", "outcome", "evidence"), errors)
     unexpected = sorted(payload.keys() - MILESTONE_FIELDS)
     if unexpected:
         errors.append(f"unexpected fields: {', '.join(unexpected)}")
-    if payload.get("event") != "milestone":
-        errors.append("event must be milestone")
+    if "event" in payload and payload.get("event") != "milestone":
+        errors.append("event, when supplied, must be milestone")
     item_id = payload.get("item_id")
     if item_id is not None and (
         not isinstance(item_id, str) or not ID_PATTERN.fullmatch(item_id)
@@ -814,17 +818,16 @@ def validate_milestone(payload: dict[str, Any], *, role: str) -> list[str]:
         errors.append("details must be an object when supplied")
     validate_exact_sha_field(payload, "subject_sha", errors)
 
-    state = payload.get("state")
     outcome = payload.get("outcome")
-    if state == "progress":
-        if outcome != "working":
-            errors.append("progress requires outcome=working")
-        if "subject_sha" in payload:
-            errors.append("progress must omit subject_sha")
-    elif state == "terminal":
+    if outcome is None:
+        return errors
+    derived_state = "progress" if outcome == "working" else "terminal"
+    if "state" in payload and payload.get("state") != derived_state:
+        errors.append(f"outcome={outcome} implies state={derived_state}")
+    if derived_state == "terminal":
         if outcome not in MILESTONE_OUTCOMES[role]:
             errors.append(
-                f"terminal {role} outcome must be one of: "
+                f"terminal {role} outcome must be working or one of: "
                 + ", ".join(MILESTONE_OUTCOMES[role])
             )
         sha_required = (role == "writer" and outcome in ("validated", "review")) or (
@@ -832,6 +835,8 @@ def validate_milestone(payload: dict[str, Any], *, role: str) -> list[str]:
         )
         if sha_required and "subject_sha" not in payload:
             errors.append(f"{role} outcome={outcome} requires subject_sha")
+        if outcome == "needs_fix" and not payload.get("findings"):
+            errors.append("outcome=needs_fix requires at least one finding id")
     return errors
 
 
@@ -882,11 +887,15 @@ def validate_review_receipt(payload: dict[str, Any]) -> list[str]:
     if details is not None and not isinstance(details, dict):
         errors.append("details must be an object when supplied")
     verdict = payload.get("verdict")
-    if verdict == "pass" and not (
-        payload.get("checkout_detached") is True
-        and payload.get("checkout_clean") is True
-    ):
-        errors.append("verdict=pass requires checkout_detached and checkout_clean")
+    if verdict == "pass":
+        require_json_fields(payload, REVIEW_RECEIPT_PASS_REQUIRED, errors)
+        if not (
+            payload.get("checkout_detached") is True
+            and payload.get("checkout_clean") is True
+        ):
+            errors.append(
+                "verdict=pass requires checkout_detached and checkout_clean"
+            )
     if verdict == "needs_fix" and not payload.get("findings"):
         errors.append("verdict=needs_fix requires at least one finding id")
     head = payload.get("checkout_head")
@@ -897,8 +906,6 @@ def validate_review_receipt(payload: dict[str, Any]) -> list[str]:
         and head.lower() != subject.lower()
     ):
         errors.append("checkout_head must equal subject_sha")
-    if verdict == "pass" and not isinstance(head, str):
-        errors.append("verdict=pass requires checkout_head")
     return errors
 
 
@@ -1747,7 +1754,7 @@ def parse_queue_item(data: bytes, *, root: Path, source: str) -> dict[str, Any]:
         if key in fields:
             raise OrchestrateError(f"duplicate queue front matter field: {key}")
         fields[key] = value
-    missing = sorted(QUEUE_FIELDS - fields.keys())
+    missing = sorted(QUEUE_REQUIRED - fields.keys())
     unexpected = sorted(fields.keys() - QUEUE_FIELDS)
     if missing or unexpected:
         detail = []
@@ -1779,7 +1786,7 @@ def parse_queue_item(data: bytes, *, root: Path, source: str) -> dict[str, Any]:
         raise OrchestrateError(
             f"queue role must be a normal writer/reviewer role: {role!r}"
         )
-    if fields["hard_critical_axes"] != "none":
+    if fields.get("hard_critical_axes", "none") != "none":
         raise OrchestrateError(
             "durable queues accept normal writer/reviewer work only; "
             "hard_critical_axes must be none"
@@ -2438,7 +2445,7 @@ def command_review_verdict(args: argparse.Namespace) -> dict[str, Any]:
     result.update(
         item_id=payload["item_id"],
         subject_sha=payload["subject_sha"],
-        review_kind=payload["review_kind"],
+        review_kind=payload.get("review_kind"),
         verdict=verdict,
         findings=payload["findings"],
         authorizes_collect=verdict == "pass",
@@ -3077,7 +3084,7 @@ def load_review_receipts(
         by_sha[payload["subject_sha"].lower()] = {
             "path": str(path),
             "item_id": payload["item_id"],
-            "review_kind": payload["review_kind"],
+            "review_kind": payload.get("review_kind"),
             "verdict": payload["verdict"],
         }
     return by_sha, invalid

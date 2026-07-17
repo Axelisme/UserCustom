@@ -1,7 +1,3 @@
----
-orchestrate_compat: 80
----
-
 # Critical review
 
 Use this branch only when a checkpoint shows **both** features, named explicitly at freeze:

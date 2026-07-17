@@ -1,7 +1,3 @@
----
-orchestrate_compat: 80
----
-
 # Evidence and handoff
 
 Read this reference when a gate aborts/times out/crashes, a task needs durable narrative, or
@@ -105,7 +101,7 @@ review-readiness packet.
 When root decides to hand off, stop dispatching. Use remaining context to drain:
 
 1. Stop at a slice boundary when possible; otherwise commit the nearest coherent state.
-2. Never hand off while holding the merge slot, mid-collection, or with reviewer findings
+2. Never hand off mid-landing, mid-collection, or with reviewer findings
    trapped in agent context. Release/yield first.
 3. Writers commit and report. Reviewers flush every finding with severity and evidence.
    Agent leases do not survive the session; the packet must support a new identity without

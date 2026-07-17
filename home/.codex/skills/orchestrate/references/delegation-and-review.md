@@ -1,7 +1,3 @@
----
-orchestrate_compat: 80
----
-
 # Delegation and review
 
 Read this before the first agent action or review decision, then read the matching runtime
@@ -106,7 +102,7 @@ Per-slice review is the exception root must justify. Wait only where a declared 
 named critical barrier requires it; normal work runs ahead unreviewed. A queue entry never
 creates review debt; root creates a review target by authorizing an exact immutable SHA.
 
-A readiness packet—inline or via [dispatch packet](dispatch-packets.md)—names at least:
+A readiness packet—inline or via [dispatch packet](transports.md)—names at least:
 
 - base and exact target SHA;
 - frozen contract/invariants and changed surface;
@@ -126,6 +122,57 @@ checkout evidence is **unusable evidence** with its own small root-set retry bud
 the dispatch, rerun with a fresh identity). Finding rounds are unlimited and never count
 against that budget.
 
+## Wave pipeline
+
+Idle capacity is cheaper than blocking the main writer with handoffs, repeated context
+loading, and duplicate gates.
+
+### Freeze the wave
+
+Root freezes one natural wave, commonly a few coherent items and sometimes a one-item tail.
+Each item is self-contained: objective, exact base, write authority, acceptance/oracle,
+dependencies, discretion, and any root-named review barrier. Contract or same-file authority
+is serialized. Planner keeps the whole known dependency chain stocked with ready proposals
+while N runs; root alone freezes and releases them, wave by wave.
+
+Prefer one writer for a coherent vertical slice. Split at independently verifiable ownership
+or dependency seams, not at each parser, field, callback, or mechanical edit. A slice may
+contain several progress observations without creating several review checkpoints.
+
+### Keep work flowing
+
+- A **non-blocking milestone** reports observed progress/evidence; an authorized writer
+  continues immediately. The runtime/profile owns its transport and schema.
+- A completed micro-step is not itself a reason to stop, commit, switch identity, or ask root.
+- Root observes delivered events; the root contact discipline above governs contact.
+
+### Writer, reviewer, and root
+
+A writer retains context across the whole slice and stops only at its declared barrier or a
+genuine decision boundary; for normal work the writer is the default reviewer.
+
+An independent reviewer exists only where root named a risk at freeze and consumes complete
+exact-state targets at the cumulative cadence above. It may continue to an already-ready
+independent target after pass; idle review time never justifies blocking the writer or
+implementing against an unstable interface.
+
+Root harvests milestones, assigns findings, and batch-collects with one narrative update per
+batch. Localized finding fixes get a **focused re-review**; one full review closes a
+named-risk surface. Only integration runs the repo/risk-required **broader gate**, whose
+evidence binds to the final tree.
+
+### Wave close
+
+Reconcile Git and the durable narrative, retain open/deferred findings, and collapse every
+closed decision into a one-line ADR/evidence pointer — task_plan carries active items and
+pointers only. Record lightweight counts (findings per review, review rounds, wait) and tune
+**review amplification** with them: two consecutive reviews yielding only minor findings drop
+the next wave's default depth one level (focused → root spot-check → none); any major finding
+restores named-risk review immediately.
+
+Normal queue mechanics live in [File transports](transports.md). A boundary that needs
+independent adversarial proof leaves this branch for [Critical review](critical-review.md).
+
 ## Receipts
 
 A receipt is a plain JSON file its author writes with native file tools at the
@@ -138,10 +185,11 @@ review kind, and detached/clean checkout evidence whose HEAD equals the subject 
 drifted receipt cannot authorize; `profile_effective` discloses a generic adapter when the
 runtime loaded no profile). `needs_fix`/`blocked` receipts are findings carriers and need
 none of that block. The terminal envelope points at the receipt, and collect consumes it
-directly, so root never retranscribes authority. A frozen contract overturned by evidence gets a
-**contract-adjustment receipt** — original contract, contradiction evidence, adjusted
-contract, authority, affected reviewed SHAs, refreshed-review scope — separating a local
-reversible adjustment from a divergence that must return to the user. A **gate receipt**
+directly, so root never retranscribes authority. A frozen contract overturned by evidence
+returns to root as `needs_decision`; root records the adjustment as a **task_plan ADR
+entry** — original contract, contradicting evidence, adjusted contract, authority, and the
+affected reviewed SHAs whose evidence is void — and refreshes review for those SHAs. A
+divergence beyond local reversible adjustment returns to the user. A **gate receipt**
 ([Evidence and handoff](evidence-and-handoff.md)) classifies a test run's status and every
 exclusion, so a deselected test can never pass silently.
 

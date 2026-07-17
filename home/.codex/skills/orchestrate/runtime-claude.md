@@ -1,7 +1,3 @@
----
-orchestrate_compat: 80
----
-
 # Orchestrate — Claude Code runtime binding
 
 Current tool availability is authoritative. Claude subagents start fresh; their prompt must

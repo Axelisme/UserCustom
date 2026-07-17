@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 80
+skill_version: 81
 ---
 
 # Orchestrate
@@ -64,9 +64,9 @@ add safety, it ratchets into ritual.
 | delivery spool | queued cross-turn delivery the runtime binding names |
 | review receipt | an independent reviewer identity closes review |
 | gate receipt (+`gate compare`) | a gate with exclusions, skips, blocks, or baseline-relative anomalies |
-| contract-adjustment receipt | evidence overturns a frozen contract |
+| contract-adjustment ADR in task_plan | evidence overturns a frozen contract |
 | landing declaration | the task will land on a persistence branch |
-| merge slot | every persistence landing |
+| merge-slot protocol | concurrent roots landing on the same repo (`land finish` always takes the built-in landing lock) |
 | version pin | a task expected to outlive one session or skill release |
 | task_plan | cross-session, multi-round, or information-heavy work |
 | independent reviewer | a root-named review risk |
@@ -87,10 +87,8 @@ Read a reference completely only when its branch fires:
 
 - Before creating a branch/worktree, collecting, or landing, read [Git coordination](references/git-coordination.md).
 - Before the first agent dispatch, identity decision, or review, read [Delegation and review](references/delegation-and-review.md) and the matching runtime binding at the skill root — [runtime-codex.md](runtime-codex.md) or [runtime-claude.md](runtime-claude.md), not under `references/`.
-- Before dispatching two or more ready slices concurrently, read [Wave pipeline](references/wave-pipeline.md).
 - Before freezing a critical checkpoint or closing its findings, read [Critical review](references/critical-review.md).
-- Before using a filesystem queue, read [Durable delivery spool](references/durable-delivery-spool.md).
-- Before replacing a long direct contract with a file, read [Dispatch packets](references/dispatch-packets.md).
+- Before replacing a long direct contract with a file or using a filesystem queue, read [File transports](references/transports.md).
 - When a gate is anomalous/baseline-relative or a handoff is needed, read [Evidence and handoff](references/evidence-and-handoff.md).
 
 Use `<repo-python> <skill-dir>/scripts/orchestrate.py --help` for mechanics; adapters enforce

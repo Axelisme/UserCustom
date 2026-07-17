@@ -1,7 +1,3 @@
----
-orchestrate_compat: 80
----
-
 # Git coordination and landing
 
 Read this reference before creating or changing task/lane branches, using worktrees,
@@ -48,10 +44,9 @@ after an aborted turn the rerun itself is the reconciliation — it reports what
 already applied (`recovered: already-created|already-collected|already-removed|…`). They
 never infer a verdict or queue state; Git remains the only topology truth carrier.
 
-- `lane create|cleanup` — lane branch and worktree lifecycle.
-- `review checkout|cleanup` — detached exact-SHA review worktrees. Checkout reports the
-  expected receipt path so the dispatch can name it verbatim; `cleanup --subject-sha <sha>`
-  fails fast on a drifted HEAD — drifted evidence is void.
+- `lane create` — lane branch plus worktree at an exact base.
+- `review checkout` — detached exact-SHA review worktree; it reports the expected receipt
+  path so the dispatch can name it verbatim.
 - `review verdict --receipt <path> [--subject-sha <sha>]` — validates and routes a receipt
   without judging it: `pass` reports the exact collect authorization, `needs_fix` returns
   findings to the original writer, `blocked|needs_decision` returns to root, and an invalid
@@ -65,6 +60,9 @@ never infer a verdict or queue state; Git remains the only topology truth carrie
   reported, never inflated into a verdict. `--scope <manifest>` fails on out-of-scope writes.
 - `cleanup --absorbed [--dry-run]` — one-pass sweep: absorbed lanes and clean detached
   review checkouts are removed, everything else rejected per entry with a reason.
+  `cleanup --worktree <path> [--subject-sha <sha>]` removes exactly one target with the
+  same proofs — absorption for a lane, clean checkout for a review, and `--subject-sha`
+  fails fast on a drifted review HEAD (drifted evidence is void).
 - `slice status --task-ref task/<t>` — read-only derivation of each lane's state from Git
   plus receipts (`writing|needs_fix|authorized_to_collect|absorbed`, seam-ready and dirty
   flags, cross-lane write-set overlap); it stores nothing and decides nothing.
@@ -102,8 +100,8 @@ never infer a verdict or queue state; Git remains the only topology truth carrie
 
 ## Landing on persistence
 
-Landing is one squash commit with explicit user authority. Every persistence landing claims
-the merge slot, even when no contention is currently visible. After the squash commit, prove
+Landing is one squash commit with explicit user authority, serialized by the built-in
+landing lock `land finish` takes itself. After the squash commit, prove
 `git diff --quiet task/<task> <landed-commit>` before deleting the task branch; squash shares
 no ancestry, so content identity—not ancestry—is the deletion authority.
 
@@ -115,56 +113,32 @@ The declaration carries the user's landing authority for step 7; the close never
 "validated but unlanded".
 
 `land status --root <checkout> --task-ref task/<t> --declaration <path> [--gate-receipt <p>]`
-reports the finish chain read-only — final gate, landing authority, merge slot, squash
-landing, tree identity, lane cleanup — and names the first missing step. `land finish` adds
-`--task-sha` (exact), a **passed** gate receipt bound to that SHA, `--merge-slot-held`
-(recorded as declared after a real merge-slot claim), and `--confirmed` under
+reports the finish chain read-only — final gate, landing authority, squash landing, tree
+identity, lane cleanup — and names the first missing step. `land finish` adds `--task-sha`
+(exact), a **passed** gate receipt bound to that SHA, and `--confirmed` under
 land-with-confirmation; it Fast Fails on staged changes or user-owned dirty paths that
-overlap the landing diff, squash-merges, commits, proves task/landed tree identity, and
-reports the remaining cleanup — plus the push, under publish-authorized — as next steps.
-Both are aliases over the sequence below and the git commands stay valid on their own.
+overlap the landing diff, then takes the non-blocking landing lock, re-reads the target tip
+under it, squash-merges, commits, proves task/landed tree identity, and reports the
+remaining cleanup — plus the push, under publish-authorized — as next steps. If the tip
+moved since the gate, rebase and rerun the gate on the new tree before retrying; never adapt
+the candidate inside the locked section. Both commands are aliases over the sequence below
+and the git commands stay valid on their own.
 
-The merge slot (`../scripts/merge_slot.py`) is an ephemeral claimant-scoped FIFO queue plus
-owner-token lease, never task state. `status` is read-only; claim/renew use atomic lock
-replacement. Reset `.agent_state/merge-slot/` only while quiescent: no command running and no
-holder in the landing critical section. Deleting/recreating its flock file while active can
-admit concurrent holders.
+Keep expensive work off-lock: rebase `task/<task>` onto the persistence tip first, run the
+repo/risk-required broader gate there, and record command/rationale plus exact tree — a
+failed gate followed by code changes invalidates the old evidence and requires a fresh run.
 
-State-entering guards run manifest/compat preflight before lane/review creation, collection,
-packet/queue publication, or merge-slot claim; status and cleanup/recovery stay available
-without one. The guards also check the task-level version pin
+**Concurrent roots** landing on the same repo are the only trigger for the external
+merge-slot protocol (`../scripts/merge_slot.py`): a claimant-scoped FIFO queue plus
+owner-token lease (`status|claim|verify|renew|release|yield`). Only `status=acquired`
+authorizes entry; keep the token in root context only; a holder that expired can no longer
+`verify|renew|release|yield`. Pass `--merge-slot-held` to `land finish` to record the claim.
+Reset `.agent_state/merge-slot/` only while quiescent.
+
+State-entering guards run manifest preflight before lane/review creation, collection,
+packet/queue publication, or landing; status and cleanup/recovery stay available without
+one. The guards also check the task-level version pin
 (`orchestrate pin set|status|migrate`, a plain JSON file under `.agent_state/orchestrate/`);
 adoption mechanics live in [Delegation and review](delegation-and-review.md). Profile
 identity is the standing orders (normalized `developer_instructions`); retuning a profile's
 model or reasoning effort never fails preflight.
-
-```bash
-merge-slot := <repo-python> "$SKILL_DIR/scripts/merge_slot.py" --root <repo>
-merge-slot status
-merge-slot claim <task> [--owner-token <token>] [--wait N]
-merge-slot verify <task> --owner-token <token>
-merge-slot renew|release|yield <task> --owner-token <token>
-```
-
-`claim` generates and returns an owner token when omitted. Preserve it only in root context;
-do not write it to task_plan or logs. Only `status=acquired` authorizes entry to the critical
-section. `already_acquired` and `queued` never do. Every later operation must present the
-same token; a second session with the same task-id is a distinct FIFO claimant.
-
-Keep expensive work off-slot:
-
-1. Rebase `task/<task>` onto the persistence tip. The integration owner runs the
-   repo/risk-required broader gate and records command/rationale plus exact tree. A failed
-   gate followed by code changes invalidates the old evidence and requires a fresh run.
-2. Claim the slot, retain the returned owner token, and proceed only on `status=acquired`.
-3. Immediately before persistence mutation, run `verify <task> --owner-token <token>` and
-   re-read the persistence tip.
-4. Tip unchanged: squash-merge, commit, prove task/landed tree identity, then release with the
-   owner token.
-5. Tip moved: `yield`; never adapt the candidate inside the landing critical section. Use
-   `git merge-tree --write-tree` off-slot. When conflict-free **and** new commits are
-   path-disjoint, rebase, rerun the repo/risk-required broader gate on that new final tree,
-   then reclaim from step 2. Otherwise restart from step 1 and resolve explicitly.
-
-Expired holders have lost both lock and claimant-specific queue position and cannot
-`verify`, `renew`, `release`, or `yield`.

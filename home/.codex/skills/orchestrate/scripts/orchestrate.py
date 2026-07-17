@@ -24,11 +24,6 @@ DISPATCH_PACKET_VERSION = 1
 ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 EXACT_SHA_PATTERN = re.compile(r"^[0-9a-fA-F]{40,64}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-COMPAT_PATTERN = re.compile(r"^orchestrate_compat:\s*(\d+)\s*$", re.MULTILINE)
-PROFILE_COMPAT_PATTERN = re.compile(
-    r"^\s*(?:#\s*|<!--\s*)?orchestrate_compat\s*(?:=|:)\s*(\d+)\s*(?:-->)?\s*$",
-    re.MULTILINE,
-)
 VERSION_PATTERN = re.compile(r"^skill_version:\s*(\d+)\s*$", re.MULTILINE)
 MILESTONE_STATES = ("progress", "terminal")
 MILESTONE_NEXT = ("continue", "idle", "stop")
@@ -75,7 +70,7 @@ DISPATCH_FIELDS = {
     "hard_critical_axes",
 }
 RECEIPT_VERSION = 1
-RECEIPT_KINDS = ("review", "contract-adjustment", "gate")
+RECEIPT_KINDS = ("review", "gate")
 GATE_STATUSES = (
     "passed",
     "failed_current",
@@ -125,19 +120,6 @@ REVIEW_RECEIPT_FIELDS = (
     | set(REVIEW_RECEIPT_PASS_REQUIRED)
     | {"subject_tree", "details"}
 )
-CONTRACT_RECEIPT_REQUIRED = (
-    "receipt_version",
-    "kind",
-    "adjustment_id",
-    "original_contract",
-    "contradiction_evidence",
-    "adjusted_contract",
-    "authority",
-    "affected_reviewed_shas",
-    "refreshed_review_scope",
-)
-CONTRACT_RECEIPT_FIELDS = set(CONTRACT_RECEIPT_REQUIRED) | {"details"}
-CONTRACT_AUTHORITIES = ("user", "root")
 SCOPE_MANIFEST_VERSION = 1
 SCOPE_REQUIRED = ("scope_version", "item_id", "owned_paths")
 SCOPE_FIELDS = set(SCOPE_REQUIRED) | {
@@ -289,11 +271,6 @@ def profile_standing_orders(text: str, suffix: str) -> str:
     return text
 
 
-def profile_compat(text: str) -> int | None:
-    match = PROFILE_COMPAT_PATTERN.search(text)
-    return int(match.group(1)) if match else None
-
-
 def document_paths(skill_dir: Path) -> list[Path]:
     paths = [
         skill_dir / "SKILL.md",
@@ -326,9 +303,6 @@ def build_manifest(skill_dir: Path, version: int) -> dict[str, Any]:
             if path.suffix == ".md"
             else {"__file__": sha256_bytes(data)},
         }
-        match = COMPAT_PATTERN.search(data.decode("utf-8"))
-        if match:
-            entry["orchestrate_compat"] = int(match.group(1))
         documents[relative] = entry
     profiles: dict[str, Any] = {}
     for path in profile_paths(home):
@@ -343,9 +317,6 @@ def build_manifest(skill_dir: Path, version: int) -> dict[str, Any]:
                 profile_standing_orders(text, path.suffix)
             ),
         }
-        compat = profile_compat(text)
-        if compat is not None:
-            entry["orchestrate_compat"] = compat
         profiles[path.relative_to(home).as_posix()] = entry
     return {
         "schema_version": MANIFEST_SCHEMA,
@@ -421,15 +392,6 @@ def verify_release(skill_dir: Path) -> dict[str, Any]:
         if name.endswith(".md") and entry["bytes"] > 16_384:
             errors.append(
                 f"single-read budget exceeded: {name} ({entry['bytes']} bytes)"
-            )
-        compat = entry.get("orchestrate_compat")
-        if compat is not None and compat != version:
-            errors.append(f"compat mismatch: {name}={compat}, expected {version}")
-    for name, entry in observed["profiles"].items():
-        compat = entry.get("orchestrate_compat")
-        if compat != version:
-            errors.append(
-                f"profile compat mismatch: {name}={compat}, expected {version}"
             )
     if manifest.get("orchestrate_compat") != version:
         errors.append("manifest orchestrate_compat does not match SKILL.md")
@@ -837,47 +799,6 @@ def validate_review_receipt(payload: dict[str, Any]) -> list[str]:
         and head.lower() != subject.lower()
     ):
         errors.append("checkout_head must equal subject_sha")
-    return errors
-
-
-def validate_contract_adjustment_receipt(payload: dict[str, Any]) -> list[str]:
-    errors: list[str] = []
-    require_json_fields(payload, CONTRACT_RECEIPT_REQUIRED, errors)
-    unexpected = sorted(payload.keys() - CONTRACT_RECEIPT_FIELDS)
-    if unexpected:
-        errors.append(f"unexpected fields: {', '.join(unexpected)}")
-    if payload.get("receipt_version") != RECEIPT_VERSION:
-        errors.append(f"receipt_version must be {RECEIPT_VERSION}")
-    if payload.get("kind") != "contract-adjustment":
-        errors.append("kind must be contract-adjustment")
-    adjustment_id = payload.get("adjustment_id")
-    if adjustment_id is not None and (
-        not isinstance(adjustment_id, str) or not ID_PATTERN.fullmatch(adjustment_id)
-    ):
-        errors.append("adjustment_id must be a stable identifier")
-    require_nonempty_string_fields(
-        payload,
-        (
-            "original_contract",
-            "contradiction_evidence",
-            "adjusted_contract",
-            "refreshed_review_scope",
-        ),
-        errors,
-    )
-    validate_json_enum(payload, "authority", CONTRACT_AUTHORITIES, errors)
-    affected = payload.get("affected_reviewed_shas")
-    if affected is not None and (
-        not isinstance(affected, list)
-        or any(
-            not isinstance(item, str) or not EXACT_SHA_PATTERN.fullmatch(item)
-            for item in affected
-        )
-    ):
-        errors.append("affected_reviewed_shas must be a list of exact SHAs")
-    details = payload.get("details")
-    if details is not None and not isinstance(details, dict):
-        errors.append("details must be an object when supplied")
     return errors
 
 
@@ -1358,10 +1279,8 @@ def command_receipt_lint(args: argparse.Namespace) -> dict[str, Any]:
         )
     if kind == "review":
         errors = validate_review_receipt(payload)
-    elif kind == "gate":
-        errors = validate_gate_receipt(payload)
     else:
-        errors = validate_contract_adjustment_receipt(payload)
+        errors = validate_gate_receipt(payload)
     return {
         "ok": not errors,
         "operation": "receipt-lint",
@@ -2298,61 +2217,6 @@ def require_registered_worktree(root: Path, target: Path) -> dict[str, Any]:
     return record
 
 
-def command_review_cleanup(args: argparse.Namespace) -> dict[str, Any]:
-    started = time.monotonic()
-    root = Path(args.root).resolve()
-    target = require_managed_worktree(
-        root, Path(args.worktree).resolve(), kind="review"
-    )
-    if not target.name.startswith("review-"):
-        raise OrchestrateError("review worktree name must start with 'review-'")
-    record = next(
-        (
-            record
-            for record in worktree_records(root)
-            if record.get("worktree") == str(target)
-        ),
-        None,
-    )
-    result: dict[str, Any] = {
-        "ok": True,
-        "operation": "review-cleanup",
-        "path": str(target),
-    }
-    if record is None:
-        if target.exists():
-            raise OrchestrateError(f"not a registered worktree: {target}")
-        result["recovered"] = "already-removed"
-    else:
-        worktree_metadata_writability_preflight(root)
-        if not target.exists():
-            run_git(root, "worktree", "prune")
-            result["recovered"] = "pruned-stale-metadata"
-        else:
-            if "detached" not in record:
-                raise OrchestrateError(
-                    "review cleanup only removes detached worktrees"
-                )
-            if run_git(target, "status", "--porcelain").stdout.strip():
-                raise OrchestrateError("review worktree is dirty")
-            head = run_git(target, "rev-parse", "HEAD").stdout.strip()
-            if args.subject_sha:
-                subject = exact_commit(root, args.subject_sha, label="subject SHA")
-                if head != subject:
-                    raise OrchestrateError(
-                        f"review checkout HEAD drifted: {head} != {subject};"
-                        " evidence bound to that SHA is void — investigate before"
-                        " removing manually"
-                    )
-            result["head"] = head
-            run_git(root, "worktree", "remove", str(target))
-    return {
-        **result,
-        "observed_at": datetime.now(UTC).isoformat(),
-        "duration_ms": round((time.monotonic() - started) * 1000),
-    }
-
-
 def command_review_verdict(args: argparse.Namespace) -> dict[str, Any]:
     payload, data = read_json_object(args.receipt, label="review receipt")
     errors = validate_review_receipt(payload)
@@ -2584,6 +2448,27 @@ def landing_gate_state(
     }
 
 
+_HELD_LOCKS: list[Any] = []
+
+
+def acquire_landing_lock(root: Path) -> None:
+    """Serialize the landing critical section within this repo, non-blocking.
+
+    The handle is held until process exit so the flock outlives this frame.
+    """
+    lock_path = common_repo_root(root) / ".agent_state" / "orchestrate" / "land.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(lock_path, "w")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        handle.close()
+        raise OrchestrateError(
+            f"another landing holds the lock: {lock_path}; wait for it to finish"
+        ) from exc
+    _HELD_LOCKS.append(handle)
+
+
 def command_land_status(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
     root = Path(args.root).resolve()
@@ -2635,11 +2520,11 @@ def command_land_status(args: argparse.Namespace) -> dict[str, Any]:
     steps = {
         "final_gate": gate,
         "landing_authority": {"policy": policy, "state": authority_state},
-        "merge_slot": {
-            "state": "declared-at-finish",
+        "landing_lock": {
+            "state": "built-in",
             "hint": (
-                "claim via scripts/merge_slot.py, then pass --merge-slot-held"
-                " to land finish"
+                "land finish takes the landing lock itself; the merge-slot"
+                " protocol (scripts/merge_slot.py) is only for concurrent roots"
             ),
         },
         "squash_landing": {
@@ -2667,9 +2552,9 @@ def command_land_status(args: argparse.Namespace) -> dict[str, Any]:
     elif gate["state"] != "passed":
         next_step = "final gate: produce a passed gate receipt bound to the task head"
     elif not based:
-        next_step = "rebase the task onto the target tip off-slot, rerun the gate"
+        next_step = "rebase the task onto the target tip, rerun the gate"
     else:
-        next_step = "claim the merge slot, then land finish"
+        next_step = "land finish"
     return {
         "ok": True,
         "operation": "land-status",
@@ -2769,11 +2654,8 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
             "user-owned dirty paths overlap the landing diff: "
             + ", ".join(dirty_overlap[:20])
         )
-    if not args.merge_slot_held:
-        raise OrchestrateError(
-            "claim the merge slot first (scripts/merge_slot.py claim/verify), then"
-            " pass --merge-slot-held; the flag is recorded as declared, not verified"
-        )
+    acquire_landing_lock(root)
+    target_sha = run_git(root, "rev-parse", f"{target_ref}^{{commit}}").stdout.strip()
     if (
         run_git(
             root, "merge-base", "--is-ancestor", target_sha, expected, check=False
@@ -2797,10 +2679,11 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
             " do not delete the task branch — investigate"
         )
     next_steps = [
-        "release the merge slot with the owner token",
         "cleanup --absorbed to sweep lanes and review checkouts",
         f"git branch -D {args.task_ref} (authorized by this tree identity proof)",
     ]
+    if args.merge_slot_held:
+        next_steps.insert(0, "release the merge slot with the owner token")
     if policy == "publish-authorized":
         next_steps.append(f"git push <remote> {target_ref}")
     return {
@@ -2815,11 +2698,10 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def command_lane_cleanup(args: argparse.Namespace) -> dict[str, Any]:
-    started = time.monotonic()
-    root = Path(args.root).resolve()
-    require_task_lane_refs(args.task_ref, args.lane_ref)
-    target = require_managed_worktree(root, Path(args.worktree).resolve(), kind="lane")
+def cleanup_single_worktree(
+    args: argparse.Namespace, root: Path, started: float
+) -> dict[str, Any]:
+    target = require_managed_worktree(root, Path(args.worktree).resolve(), kind="any")
     record = next(
         (
             record
@@ -2828,75 +2710,61 @@ def command_lane_cleanup(args: argparse.Namespace) -> dict[str, Any]:
         ),
         None,
     )
-    task_sha = run_git(root, "rev-parse", f"{args.task_ref}^{{commit}}").stdout.strip()
-    branch_exists = (
-        run_git(
-            root,
-            "show-ref",
-            "--verify",
-            "--quiet",
-            f"refs/heads/{args.lane_ref}",
-            check=False,
-        ).returncode
-        == 0
-    )
     result: dict[str, Any] = {
         "ok": True,
-        "operation": "lane-cleanup",
-        "lane_ref": args.lane_ref,
-        "task_ref": args.task_ref,
-        "task_sha": task_sha,
+        "operation": "cleanup",
         "path": str(target),
     }
-
-    def drop_absorbed_branch() -> None:
-        lane_sha = run_git(
-            root, "rev-parse", f"{args.lane_ref}^{{commit}}"
-        ).stdout.strip()
-        absorption = lane_absorption(root, lane_sha, task_sha)
-        if absorption is None:
-            raise OrchestrateError(
-                "lane is not absorbed by task ref (ancestry or tree identity)"
-            )
-        run_git(root, "branch", "-D", args.lane_ref)
-        result["lane_sha"] = lane_sha
-        result["absorption"] = absorption
-
     if record is None:
         if target.exists():
             raise OrchestrateError(f"not a registered worktree: {target}")
-        if branch_exists:
-            drop_absorbed_branch()
-            result["recovered"] = "removed-stale-branch"
-        else:
-            result["recovered"] = "already-removed"
+        result["recovered"] = "already-removed"
     else:
         worktree_metadata_writability_preflight(root)
         if not target.exists():
             run_git(root, "worktree", "prune")
-            if branch_exists:
-                drop_absorbed_branch()
             result["recovered"] = "pruned-stale-metadata"
+        elif "detached" in record:
+            result["kind"] = "review"
+            if run_git(target, "status", "--porcelain").stdout.strip():
+                raise OrchestrateError("review worktree is dirty")
+            head = run_git(target, "rev-parse", "HEAD").stdout.strip()
+            if args.subject_sha:
+                subject = exact_commit(root, args.subject_sha, label="subject SHA")
+                if head != subject:
+                    raise OrchestrateError(
+                        f"review checkout HEAD drifted: {head} != {subject};"
+                        " evidence bound to that SHA is void — investigate before"
+                        " removing manually"
+                    )
+            result["head"] = head
+            run_git(root, "worktree", "remove", str(target))
         else:
+            result["kind"] = "lane"
             branch = str(record.get("branch", "")).removeprefix("refs/heads/")
-            if branch != args.lane_ref:
-                raise OrchestrateError(
-                    f"worktree branch is {branch!r}, expected {args.lane_ref!r}"
-                )
+            match = re.fullmatch(r"agent/([^/]+)/[^/]+", branch)
+            if match is None:
+                raise OrchestrateError(f"not an agent lane branch: {branch!r}")
+            task_ref = f"task/{match.group(1)}"
             if run_git(target, "status", "--porcelain").stdout.strip():
                 raise OrchestrateError("lane worktree is dirty")
-            lane_sha = run_git(
-                root, "rev-parse", f"{args.lane_ref}^{{commit}}"
+            lane_sha = run_git(root, "rev-parse", f"{branch}^{{commit}}").stdout.strip()
+            task_sha = run_git(
+                root, "rev-parse", f"{task_ref}^{{commit}}"
             ).stdout.strip()
             absorption = lane_absorption(root, lane_sha, task_sha)
             if absorption is None:
                 raise OrchestrateError(
-                    "lane is not absorbed by task ref (ancestry or tree identity)"
+                    f"lane is not absorbed by {task_ref} (ancestry or tree identity)"
                 )
             run_git(root, "worktree", "remove", str(target))
-            run_git(root, "branch", "-D", args.lane_ref)
-            result["lane_sha"] = lane_sha
-            result["absorption"] = absorption
+            run_git(root, "branch", "-D", branch)
+            result.update(
+                branch=branch,
+                lane_sha=lane_sha,
+                task_ref=task_ref,
+                absorption=absorption,
+            )
     return {
         **result,
         "observed_at": datetime.now(UTC).isoformat(),
@@ -2907,8 +2775,12 @@ def command_lane_cleanup(args: argparse.Namespace) -> dict[str, Any]:
 def command_cleanup_absorbed(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
     root = Path(args.root).resolve()
+    if args.worktree:
+        return cleanup_single_worktree(args, root, started)
     if not args.absorbed:
-        raise OrchestrateError("pass --absorbed to authorize the sweep")
+        raise OrchestrateError(
+            "pass --worktree for one target or --absorbed to authorize the sweep"
+        )
     if not args.dry_run:
         worktree_metadata_writability_preflight(root)
     managed = managed_worktree_root(root).resolve()
@@ -2931,7 +2803,7 @@ def command_cleanup_absorbed(args: argparse.Namespace) -> dict[str, Any]:
             if not path.exists():
                 entry.update(
                     action="rejected",
-                    reason="directory missing; run review cleanup to prune metadata",
+                    reason="directory missing; run cleanup --worktree to prune metadata",
                 )
             elif run_git(path, "status", "--porcelain").stdout.strip():
                 entry.update(action="rejected", reason="worktree is dirty")
@@ -2969,7 +2841,7 @@ def command_cleanup_absorbed(args: argparse.Namespace) -> dict[str, Any]:
         if not path.exists():
             entry.update(
                 action="rejected",
-                reason="directory missing; run lane cleanup to recover",
+                reason="directory missing; run cleanup --worktree to recover",
             )
             continue
         if run_git(path, "status", "--porcelain").stdout.strip():
@@ -3267,12 +3139,6 @@ def build_parser() -> argparse.ArgumentParser:
     lane_create.set_defaults(
         handler=command_lane_create, requires_release_preflight=True
     )
-    lane_cleanup = lane_commands.add_parser("cleanup")
-    add_root(lane_cleanup)
-    lane_cleanup.add_argument("--task-ref", required=True)
-    lane_cleanup.add_argument("--lane-ref", required=True)
-    lane_cleanup.add_argument("--worktree", required=True)
-    lane_cleanup.set_defaults(handler=command_lane_cleanup)
 
     review = commands.add_parser("review", help="detached exact-SHA review worktrees")
     review_commands = review.add_subparsers(dest="review_command", required=True)
@@ -3284,14 +3150,6 @@ def build_parser() -> argparse.ArgumentParser:
     checkout.set_defaults(
         handler=command_review_checkout, requires_release_preflight=True
     )
-    cleanup = review_commands.add_parser("cleanup")
-    add_root(cleanup)
-    cleanup.add_argument("--worktree", required=True)
-    cleanup.add_argument(
-        "--subject-sha",
-        help="fail fast when the checkout HEAD drifted from this reviewed SHA",
-    )
-    cleanup.set_defaults(handler=command_review_cleanup)
     review_verdict = review_commands.add_parser("verdict")
     review_verdict.add_argument(
         "--receipt", required=True, help="review receipt JSON path, or '-' for stdin"
@@ -3325,7 +3183,8 @@ def build_parser() -> argparse.ArgumentParser:
     land_finish.add_argument(
         "--merge-slot-held",
         action="store_true",
-        help="declare that the merge slot is claimed and verified",
+        help="declare an external merge-slot claim (concurrent-roots protocol);"
+        " the built-in landing lock is always taken",
     )
     land_finish.add_argument(
         "--confirmed",
@@ -3397,13 +3256,21 @@ def build_parser() -> argparse.ArgumentParser:
     scope_amend.set_defaults(handler=command_scope_amend)
 
     sweep = commands.add_parser(
-        "cleanup", help="sweep absorbed lanes and clean detached review worktrees"
+        "cleanup",
+        help="remove one worktree, or sweep absorbed lanes and clean review checkouts",
     )
     add_root(sweep)
     sweep.add_argument(
-        "--absorbed", action="store_true", help="authorize the sweep (required)"
+        "--absorbed", action="store_true", help="authorize the full sweep"
     )
     sweep.add_argument("--dry-run", action="store_true")
+    sweep.add_argument(
+        "--worktree", help="remove exactly this managed worktree with full proofs"
+    )
+    sweep.add_argument(
+        "--subject-sha",
+        help="review targets only: fail fast when the checkout HEAD drifted",
+    )
     sweep.set_defaults(handler=command_cleanup_absorbed)
 
     slice_parser = commands.add_parser(

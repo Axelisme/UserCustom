@@ -1,7 +1,3 @@
----
-orchestrate_compat: 80
----
-
 # Orchestrate — Codex runtime binding
 
 Session-injected collaboration tool definitions are authoritative. Codex ships **two

@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 69
+orchestrate_compat: 70
 ---
 
 # Git coordination and landing
@@ -56,6 +56,9 @@ removed, everything dirty or unabsorbed is rejected per entry. `orchestrate slic
 --task-ref task/<t>` derives each lane's state read-only from Git plus receipts
 (`writing|needs_fix|authorized_to_collect|absorbed`, with seam-ready and dirty flags); it
 stores nothing and decides nothing — Git remains the only topology truth carrier.
+`review checkout` reports the expected receipt path for its SHA so the dispatch can name it
+verbatim, and `review cleanup --subject-sha <sha>` fails fast when the checkout HEAD drifted
+from the reviewed SHA — drifted evidence is void.
 For collect, `--authorized-sha` plus `--review-kind` with
 `different-identity|focused|root-spot|mechanical` is root's **declared authorization**. The
 adapter reports it but **does not infer a verdict** or claim that a formal reviewer acted.

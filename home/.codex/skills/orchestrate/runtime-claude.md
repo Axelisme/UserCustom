@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 69
+orchestrate_compat: 70
 ---
 
 # Orchestrate — Claude Code runtime binding

@@ -842,6 +842,16 @@ def validate_review_receipt(payload: dict[str, Any]) -> list[str]:
         errors.append("verdict=pass requires checkout_detached and checkout_clean")
     if verdict == "needs_fix" and not payload.get("findings"):
         errors.append("verdict=needs_fix requires at least one finding id")
+    head = payload.get("checkout_head")
+    subject = payload.get("subject_sha")
+    if (
+        isinstance(head, str)
+        and isinstance(subject, str)
+        and head.lower() != subject.lower()
+    ):
+        errors.append("checkout_head must equal subject_sha")
+    if verdict == "pass" and not isinstance(head, str):
+        errors.append("verdict=pass requires checkout_head")
     return errors
 
 
@@ -1797,7 +1807,20 @@ def command_review_checkout(args: argparse.Namespace) -> dict[str, Any]:
     evidence = worktree_evidence(target, started=started)
     if evidence["branch"] is not None or evidence["head"] != target_sha:
         raise OrchestrateError("review checkout is not detached at the requested SHA")
-    return {"ok": True, "operation": "review-checkout", **evidence}
+    expected_receipt = (
+        common_repo_root(root)
+        / ".agent_state"
+        / "orchestrate"
+        / "receipts"
+        / f"review-{label}.json"
+    )
+    return {
+        "ok": True,
+        "operation": "review-checkout",
+        "subject_sha": target_sha,
+        "expected_receipt": str(expected_receipt),
+        **evidence,
+    }
 
 
 def require_registered_worktree(root: Path, target: Path) -> dict[str, Any]:
@@ -1852,7 +1875,16 @@ def command_review_cleanup(args: argparse.Namespace) -> dict[str, Any]:
                 )
             if run_git(target, "status", "--porcelain").stdout.strip():
                 raise OrchestrateError("review worktree is dirty")
-            result["head"] = run_git(target, "rev-parse", "HEAD").stdout.strip()
+            head = run_git(target, "rev-parse", "HEAD").stdout.strip()
+            if args.subject_sha:
+                subject = exact_commit(root, args.subject_sha, label="subject SHA")
+                if head != subject:
+                    raise OrchestrateError(
+                        f"review checkout HEAD drifted: {head} != {subject};"
+                        " evidence bound to that SHA is void — investigate before"
+                        " removing manually"
+                    )
+            result["head"] = head
             run_git(root, "worktree", "remove", str(target))
     return {
         **result,
@@ -2511,6 +2543,10 @@ def build_parser() -> argparse.ArgumentParser:
     cleanup = review_commands.add_parser("cleanup")
     add_root(cleanup)
     cleanup.add_argument("--worktree", required=True)
+    cleanup.add_argument(
+        "--subject-sha",
+        help="fail fast when the checkout HEAD drifted from this reviewed SHA",
+    )
     cleanup.set_defaults(handler=command_review_cleanup)
 
     collect = commands.add_parser(

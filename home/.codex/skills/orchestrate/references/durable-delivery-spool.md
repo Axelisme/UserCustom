@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 69
+orchestrate_compat: 70
 ---
 
 # Durable delivery spool

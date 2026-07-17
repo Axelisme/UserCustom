@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 69
+orchestrate_compat: 70
 ---
 
 # Delegation and review
@@ -96,6 +96,12 @@ framing for surfaces that genuinely cross a security boundary. A platform-classi
 **unusable review evidence**, never a verdict: reword the dispatch and rerun with a fresh
 identity.
 
+Root classifies every review turn before counting it: `pass` and `needs_fix` are verdicts a
+receipt can carry; an incomplete turn, an execution failure, a platform abort, and invalid
+checkout evidence are unusable evidence, never verdicts. Budget retries by class — execution
+failures get a small root-set retry budget (reworded dispatch, fresh identity) before root
+escalates, while finding rounds are unlimited and never count against that budget.
+
 ## Receipts
 
 A receipt is a plain JSON file its author writes with native file tools at the
@@ -103,7 +109,8 @@ dispatch-named path; `orchestrate receipt lint` validates one and `collect --rec
 consumes one — aliases over the file, never a required control plane. A reviewer closes
 review by writing a **review receipt**: exact subject SHA, reviewer runtime identity,
 requested and effective profile, review kind, verdict, finding ids, detached/clean checkout
-evidence, and a gate summary; the terminal envelope points at it. Collect consumes the
+evidence with the checkout HEAD (it must equal the subject SHA — a drifted receipt cannot
+authorize), and a gate summary; the terminal envelope points at it. Collect consumes the
 receipt directly, so root never retranscribes authority, and a receipt without the profile
 acknowledgment fields cannot authorize collection; `profile_effective` discloses a generic
 adapter when the runtime loaded no profile. A frozen contract overturned by evidence gets a
@@ -120,7 +127,12 @@ scope, and dangerous failures—green tests prove behavior, not that the seam is
 Report findings with severity, path, observable behavior, evidence, and propagation shape.
 Root decides deferral. A confirmed major finding (P0/P1, contract invalidation, retract class,
 or dangerous intermediate) is sent immediately so root can stop affected work; ordinary
-findings stay in the target's one terminal milestone.
+findings stay in the target's one terminal milestone. Propagation stop and review stop are
+separate decisions: the immediate report lets root hold dependent work, but the reviewer ends
+the turn early only when the finding overturns the frozen contract, the remaining scope
+depends on the broken invariant, or further scanning would build on a false premise —
+otherwise it keeps scanning the surfaces independent of that invariant and closes them in the
+same terminal receipt.
 
 Normal re-review is finding-focused. Critical hostile proof, refreshed-review criteria, and
 dependent-work release live together in [Critical review](critical-review.md). After collection,

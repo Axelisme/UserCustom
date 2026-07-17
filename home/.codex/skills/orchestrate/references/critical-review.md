@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 69
+orchestrate_compat: 70
 ---
 
 # Critical review
@@ -33,8 +33,10 @@ paths and dangerous intermediate states. Green writer tests are input evidence, 
 verdict.
 
 Report confirmed major boundary invalidation immediately so root can hold dependent work.
-Other findings stay in the checkpoint verdict with severity, path, observed behavior, evidence,
-and propagation shape. Root owns deferral.
+Holding dependent work does not itself end the review turn: continue auditing the surfaces
+independent of the invalidated boundary unless the contract is overturned or the remaining
+scope depends on it. Other findings stay in the checkpoint verdict with severity, path,
+observed behavior, evidence, and propagation shape. Root owns deferral.
 
 ## Close findings economically
 

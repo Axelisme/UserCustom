@@ -1,0 +1,225 @@
+{
+  "documents": {
+    "SKILL.md": {
+      "bytes": 6683,
+      "sections": {
+        "Constitution": "bec1163f705ca3be2d10804909b03fa728eb5baf9ddde16faf7a0b9d223c9f5e",
+        "Context pointers": "79538e431891dc00dae9add80413f1f236857f79b2c9ada95c954448fc128936",
+        "Definition of done": "50a056fec0422a141a201e200883705c1e03941ac8efb2f2c53f7e56b8302114",
+        "Orchestrate": "b1c11e399d27f3ca181d5f2ec9cdb3bf06be4af16b093ee51f7efe4bda4f16d2",
+        "Pipeline shapes": "42473a86bf3495aed88503eb5f666c1dffa46dbd9c07b079f106ec33d5c2cab1",
+        "Root control loop": "e5058e3bf2918ab4858cbb8f1b093ece59fc170684dc1e470858fca9ed7bac09"
+      },
+      "sha256": "e32a2f8ef20e0728d32121b3e1893c0438caebc3f084b320e9179ee0052d0703"
+    },
+    "references/critical-review.md": {
+      "bytes": 2801,
+      "orchestrate_compat": 70,
+      "sections": {
+        "Close findings economically": "74b34787e14a7b3bd8f4ed5252a775116b2c0bd3dd3dc3caaf44f83bde0a5db6",
+        "Critical review": "6ffd039a08baa8035ac6679c9a49e7caace8618baa282e96b78628a3684a147d",
+        "Freeze the barrier": "03bf72764a80dc59350cad45ae5e4d290d2451913d1ccf570d44a7af8043e7f4",
+        "Try to disprove it": "d68f47e1af8e7291c793c35ead7a6f4625394f13e98b38ecb73fda94c101dd44"
+      },
+      "sha256": "fe4edfbb34007d7e4425029037d1c79d011639db930a8aa2dd4f0a2408164c7e"
+    },
+    "references/delegation-and-review.md": {
+      "bytes": 8973,
+      "orchestrate_compat": 70,
+      "sections": {
+        "Delegation and review": "8cd362e6113ea8e8415370f1678ea75e8f2d4eeae87e7b9618b70408138381ae",
+        "Evidence ownership": "278d234101cbdeec0e93c871d0376c5fa3bfb1ecf1b76e634918702f5c46bea4",
+        "Receipts": "f9dda1bcb875a5ab0950b0583cc8d01237e8affcab2d06fd3d4b679c54c332ff",
+        "Review depth and readiness": "14d3244e6111a198b4ad81d15356c72c1c6e997a52ee3fc00cf5652d3606b58f",
+        "Reviewer mental model": "3162e6598e3ba7f4fa8642b6856f08decf486f2fb5dd89bbe2f522ffd17f7f20",
+        "Roles and continuity": "eb27e27d844a5cd210bdd3667aa803ae87d677be74c7839042681c373a268c62",
+        "Root contact discipline": "def7b2c0e5551bf157b32fcf0020beb7d2f9173e29ff83ca9cbf4932e78268c3",
+        "Skill upgrades": "5516c69e1e54689ba512c03e8dbea2890b2aa5693e1b1ef745e2e772416e22d9"
+      },
+      "sha256": "bcb00e0867545237069efca5815fa98ef0e50c09ac985b360d69a1cddc94c845"
+    },
+    "references/dispatch-packets.md": {
+      "bytes": 3152,
+      "orchestrate_compat": 70,
+      "sections": {
+        "Adapter and lifecycle": "9aeabf16019e73afb018bf148489f3ade41ded9277515552446686273585d2dc",
+        "Boundary": "32810c74efba5099cb39dd205b225abc7d32fa2332a1ca9c22022ac92a594c15",
+        "Format": "5144ec3874c1fc2bb4f5e344b98e03becd854ba05789187a4c1f24ce87a931fe",
+        "Immutable dispatch packets": "555f2600eca3edcf47348a602ef24e87aed4288c2fc3df0050c768a51f0992f4"
+      },
+      "sha256": "cc0a958d5014e49f525fd1e53ff5735c27949178cb96c00ac31efe34c4e26f82"
+    },
+    "references/durable-delivery-spool.md": {
+      "bytes": 3816,
+      "orchestrate_compat": 70,
+      "sections": {
+        "Adapter": "9eb9c074aa6434ea02a9b7141406452a31ecea607f5a0738b2182486df98b06c",
+        "Authority and layout": "5cd138b509a2197d0b428f5788c619501c3178543a53c0734ff2e2d305c58de7",
+        "Durable delivery spool": "02640761e69d94644b73257dcdeeb6a4e7ba8004399991c9c843541a2466c2a9",
+        "Event-driven consumption": "e2655deb0749f68879f7c8325f72ca2056b9f030d8ab236428ecf40b3eef57c6",
+        "Recovery and rebinding": "e424b4b45745bc43d817b6e299c6b5e6f505b6055cae0a7e14fceaa6d14f6595"
+      },
+      "sha256": "d812b82f5f86f45f164a810e3ddb3cdf139c40173fee2c1c19b77a07ce1afb79"
+    },
+    "references/evidence-and-handoff.md": {
+      "bytes": 7277,
+      "orchestrate_compat": 70,
+      "sections": {
+        "Baseline-relative gates": "bf74b44b4d5474e8269242dd68b5470db332b66a3dbf12f107f18dfc7cb5298b",
+        "Durable narrative": "72572fc9df924a56bb458b0e8e639e82f40a1d0197e351f29eb51652dbf744e7",
+        "Evidence and handoff": "86d9250330d4b46ce8ce5de4554c89008ee89fbba955769fd06453c9d4ffb1f6",
+        "Gate evidence scope": "2a34eaf5b174a6e76162279791a53e3f9c7a6685e42434cc05c76774d9457bf1",
+        "Session handoff": "6660cf27406c08b510d06a6733203d903af373ba463f7571921b90fb2148ce37",
+        "Validation anomalies": "3feeca78a3052741c01dd8cf318a829d02cbd093e7603ad6554565d21c3b7aa9"
+      },
+      "sha256": "32888426ce094d6f3039f398a30d7b62fdf33e083f9a500a0b4bfdbb9ab2ff03"
+    },
+    "references/git-coordination.md": {
+      "bytes": 8893,
+      "orchestrate_compat": 70,
+      "sections": {
+        "Git coordination and landing": "be17c1758ece9a5b6883464f9bf55d83a2e964777e2c863a4872e9e5bb055003",
+        "Landing on persistence": "ea485732379566cbcd3c1ce6c170d5e5278345bd7224be3bee5205b623f3caac",
+        "Multi-writer parallelism": "b06b99e91c8e02709ef91b3d119a2561305af7c55cb7d1332ab12d6683952cf6",
+        "Single writer": "cf54e8fbf2fcceddc52976287c5bfadcb1906ec01464de1f0cfa93122f423bc6",
+        "Terms and branch hierarchy": "aede0725a0c1839ec187fc880a86eb761c261b94661aa4c97134de9aaed881a7"
+      },
+      "sha256": "cf0955fca3d1654f343df5f49242dbddfe8e7a88a1cd8f2fcfee15c2827cbd1d"
+    },
+    "references/wave-pipeline.md": {
+      "bytes": 3518,
+      "orchestrate_compat": 70,
+      "sections": {
+        "Freeze the wave": "36c467e0900a487abf258f03100ba8f33ad0b1cb183c07e03699a3f4f24a6f62",
+        "Keep work flowing": "0ba8f705f76c6a8d5916a47077ed8a09f9e278036a1510656a88f7e5a1acdb06",
+        "Wave close": "0d129c98f4d711bcaac2f799cf9c8f32d1ff59b2d1dd121fafa55f37fd773231",
+        "Wave pipeline": "2d11d100643da1fd27fe4834260615188755ea6070313f1a34e20fa0757b3e30",
+        "Writer, reviewer, and root": "34f01c025f3dfe7dd97a06daa4770fa0c07a177d16ecf371e96093aa4811a58b"
+      },
+      "sha256": "ae1ad59756bf3d193501c56e3c1a5459593b6c4a0306dc4fbb61aca5caec62cb"
+    },
+    "runtime-claude.md": {
+      "bytes": 4449,
+      "orchestrate_compat": 70,
+      "sections": {
+        "Capability boundaries": "508a028971d50c762e09acc39c39e0a6acb92141b63cf4fcda14061012632998",
+        "Flow control": "88850ef001d5e1cf10b812b89370f462ef728a89b003cd8f3f21c25e1038d395",
+        "Milestones": "987886afa992b545e85b9315d5cee76190b75cdc3e7b15a1d1a89d23fe063985",
+        "Orchestrate \u2014 Claude Code runtime binding": "edbde56dfdb0dde4625c0938c3b4d8725aee70af76469b28086f67c9f3c374fe",
+        "Stalled work": "f9e2567f9382120aa7062a29ba32e8ae55f066d69c701d9854b5d877087dae86",
+        "Tool and profile binding": "c3e310aec74279058bb37d40ee6869e4c33eaae0bdea3a9548168a74325859f7"
+      },
+      "sha256": "7e67aacf191b5b92db09f19b1e78266c7243ec1eda72d7c0cd77183be1c768e4"
+    },
+    "runtime-codex.md": {
+      "bytes": 8178,
+      "orchestrate_compat": 70,
+      "sections": {
+        "Flow control": "f5c57471a74faad3fd1c43da3c2d349d94c197c9b4f9cd34ef82b3e9df6d3fe8",
+        "Milestones": "bcafeb27a1fc9ada0f0c43c40b888c564b177d2ccf0a2cae28eb1846bbb46645",
+        "Orchestrate \u2014 Codex runtime binding": "49b41742938d0e26a70acc4d355f045fcc83d29460c0a5db83dad389641b805a",
+        "Profile bootstrap and dispatch": "7147d8dc7200f8288abc1f5842855273c7d293c67b342c2552874c4eda8d9de2",
+        "Runtime limits": "6bbabc9cee767a8e5c1820184eb6ebe5541b55e8544df8aa3ea56efe69efc3f0",
+        "Stalled work": "b36b850980b20dae472f38819f6545f423d48da7d60296116227944637855df6",
+        "Tool binding": "2f207a6f8eaa4b7705c6aba640b357bf5e64c35a2bda6a7e07d7c9bcf822ebd7",
+        "v1 transport \u2014 git-carried progress": "8d101d786aea7c78d08a7dfbe6db643933701a817d52f58ed6373e4668c30e38",
+        "v2 transport \u2014 real-time messages": "68360c9d867be1ab7675aae8a68d6f9281263670d63dfe3acdbf53c9c4bb6491"
+      },
+      "sha256": "5ea014a1a6a31b72664b41e77e43681d11abb6f75dbd78e9636f457d738d8396"
+    },
+    "scripts/merge_slot.py": {
+      "bytes": 15119,
+      "sections": {
+        "__file__": "d603f3e5b200fac4e189f1981e617224da2c8a29d3be5c7281049b65176709e0"
+      },
+      "sha256": "d603f3e5b200fac4e189f1981e617224da2c8a29d3be5c7281049b65176709e0"
+    },
+    "scripts/orchestrate.py": {
+      "bytes": 98271,
+      "sections": {
+        "__file__": "1f6cb2465cbee4dc5ad5258b49b5f5443744eb2c70429b1c0c09b8243efd414b"
+      },
+      "sha256": "1f6cb2465cbee4dc5ad5258b49b5f5443744eb2c70429b1c0c09b8243efd414b"
+    }
+  },
+  "orchestrate_compat": 70,
+  "profiles": {
+    ".claude/agents/contract-planner.md": {
+      "bytes": 1688,
+      "orchestrate_compat": 70,
+      "sha256": "e1ec94d5044b8499246a73579efb134bdcee01f74def9b7d6919aadf1a3a421d",
+      "standing_orders_sha256": "9947e80e487c99d45ef5965e17965b7f6376ba58721aaf0d065f744e13d88f52"
+    },
+    ".claude/agents/implementer.md": {
+      "bytes": 3038,
+      "orchestrate_compat": 70,
+      "sha256": "f4153e2621a506a1924ac988d23e4f3b0c4768beb6257769d24eec71faac5039",
+      "standing_orders_sha256": "20ee4f8219876586c68af2ba3ccf89f5befafd9cd4bea2f30748b1f55f964fa3"
+    },
+    ".claude/agents/reviewer.md": {
+      "bytes": 3487,
+      "orchestrate_compat": 70,
+      "sha256": "8ab78d10eda37f5e904a5b613adec4e43379b89535c7cc5b2c67549c2967665a",
+      "standing_orders_sha256": "0034b9480cad3f5595d327c6bc3c266e7a079a9dec9a2c301560f757459f977f"
+    },
+    ".codex/agents/contract-planner.toml": {
+      "bytes": 1760,
+      "orchestrate_compat": 70,
+      "sha256": "066660720d4a34064f4423bbcbb63bcc7bf74a0d6843aba1f546be77ab650a5b",
+      "standing_orders_sha256": "9947e80e487c99d45ef5965e17965b7f6376ba58721aaf0d065f744e13d88f52"
+    },
+    ".codex/agents/implementer.toml": {
+      "bytes": 3115,
+      "orchestrate_compat": 70,
+      "sha256": "5a5034505b8c7a5563bb4ebb0164ca3b83f0f05a509d640d827b699d98908b41",
+      "standing_orders_sha256": "20ee4f8219876586c68af2ba3ccf89f5befafd9cd4bea2f30748b1f55f964fa3"
+    },
+    ".codex/agents/reviewer.toml": {
+      "bytes": 3563,
+      "orchestrate_compat": 70,
+      "sha256": "3b1b3070219e245889149d05a52508fd5eba7cd6feaf5ed1a9925262a8340c1f",
+      "standing_orders_sha256": "0034b9480cad3f5595d327c6bc3c266e7a079a9dec9a2c301560f757459f977f"
+    }
+  },
+  "release_delta": {
+    "changed_profiles": [
+      ".claude/agents/contract-planner.md",
+      ".claude/agents/implementer.md",
+      ".claude/agents/reviewer.md",
+      ".codex/agents/contract-planner.toml",
+      ".codex/agents/implementer.toml",
+      ".codex/agents/reviewer.toml"
+    ],
+    "changed_sections": {
+      "SKILL.md": [],
+      "references/critical-review.md": [
+        "Try to disprove it"
+      ],
+      "references/delegation-and-review.md": [
+        "Receipts",
+        "Review depth and readiness",
+        "Reviewer mental model"
+      ],
+      "references/dispatch-packets.md": [],
+      "references/durable-delivery-spool.md": [],
+      "references/evidence-and-handoff.md": [],
+      "references/git-coordination.md": [
+        "Multi-writer parallelism"
+      ],
+      "references/wave-pipeline.md": [],
+      "runtime-claude.md": [],
+      "runtime-codex.md": [],
+      "scripts/orchestrate.py": [
+        "__file__"
+      ]
+    },
+    "from_version": 69,
+    "must_reread": [
+      "references/critical-review.md",
+      "references/delegation-and-review.md",
+      "references/git-coordination.md"
+    ]
+  },
+  "schema_version": 1,
+  "skill_version": 70
+}

@@ -1,4 +1,4 @@
-# orchestrate_compat: 69
+# orchestrate_compat: 70
 name = "implementer"
 description = "Own end-to-end implementation of one assigned scope within a frozen contract, using targeted validation and concise evidence."
 model = "gpt-5.6-terra"

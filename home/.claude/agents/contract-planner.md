@@ -1,6 +1,6 @@
 ---
 name: contract-planner
-# orchestrate_compat: 73
+# orchestrate_compat: 74
 description: Resolve a contract or keep a ready chain of wave proposals stocked without modifying files or dispatching work.
 model: opus
 color: blue

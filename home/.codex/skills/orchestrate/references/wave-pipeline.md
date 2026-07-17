@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 73
+orchestrate_compat: 74
 ---
 
 # Wave pipeline
@@ -24,31 +24,25 @@ contain several progress observations without creating several review checkpoint
 
 - A **non-blocking milestone** reports observed progress/evidence; an authorized writer
   continues immediately. The runtime/profile owns its transport and schema.
-- A writer **runs ahead by default**: it stacks the next slice on its own announced unreviewed
-  exact SHA, and a later finding lands as a follow-up fix commit — announced history is never
-  rewritten. Only a declared dependency or root-named critical barrier waits for review.
 - A completed micro-step is not itself a reason to stop, commit, switch identity, or ask root.
 - Root observes delivered events; contact rules are the root contact discipline in
   [Delegation and review](delegation-and-review.md).
 
 ## Writer, reviewer, and root
 
-Writer runs targeted tests and affected type/lint checks during development, retains context
-across the whole slice, self-reviews against the frozen contract before its terminal
-milestone, and stops only at its declared barrier or genuine decision boundary. For normal
-work the writer is the default reviewer.
+A writer retains context across the whole slice and stops only at its declared barrier or a
+genuine decision boundary; for normal work the writer is the default reviewer.
 
-An independent reviewer exists only where root named a risk at freeze. It consumes complete
-exact-state targets **cumulatively**: one review closes a coherent surface or selected batch,
-never each small commit. It may continue to an already-ready independent target after pass;
-idle review time never justifies blocking the writer or implementing against an unstable
-interface.
+An independent reviewer exists only where root named a risk at freeze and consumes complete
+exact-state targets at the cumulative cadence in
+[Delegation and review](delegation-and-review.md). It may continue to an already-ready
+independent target after pass; idle review time never justifies blocking the writer or
+implementing against an unstable interface.
 
-Root harvests milestones, assigns findings, and collects accepted work in batches of a few
-slices — one preflight, serial merges inside the batch, one narrative update. Localized
-finding fixes get a **focused re-review**; one full review closes a named-risk surface.
-Only integration runs the repo/risk-required **broader gate**, whose evidence binds to the
-final tree.
+Root harvests milestones, assigns findings, and batch-collects with one narrative update per
+batch. Localized finding fixes get a **focused re-review**; one full review closes a
+named-risk surface. Only integration runs the repo/risk-required **broader gate**, whose
+evidence binds to the final tree.
 
 ## Wave close
 

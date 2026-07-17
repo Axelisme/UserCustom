@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 73
+orchestrate_compat: 74
 ---
 
 # Orchestrate — Codex runtime binding
@@ -25,23 +25,21 @@ read `~/.codex/agents/<role>.toml` `developer_instructions` and confirm the file
 inventory; if inaccessible, paste that block verbatim — do not summarize it from memory — and
 record `profile_effective=generic_role_adapter`.
 
-Every dispatch names objective, workdir/scope, basis, acceptance, authority, stop conditions,
-and checkpoint budget. The budget has two parts: a **worker-observable cadence in discrete
-units** (commits, items, acceptance sub-steps — never wall-clock, which a worker cannot see)
-and a wall-clock bound root itself measures while waiting. Stable boilerplate — profile
-standing orders, the milestone schema, tool recipes — lives in the profile and this binding;
-the dispatch carries pointers to them plus only the contract, risk axes, acceptance, and
-non-goals. Add the absolute queue path/lease generation for a spool consumer. For
-a long direct contract, send the immutable dispatch-packet absolute path and SHA-256 plus the
-immediate action; file existence alone is inert.
+Dispatch contents and the lean-boilerplate rule live in
+[Delegation and review](references/delegation-and-review.md); stable boilerplate sits in the
+profile and this binding, reached by pointer. Codex-specific: alongside the worker's
+discrete-unit cadence, root measures its own wall-clock bound while waiting. Add the absolute
+queue path/lease generation for a spool consumer. For a long direct contract, send the
+immutable dispatch-packet absolute path and SHA-256 plus the immediate action; file existence
+alone is inert.
 
 ## Milestones
 
 Send one semantic envelope to root at every observable boundary — **for a writer, after every
 commit** (`state=progress`); after each item or when the declared cadence passes; and one
 terminal envelope per item. Per-commit progress gives root real-time position without
-touching the assignee; **cross-identity pipelining bases only on a SHA the writer declared
-seam-ready**, never on every progress SHA:
+touching the assignee; **cross-identity pipelining bases only on a seam-ready SHA**
+([Git coordination](references/git-coordination.md)):
 
 ```text
 event=milestone
@@ -78,9 +76,9 @@ response. Do not pretend otherwise:
   question or a scheduling decision needs it. This touches no identity and is not the
   forbidden fixed-interval status polling; the liveness cadence trigger is measured the same
   way (no new commit across the declared cadence within root's wall-clock bound).
-- A reviewer or other non-writing role that confirms a **retract-class finding stops work and
-  ends the turn immediately** — the terminal envelope is the immediate report. Auditing on
-  past the finding delays the stop root must issue.
+- A reviewer or other non-writing role that confirms a **retract-class finding ends the turn
+  immediately** — with no mid-turn transport, the terminal envelope is the only way to
+  deliver the stop root must issue.
 
 ## Tool binding
 
@@ -125,8 +123,7 @@ model/capacity failure; the runtime declares its lease expired; or the dispatch-
 checkpoint budget passes with no milestone. Everything else is healthy: `running` with no
 tool/filesystem activity is model reasoning, a `wait_agent` timeout is normal silence to wait
 on again, and fixed 30/60-second status polling of a sub-agent is forbidden. There is no
-universal timer. Updating the user never requires touching the assignee — report from the
-last milestone, read-only Git, and the frozen dispatch.
+universal timer.
 
 When a trigger fires:
 

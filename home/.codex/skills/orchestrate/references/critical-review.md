@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 73
+orchestrate_compat: 74
 ---
 
 # Critical review
@@ -47,11 +47,10 @@ checkout. It challenges the writer's oracle with a **hostile reproducer**, inclu
 paths and dangerous intermediate states. Green writer tests are input evidence, not the review
 verdict.
 
-Report confirmed major boundary invalidation immediately so root can hold dependent work.
-Holding dependent work does not itself end the review turn: continue auditing the surfaces
-independent of the invalidated boundary unless the contract is overturned or the remaining
-scope depends on it. Other findings stay in the checkpoint verdict with severity, path,
-observed behavior, evidence, and propagation shape. Root owns deferral.
+Report confirmed major boundary invalidation immediately so root can hold dependent work;
+the report/stop split in [Delegation and review](delegation-and-review.md) applies. Other
+findings stay in the checkpoint verdict with severity, path, observed behavior, evidence,
+and propagation shape. Root owns deferral.
 
 ## Close findings economically
 

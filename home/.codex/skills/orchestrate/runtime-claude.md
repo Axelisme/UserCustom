@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 73
+orchestrate_compat: 74
 ---
 
 # Orchestrate — Claude Code runtime binding
@@ -26,10 +26,10 @@ role, lease, generation, and adapter command.
 ## Milestones
 
 When `SendMessage` exists, send an envelope at every observable boundary — for a writer,
-after every commit (`state=progress`) — and one terminal envelope per item. Cadence is
-declared in discrete units (commits, items, sub-steps), never wall-clock, which a subagent
-cannot observe; root measures wall-clock itself while waiting. Cross-identity pipelining
-bases only on a SHA the writer declared seam-ready, never on every progress SHA:
+after every commit (`state=progress`) — and one terminal envelope per item. Root measures
+its own wall-clock bound while waiting; the worker's cadence stays in discrete units.
+Cross-identity pipelining bases only on a seam-ready SHA
+([Git coordination](references/git-coordination.md)):
 
 ```text
 event=milestone
@@ -66,8 +66,7 @@ model/capacity failure; the runtime declares its lease/continuation lost; or the
 dispatch-declared checkpoint budget passes with no milestone. Everything else is healthy: a
 running task with no tool activity is model reasoning, a `Monitor`/wait timeout is normal
 silence to wait on again, and fixed-interval status polling of a sub-agent is forbidden.
-There is no universal timer. Updating the user never requires touching the assignee — report
-from the last milestone, read-only Git, and the frozen dispatch.
+There is no universal timer.
 
 When a trigger fires:
 

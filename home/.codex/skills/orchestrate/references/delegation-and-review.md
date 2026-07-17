@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 73
+orchestrate_compat: 74
 ---
 
 # Delegation and review
@@ -38,15 +38,12 @@ coordination sub-agents or decide landing/finding deferral.
 
 ## Root contact discipline
 
-After dispatch, root MUST NOT send progress or status prompts to a running assignee. Root
-contacts it only for a public-contract correction, confirmed major finding, user override/stop,
-or a liveness failure the runtime binding explicitly identifies. Short absence of tool or
-filesystem activity is model reasoning, not a stall signal; the runtime binding owns liveness
-recovery and its triggers are closed. Commentary obligations to the user never justify
-contacting the assignee — report from the last milestone, read-only Git state, and the frozen
-dispatch description. Dispatch a frozen bounded turn rather than drip-feeding a running
-identity; routine additions merge into one spool batch, and only major finding, correction,
-retract, or stop may interrupt directly.
+The four contact reasons in the SKILL dispatch row are a closed list. Short absence of tool
+or filesystem activity is model reasoning, not a stall signal; the runtime binding owns
+liveness recovery. Report to the user from the last milestone, read-only Git state, and the
+frozen dispatch description — commentary never touches the assignee. Dispatch a frozen
+bounded turn rather than drip-feeding a running identity; routine additions merge into one
+spool batch, and only major finding, correction, retract, or stop may interrupt directly.
 
 ## Evidence ownership
 
@@ -92,15 +89,11 @@ aborted suites, and unproved tree equivalence are invalid substitutes.
 
 Word review dispatches in neutral engineering vocabulary — correctness, negative path,
 boundary probe, lifecycle probe, transaction safety — and reserve hostile/adversarial/security
-framing for surfaces that genuinely cross a security boundary. A platform-classifier abort is
-**unusable review evidence**, never a verdict: reword the dispatch and rerun with a fresh
-identity.
-
-Root classifies every review turn before counting it: `pass` and `needs_fix` are verdicts a
-receipt can carry; an incomplete turn, an execution failure, a platform abort, and invalid
-checkout evidence are unusable evidence, never verdicts. Budget retries by class — execution
-failures get a small root-set retry budget (reworded dispatch, fresh identity) before root
-escalates, while finding rounds are unlimited and never count against that budget.
+framing for surfaces that genuinely cross a security boundary. Only `pass` and `needs_fix`
+are verdicts; an incomplete turn, execution failure, platform-classifier abort, or invalid
+checkout evidence is **unusable evidence** with its own small root-set retry budget (reword
+the dispatch, rerun with a fresh identity). Finding rounds are unlimited and never count
+against that budget.
 
 ## Receipts
 
@@ -128,13 +121,10 @@ scope, and dangerous failures—green tests prove behavior, not that the seam is
 
 Report findings with severity, path, observable behavior, evidence, and propagation shape.
 Root decides deferral. A confirmed major finding (P0/P1, contract invalidation, retract class,
-or dangerous intermediate) is sent immediately so root can stop affected work; ordinary
-findings stay in the target's one terminal milestone. Propagation stop and review stop are
-separate decisions: the immediate report lets root hold dependent work, but the reviewer ends
-the turn early only when the finding overturns the frozen contract, the remaining scope
-depends on the broken invariant, or further scanning would build on a false premise —
-otherwise it keeps scanning the surfaces independent of that invariant and closes them in the
-same terminal receipt.
+or dangerous intermediate) is reported immediately so root can hold dependent work; the
+reviewer keeps scanning the surfaces independent of the broken invariant and ends the turn
+early only when the contract is overturned or the remaining scope depends on it. Ordinary
+findings stay in the target's one terminal milestone.
 
 Normal re-review is finding-focused. Critical hostile proof, refreshed-review criteria, and
 dependent-work release live together in [Critical review](critical-review.md). After collection,
@@ -145,7 +135,7 @@ may differ.
 
 Pin a role turn to the profile/dispatch it loaded. Pin the task itself at task start with
 `orchestrate pin set`; state-entering guards then fail fast if the installed skill moves
-mid-task, instead of an unexplained hash mismatch. Adopt a new orchestrate version at a safe
+mid-task. Adopt a new orchestrate version at a safe
 boundary—before dispatch, after a milestone, or after turn completion—by running
 `orchestrate pin migrate`, which repins and reports the manifest delta so root re-reads
 exactly the changed documents. An immutable review

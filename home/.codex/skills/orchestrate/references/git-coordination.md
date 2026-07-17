@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 73
+orchestrate_compat: 74
 ---
 
 # Git coordination and landing
@@ -42,42 +42,38 @@ git merge --no-ff "agent/<task>/<lane>"
 git worktree remove ".agent_state/worktrees/<task>-<lane>"
 ```
 
-Root may use `orchestrate lane create|cleanup`, `review checkout|cleanup`, and
-`collect` pseudo aliases from the entrypoint instead. They are stateless guards around these
-same operations: exact inputs only, JSON evidence, Git recheck immediately before mutation,
-and Fast Fail on dirty/drifted/unabsorbed state. They never infer a verdict or queue state.
-Every guard is idempotent: after an aborted turn, rerun the same command — it reports what a
-prior run already applied (`recovered: already-created|already-collected|already-removed|…`)
-instead of failing, so reconciliation is the rerun itself. `collect` takes
-`--integration-worktree` (`--root` remains a deprecated alias) because it requires the
-integration checkout, not the repository root. `orchestrate cleanup --absorbed [--dry-run]`
-sweeps managed worktrees in one pass — absorbed lanes and clean detached review checkouts are
-removed, everything dirty or unabsorbed is rejected per entry. `orchestrate slice status
---task-ref task/<t>` derives each lane's state read-only from Git plus receipts
-(`writing|needs_fix|authorized_to_collect|absorbed`, with seam-ready and dirty flags); it
-stores nothing and decides nothing — Git remains the only topology truth carrier.
-`review checkout` reports the expected receipt path for its SHA so the dispatch can name it
-verbatim, and `review cleanup --subject-sha <sha>` fails fast when the checkout HEAD drifted
-from the reviewed SHA — drifted evidence is void.
-For collect, `--authorized-sha` plus `--review-kind` with
-`different-identity|focused|root-spot|mechanical` is root's **declared authorization**. The
-adapter reports it but **does not infer a verdict** or claim that a formal reviewer acted.
-Preferably pass `--receipt <path>` instead: the reviewer-written review receipt is validated
-and its exact SHA, review kind, and profile acknowledgment are consumed directly, with no
-root retranscription; only `verdict=pass` authorizes.
+Root may use the `orchestrate` pseudo aliases from the entrypoint instead. They are
+stateless idempotent guards around these same operations: exact inputs only, JSON evidence,
+Git recheck immediately before mutation, Fast Fail on dirty/drifted/unabsorbed state, and
+after an aborted turn the rerun itself is the reconciliation — it reports what a prior run
+already applied (`recovered: already-created|already-collected|already-removed|…`). They
+never infer a verdict or queue state; Git remains the only topology truth carrier.
+
+- `lane create|cleanup` — lane branch and worktree lifecycle.
+- `review checkout|cleanup` — detached exact-SHA review worktrees. Checkout reports the
+  expected receipt path so the dispatch can name it verbatim; `cleanup --subject-sha <sha>`
+  fails fast on a drifted HEAD — drifted evidence is void.
+- `collect --integration-worktree <path>` (`--root` is a deprecated alias; it requires the
+  integration checkout, not the repository root) merges one authorized exact lane SHA.
+  Preferably pass `--receipt <path>`: the reviewer-written receipt's exact SHA, review kind,
+  and profile acknowledgment are consumed directly, with no root retranscription, and only
+  `verdict=pass` authorizes. `--authorized-sha` plus `--review-kind`
+  `different-identity|focused|root-spot|mechanical` is root's **declared authorization** —
+  reported, never inflated into a verdict. `--scope <manifest>` fails on out-of-scope writes.
+- `cleanup --absorbed [--dry-run]` — one-pass sweep: absorbed lanes and clean detached
+  review checkouts are removed, everything else rejected per entry with a reason.
+- `slice status --task-ref task/<t>` — read-only derivation of each lane's state from Git
+  plus receipts (`writing|needs_fix|authorized_to_collect|absorbed`, seam-ready and dirty
+  flags, cross-lane write-set overlap); it stores nothing and decides nothing.
 
 - Declare each writer's file scope in one sentence, or as a hand-written scope manifest JSON
-  (`owned_paths`/`excluded_paths`/`shared_read_only_paths`) when lanes touch adjacent
-  surfaces. `orchestrate scope check` compares the actual diff against it, `collect --scope`
-  fails on out-of-scope writes, and `slice status` reports cross-lane write-set overlap from
-  the actual diffs. A conflict still means the split was poor; fix the plan rather than
-  adding machinery.
+  (`owned_paths`/`excluded_paths`/`shared_read_only_paths`) checked by `scope check` and
+  `collect --scope` when lanes touch adjacent surfaces. A conflict still means the split was
+  poor; fix the plan rather than adding machinery.
 - Same-file or same public interface/schema/fixture work is serial in one worktree.
-- Root collects in batches: several accepted lanes in one integration pass, merged serially
-  inside it. Shared foundation lands on integration first; dependent lanes start from that SHA.
-- A writer may stack its next lane on **its own** announced unreviewed SHA; a later finding
-  lands as a follow-up fix commit on top. Never rewrite an announced SHA that later work
-  stacks on.
+- Shared foundation lands on integration first; dependent lanes start from that SHA.
+- Never rewrite an announced SHA that later work stacks on; a finding lands as a follow-up
+  fix commit on top.
 - **Cross-identity work bases only on a seam-ready SHA**: the commit where the writer declared
   the frozen public seam stable (`Seam-Ready: true` trailer, or the slice's terminal validated
   SHA). Working-progress SHAs are visibility, never a base for another identity — the seam may
@@ -107,13 +103,12 @@ holder in the landing critical section. Deleting/recreating its flock file while
 admit concurrent holders.
 
 State-entering guards run manifest/compat preflight before lane/review creation, collection,
-packet/queue publication, or merge-slot claim. Status and cleanup/recovery remain available
-without a remembered session flag. This mechanizes compatibility instead of relying on root
-to remember `doctor`. A task-level version pin (`orchestrate pin set|status|migrate`, a plain
-JSON file under `.agent_state/orchestrate/`) makes a mid-task skill upgrade an explicit
-migration at a root-chosen boundary rather than a surprise preflight failure. Profile identity is the standing orders (normalized
-`developer_instructions`); retuning a profile's model or reasoning effort never fails
-preflight.
+packet/queue publication, or merge-slot claim; status and cleanup/recovery stay available
+without one. The guards also check the task-level version pin
+(`orchestrate pin set|status|migrate`, a plain JSON file under `.agent_state/orchestrate/`);
+adoption mechanics live in [Delegation and review](delegation-and-review.md). Profile
+identity is the standing orders (normalized `developer_instructions`); retuning a profile's
+model or reasoning effort never fails preflight.
 
 ```bash
 merge-slot := <repo-python> "$SKILL_DIR/scripts/merge_slot.py" --root <repo>

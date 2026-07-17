@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 73
+skill_version: 74
 ---
 
 # Orchestrate
@@ -46,10 +46,8 @@ Optimize **critical-path lead time**, not agent utilization. A milestone is non-
 checkpoint is a review barrier, and only a root-named risk creates one. The default posture
 is **throughput**: a writer keeps a coherent vertical slice, runs targeted gates only,
 self-reviews against its contract, and stacks its next slice on its own unreviewed SHA; a
-later finding lands as a follow-up fix, not a rewrite. Treat ordinary HTTP/codec/client
-wiring as a normal vertical; when a critical boundary appears, carve the critical core into
-its own small slice and keep the shell normal — critical identity attaches to the boundary
-surface and is not inherited by the plumbing that feeds it.
+later finding lands as a follow-up fix, not a rewrite. When a checkpoint qualifies as
+critical, carve the core into its own small slice and keep the shell normal.
 
 ## Context pointers
 

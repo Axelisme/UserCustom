@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 79
+orchestrate_compat: 80
 ---
 
 # Orchestrate — Codex runtime binding
@@ -35,28 +35,10 @@ alone is inert.
 
 ## Milestones
 
-Send one semantic envelope to root at every observable boundary — **for a writer, after every
-commit** (`outcome=working`); after each item or when the declared cadence passes; and one
-terminal envelope per item. Per-commit progress gives root real-time position without
-touching the assignee; **cross-identity pipelining bases only on a seam-ready SHA**
-([Git coordination](references/git-coordination.md)). The core is three fields; everything
-else is optional and validated only when present:
-
-```text
-item_id=<stable id>
-outcome=working | <role terminal outcome>
-evidence=<compact result or artifact pointer>
-subject_sha=<exact SHA when the outcome binds to one; required for
-            validated|review|pass|needs_fix>
-findings=<ids; required for needs_fix>
-```
-
-Run `orchestrate milestone lint` when machine validation is useful. Delivery is
-**at-least-once, deduplicated by `item_id`**: a milestone counts as delivered only when root
-acknowledged it or its receipt is otherwise observable. Until then, repeat the full envelope
-verbatim in the final response — a repeated envelope is cheap, a lost terminal envelope
-(findings, verdicts) is the one thing this protocol must never drop. The runtime completion
-event means only turn completion.
+The envelope schema, delivery rule, review-continuation rule, and liveness triggers live in
+[Delegation and review](references/delegation-and-review.md). Per-commit progress gives root
+real-time position without touching the assignee; **cross-identity pipelining bases only on
+a seam-ready SHA** ([Git coordination](references/git-coordination.md)).
 
 ### v2 transport — real-time messages
 
@@ -109,28 +91,9 @@ improvising per event.
   it discovers it at the item boundary.
 - On a consumer completion event, process milestone/stop first, inspect its spool once, then
   wake only if work remains and no unresolved stop exists.
-- Major findings, retract, correction, and stop are direct. Prefer the interrupt capability
-  for urgent invalidation, then continue the same identity with a corrective follow-up when
-  the generation allows it (v2); on v1, close and respawn with a recovery delta.
-- Pass may continue to a complete pre-authorized review target. Other reviewer outcomes stop
-  unless independent continuation was frozen. Hard-critical dependent work always waits.
-
-## Stalled work
-
-Liveness recovery has exactly three triggers: the runtime reports the agent `errored` or a
-model/capacity failure; the runtime declares its lease expired; or the dispatch-declared
-checkpoint budget passes with no milestone. Everything else is healthy: `running` with no
-tool/filesystem activity is model reasoning, a `wait_agent` timeout is normal silence to wait
-on again, and fixed 30/60-second status polling of a sub-agent is forbidden. There is no
-universal timer.
-
-When a trigger fires:
-
-1. read available runtime activity/waiting metadata first, without guessing from `ps`/Git;
-2. send one liveness ping asking for progress, blocker, or the nearest coherent checkpoint;
-3. if no response, interrupt and resume the same identity with a recovery delta; the worktree
-   remains evidence. Spawn a replacement only when identity continuity is unavailable or the
-   domain/independence requirement changed.
+- For an urgent invalidation prefer the interrupt capability, then continue the same
+  identity with a corrective follow-up when the generation allows it (v2); on v1, close and
+  respawn with a recovery delta — the worktree remains evidence.
 
 ## Runtime limits
 

@@ -30,10 +30,6 @@ PROFILE_COMPAT_PATTERN = re.compile(
     re.MULTILINE,
 )
 VERSION_PATTERN = re.compile(r"^skill_version:\s*(\d+)\s*$", re.MULTILINE)
-PHASE_ROW_PATTERN = re.compile(
-    r"^\|\s*(?P<phase>[^|]+?)\s*\|\s*"
-    r"(?P<status>pending|in_progress|blocked|completed)\s*\|"
-)
 MILESTONE_STATES = ("progress", "terminal")
 MILESTONE_NEXT = ("continue", "idle", "stop")
 MILESTONE_OUTCOMES = {
@@ -168,13 +164,6 @@ DISPATCH_SECTIONS = (
     "Non-goals",
     "Write scope",
     "Stop conditions",
-)
-# Optional headings: absence means none.
-DISPATCH_SECTIONS_OPTIONAL = (
-    "Dependencies",
-    "Exact literals",
-    "Oracles",
-    "Review policy",
 )
 
 
@@ -689,64 +678,6 @@ def command_diff(args: argparse.Namespace) -> dict[str, Any]:
         ]
         comparison["runtime"] = args.runtime
     return {"ok": True, **comparison}
-
-
-def command_identity(args: argparse.Namespace) -> dict[str, Any]:
-    skill_dir = Path(args.skill_dir).resolve()
-    profile = Path(args.profile).resolve()
-    try:
-        data = profile.read_bytes()
-    except OSError as exc:
-        raise OrchestrateError(f"cannot read profile {profile}: {exc}") from exc
-    text = data.decode("utf-8")
-    profile_hash = sha256_bytes(data)
-    same_identity: bool | None = None
-    if args.writer_agent_id is not None:
-        same_identity = args.agent_id == args.writer_agent_id
-    current_version = skill_version(skill_dir)
-    observed_compat = profile_compat(text)
-    profile_manifest_version: int | None = None
-    manifest_profiles = load_manifest(skill_dir, current_version)["profiles"]
-    try:
-        relative_profile = profile.relative_to(source_home(skill_dir)).as_posix()
-        expected_profile = manifest_profiles.get(relative_profile)
-        if expected_profile and expected_profile["sha256"] == profile_hash:
-            profile_manifest_version = current_version
-    except ValueError:
-        pass
-    if profile_manifest_version is None and any(
-        entry["sha256"] == profile_hash for entry in manifest_profiles.values()
-    ):
-        profile_manifest_version = current_version
-    different_identity = None if same_identity is None else not same_identity
-    requirement_checks: dict[str, bool] = {}
-    requirement_checks["profile_compat"] = observed_compat == current_version
-    requirement_checks["profile_release_match"] = (
-        profile_manifest_version == current_version
-    )
-    if args.require_different_identity:
-        requirement_checks["different_identity"] = different_identity is True
-    return {
-        "ok": True,
-        "requested_identity": args.requested,
-        "effective_identity": args.effective,
-        "agent_id": args.agent_id,
-        "profile": str(profile),
-        "profile_sha256": profile_hash,
-        "profile_manifest_version": profile_manifest_version,
-        "profile_compat": observed_compat,
-        "profile_compat_matches_current": observed_compat == current_version,
-        "standing_orders_sha256": normalized_sha256(
-            profile_standing_orders(text, profile.suffix)
-        ),
-        "writer_agent_id": args.writer_agent_id,
-        "different_identity": different_identity,
-        "park_capability": args.park_capability,
-        "requirement_checks": requirement_checks,
-        "requirements_satisfied": (
-            all(requirement_checks.values()) if requirement_checks else None
-        ),
-    }
 
 
 def read_json_object(path: str, *, label: str) -> tuple[dict[str, Any], bytes]:
@@ -1419,16 +1350,22 @@ def command_scope_check(args: argparse.Namespace) -> dict[str, Any]:
 
 def command_receipt_lint(args: argparse.Namespace) -> dict[str, Any]:
     payload, data = read_json_object(args.input, label="receipt")
-    if args.kind == "review":
+    kind = args.kind or payload.get("kind")
+    if kind not in RECEIPT_KINDS:
+        raise OrchestrateError(
+            f"receipt kind must be one of {'|'.join(RECEIPT_KINDS)};"
+            f" the file declares {payload.get('kind')!r}"
+        )
+    if kind == "review":
         errors = validate_review_receipt(payload)
-    elif args.kind == "gate":
+    elif kind == "gate":
         errors = validate_gate_receipt(payload)
     else:
         errors = validate_contract_adjustment_receipt(payload)
     return {
         "ok": not errors,
         "operation": "receipt-lint",
-        "kind": args.kind,
+        "kind": kind,
         "input_sha256": sha256_bytes(data),
         "errors": errors,
     }
@@ -3186,83 +3123,6 @@ def section_text(text: str, heading: str) -> str:
     return "\n".join(lines[start:end]).strip()
 
 
-def table_rows(section: str) -> list[list[str]]:
-    rows: list[list[str]] = []
-    for line in section.splitlines():
-        if not line.strip().startswith("|"):
-            continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        if not cells or all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
-            continue
-        rows.append(cells)
-    return rows[1:] if rows else []
-
-
-def command_status(args: argparse.Namespace) -> dict[str, Any]:
-    started = time.monotonic()
-    root = Path(args.root).resolve()
-    task_id = require_identifier(args.task_id, label="task-id")
-    plan = root / ".agent_state" / "plans" / task_id / "task_plan.md"
-    if not plan.is_file():
-        raise OrchestrateError(f"task plan not found: {plan}")
-    text = plan.read_text(encoding="utf-8")
-    phases = []
-    for line in section_text(text, "## Phase Status").splitlines():
-        match = PHASE_ROW_PATTERN.match(line)
-        if match:
-            phases.append(match.groupdict())
-    current = [
-        item["phase"] for item in phases if item["status"] in {"in_progress", "blocked"}
-    ]
-    remaining = [item["phase"] for item in phases if item["status"] == "pending"]
-    completed = [item["phase"] for item in phases if item["status"] == "completed"]
-    current_state = section_text(text, "## Current State")
-    packets = section_text(text, "## Active Domain Packets")
-    review_debt = [
-        line.split("Review debt:", 1)[1].strip()
-        for line in packets.splitlines()
-        if "Review debt:" in line and not line.rstrip().endswith(("none", "無"))
-    ]
-    next_gates = [
-        line.split("Next acceptance gate:", 1)[1].strip()
-        for line in packets.splitlines()
-        if "Next acceptance gate:" in line
-    ]
-    progress_path = plan.parent / "progress.md"
-    verification = []
-    if progress_path.is_file():
-        progress = progress_path.read_text(encoding="utf-8")
-        verification = table_rows(section_text(progress, "## Verification Log"))[-5:]
-    worktrees = []
-    for record in worktree_records(root):
-        path = Path(record["worktree"])
-        status = run_git(path, "status", "--porcelain", check=False)
-        worktrees.append(
-            {
-                "path": str(path),
-                "branch": str(record.get("branch", "")).removeprefix("refs/heads/")
-                or None,
-                "head": record.get("HEAD"),
-                "detached": "detached" in record,
-                "clean": status.returncode == 0 and not bool(status.stdout.strip()),
-            }
-        )
-    return {
-        "ok": True,
-        "task_id": task_id,
-        "current_phase": current,
-        "completed_phases": completed,
-        "remaining_phases": remaining,
-        "current_state": current_state,
-        "review_debt": review_debt,
-        "recent_verification": verification,
-        "next_safe_pause": next_gates,
-        "worktrees": worktrees,
-        "observed_at": datetime.now(UTC).isoformat(),
-        "duration_ms": round((time.monotonic() - started) * 1000),
-    }
-
-
 def add_root(command: argparse.ArgumentParser) -> None:
     command.add_argument("--root", required=True)
 
@@ -3286,22 +3146,6 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("new_version", type=int)
     diff.add_argument("--runtime", choices=("codex", "claude"))
     diff.set_defaults(handler=command_diff)
-
-    identity = commands.add_parser(
-        "identity", help="report explicit runtime/profile identity evidence"
-    )
-    identity.add_argument("--requested", required=True)
-    identity.add_argument("--effective", required=True)
-    identity.add_argument("--profile", required=True)
-    identity.add_argument("--agent-id", required=True)
-    identity.add_argument("--writer-agent-id")
-    identity.add_argument("--require-different-identity", action="store_true")
-    identity.add_argument(
-        "--park-capability",
-        choices=("slot-free", "slot-held", "unknown"),
-        default="unknown",
-    )
-    identity.set_defaults(handler=command_identity)
 
     packet = commands.add_parser(
         "packet", help="publish or inspect immutable direct-dispatch packets"
@@ -3357,7 +3201,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     receipt_commands = receipt.add_subparsers(dest="receipt_command", required=True)
     receipt_lint = receipt_commands.add_parser("lint")
-    receipt_lint.add_argument("--kind", choices=RECEIPT_KINDS, required=True)
+    receipt_lint.add_argument(
+        "--kind",
+        choices=RECEIPT_KINDS,
+        help="override; defaults to the receipt's own kind field",
+    )
     receipt_lint.add_argument(
         "--input", required=True, help="receipt JSON path, or '-' for stdin"
     )
@@ -3407,13 +3255,6 @@ def build_parser() -> argparse.ArgumentParser:
     queue_remove.add_argument("--consumer-ended-confirmed", action="store_true")
     queue_remove.add_argument("--reason")
     queue_remove.set_defaults(handler=command_queue_remove)
-
-    status = commands.add_parser(
-        "status", help="summarize plan plus observed Git topology"
-    )
-    add_root(status)
-    status.add_argument("--task-id", required=True)
-    status.set_defaults(handler=command_status)
 
     lane = commands.add_parser("lane", help="explicit lane lifecycle guards")
     lane_commands = lane.add_subparsers(dest="lane_command", required=True)

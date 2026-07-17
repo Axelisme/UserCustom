@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 79
+orchestrate_compat: 80
 ---
 
 # Delegation and review
@@ -37,12 +37,44 @@ coordination sub-agents or decide landing/finding deferral.
 
 ## Root contact discipline
 
-The four contact reasons in the SKILL dispatch row are a closed list. Short absence of tool
-or filesystem activity is model reasoning, not a stall signal; the runtime binding owns
-liveness recovery. Report to the user from the last milestone, read-only Git state, and the
-frozen dispatch description — commentary never touches the assignee. Dispatch a frozen
-bounded turn rather than drip-feeding a running identity; routine additions merge into one
-spool batch, and only major finding, correction, retract, or stop may interrupt directly.
+The four contact reasons in the SKILL dispatch row are a closed list. Report to the user
+from the last milestone, read-only Git state, and the frozen dispatch description —
+commentary never touches the assignee. Dispatch a frozen bounded turn rather than
+drip-feeding a running identity; routine additions merge into one spool batch, and only
+major finding, correction, retract, or stop may interrupt directly.
+
+## Milestones and liveness
+
+A milestone is one semantic envelope per observable boundary — for a writer, after every
+commit (`outcome=working`) — plus one terminal envelope per item. The core is three fields;
+the rest is optional and validated only when present (`orchestrate milestone lint`):
+
+```text
+item_id=<stable id>
+outcome=working | <role terminal outcome>
+evidence=<compact result or artifact pointer>
+subject_sha=<exact SHA; required for validated|review|pass|needs_fix>
+findings=<ids; required for needs_fix>
+```
+
+Delivery is **at-least-once, deduplicated by `item_id`**: a milestone counts as delivered
+only when root observably received it; until then the sender repeats the envelope verbatim
+in its final response — a duplicate is cheap, a lost terminal envelope (findings, verdicts)
+is the one thing this protocol must never drop. A runtime completion event means only that
+the turn ended. A reviewer `pass` may continue to a complete pre-authorized target; other
+outcomes stop unless independent continuation was frozen, and hard-critical dependent work
+always waits.
+
+Liveness recovery has exactly three triggers: the runtime reports the identity errored or a
+model/capacity failure; the runtime declares its lease/continuation lost; or the
+dispatch-declared checkpoint budget passes with no milestone. Everything else is healthy —
+absent tool/filesystem activity is model reasoning, a wait timeout is normal silence to wait
+on again, fixed-interval status polling of a sub-agent is forbidden, and there is no
+universal timer. When a trigger fires: read runtime activity metadata first (never guess
+from `ps`/Git); send one liveness ping asking for progress, blocker, or the nearest coherent
+checkpoint; without a response, interrupt and resume the same identity with a recovery
+delta, spawning a replacement only when continuity is unavailable or the
+domain/independence requirement changed.
 
 ## Evidence ownership
 

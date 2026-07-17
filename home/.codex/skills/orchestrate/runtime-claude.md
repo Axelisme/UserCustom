@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 79
+orchestrate_compat: 80
 ---
 
 # Orchestrate — Claude Code runtime binding
@@ -25,26 +25,11 @@ role, lease, generation, and adapter command.
 
 ## Milestones
 
-When `SendMessage` exists, send an envelope at every observable boundary — for a writer,
-after every commit (`state=progress`) — and one terminal envelope per item. Root measures
-its own wall-clock bound while waiting; the worker's cadence stays in discrete units.
-Cross-identity pipelining bases only on a seam-ready SHA
-([Git coordination](references/git-coordination.md)):
-
-```text
-event=milestone
-item_id=<stable id>
-state=progress|terminal
-outcome=<role-specific outcome>
-subject_sha=<exact SHA when applicable>
-evidence=<compact result or artifact pointer>
-findings=<ids or []>
-next=continue|idle|stop
-```
-
-Delivery is at-least-once, deduplicated by `item_id`: until root has observably received the
-terminal envelope, repeat it verbatim in the final response — a duplicate is cheap, lost
-findings are not. Runtime completion means only that the turn ended.
+The envelope schema, delivery rule, review-continuation rule, and liveness triggers live in
+[Delegation and review](references/delegation-and-review.md). When `SendMessage` exists,
+send each envelope through it at the boundary; root measures its own wall-clock bound while
+waiting, and the worker's cadence stays in discrete units. Cross-identity pipelining bases
+only on a seam-ready SHA ([Git coordination](references/git-coordination.md)).
 If `SendMessage` is absent, root must predeclare a one-item final-response fallback. When
 same-identity continuation is required and `SendMessage` is absent, return `needs_decision`;
 never respawn and call it continuity.
@@ -54,26 +39,7 @@ never respawn and call it continuity.
 - Spawn independent background agents together, then advance on completion events—not polls.
 - Ready direct work wakes an idle identity. Running spool consumers discover routine additions
   at item boundaries; root also inspects once on their completion event to avoid lost wakeup.
-- Major finding, retract, correction, and stop remain direct. Use `TaskStop` for urgent
-  invalidation, then continue the same identity when possible.
-- Pass may continue to a complete pre-authorized review target; other outcomes stop unless
-  independent continuation was frozen. Hard-critical dependent work waits.
-
-## Stalled work
-
-Liveness recovery has exactly three triggers: the runtime reports the task errored or a
-model/capacity failure; the runtime declares its lease/continuation lost; or the
-dispatch-declared checkpoint budget passes with no milestone. Everything else is healthy: a
-running task with no tool activity is model reasoning, a `Monitor`/wait timeout is normal
-silence to wait on again, and fixed-interval status polling of a sub-agent is forbidden.
-There is no universal timer.
-
-When a trigger fires:
-
-1. inspect runtime activity/waiting metadata when available, without Git/process polling;
-2. send one liveness ping asking for progress, blocker, or a coherent checkpoint;
-3. without a response, interrupt and resume the same identity with a recovery delta. Use a
-   replacement only for unavailable continuity, a changed domain, or required independence.
+- Use `TaskStop` for urgent invalidation, then continue the same identity when possible.
 
 ## Capability boundaries
 

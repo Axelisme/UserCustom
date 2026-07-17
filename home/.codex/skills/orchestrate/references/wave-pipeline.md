@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 79
+orchestrate_compat: 80
 ---
 
 # Wave pipeline

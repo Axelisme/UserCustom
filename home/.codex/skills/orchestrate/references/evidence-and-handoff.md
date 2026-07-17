@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 79
+orchestrate_compat: 80
 ---
 
 # Evidence and handoff
@@ -10,7 +10,7 @@ the root session must hand off.
 ## Gate evidence scope
 
 Gate evidence has one carrier: the hand-written **gate receipt**
-(`orchestrate receipt lint --kind gate`) — exact subject SHA, the exact command, one status
+(`orchestrate receipt lint`) — exact subject SHA, the exact command, one status
 (`passed | failed_current | failed_baseline | environment_blocked | unverified`), and an
 explicit `exclusions` list; scope (`affected|wave|task`), covered surface, baseline SHA, and
 invalidation notes go in `details` when they matter. Every deselected, skipped, or excluded

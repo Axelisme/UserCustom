@@ -1,7 +1,6 @@
 ---
 name: to-tickets
 description: Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges — published as an orchestrate lane/slice-queue plan in plan-directory repos, or to the configured tracker / local files elsewhere.
-disable-model-invocation: true
 ---
 
 # To Tickets

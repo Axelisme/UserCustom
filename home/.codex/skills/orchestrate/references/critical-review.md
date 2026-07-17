@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 76
+orchestrate_compat: 77
 ---
 
 # Critical review

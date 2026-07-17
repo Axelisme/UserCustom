@@ -1298,6 +1298,84 @@ def changed_paths_since_fork(root: Path, base: str, head: str) -> list[str]:
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
+def command_scope_amend(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    manifest, data = read_scope_manifest(args.manifest)
+    if not args.reason.strip():
+        raise OrchestrateError("--reason must be a non-empty explanation")
+    added_owned = list(dict.fromkeys(args.add_owned or []))
+    added_shared = list(dict.fromkeys(args.add_shared_read_only or []))
+    if not added_owned and not added_shared:
+        raise OrchestrateError(
+            "pass --add-owned and/or --add-shared-read-only; an amendment must"
+            " change something"
+        )
+    excluded = manifest.get("excluded_paths") or []
+    for pattern in added_owned:
+        if any(scope_pattern_match(pattern, rule) for rule in excluded) or (
+            pattern in excluded
+        ):
+            raise OrchestrateError(
+                f"pattern is excluded by the current manifest: {pattern!r};"
+                " overriding an exclusion needs a fresh root-written manifest,"
+                " not an amendment"
+            )
+    amended = dict(manifest)
+    amended["owned_paths"] = list(
+        dict.fromkeys([*manifest["owned_paths"], *added_owned])
+    )
+    if added_shared:
+        amended["shared_read_only_paths"] = list(
+            dict.fromkeys(
+                [*(manifest.get("shared_read_only_paths") or []), *added_shared]
+            )
+        )
+    details = dict(amended.get("details") or {})
+    amendments = list(details.get("amendments") or [])
+    amendments.append(
+        {
+            "previous_manifest_sha256": sha256_bytes(data),
+            "added_owned": added_owned,
+            "added_shared_read_only": added_shared,
+            "reason": args.reason,
+        }
+    )
+    details["amendments"] = amendments
+    amended["details"] = details
+    errors = validate_scope_manifest(amended)
+    if errors:
+        raise OrchestrateError("amended manifest is invalid: " + "; ".join(errors))
+    output = Path(args.output).resolve()
+    if output.exists():
+        raise OrchestrateError(
+            f"output already exists: {output}; amendments never overwrite —"
+            " each proposal is its own file"
+        )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    serialized = (
+        json.dumps(amended, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    )
+    output.write_text(serialized, encoding="utf-8")
+    return {
+        "ok": True,
+        "operation": "scope-amend",
+        "item_id": manifest["item_id"],
+        "previous_manifest_sha256": sha256_bytes(data),
+        "amended_manifest": str(output),
+        "amended_manifest_sha256": sha256_bytes(serialized.encode()),
+        "added_owned": added_owned,
+        "added_shared_read_only": added_shared,
+        "reason": args.reason,
+        "amendment_count": len(amendments),
+        "approval": (
+            "proposal only: root approves by passing the amended manifest to"
+            " scope check / collect --scope"
+        ),
+        "observed_at": datetime.now(UTC).isoformat(),
+        "duration_ms": round((time.monotonic() - started) * 1000),
+    }
+
+
 def command_scope_lint(args: argparse.Namespace) -> dict[str, Any]:
     payload, data = read_json_object(args.input, label="scope manifest")
     errors = validate_scope_manifest(payload)
@@ -3450,6 +3528,25 @@ def build_parser() -> argparse.ArgumentParser:
     scope_check.add_argument("--head", required=True)
     scope_check.add_argument("--manifest", required=True)
     scope_check.set_defaults(handler=command_scope_check)
+    scope_amend = scope_commands.add_parser("amend")
+    scope_amend.add_argument(
+        "--manifest", required=True, help="current scope manifest JSON path"
+    )
+    scope_amend.add_argument(
+        "--add-owned", action="append", help="owned path pattern to add (repeatable)"
+    )
+    scope_amend.add_argument(
+        "--add-shared-read-only",
+        action="append",
+        help="shared read-only path pattern to add (repeatable)",
+    )
+    scope_amend.add_argument(
+        "--reason", required=True, help="why the declared scope must grow"
+    )
+    scope_amend.add_argument(
+        "--output", required=True, help="amended manifest path (never overwrites)"
+    )
+    scope_amend.set_defaults(handler=command_scope_amend)
 
     sweep = commands.add_parser(
         "cleanup", help="sweep absorbed lanes and clean detached review worktrees"

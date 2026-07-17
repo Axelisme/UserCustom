@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 76
+orchestrate_compat: 77
 ---
 
 # Git coordination and landing
@@ -74,6 +74,11 @@ never infer a verdict or queue state; Git remains the only topology truth carrie
   (`owned_paths`/`excluded_paths`/`shared_read_only_paths`) checked by `scope check` and
   `collect --scope` when lanes touch adjacent surfaces. A conflict still means the split was
   poor; fix the plan rather than adding machinery.
+- A writer who must grow its scope (a missing test, a shared fixture) proposes
+  `scope amend --manifest <cur> --add-owned <pattern> --reason <why> --output <new>`: a new
+  manifest file carrying the amendment lineage (previous manifest SHA-256, patterns, reason).
+  Root approves by adopting the amended manifest in `scope check`/`collect --scope`;
+  excluded patterns are never amendable — an exclusion override needs a fresh root manifest.
 - Same-file or same public interface/schema/fixture work is serial in one worktree.
 - Shared foundation lands on integration first; dependent lanes start from that SHA.
 - Never rewrite an announced SHA that later work stacks on; a finding lands as a follow-up
@@ -84,8 +89,11 @@ never infer a verdict or queue state; Git remains the only topology truth carrie
   still move under them.
 - Never copy, create, or repair environments (`.venv`, `node_modules`, caches) in worktrees.
   Point the main checkout's toolchain at worktree sources; for Python, a common shape is
-  `PYTHONPATH=<worktree>/<pkg-root> <main>/.venv/bin/python -m pytest ...`. Follow repo docs
-  when they specify another recipe. Full-environment gates run in the main checkout.
+  `PYTHONPATH=<worktree>/<pkg-root> <main>/.venv/bin/python -m pytest ...`. For uv projects,
+  `UV_PROJECT_ENVIRONMENT=<main>/.venv uv run --no-sync ...` reuses the main environment
+  read-only; a plain `uv run` in a worktree builds a fresh `.venv` and re-resolves Git
+  dependencies — network and cache drift a lane must not depend on. Follow repo docs when
+  they specify another recipe. Full-environment gates run in the main checkout.
 - Resolve a merge conflict by recovering each side's intent from commits and the plan;
   preserve compatible intent, choose according to the frozen goal where incompatible, and
   record the trade-off. Conflict resolution never invents new behavior.

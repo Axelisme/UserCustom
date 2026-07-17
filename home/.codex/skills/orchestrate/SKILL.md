@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 76
+skill_version: 77
 ---
 
 # Orchestrate
@@ -48,6 +48,23 @@ is **throughput**: a writer keeps a coherent vertical slice, runs targeted gates
 self-reviews against its contract, and stacks its next slice on its own unreviewed SHA; a
 later finding lands as a follow-up fix, not a rewrite. When a checkpoint qualifies as
 critical, carve the core into its own small slice and keep the shell normal.
+
+## Rigor presets
+
+Every adapter is optional; a preset is the declared default for how much of that optional
+machinery this task invokes, chosen at contract freeze and escalated mid-task only by naming
+a new risk:
+
+- **light** — root-only or single writer: scope in one sentence, targeted gates, root
+  review, land under the declared policy. UI tweaks, docs, mechanical changes.
+- **standard** — multi-lane wave: scope manifests on adjacent surfaces, a gate receipt for
+  the final gate, review receipts only where root named a risk. The feature-work default.
+- **critical** — adds different-identity review with profile acknowledgment, dispatch-packet
+  or spool hashes, and per-checkpoint immutable review — only for surfaces passing the
+  critical two-feature test.
+
+Landing rules never scale down: the declared landing policy, merge slot, and tree-identity
+proof apply to every persistence landing regardless of preset.
 
 ## Context pointers
 

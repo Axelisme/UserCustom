@@ -1,13 +1,27 @@
 ---
-orchestrate_compat: 72
+orchestrate_compat: 73
 ---
 
 # Critical review
 
-Use this branch when failure can cross security/capability/authentication, hardware or process
-ownership, persistence/migration, or an atomic cutover. Ordinary HTTP composition, codec
-wiring, client adapters, tests, typing, formatting, documentation, and mechanical refactors stay
-normal unless their actual failure crosses one of those boundaries.
+Use this branch only when a checkpoint shows **both** features, named explicitly at freeze:
+
+1. **A dangerous state a follow-up commit cannot cheaply undo.** Before landing, repo work is
+   reversible by default; qualifying failures are external or cascading — verification
+   touches real hardware/process/device state, a capability or security exposure is live
+   while agents run, a persistence/migration step acts on real data, or a wrong seam would
+   invalidate the reviewed evidence of several dependent lanes at once.
+2. **Named dependent work about to stack on the invariant** before a cumulative review would
+   close it. If root cannot name the specific slice being held, the barrier protects nothing.
+
+Touching a critical-sounding domain — lifecycle, ownership, persistence code,
+security-adjacent plumbing — never qualifies by itself, and accumulated findings that land as
+batched follow-up fixes are normally cheaper than serializing the pipeline. A checkpoint
+failing either feature is at most a **named review risk**: the same independent review depth,
+no barrier, work runs ahead. Ordinary HTTP composition, codec wiring, client adapters, tests,
+typing, formatting, documentation, and mechanical refactors stay normal. At task close,
+recalibrate: a critical checkpoint whose findings would all have landed as follow-up fixes
+proved the review's value, not the barrier's.
 
 **Carve the critical core out of its normal shell.** Critical identity attaches to the
 boundary surface itself — the admission gate, the capability mint, the cutover switch — and is
@@ -23,7 +37,8 @@ attributes, closures, bound owners, or nested object graphs are observable.
 
 The writer owns permanent regression tests and targeted acceptance. Progress inside the slice
 is non-blocking; the writer stops when the coherent critical checkpoint is an exact immutable
-SHA ready for review.
+SHA ready for review. The barrier holds only the dependent work: while the review runs, the
+writer runs ahead on an independent slice rather than idling.
 
 ## Try to disprove it
 

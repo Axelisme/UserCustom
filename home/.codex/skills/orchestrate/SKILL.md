@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 72
+skill_version: 73
 ---
 
 # Orchestrate
@@ -40,7 +40,7 @@ user authority.
 | **root-only** | Root can retire the uncertainty more cheaply than a handoff. | inspect/change → targeted evidence |
 | **single writer** | One coherent surface dominates and an independent identity adds little. | freeze → write one coherent vertical slice → targeted gates → root review → integrate |
 | **normal wave** | Two or more ready slices are genuinely independent, or a known chain can be stacked writer-ahead. | planner keeps the ready chain stocked → root freezes seams → writers produce validated exact SHAs and run ahead on their own work → root spot-checks and batch-collects → cumulative review only where root named a risk → final integrated gate |
-| **critical checkpoint** | The **critical core** — an admission gate, capability mint, hardware/process ownership change, persistence cutover — where failure is costly. | freeze → writer checkpoint → different-identity adversarial review → finding returns to the writer → focused closure or refreshed exact-state review → release dependent work |
+| **critical checkpoint** | The **critical core** — only where a wrong intermediate state cannot be undone by a follow-up commit **and** named dependent work is about to stack on it; a domain match alone never qualifies. | freeze → writer checkpoint → different-identity adversarial review → finding returns to the writer → focused closure or refreshed exact-state review → release dependent work |
 
 Optimize **critical-path lead time**, not agent utilization. A milestone is non-blocking; a
 checkpoint is a review barrier, and only a root-named risk creates one. The default posture

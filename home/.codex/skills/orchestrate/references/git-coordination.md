@@ -1,5 +1,5 @@
 ---
-orchestrate_compat: 72
+orchestrate_compat: 73
 ---
 
 # Git coordination and landing

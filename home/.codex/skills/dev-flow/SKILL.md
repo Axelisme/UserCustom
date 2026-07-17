@@ -1,12 +1,12 @@
 ---
 name: dev-flow
-description: Route a heavy, multi-session development effort through the pipeline — wayfinder → to-spec → to-tickets → orchestrate → simplify. Use only when the work is too large for one session or needs a frozen contract before implementation; smaller tasks never enter this pipeline.
+description: Route a heavy, multi-session development effort through the pipeline — wayfinder → to-spec → to-tickets → orchestrate → acceptance (code-review + simplify) → landing → close-out. Use only when the work is too large for one session or needs a frozen contract before implementation; smaller tasks never enter this pipeline.
 ---
 
 # Dev Flow
 
-重型長時任務的管線路線圖。本 skill 只導航，不執行；交接時說明目前處於哪一站、
-以及進入下一站的理由。
+重型長時任務的管線路線圖。本 skill 只導航，不執行（收尾清單除外）；交接時說明
+目前處於哪一站、以及進入下一站的理由。
 
 **不適用**：單 session 裝得下的工作不進這條管線——直接做，或按各 skill 自己的
 description 判斷取用。
@@ -18,16 +18,36 @@ description 判斷取用。
   └─ wayfinder ──→ 建 decision-ticket map，一次解一票，直到路徑清楚
        └─ to-spec ──→ 把已收斂的共識凍結成 contract
             └─ to-tickets ──→ tracer-bullet 垂直切片＋blocking edges
-                 └─ orchestrate ──→ 依 shape 派工實作、review、landing
-                      └─ simplify ──→ 收尾品質清理（只改品質不找 bug）
+                 └─ orchestrate ──→ 依 shape 派工實作、slice 級 review、整合
+                      └─ 驗收（landing 前）──→ code-review：effort 級雙軸 audit，
+                      │     Spec 軸對 frozen contract、也對照 wayfinder 的
+                      │     destination；＋ simplify：品質清理。兩者產生的改動
+                      │     跟最終 gate 一起重驗，不另走一輪管線
+                      └─ landing ──→ 依 orchestrate 的 landing 流程、repo policy
+                           │     與當下授權
+                           └─ 收尾 ──→ 本 skill 內建，見下節
 ```
 
 各站的觸發條件、內部流程與產物落點由各 skill 自述。其他 skill（grilling、research、
-prototype、domain-modeling、codebase-design、tdd、diagnosing-bugs、code-review…）
-是按需工具：由各站或 agent 依其 description 自行取用，不是管線站點，本圖不列。
+prototype、domain-modeling、codebase-design、tdd、diagnosing-bugs…）是按需工具：
+由各站或 agent 依其 description 自行取用，不是管線站點，本圖不列。
 
 進入會展開長流程或凍結 contract 的站（wayfinder、to-spec）前，先用一句話向 user
 確認再繼續；to-tickets 接在剛核准的 spec 後屬自然接續，不需再問。
+
+## Effort 收尾（landing 後）
+
+effort 級的關閉動作，orchestrate 只關自己的 task，不關這些：
+
+- **關閉 wayfinder map**：殘餘 frontier／fog 逐項處置——已被 destination 覆蓋的
+  close、仍有價值但出了本 effort 的移入 candidate-backlog，map 不留懸置票。
+- **詞彙與決策落檔**：途中沉澱但尚未寫入的 glossary 條目／ADR 補寫
+  （用 domain-modeling 的格式與 ADR 三條件）。
+- **candidate-backlog 掃尾**：實作中發現但出界的東西進 inbox，不擴 scope 也不丟失。
+- **plan directory 歸檔**：task narrative 收尾（planning-with-files），
+  spec／map 保持指向最終落地 SHA 的狀態。
+- **向 user 回報 effort 級總結**：destination 達成狀況、留下的 backlog、
+  被推翻或調整過的決策。
 
 ## 粒度交接：wayfinder 停在哪、planner 從哪接手
 

@@ -46,7 +46,8 @@ with a recovery delta; replace only when continuity is unavailable.
 Depth scales with risk: mechanical → none or a root spot-check; normal internal behavior →
 writer self-review plus root spot-check; root-named risk → cumulative independent review;
 critical boundary → the barrier below. Two consecutive reviews yielding only minor findings
-drop the next wave's default depth one level; any major finding restores it.
+**on the same risk surface** drop that surface's next default depth one level — a new
+domain or risk axis starts at its own default; any major finding restores it.
 
 A reviewer inspects source first, then runs thin probes from a **detached checkout at the
 exact target SHA** (`review checkout`; a live-writer tree voids the evidence). Challenge
@@ -58,7 +59,12 @@ Root decides deferral. Findings route in three tiers: a **confirmed major** is s
 mid-review the moment it is confirmed — root routes it to the original writer at once
 while the reviewer keeps scanning independent surfaces; **ordinary findings** accumulate
 into the one terminal milestone; a **contract-overturning** finding stops the review and
-holds every axis that depends on the broken invariant. Waiting for a terminal exact SHA
+holds every axis that depends on the broken invariant. Root delivers accumulated ordinary
+findings to the assignee at that assignee's next declared milestone (commit or item
+envelope) — replying at a declared boundary is harvest, not an unsolicited
+running-assignee contact. A **public-contract correction** means the frozen seam itself
+changed — interface, acceptance, write scope, or base; anything that leaves the frozen
+contract intact is a finding or advice and waits for a milestone boundary. Waiting for a terminal exact SHA
 before reviewing is necessary (a moving tree voids evidence); waiting for a review
 verdict before stacking the successor, or for the whole review to end before fixing a
 confirmed major, is waste — review is a shadow station, and only a critical checkpoint
@@ -111,6 +117,11 @@ surface, and keep unexplained risk blocking.
   **Cross-identity work bases only on a seam-ready SHA** (the writer's declared-stable
   commit, `Seam-Ready: true` trailer, or the slice's terminal validated SHA) — never an
   announced SHA that later work already stacks on; findings land as follow-up commits.
+- Commit trailers carry attribution across run-ahead: every slice commit names
+  `Item: <id>`; a finding fix adds `Closes-Finding: <id>`, even when it lands on a
+  successor's branch. Re-review binds to the commits carrying `Closes-Finding`, not the
+  whole branch, so a successor's terminal SHA may include predecessor corrections without
+  blurring whose closure they are.
 - Never create or repair environments in worktrees; point the main checkout's toolchain at
   worktree sources (e.g. `UV_PROJECT_ENVIRONMENT=<main>/.venv uv run --no-sync …`, or
   `PYTHONPATH=<worktree>/<pkg> <main>/.venv/bin/python -m pytest …`).
@@ -159,7 +170,9 @@ Pin the task at start with `orchestrate pin set`; the state-entering commands (`
 create`, `review checkout`, `collect`, `land finish`) fail fast if the installed skill
 moves mid-task, while maintenance commands stay unguarded so a stale pin never blocks
 closing down. Adopt a new version at a safe boundary with `orchestrate pin migrate`, which
-repins and reports the changed documents so root re-reads exactly those. Sub-agents never
+repins and reports the changed documents so root re-reads exactly those; removed
+documents are listed separately (`acknowledge_removed`) — acknowledge they are gone, do
+not hunt for them. Sub-agents never
 load orchestrate; root sends only the effective delta. Releases are cut only with the
 one-shot `orchestrate release` (version bump + manifest + doctor succeed or roll back
 together); rerunning it after an abort finishes or confirms the release

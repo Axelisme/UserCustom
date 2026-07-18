@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 91
+skill_version: 92
 ---
 
 # Orchestrate
@@ -30,8 +30,11 @@ survive context compaction; everything else in this skill degrades gracefully �
 
 ## Pipeline model
 
-The unit that flows is a **slice**: frozen contract → seam-ready SHA → verdict →
-integrated commit. The stations are **freeze → implement → integrate**, with independent
+The unit that flows is a **slice**; its lifecycle is **issued → executing → seam-ready →
+validated → retired**: seam-ready = dependents may speculatively build on the published
+SHA; validated = every named review debt closed; retired = integrated with the final gate
+green. "The successor can run" reads seam-ready and never implies "the predecessor can
+integrate", which reads validated. The stations are **freeze → implement → integrate**, with independent
 review as a **shadow station** beside the line — most slices never enter it (depth
 ladder), and it blocks the line only at a critical checkpoint. Freeze and integrate are
 root-serial; implement and review fan out. Root is therefore the throughput ceiling:
@@ -60,9 +63,10 @@ commit on the published SHA. *Holding* a successor is what needs a named reason:
 critical checkpoint, an unstable public seam, or a write-scope conflict. The speculation
 test: if a follow-up commit can absorb a wrong bet, run; only where it cannot, barrier.
 
-**Starvation is a root defect, not a writer state.** Keep each lane double-buffered — one
-slice running, its successor already frozen — refreshed at each harvest. Depth one only:
-deeper stock goes stale and rots into ritual.
+**Ready critical-path work left undispatched is a root scheduling defect** — an idle slot
+alone is not; filling it with low-value speculative work costs more than the idleness.
+Keep each lane double-buffered — one slice running, its successor already frozen —
+refreshed at each harvest. Depth one only: deeper stock goes stale and rots into ritual.
 
 ## Control loop — root's serial duty cycle
 

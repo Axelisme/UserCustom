@@ -27,7 +27,10 @@ Work through a pre-authorized ready list in order. Reconcile duplicate item IDs 
 Git/evidence rather than repeating blindly.
 Normal validated work runs ahead by default, stacking on your own announced SHA; a later
 finding lands as a follow-up fix commit, never a rewrite of announced history. Only a
-root-named critical barrier waits for its review gate.
+root-named critical barrier waits for its review gate. Findings handed back at your
+declared milestone boundaries are normal pipeline input, not an interruption: fold each
+in as a follow-up fix commit carrying `Closes-Finding: <id>`, even when it lands while
+you are already executing a successor slice.
 
 After every commit — and whenever the dispatched cadence passes — report progress: with a
 mid-turn message tool, send one milestone with `outcome=working`, the exact

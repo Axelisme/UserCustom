@@ -250,6 +250,7 @@ def write_release_manifest(
             },
             "changed_profiles": comparison["changed_profiles"],
             "must_reread": comparison["must_reread"],
+            "acknowledge_removed": comparison["acknowledge_removed"],
         }
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
@@ -526,6 +527,7 @@ def require_release_preflight(
 def compare_manifests(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     documents: list[dict[str, Any]] = []
     must_reread: list[str] = []
+    acknowledge_removed: list[str] = []
     old_docs = old["documents"]
     new_docs = new["documents"]
     for name in sorted(set(old_docs) | set(new_docs)):
@@ -533,6 +535,9 @@ def compare_manifests(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any
         after = new_docs.get(name)
         if before == after:
             continue
+        change = (
+            "added" if before is None else "removed" if after is None else "modified"
+        )
         before_sections = before.get("sections", {}) if before else {}
         after_sections = after.get("sections", {}) if after else {}
         changed_sections = [
@@ -541,18 +546,17 @@ def compare_manifests(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any
             if before_sections.get(section) != after_sections.get(section)
         ]
         semantic = bool(changed_sections)
-        if semantic and name.endswith(".md"):
+        reread = change != "removed" and semantic and name.endswith(".md")
+        if reread:
             must_reread.append(name)
+        elif change == "removed" and name.endswith(".md"):
+            acknowledge_removed.append(name)
         documents.append(
             {
                 "path": name,
-                "change": "added"
-                if before is None
-                else "removed"
-                if after is None
-                else "modified",
+                "change": change,
                 "changed_sections": changed_sections,
-                "must_reread": semantic and name.endswith(".md"),
+                "must_reread": reread,
             }
         )
     changed_profiles = [
@@ -567,6 +571,7 @@ def compare_manifests(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any
         "changed_documents": documents,
         "changed_profiles": changed_profiles,
         "must_reread": must_reread,
+        "acknowledge_removed": acknowledge_removed,
     }
 
 
@@ -587,6 +592,11 @@ def command_diff(args: argparse.Namespace) -> dict[str, Any]:
         comparison["must_reread"] = [
             path
             for path in comparison["must_reread"]
+            if not path.startswith("runtime-") or path == runtime_document
+        ]
+        comparison["acknowledge_removed"] = [
+            path
+            for path in comparison["acknowledge_removed"]
             if not path.startswith("runtime-") or path == runtime_document
         ]
         comparison["changed_profiles"] = [

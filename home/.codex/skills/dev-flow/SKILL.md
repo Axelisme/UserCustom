@@ -8,6 +8,10 @@ description: Route a heavy, multi-session development effort through the pipelin
 重型長時任務的管線路線圖。本 skill 只導航，不執行（收尾清單除外）；交接時說明
 目前處於哪一站、以及進入下一站的理由。
 
+兩層管線各自完整：dev-flow 是**外層串行管線**（站點＝skill，一次一站）；orchestrate
+站內部自帶**併發管線**的心智模型（lane 空間並行、slice pipeline 時間並行、hazard 判斷、
+wave 間檢討），由該 skill 自述，本層不重複。
+
 **不適用**：單 session 裝得下的工作不進這條管線——直接做，或按各 skill 自己的
 description 判斷取用。
 

@@ -67,3 +67,7 @@ effort 級的關閉動作，orchestrate 只關自己的 task，不關這些：
 下限：後續階段永遠不需要重開決策（重開＝contract-level 中斷，最貴）。上限：可推導的
 一律不寫（早期寫死的程式碼細節到執行時是腐爛的假權威）。一句話：**具體到「不需要再問
 用戶就能動工」為止，然後停手。**
+
+Ticket 邊界屬 planner 層可推導物，不是 frozen contract 的一部分：執行期發現某票超出
+single-context，直接拆票、更新 DAG 與 durable plan 後繼續——frozen 的是 contract 與
+acceptance，不是最初寫下的 ticket 外形。

@@ -2,7 +2,7 @@
 name: planning-with-files
 description: 以 explicit task-id 管理 repo-local durable task narrative；只在跨回合、critical或資訊量確有需要時使用。
 user-invocable: true
-skill_version: 6
+skill_version: 7
 ---
 
 # Planning with Files
@@ -74,6 +74,9 @@ pointer回到目前生效的decision，不可自行選擇較舊敘述。
 - 發生需要避免重試的錯誤；
 - validation/review得到會影響下一步的結果；
 - handoff、blocked、resume或task closure。
+
+Current State／packet 除進度外也承載**active hypotheses、unverified claims、負面約束（不做什麼＋為什麼）**
+——這些是 context 壓縮最容易失真的內容，必須放在永不壓縮的載體裡，不能只留在對話。
 
 decision被取代時，在唯一decision ledger把舊項標成`superseded`並指向replacement；不能只新增一段相反文字。
 checkpoint／handoff時同時清除`Current State`與packet內已失效的workflow語彙，不必等Phase數量達到壓縮門檻。

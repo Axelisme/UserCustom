@@ -28,6 +28,8 @@ User 主動觸發,表示把「當前交付的這份任務/專案」的實作裁�
 - 戰術取捨:演算法、資料結構、命名、檔案佈局、patch vs refactor、test 策略細節。
 - **架構 / ADR / 跨模組設計的調整** —— 只要它「可逆」:能在實作後用局部重構切換到別的
   方案。可逆的架構決定由你做,**不算**重大分歧。
+- **skill 中間產物的調整** —— ticket 邊界、wave 規劃、DAG 形狀這類施工策略是可逆執行
+  戰術,不是 frozen contract;發現不合身(如某票超出 single-context)就直接改,不必問。
 - `git commit`(見下方紀律:gate 通過才 commit)、建立或 checkout 新的 git branch。
 - 刪除可確認是 agent 自己為當前任務建立的臨時 / worktree git branch。
 

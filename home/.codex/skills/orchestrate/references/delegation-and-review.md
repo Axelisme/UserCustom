@@ -200,12 +200,14 @@ target SHA; a live-writer checkout voids evidence. Challenge the oracle, ownersh
 scope, and dangerous failures—green tests prove behavior, not that the seam is correct.
 
 Report findings with severity, path, observable behavior, evidence, and propagation shape,
-and classify each into one of four dispositions: **blocking contract violation** (gates this
-slice), **ticket-local hardening** (fix within this ticket's scope), **future-ticket
-concern** (routes to the plan/DAG), or **candidate backlog** (out of effort scope). Only the
-first blocks; the last two never expand the current ticket — this keeps foundation slices
-from absorbing downstream scope. Root decides deferral. A confirmed major finding (P0/P1, contract invalidation, retract class,
-or dangerous intermediate) is reported immediately so root can hold dependent work; the
+plus a proposed disposition: **contract violation** (the only one that proposes `needs_fix`
+and gates the slice), **slice-local hardening** (rides the verdict; the fix returns to the
+writer as a follow-up), **future-slice concern** (routes to the task plan), or **candidate
+backlog** (out of task scope; record in the repo's backlog inbox). Dispositions are routing
+proposals, not deferral decisions — they exist so foundation slices do not absorb downstream
+scope, and severity stays orthogonal to them. Root decides deferral. A confirmed major finding (P0/P1, contract invalidation, retract class,
+or dangerous intermediate) is reported immediately, whatever its disposition, so root can
+hold dependent work; the
 reviewer keeps scanning the surfaces independent of the broken invariant and ends the turn
 early only when the contract is overturned or the remaining scope depends on it. Ordinary
 findings stay in the target's one terminal milestone.

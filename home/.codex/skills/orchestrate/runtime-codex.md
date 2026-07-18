@@ -3,7 +3,8 @@
 Session-injected collaboration tool definitions are authoritative. Codex ships **two
 sub-agent generations** and either may be injected; identify the generation at session start
 from the injected tool names, note the resolved capability matrix once in root context, and
-use it consistently:
+use it consistently (re-derive it from the injected tool names after a context compaction —
+the matrix lives nowhere durable):
 
 - **v1** (`multi_agent_v1__*`: `spawn_agent` with `agent_type`, `send_input`,
   `resume_agent`, `close_agent`, `wait_agent`; no `list_agents`): spawn **loads the named

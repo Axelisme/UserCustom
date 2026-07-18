@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 83
+skill_version: 84
 ---
 
 # Orchestrate
@@ -18,16 +18,17 @@ Ground every irreversible, durable, external, or high-risk consequence in proven
 current user authority. When that basis is insufficient, reduce the move, add independent
 evidence, or return the decision.
 Judge risk by reversibility, blast radius, boundary crossing, and evidence independence.
-Evidence is valid only for the actual tree it inspected; a green result carried across a
-context compaction or session boundary is reported-not-revalidated until re-run on the
-current tree. A persistence landing requires current
+Evidence is valid only for the actual tree it inspected; a green result whose only carrier
+is a compaction summary — no exact-SHA receipt or durable record — is
+reported-not-revalidated until re-run or re-anchored to such a record. Receipt-bound
+evidence keeps its normal surface-scoped validity across boundaries. A persistence landing requires current
 user authority.
 
 ## Root control loop
 
 | step | action | completion criterion |
 |---|---|---|
-| **1. Observe** | Read repo instructions and relevant decisions; inspect Git, worktrees, user dirt, current narrative, and existing evidence. A context compaction re-triggers this step: the summary narrative is hypothesis, not authority — re-read the durable plan, relevant ADRs, and Git state, and treat already-triggered skill rules (this SKILL and any fired context pointers) as unread — the summary keeps the fact of having read them while dropping their content. | The authoritative tree, user-owned changes, live task state, and largest unresolved uncertainty are named. |
+| **1. Observe** | Read repo instructions and relevant decisions; inspect Git, worktrees, user dirt, current narrative, and existing evidence. A context compaction re-triggers this step: the summary narrative is hypothesis, not authority — re-read the durable plan, relevant ADRs, and Git state, and treat already-triggered skill rules (this SKILL and the context pointers whose branches are live for the work in flight) as unread — the summary keeps the fact of having read them while dropping their content. | The authoritative tree, user-owned changes, live task state, and largest unresolved uncertainty are named. |
 | **2. Freeze** | Freeze only the public seam of the next bounded outcome: objective, public contract, acceptance, non-goals, write scope, exact base, landing policy, and any named review risk. Internal design is writer discretion, recorded after the fact. | The assignee can act without guessing the public contract, ownership, or acceptance; everything inside the seam is theirs to decide. |
 | **3. Shape** | Choose the cheapest pipeline that retires the uncertainty; when freeze+dispatch+harvest overhead would exceed the work itself, root does the work directly. Serialize shared files, contracts, schemas, fixtures, and authority. | Every ready item has an owner, base, scope, acceptance, dependency, and any named review barrier; conflicting authority is serialized. |
 | **4. Dispatch** | Issue only ready, self-contained work with a bounded lease and explicit discretion/stop boundary. After dispatch, root contacts a running assignee only for a public-contract correction, confirmed major finding, user override/stop, or a fired liveness trigger — never for progress or status. | The consumer can act without chat history and knows when it may run ahead or must stop. |
@@ -42,7 +43,7 @@ user authority.
 | **root-only** | Root can retire the uncertainty more cheaply than a handoff. | inspect/change → targeted evidence |
 | **single writer** | One coherent surface dominates and an independent identity adds little. | freeze → write one coherent vertical slice → targeted gates → root review → integrate |
 | **normal wave** | Two or more ready slices are genuinely independent, or a known chain can be stacked writer-ahead. | planner keeps the ready chain stocked → root freezes seams → writers produce validated exact SHAs and run ahead on their own work → root spot-checks and batch-collects → cumulative review only where root named a risk → final integrated gate |
-| **critical checkpoint** | The **critical core** — only where a wrong intermediate state cannot be undone by a follow-up commit **and** named dependent work is about to stack on it; a domain match alone never qualifies. The typical qualifying case is a foundation/contract-hub slice (canonical protocol, shared adapter seam) that multiple lanes are about to stack on — review it before the fan-out, not after. | freeze → writer checkpoint → different-identity adversarial review → finding returns to the writer → focused closure or refreshed exact-state review → release dependent work |
+| **critical checkpoint** | The **critical core** — only where a wrong intermediate state cannot be undone by a follow-up commit **and** named dependent work is about to stack on it; a domain match alone never qualifies. A shared-foundation slice many lanes are about to stack on is usually a **named review risk** reviewed before the fan-out — it becomes a critical checkpoint only when it also passes this test. | freeze → writer checkpoint → different-identity adversarial review → finding returns to the writer → focused closure or refreshed exact-state review → release dependent work |
 
 Optimize **critical-path lead time**, not agent utilization. A milestone is non-blocking; a
 checkpoint is a review barrier, and only a root-named risk creates one. The default posture

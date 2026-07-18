@@ -97,7 +97,16 @@ surface, and keep unexplained risk blocking.
   create`, `review checkout`, `collect`, `cleanup`, `slice status`) wrap the same
   operations with exact-input checks and idempotent rerun reports.
 - Declare each writer's file scope in a sentence; same-file or same-interface work is
-  serial. A scope conflict means the split was poor — fix the plan, not the machinery.
+  serial. A scope conflict means the split was poor — prefer splitting the seam
+  (prefactor) so scopes become disjoint; fix the plan, not the machinery. Sole overlap
+  exception: root may declare a file **append-only shared** (registration lists, import
+  blocks, changelogs — no semantic coupling between entries); writers may touch it
+  concurrently and the textual merge is trusted.
+- While two lanes run, a zero-cost `git merge-tree <merge-base> <laneA> <laneB>` dry run
+  surfaces textual collisions before either terminals — an early warning to correct a
+  contract, never a license to overlap. A clean result proves nothing semantic: interface
+  conflicts live across files where Git cannot see them, which is why write scopes are
+  declared in prose, not derived from paths.
 - Shared foundation lands on integration first; dependent lanes start from that SHA.
   **Cross-identity work bases only on a seam-ready SHA** (the writer's declared-stable
   commit, `Seam-Ready: true` trailer, or the slice's terminal validated SHA) — never an

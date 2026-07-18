@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 89
+skill_version: 90
 ---
 
 # Orchestrate
@@ -45,8 +45,10 @@ Two axes of parallelism:
 
 A stall is legitimate only as one of three hazards:
 
-- **Structural** — two slices need the same file/interface: serialize, and read it as a
-  poor cut; fix the plan, not the machinery.
+- **Structural** — two slices need the same file/interface: first try splitting the seam
+  so the scopes become disjoint (prefactor), else serialize — and read it as a poor cut;
+  fix the plan, not the machinery. Sole overlap exception: a root-declared append-only
+  shared file, where the textual merge is trusted.
 - **Data** — a successor needs a predecessor's seam: forward on the **seam-ready SHA**; a
   review verdict is never the wait condition.
 - **Control** — a finding overturns the contract: flush only the work stacked on the

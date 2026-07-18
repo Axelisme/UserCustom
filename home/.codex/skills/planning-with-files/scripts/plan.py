@@ -484,11 +484,6 @@ def compact_task_plan(text: str) -> tuple[str, list[HistorySegment], int]:
         )
         if not needs_compaction:
             break
-        if len(blocks) <= PHASE_COMPACTION_BATCH:
-            raise PlanError(
-                "task_plan exceeds the live-file budget without a safe completed phase batch"
-            )
-
         phase_table = markdown_table(
             lines,
             "## Phase Status",
@@ -497,14 +492,20 @@ def compact_task_plan(text: str) -> tuple[str, list[HistorySegment], int]:
         phase_rows = {row.cells[0]: row for row in phase_table.rows}
         if len(phase_rows) != len(phase_table.rows):
             raise PlanError("Phase Status contains duplicate Phase rows")
-        candidates = blocks[:PHASE_COMPACTION_BATCH]
-        if any(
-            block.phase not in phase_rows
-            or phase_rows[block.phase].cells[1] != "completed"
-            for block in candidates
-        ):
+        # Sealed prefix: only the contiguous run of completed phases at the top
+        # may move to history, capped per batch.
+        candidates = []
+        for block in blocks:
+            row = phase_rows.get(block.phase)
+            if row is None or row.cells[1] != "completed":
+                break
+            candidates.append(block)
+            if len(candidates) == PHASE_COMPACTION_BATCH:
+                break
+        if not candidates:
             raise PlanError(
-                "oldest five phase notes must be completed before compaction"
+                "task_plan exceeds the live-file budget without an archivable"
+                " completed phase prefix"
             )
 
         summary_table = markdown_table(

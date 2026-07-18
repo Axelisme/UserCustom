@@ -100,9 +100,11 @@ authority來源，不得自行宣告validation、review或merge authority。
 
 共同budget是每個hot檔與每個immutable history segment最多16 KiB：
 
-- `task_plan.md`詳細Phase超過10個或超過budget時，每批只搬最舊5個；五個都必須在Phase table標成
-  `completed`，且每個`### Phase N — Topic`都有唯一非空`Conclusion / Commit`。Current State、active
-  decision、domain packet、open review debt永不壓縮；live檔留下Historical Phase Summary列。
+- `task_plan.md`詳細Phase超過10個或超過budget時，搬移最舊的**連續completed前綴**（每批最多5個，
+  1個也可搬——不要求湊滿5個）；被搬的Phase必須在Phase table標成`completed`，且每個
+  `### Phase N — Topic`都有唯一非空`Conclusion / Commit`。最舊Phase尚未completed而又超budget才
+  Fast Fail。Current State、active decision、domain packet、open review debt永不壓縮；
+  live檔留下Historical Phase Summary列。
   只靠這些永不壓縮內容就超過budget時Fast Fail（與`findings.md`同規則），先在boundary清除stale項再重試。
 - `progress.md`超過40筆任一table row或budget時，搬移舊prefix並各保留最近20筆。一般writer仍只append；
   compactor是唯一可搬移sealed prefix的角色。Current State不在此檔，因此history不取得authority。

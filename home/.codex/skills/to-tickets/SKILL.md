@@ -45,7 +45,7 @@ Present the proposed breakdown as a numbered list. For each ticket, show:
 - **Title**: short descriptive name
 - **Blocked by**: which other tickets (if any) must complete first
 - **What it delivers**: the end-to-end behaviour this ticket makes work
-- **Acceptance criteria**: the checks that will gate the ticket done — these freeze at publish, so they must be approved here
+- **Acceptance criteria**: the checks that will gate the ticket done — these freeze at publish, so they must be approved here. Any automated gate freezes as a **verbatim command** (exact command line, workdir, environment) — never a described intent like "affected pyright" left for the implementer to interpret
 
 Ask the user:
 

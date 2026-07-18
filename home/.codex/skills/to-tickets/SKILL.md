@@ -1,6 +1,6 @@
 ---
 name: to-tickets
-description: Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges — published as an orchestrate lane/slice-queue plan in plan-directory repos, or to the configured tracker / local files elsewhere.
+description: Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges — published as an orchestrate lane/slice plan in plan-directory repos, or to the configured tracker / local files elsewhere.
 ---
 
 # To Tickets
@@ -61,7 +61,7 @@ Publish the approved tickets to whichever backend this repo uses. The tickets ar
 
 - **Plan-directory repo** (CLAUDE.md / AGENTS.md documents `planning-with-files` / `.agent_state/plans/` and an `orchestrate` skill) → the tickets become orchestrate's dispatch structure, recorded in the task's `task_plan.md` (init via `planning-with-files` if needed):
   - Tickets with **no blocking edges between them** and disjoint write scopes → parallel **lanes** (one worktree each).
-  - A **dependency chain** of tickets → one lane's ordered **slice queue** (each ticket = one slice, keeping its acceptance criteria as the slice's acceptance).
+  - A **dependency chain** of tickets → one lane's ordered **slice sequence** (each ticket = one slice, keeping its acceptance criteria as the slice's acceptance).
   - An expand–contract sequence → the expand ticket is the **shared foundation** that lands on the integration branch first; migrate batches fan out as lanes from that SHA; contract is a final slice blocked by all of them.
   - Each ticket keeps its "What it delivers / Blocked by / acceptance criteria" fields inside the plan — orchestrate's spawn prompts quote them directly. Do **not** create per-ticket files or any tracker state.
 - **Tracker repo** (an issue tracker is documented, e.g. `docs/agents/issue-tracker.md`) → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. Apply whatever "ready for agent" triage convention the repo documents.

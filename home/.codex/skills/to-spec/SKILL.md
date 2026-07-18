@@ -15,7 +15,7 @@ Check with the user that these seams match their expectations.
 
 3. Write the spec using the template below, then publish it to whichever backend this repo uses:
 
-- **Plan-directory repo** (CLAUDE.md / AGENTS.md documents a `planning-with-files` / `.agent_state/plans/` convention): write the spec to `.agent_state/plans/<task-id>/spec.md`, initializing the plan directory via `planning-with-files` if it doesn't exist yet. This spec is the **frozen contract** that orchestrate's review-readiness packets and `/code-review`'s Spec axis later point at.
+- **Plan-directory repo** (CLAUDE.md / AGENTS.md documents a `planning-with-files` / `.agent_state/plans/` convention): write the spec to `.agent_state/plans/<task-id>/spec.md`, initializing the plan directory via `planning-with-files` if it doesn't exist yet. This spec is the **frozen contract** that orchestrate reviews and `/code-review`'s Spec axis later point at.
 - **Tracker repo** (an issue tracker is documented, e.g. `docs/agents/issue-tracker.md`): publish it as an issue and apply whatever "ready for agent" triage convention the repo documents — no additional triage.
 - **Neither**: write it to `.scratch/<feature-slug>/spec.md` and tell the user where it landed.
 

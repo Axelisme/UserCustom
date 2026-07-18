@@ -38,7 +38,27 @@ backup_cp() {
   done
 }
 
+backup_cp_one() {
+  src=$(realpath $1)
+  dst=$2
+  if [ -e $dst ]; then
+    if [ ! -L $dst ]; then
+      if [ $dst -ef $src ]; then
+        echo "skip $dst"
+        return
+      fi
+      echo "backup $dst"
+      mv -b $dst $dst.bak
+    else
+      echo "skip $dst"
+      return
+    fi
+  fi
+  ln $src $dst
+}
+
 backup_cp $UserCustom/home/.config $HOME/.config
+backup_cp_one $UserCustom/home/.codex/AGENTS.md $HOME/.codex/AGENTS.md
 backup_cp $UserCustom/home/.codex/skills $HOME/.codex/skills
 backup_cp $UserCustom/home/.codex/agents $HOME/.codex/agents
 backup_cp $UserCustom/home/.claude/skills $HOME/.claude/skills

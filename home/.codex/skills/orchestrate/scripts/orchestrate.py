@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Inspect orchestrate releases and guard explicit Git and delivery-spool actions."""
+"""Inspect orchestrate releases and guard explicit Git lane/landing actions."""
 
 from __future__ import annotations
 
 import argparse
 import fcntl
-import fnmatch
 import hashlib
 import json
 import os
@@ -19,118 +18,15 @@ from pathlib import Path
 from typing import Any, Sequence
 
 MANIFEST_SCHEMA = 1
-QUEUE_VERSION = 1
-DISPATCH_PACKET_VERSION = 1
 ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 EXACT_SHA_PATTERN = re.compile(r"^[0-9a-fA-F]{40,64}$")
-SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 VERSION_PATTERN = re.compile(r"^skill_version:\s*(\d+)\s*$", re.MULTILINE)
-MILESTONE_STATES = ("progress", "terminal")
-MILESTONE_NEXT = ("continue", "idle", "stop")
-MILESTONE_OUTCOMES = {
-    "planner": ("proposal", "needs_decision"),
-    "writer": ("validated", "review", "blocked", "needs_decision"),
-    "reviewer": ("pass", "needs_fix", "blocked", "needs_decision"),
-}
-MILESTONE_FIELDS = {
-    "event",
-    "item_id",
-    "state",
-    "outcome",
-    "subject_sha",
-    "evidence",
-    "findings",
-    "next",
-    "details",
-}
 COLLECT_REVIEW_KINDS = (
     "different-identity",
     "focused",
     "root-spot",
     "mechanical",
 )
-QUEUE_ROLES = ("writer", "reviewer")
-QUEUE_REQUIRED = {
-    "queue_version",
-    "item_id",
-    "order",
-    "role",
-    "lease_id",
-    "lease_generation",
-    "basis_sha",
-}
-QUEUE_FIELDS = QUEUE_REQUIRED | {"hard_critical_axes"}
-DISPATCH_ROLES = ("planner", "writer", "reviewer")
-HARD_CRITICAL_AXES = ("hardware", "persistence", "security", "atomic-cutover")
-DISPATCH_FIELDS = {
-    "dispatch_packet_version",
-    "packet_id",
-    "role",
-    "basis_sha",
-    "hard_critical_axes",
-}
-RECEIPT_VERSION = 1
-RECEIPT_KINDS = ("review", "gate")
-GATE_STATUSES = (
-    "passed",
-    "failed_current",
-    "failed_baseline",
-    "environment_blocked",
-    "unverified",
-)
-GATE_RECEIPT_REQUIRED = (
-    "receipt_version",
-    "kind",
-    "item_id",
-    "subject_sha",
-    "command",
-    "status",
-    "exclusions",
-)
-GATE_RECEIPT_FIELDS = set(GATE_RECEIPT_REQUIRED) | {"subject_tree", "details"}
-GATE_EXCLUSION_REQUIRED = (
-    "test_id",
-    "reason",
-    "baseline_evidence",
-    "affects_acceptance",
-    "follow_up",
-)
-REVIEW_RECEIPT_REQUIRED = (
-    "receipt_version",
-    "kind",
-    "item_id",
-    "subject_sha",
-    "verdict",
-    "findings",
-    "evidence",
-)
-# The authorization block: required only on verdict=pass, the receipt that
-# authorizes collect. Findings-carrier receipts stay small.
-REVIEW_RECEIPT_PASS_REQUIRED = (
-    "reviewer_agent_id",
-    "profile_requested",
-    "profile_effective",
-    "review_kind",
-    "checkout_detached",
-    "checkout_clean",
-    "checkout_head",
-)
-REVIEW_RECEIPT_FIELDS = (
-    set(REVIEW_RECEIPT_REQUIRED)
-    | set(REVIEW_RECEIPT_PASS_REQUIRED)
-    | {"subject_tree", "details"}
-)
-SCOPE_MANIFEST_VERSION = 1
-SCOPE_REQUIRED = ("scope_version", "item_id", "owned_paths")
-SCOPE_FIELDS = set(SCOPE_REQUIRED) | {
-    "excluded_paths",
-    "shared_read_only_paths",
-    "details",
-}
-GATE_RUN_VERSION = 1
-GATE_RUN_TEST_STATUSES = ("passed", "failed", "error", "skipped", "blocked")
-GATE_RUN_REQUIRED = ("run_version", "subject_sha", "command", "results")
-GATE_RUN_FIELDS = set(GATE_RUN_REQUIRED) | {"details"}
 LANDING_VERSION = 1
 LANDING_POLICIES = (
     "validate-only",
@@ -140,13 +36,6 @@ LANDING_POLICIES = (
 )
 LANDING_REQUIRED = ("landing_version", "task_id", "policy", "target_ref")
 LANDING_FIELDS = set(LANDING_REQUIRED) | {"details"}
-DISPATCH_SECTIONS = (
-    "Authority",
-    "Acceptance",
-    "Non-goals",
-    "Write scope",
-    "Stop conditions",
-)
 
 
 class OrchestrateError(RuntimeError):
@@ -671,449 +560,6 @@ def validate_json_enum(
         errors.append(f"{field} must be one of: {', '.join(choices)}")
 
 
-def validate_exact_sha_field(
-    payload: dict[str, Any], field: str, errors: list[str]
-) -> None:
-    value = payload.get(field)
-    if value is not None and (
-        not isinstance(value, str) or not EXACT_SHA_PATTERN.fullmatch(value)
-    ):
-        errors.append(f"{field} must be an exact 40-64 character hexadecimal SHA")
-
-
-def validate_milestone(payload: dict[str, Any], *, role: str) -> list[str]:
-    """Core is three fields; state derives from outcome, the rest is optional."""
-    errors: list[str] = []
-    require_json_fields(payload, ("item_id", "outcome", "evidence"), errors)
-    unexpected = sorted(payload.keys() - MILESTONE_FIELDS)
-    if unexpected:
-        errors.append(f"unexpected fields: {', '.join(unexpected)}")
-    if "event" in payload and payload.get("event") != "milestone":
-        errors.append("event, when supplied, must be milestone")
-    item_id = payload.get("item_id")
-    if item_id is not None and (
-        not isinstance(item_id, str) or not ID_PATTERN.fullmatch(item_id)
-    ):
-        errors.append("item_id must be a stable identifier")
-    validate_json_enum(payload, "state", MILESTONE_STATES, errors)
-    validate_json_enum(payload, "next", MILESTONE_NEXT, errors)
-    evidence = payload.get("evidence")
-    if evidence is not None and (not isinstance(evidence, str) or not evidence.strip()):
-        errors.append("evidence must be a non-empty string")
-    findings = payload.get("findings")
-    if findings is not None and (
-        not isinstance(findings, list)
-        or any(not isinstance(item, str) or not item.strip() for item in findings)
-    ):
-        errors.append("findings must be a list of non-empty ids")
-    details = payload.get("details")
-    if details is not None and not isinstance(details, dict):
-        errors.append("details must be an object when supplied")
-    validate_exact_sha_field(payload, "subject_sha", errors)
-
-    outcome = payload.get("outcome")
-    if outcome is None:
-        return errors
-    derived_state = "progress" if outcome == "working" else "terminal"
-    if "state" in payload and payload.get("state") != derived_state:
-        errors.append(f"outcome={outcome} implies state={derived_state}")
-    if derived_state == "terminal":
-        if outcome not in MILESTONE_OUTCOMES[role]:
-            errors.append(
-                f"terminal {role} outcome must be working or one of: "
-                + ", ".join(MILESTONE_OUTCOMES[role])
-            )
-        sha_required = (role == "writer" and outcome in ("validated", "review")) or (
-            role == "reviewer" and outcome in ("pass", "needs_fix")
-        )
-        if sha_required and "subject_sha" not in payload:
-            errors.append(f"{role} outcome={outcome} requires subject_sha")
-        if outcome == "needs_fix" and not payload.get("findings"):
-            errors.append("outcome=needs_fix requires at least one finding id")
-    return errors
-
-
-def require_nonempty_string_fields(
-    payload: dict[str, Any], fields: Sequence[str], errors: list[str]
-) -> None:
-    for field in fields:
-        value = payload.get(field)
-        if field in payload and (not isinstance(value, str) or not value.strip()):
-            errors.append(f"{field} must be a non-empty string")
-
-
-def validate_review_receipt(payload: dict[str, Any]) -> list[str]:
-    errors: list[str] = []
-    require_json_fields(payload, REVIEW_RECEIPT_REQUIRED, errors)
-    unexpected = sorted(payload.keys() - REVIEW_RECEIPT_FIELDS)
-    if unexpected:
-        errors.append(f"unexpected fields: {', '.join(unexpected)}")
-    if payload.get("receipt_version") != RECEIPT_VERSION:
-        errors.append(f"receipt_version must be {RECEIPT_VERSION}")
-    if payload.get("kind") != "review":
-        errors.append("kind must be review")
-    item_id = payload.get("item_id")
-    if item_id is not None and (
-        not isinstance(item_id, str) or not ID_PATTERN.fullmatch(item_id)
-    ):
-        errors.append("item_id must be a stable identifier")
-    validate_exact_sha_field(payload, "subject_sha", errors)
-    validate_exact_sha_field(payload, "subject_tree", errors)
-    validate_exact_sha_field(payload, "checkout_head", errors)
-    require_nonempty_string_fields(
-        payload,
-        ("reviewer_agent_id", "profile_requested", "profile_effective", "evidence"),
-        errors,
-    )
-    validate_json_enum(payload, "review_kind", COLLECT_REVIEW_KINDS, errors)
-    validate_json_enum(payload, "verdict", MILESTONE_OUTCOMES["reviewer"], errors)
-    findings = payload.get("findings")
-    if findings is not None and (
-        not isinstance(findings, list)
-        or any(not isinstance(item, str) or not item.strip() for item in findings)
-    ):
-        errors.append("findings must be a list of non-empty ids")
-    for field in ("checkout_detached", "checkout_clean"):
-        if field in payload and not isinstance(payload[field], bool):
-            errors.append(f"{field} must be a boolean")
-    details = payload.get("details")
-    if details is not None and not isinstance(details, dict):
-        errors.append("details must be an object when supplied")
-    verdict = payload.get("verdict")
-    if verdict == "pass":
-        require_json_fields(payload, REVIEW_RECEIPT_PASS_REQUIRED, errors)
-        if not (
-            payload.get("checkout_detached") is True
-            and payload.get("checkout_clean") is True
-        ):
-            errors.append(
-                "verdict=pass requires checkout_detached and checkout_clean"
-            )
-    if verdict == "needs_fix" and not payload.get("findings"):
-        errors.append("verdict=needs_fix requires at least one finding id")
-    head = payload.get("checkout_head")
-    subject = payload.get("subject_sha")
-    if (
-        isinstance(head, str)
-        and isinstance(subject, str)
-        and head.lower() != subject.lower()
-    ):
-        errors.append("checkout_head must equal subject_sha")
-    return errors
-
-
-def validate_gate_receipt(payload: dict[str, Any]) -> list[str]:
-    errors: list[str] = []
-    require_json_fields(payload, GATE_RECEIPT_REQUIRED, errors)
-    unexpected = sorted(payload.keys() - GATE_RECEIPT_FIELDS)
-    if unexpected:
-        errors.append(f"unexpected fields: {', '.join(unexpected)}")
-    if payload.get("receipt_version") != RECEIPT_VERSION:
-        errors.append(f"receipt_version must be {RECEIPT_VERSION}")
-    if payload.get("kind") != "gate":
-        errors.append("kind must be gate")
-    item_id = payload.get("item_id")
-    if item_id is not None and (
-        not isinstance(item_id, str) or not ID_PATTERN.fullmatch(item_id)
-    ):
-        errors.append("item_id must be a stable identifier")
-    validate_exact_sha_field(payload, "subject_sha", errors)
-    validate_exact_sha_field(payload, "subject_tree", errors)
-    require_nonempty_string_fields(payload, ("command",), errors)
-    validate_json_enum(payload, "status", GATE_STATUSES, errors)
-    exclusions = payload.get("exclusions")
-    if exclusions is not None and not isinstance(exclusions, list):
-        errors.append("exclusions must be a list")
-        exclusions = []
-    affects_acceptance = False
-    for index, exclusion in enumerate(exclusions or []):
-        if not isinstance(exclusion, dict):
-            errors.append(f"exclusions[{index}] must be an object")
-            continue
-        missing = sorted(set(GATE_EXCLUSION_REQUIRED) - exclusion.keys())
-        extra = sorted(exclusion.keys() - set(GATE_EXCLUSION_REQUIRED))
-        if missing:
-            errors.append(f"exclusions[{index}] missing: {', '.join(missing)}")
-        if extra:
-            errors.append(f"exclusions[{index}] unexpected: {', '.join(extra)}")
-        for field in ("test_id", "reason", "baseline_evidence", "follow_up"):
-            value = exclusion.get(field)
-            if field in exclusion and (
-                not isinstance(value, str) or not value.strip()
-            ):
-                errors.append(f"exclusions[{index}].{field} must be a non-empty string")
-        flag = exclusion.get("affects_acceptance")
-        if "affects_acceptance" in exclusion and not isinstance(flag, bool):
-            errors.append(f"exclusions[{index}].affects_acceptance must be a boolean")
-        if flag is True:
-            affects_acceptance = True
-    if payload.get("status") == "passed" and affects_acceptance:
-        errors.append(
-            "an exclusion with affects_acceptance=true cannot report status=passed"
-        )
-    details = payload.get("details")
-    if details is not None and not isinstance(details, dict):
-        errors.append("details must be an object when supplied")
-    return errors
-
-
-def validate_scope_manifest(payload: dict[str, Any]) -> list[str]:
-    errors: list[str] = []
-    require_json_fields(payload, SCOPE_REQUIRED, errors)
-    unexpected = sorted(payload.keys() - SCOPE_FIELDS)
-    if unexpected:
-        errors.append(f"unexpected fields: {', '.join(unexpected)}")
-    if payload.get("scope_version") != SCOPE_MANIFEST_VERSION:
-        errors.append(f"scope_version must be {SCOPE_MANIFEST_VERSION}")
-    item_id = payload.get("item_id")
-    if item_id is not None and (
-        not isinstance(item_id, str) or not ID_PATTERN.fullmatch(item_id)
-    ):
-        errors.append("item_id must be a stable identifier")
-    for field in ("owned_paths", "excluded_paths", "shared_read_only_paths"):
-        value = payload.get(field)
-        if field not in payload:
-            continue
-        if not isinstance(value, list) or any(
-            not isinstance(item, str) or not item.strip() for item in value
-        ):
-            errors.append(f"{field} must be a list of non-empty path patterns")
-    owned = payload.get("owned_paths")
-    if isinstance(owned, list) and not owned:
-        errors.append("owned_paths must name at least one pattern")
-    details = payload.get("details")
-    if details is not None and not isinstance(details, dict):
-        errors.append("details must be an object when supplied")
-    return errors
-
-
-def scope_pattern_match(path: str, pattern: str) -> bool:
-    pattern = pattern.rstrip("/")
-    if fnmatch.fnmatch(path, pattern):
-        return True
-    return path.startswith(pattern + "/")
-
-
-def scope_violations(
-    paths: Sequence[str], manifest: dict[str, Any]
-) -> list[dict[str, str]]:
-    owned = manifest["owned_paths"]
-    excluded = manifest.get("excluded_paths") or []
-    shared = manifest.get("shared_read_only_paths") or []
-    violations: list[dict[str, str]] = []
-    for path in paths:
-        if any(scope_pattern_match(path, pattern) for pattern in excluded):
-            violations.append({"path": path, "reason": "excluded"})
-        elif any(scope_pattern_match(path, pattern) for pattern in shared):
-            violations.append({"path": path, "reason": "shared-read-only"})
-        elif not any(scope_pattern_match(path, pattern) for pattern in owned):
-            violations.append({"path": path, "reason": "outside-owned"})
-    return violations
-
-
-def read_scope_manifest(path: str) -> tuple[dict[str, Any], bytes]:
-    payload, data = read_json_object(path, label="scope manifest")
-    errors = validate_scope_manifest(payload)
-    if errors:
-        raise OrchestrateError("invalid scope manifest: " + "; ".join(errors))
-    return payload, data
-
-
-def validate_gate_run(payload: dict[str, Any]) -> list[str]:
-    errors: list[str] = []
-    require_json_fields(payload, GATE_RUN_REQUIRED, errors)
-    unexpected = sorted(payload.keys() - GATE_RUN_FIELDS)
-    if unexpected:
-        errors.append(f"unexpected fields: {', '.join(unexpected)}")
-    if payload.get("run_version") != GATE_RUN_VERSION:
-        errors.append(f"run_version must be {GATE_RUN_VERSION}")
-    validate_exact_sha_field(payload, "subject_sha", errors)
-    require_nonempty_string_fields(payload, ("command",), errors)
-    results = payload.get("results")
-    if results is not None:
-        if not isinstance(results, dict) or not results:
-            errors.append("results must be a non-empty object of test_id -> status")
-        else:
-            if any(
-                not isinstance(test_id, str) or not test_id.strip()
-                for test_id in results
-            ):
-                errors.append("results keys must be non-empty test ids")
-            invalid = sorted(
-                {
-                    str(status)
-                    for status in results.values()
-                    if status not in GATE_RUN_TEST_STATUSES
-                }
-            )
-            if invalid:
-                errors.append(
-                    "results statuses must be one of "
-                    + "|".join(GATE_RUN_TEST_STATUSES)
-                    + f"; got: {', '.join(invalid[:5])}"
-                )
-    details = payload.get("details")
-    if details is not None and not isinstance(details, dict):
-        errors.append("details must be an object when supplied")
-    return errors
-
-
-def read_gate_run(path: str, *, label: str) -> tuple[dict[str, Any], bytes]:
-    payload, data = read_json_object(path, label=label)
-    errors = validate_gate_run(payload)
-    if errors:
-        raise OrchestrateError(f"invalid {label}: " + "; ".join(errors))
-    return payload, data
-
-
-def command_gate_compare(args: argparse.Namespace) -> dict[str, Any]:
-    started = time.monotonic()
-    item_id = require_identifier(args.item_id, label="item-id")
-    baseline, baseline_data = read_gate_run(args.baseline, label="baseline run")
-    current, current_data = read_gate_run(args.current, label="current run")
-    if baseline["command"] != current["command"]:
-        raise OrchestrateError(
-            "baseline and current runs used different commands, so the comparison"
-            f" is not like-for-like: {baseline['command']!r} vs"
-            f" {current['command']!r}"
-        )
-    failing = {"failed", "error"}
-    base_results = baseline["results"]
-    cur_results = current["results"]
-    regressions: list[str] = []
-    baseline_equal: list[str] = []
-    blocked: list[str] = []
-    skipped: list[str] = []
-    fixed: list[str] = []
-    for test_id in sorted(cur_results):
-        status = cur_results[test_id]
-        base_status = base_results.get(test_id)
-        if status == "passed":
-            if base_status in failing:
-                fixed.append(test_id)
-        elif status in failing:
-            if base_status in failing:
-                baseline_equal.append(test_id)
-            else:
-                regressions.append(test_id)
-        elif status == "blocked":
-            blocked.append(test_id)
-        else:
-            skipped.append(test_id)
-    missing = sorted(set(base_results) - set(cur_results))
-    baseline_sha = baseline["subject_sha"]
-
-    def draft_exclusion(test_id: str, reason: str) -> dict[str, Any]:
-        return {
-            "test_id": test_id,
-            "reason": reason,
-            "baseline_evidence": (
-                f"baseline {baseline_sha}: {base_results.get(test_id, 'absent')}"
-            ),
-            "affects_acceptance": True,
-            "follow_up": (
-                "root: classify this exclusion and set affects_acceptance"
-            ),
-        }
-
-    exclusions = (
-        [
-            draft_exclusion(
-                test_id,
-                f"{cur_results[test_id]} in current run and already failing at"
-                " the baseline",
-            )
-            for test_id in baseline_equal
-        ]
-        + [
-            draft_exclusion(test_id, "environment blocked in current run")
-            for test_id in blocked
-        ]
-        + [
-            draft_exclusion(test_id, "skipped in current run")
-            for test_id in skipped
-        ]
-        + [
-            draft_exclusion(
-                test_id,
-                "present at baseline but missing from current run"
-                " (silent deselection)",
-            )
-            for test_id in missing
-        ]
-    )
-    if regressions:
-        status = "failed_current"
-    elif blocked:
-        status = "environment_blocked"
-    elif baseline_equal:
-        status = "failed_baseline"
-    elif exclusions:
-        status = "unverified"
-    else:
-        status = "passed"
-    draft = {
-        "receipt_version": RECEIPT_VERSION,
-        "kind": "gate",
-        "item_id": item_id,
-        "subject_sha": current["subject_sha"],
-        "command": current["command"],
-        "status": status,
-        "exclusions": exclusions,
-        "details": {
-            "baseline_sha": baseline_sha,
-            "baseline_run_sha256": sha256_bytes(baseline_data),
-            "current_run_sha256": sha256_bytes(current_data),
-            "regressions": regressions,
-            "fixed": fixed,
-        },
-    }
-    draft_errors = validate_gate_receipt(draft)
-    result: dict[str, Any] = {
-        "ok": not draft_errors,
-        "operation": "gate-compare",
-        "read_only": not args.output,
-        "item_id": item_id,
-        "baseline_sha": baseline_sha,
-        "current_sha": current["subject_sha"],
-        "command": current["command"],
-        "status": status,
-        "counts": {
-            "current_total": len(cur_results),
-            "regressions": len(regressions),
-            "baseline_equal_failures": len(baseline_equal),
-            "environment_blocked": len(blocked),
-            "skipped": len(skipped),
-            "missing_in_current": len(missing),
-            "fixed": len(fixed),
-        },
-        "regressions": regressions,
-        "baseline_equal_failures": baseline_equal,
-        "environment_blocked": blocked,
-        "skipped": skipped,
-        "missing_in_current": missing,
-        "fixed": fixed,
-        "receipt_draft": draft,
-        "draft_errors": draft_errors,
-        "observed_at": datetime.now(UTC).isoformat(),
-        "duration_ms": round((time.monotonic() - started) * 1000),
-    }
-    if args.output:
-        output = Path(args.output).resolve()
-        if output.exists():
-            raise OrchestrateError(
-                f"output already exists: {output}; a possibly edited receipt is"
-                " never overwritten — remove it explicitly first"
-            )
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(
-            json.dumps(draft, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        result["draft_written"] = str(output)
-    return result
-
-
 def validate_landing_declaration(payload: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     require_json_fields(payload, LANDING_REQUIRED, errors)
@@ -1157,159 +603,6 @@ def changed_paths_since_fork(root: Path, base: str, head: str) -> list[str]:
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
-def command_scope_amend(args: argparse.Namespace) -> dict[str, Any]:
-    started = time.monotonic()
-    manifest, data = read_scope_manifest(args.manifest)
-    if not args.reason.strip():
-        raise OrchestrateError("--reason must be a non-empty explanation")
-    added_owned = list(dict.fromkeys(args.add_owned or []))
-    added_shared = list(dict.fromkeys(args.add_shared_read_only or []))
-    if not added_owned and not added_shared:
-        raise OrchestrateError(
-            "pass --add-owned and/or --add-shared-read-only; an amendment must"
-            " change something"
-        )
-    excluded = manifest.get("excluded_paths") or []
-    for pattern in added_owned:
-        if any(scope_pattern_match(pattern, rule) for rule in excluded) or (
-            pattern in excluded
-        ):
-            raise OrchestrateError(
-                f"pattern is excluded by the current manifest: {pattern!r};"
-                " overriding an exclusion needs a fresh root-written manifest,"
-                " not an amendment"
-            )
-    amended = dict(manifest)
-    amended["owned_paths"] = list(
-        dict.fromkeys([*manifest["owned_paths"], *added_owned])
-    )
-    if added_shared:
-        amended["shared_read_only_paths"] = list(
-            dict.fromkeys(
-                [*(manifest.get("shared_read_only_paths") or []), *added_shared]
-            )
-        )
-    details = dict(amended.get("details") or {})
-    amendments = list(details.get("amendments") or [])
-    amendments.append(
-        {
-            "previous_manifest_sha256": sha256_bytes(data),
-            "added_owned": added_owned,
-            "added_shared_read_only": added_shared,
-            "reason": args.reason,
-        }
-    )
-    details["amendments"] = amendments
-    amended["details"] = details
-    errors = validate_scope_manifest(amended)
-    if errors:
-        raise OrchestrateError("amended manifest is invalid: " + "; ".join(errors))
-    output = Path(args.output).resolve()
-    serialized = (
-        json.dumps(amended, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    )
-    recovered = None
-    if output.exists():
-        # A prior run wrote this exact amendment; rerunning after an abort
-        # reports instead of failing. Anything else never overwrites.
-        if output.read_text(encoding="utf-8") != serialized:
-            raise OrchestrateError(
-                f"output already exists: {output}; amendments never overwrite —"
-                " each proposal is its own file"
-            )
-        recovered = "already-amended"
-    else:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(serialized, encoding="utf-8")
-    return {
-        "ok": True,
-        **({"recovered": recovered} if recovered else {}),
-        "operation": "scope-amend",
-        "item_id": manifest["item_id"],
-        "previous_manifest_sha256": sha256_bytes(data),
-        "amended_manifest": str(output),
-        "amended_manifest_sha256": sha256_bytes(serialized.encode()),
-        "added_owned": added_owned,
-        "added_shared_read_only": added_shared,
-        "reason": args.reason,
-        "amendment_count": len(amendments),
-        "approval": (
-            "proposal only: root approves by passing the amended manifest to"
-            " scope check / collect --scope"
-        ),
-        "observed_at": datetime.now(UTC).isoformat(),
-        "duration_ms": round((time.monotonic() - started) * 1000),
-    }
-
-
-def command_scope_lint(args: argparse.Namespace) -> dict[str, Any]:
-    payload, data = read_json_object(args.input, label="scope manifest")
-    errors = validate_scope_manifest(payload)
-    return {
-        "ok": not errors,
-        "operation": "scope-lint",
-        "input_sha256": sha256_bytes(data),
-        "errors": errors,
-    }
-
-
-def command_scope_check(args: argparse.Namespace) -> dict[str, Any]:
-    started = time.monotonic()
-    root = Path(args.root).resolve()
-    manifest, data = read_scope_manifest(args.manifest)
-    base = exact_commit(root, args.base, label="base")
-    head = exact_commit(root, args.head, label="head")
-    changed = changed_paths_since_fork(root, base, head)
-    violations = scope_violations(changed, manifest)
-    return {
-        "ok": not violations,
-        "operation": "scope-check",
-        "read_only": True,
-        "item_id": manifest["item_id"],
-        "manifest_sha256": sha256_bytes(data),
-        "base": base,
-        "head": head,
-        "changed_paths": changed,
-        "violations": violations,
-        "observed_at": datetime.now(UTC).isoformat(),
-        "duration_ms": round((time.monotonic() - started) * 1000),
-    }
-
-
-def command_receipt_lint(args: argparse.Namespace) -> dict[str, Any]:
-    payload, data = read_json_object(args.input, label="receipt")
-    kind = args.kind or payload.get("kind")
-    if kind not in RECEIPT_KINDS:
-        raise OrchestrateError(
-            f"receipt kind must be one of {'|'.join(RECEIPT_KINDS)};"
-            f" the file declares {payload.get('kind')!r}"
-        )
-    if kind == "review":
-        errors = validate_review_receipt(payload)
-    else:
-        errors = validate_gate_receipt(payload)
-    return {
-        "ok": not errors,
-        "operation": "receipt-lint",
-        "kind": kind,
-        "input_sha256": sha256_bytes(data),
-        "errors": errors,
-    }
-
-
-def command_milestone_lint(args: argparse.Namespace) -> dict[str, Any]:
-    payload, data = read_json_object(args.input, label="milestone")
-    errors = validate_milestone(payload, role=args.role)
-    return {
-        "ok": not errors,
-        "operation": "milestone-lint",
-        "role": args.role,
-        "input_sha256": sha256_bytes(data),
-        "delivery_inferred": False,
-        "errors": errors,
-    }
-
-
 def common_repo_root(root: Path) -> Path:
     common = Path(
         run_git(
@@ -1317,712 +610,6 @@ def common_repo_root(root: Path) -> Path:
         ).stdout.strip()
     )
     return common.parent if common.name == ".git" else common
-
-
-def require_gitignored_agent_state(root: Path) -> None:
-    ignored = run_git(
-        root,
-        "check-ignore",
-        "--no-index",
-        "--quiet",
-        "--",
-        ".agent_state/orchestrate/.probe",
-        check=False,
-    )
-    if ignored.returncode != 0:
-        raise OrchestrateError(
-            ".agent_state/orchestrate must be gitignored before transport use"
-        )
-
-
-def read_regular_input(path_value: str, *, label: str) -> tuple[bytes, Path]:
-    supplied = Path(path_value)
-    if supplied.is_symlink():
-        raise OrchestrateError(f"{label} input must not be a symlink: {supplied}")
-    path = supplied.resolve()
-    if not path.is_file():
-        raise OrchestrateError(f"{label} input must be a regular file: {path}")
-    return path.read_bytes(), path
-
-
-def dispatch_packet_directory(root: Path, *, task_id: str) -> tuple[Path, Path]:
-    common = common_repo_root(root).resolve()
-    task_id = require_identifier(task_id, label="task-id")
-    state = common / ".agent_state"
-    paths = (
-        state,
-        state / "orchestrate",
-        state / "orchestrate" / task_id,
-        state / "orchestrate" / task_id / "packets",
-    )
-    for path in paths:
-        if path.is_symlink():
-            raise OrchestrateError(
-                f"dispatch packet path component must not be a symlink: {path}"
-            )
-    require_gitignored_agent_state(common)
-    return common, paths[-1]
-
-
-def parse_dispatch_packet(data: bytes, *, root: Path, source: str) -> dict[str, Any]:
-    try:
-        text = data.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise OrchestrateError(f"dispatch packet is not UTF-8: {source}") from exc
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        raise OrchestrateError(
-            f"dispatch packet requires YAML-style front matter: {source}"
-        )
-    try:
-        end = lines.index("---", 1)
-    except ValueError as exc:
-        raise OrchestrateError(
-            f"dispatch packet front matter is not closed: {source}"
-        ) from exc
-    fields: dict[str, str] = {}
-    for line in lines[1:end]:
-        if not line.strip():
-            continue
-        key, separator, value = line.partition(":")
-        key = key.strip()
-        value = value.strip()
-        if not separator or not key or not value:
-            raise OrchestrateError(
-                f"malformed dispatch packet front matter line: {line!r}"
-            )
-        if key in fields:
-            raise OrchestrateError(
-                f"duplicate dispatch packet front matter field: {key}"
-            )
-        fields[key] = value
-    missing = sorted(DISPATCH_FIELDS - fields.keys())
-    unexpected = sorted(fields.keys() - DISPATCH_FIELDS)
-    if missing or unexpected:
-        detail = []
-        if missing:
-            detail.append(f"missing={','.join(missing)}")
-        if unexpected:
-            detail.append(f"unexpected={','.join(unexpected)}")
-        raise OrchestrateError(
-            f"invalid dispatch packet front matter ({'; '.join(detail)})"
-        )
-    try:
-        version = int(fields["dispatch_packet_version"])
-    except ValueError as exc:
-        raise OrchestrateError("dispatch_packet_version must be an integer") from exc
-    if version != DISPATCH_PACKET_VERSION:
-        raise OrchestrateError(
-            f"unsupported dispatch_packet_version={version}; "
-            f"expected {DISPATCH_PACKET_VERSION}"
-        )
-    packet_id = require_identifier(fields["packet_id"], label="packet-id")
-    role = fields["role"]
-    if role not in DISPATCH_ROLES:
-        raise OrchestrateError(
-            f"dispatch packet role must be one of: {', '.join(DISPATCH_ROLES)}"
-        )
-    raw_axes = fields["hard_critical_axes"]
-    axes = [] if raw_axes == "none" else [axis.strip() for axis in raw_axes.split(",")]
-    if (
-        any(axis not in HARD_CRITICAL_AXES for axis in axes)
-        or len(axes) != len(set(axes))
-        or any(not axis for axis in axes)
-    ):
-        raise OrchestrateError(
-            "hard_critical_axes must be none or a unique comma-separated subset of: "
-            + ", ".join(HARD_CRITICAL_AXES)
-        )
-    basis_sha = exact_commit(root, fields["basis_sha"], label="basis_sha")
-    for heading in DISPATCH_SECTIONS:
-        if not section_text(text, f"## {heading}"):
-            raise OrchestrateError(
-                f"dispatch packet missing or empty required section: {heading}"
-            )
-    return {
-        "dispatch_packet_version": version,
-        "packet_id": packet_id,
-        "role": role,
-        "basis_sha": basis_sha,
-        "hard_critical_axes": axes,
-    }
-
-
-def dispatch_packet_evidence(
-    *,
-    root: Path,
-    directory: Path,
-    path: Path,
-    data: bytes,
-    envelope: dict[str, Any],
-    started: float,
-) -> dict[str, Any]:
-    return {
-        "ok": True,
-        "operation": "packet-inspect",
-        "root": str(root),
-        "packet_directory": str(directory),
-        "path": str(path),
-        "sha256": sha256_bytes(data),
-        "envelope": envelope,
-        "authority_inferred": False,
-        "dispatch_inferred": False,
-        "observed_at": datetime.now(UTC).isoformat(),
-        "duration_ms": round((time.monotonic() - started) * 1000),
-    }
-
-
-def command_packet_publish(args: argparse.Namespace) -> dict[str, Any]:
-    started = time.monotonic()
-    requested_root = Path(args.root).resolve()
-    root, directory = dispatch_packet_directory(requested_root, task_id=args.task_id)
-    data, source = read_regular_input(args.input, label="dispatch packet")
-    envelope = parse_dispatch_packet(data, root=root, source=str(source))
-    digest = sha256_bytes(data)
-    destination = directory / f"{digest}.md"
-    directory.mkdir(parents=True, exist_ok=True)
-    if directory.is_symlink():
-        raise OrchestrateError(
-            f"dispatch packet directory must not be a symlink: {directory}"
-        )
-    descriptor = lock_queue_directory(directory, exclusive=True)
-    try:
-        if destination.exists():
-            if destination.is_symlink() or not destination.is_file():
-                raise OrchestrateError(
-                    f"dispatch packet destination is not a regular file: {destination}"
-                )
-            if destination.read_bytes() != data:
-                raise OrchestrateError(
-                    f"content-address collision or tampered packet: {destination}"
-                )
-            created = False
-        else:
-            handle, temporary_name = tempfile.mkstemp(
-                prefix=f".{destination.name}.pending-", dir=directory
-            )
-            temporary = Path(temporary_name)
-            try:
-                with os.fdopen(handle, "wb") as stream:
-                    stream.write(data)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                if destination.exists():
-                    raise OrchestrateError(
-                        f"dispatch packet destination appeared: {destination}"
-                    )
-                os.replace(temporary, destination)
-                os.fsync(descriptor)
-            finally:
-                temporary.unlink(missing_ok=True)
-            created = True
-    finally:
-        unlock_queue_directory(descriptor)
-    result = {
-        **dispatch_packet_evidence(
-            root=root,
-            directory=directory,
-            path=destination,
-            data=data,
-            envelope=envelope,
-            started=started,
-        ),
-        "operation": "packet-publish",
-        "created": created,
-    }
-    if not created:
-        result["recovered"] = "already-published"
-    return result
-
-
-def command_packet_inspect(args: argparse.Namespace) -> dict[str, Any]:
-    started = time.monotonic()
-    if not SHA256_PATTERN.fullmatch(args.sha256):
-        raise OrchestrateError("sha256 must be 64 lowercase hexadecimal digits")
-    requested_root = Path(args.root).resolve()
-    root, directory = dispatch_packet_directory(requested_root, task_id=args.task_id)
-    path = directory / f"{args.sha256}.md"
-    if path.is_symlink() or not path.is_file():
-        raise OrchestrateError(f"dispatch packet not found: {path}")
-    data = path.read_bytes()
-    if sha256_bytes(data) != args.sha256:
-        raise OrchestrateError(f"dispatch packet hash mismatch: {path}")
-    envelope = parse_dispatch_packet(data, root=root, source=str(path))
-    return dispatch_packet_evidence(
-        root=root,
-        directory=directory,
-        path=path,
-        data=data,
-        envelope=envelope,
-        started=started,
-    )
-
-
-def queue_directory(
-    root: Path,
-    *,
-    task_id: str,
-    lease_id: str,
-    generation: int,
-) -> tuple[Path, Path]:
-    common = common_repo_root(root).resolve()
-    task_id = require_identifier(task_id, label="task-id")
-    lease_id = require_identifier(lease_id, label="lease-id")
-    if generation < 1 or generation > 9999:
-        raise OrchestrateError("generation must be between 1 and 9999")
-    state = common / ".agent_state"
-    paths = (
-        state,
-        state / "orchestrate",
-        state / "orchestrate" / task_id,
-        state / "orchestrate" / task_id / "queues",
-        state / "orchestrate" / task_id / "queues" / lease_id,
-    )
-    for path in paths:
-        if path.is_symlink():
-            raise OrchestrateError(
-                f"queue path component must not be a symlink: {path}"
-            )
-    queue = paths[-1] / f"g{generation:04d}"
-    if queue.is_symlink():
-        raise OrchestrateError(f"queue directory must not be a symlink: {queue}")
-    require_gitignored_agent_state(common)
-    return common, queue
-
-
-def read_queue_input(path_value: str) -> tuple[bytes, Path]:
-    return read_regular_input(path_value, label="queue")
-
-
-def parse_queue_item(data: bytes, *, root: Path, source: str) -> dict[str, Any]:
-    try:
-        text = data.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise OrchestrateError(f"queue item is not UTF-8: {source}") from exc
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        raise OrchestrateError(f"queue item requires YAML-style front matter: {source}")
-    try:
-        end = lines.index("---", 1)
-    except ValueError as exc:
-        raise OrchestrateError(
-            f"queue item front matter is not closed: {source}"
-        ) from exc
-    fields: dict[str, str] = {}
-    for line in lines[1:end]:
-        if not line.strip():
-            continue
-        key, separator, value = line.partition(":")
-        key = key.strip()
-        value = value.strip()
-        if not separator or not key or not value:
-            raise OrchestrateError(f"malformed queue front matter line: {line!r}")
-        if key in fields:
-            raise OrchestrateError(f"duplicate queue front matter field: {key}")
-        fields[key] = value
-    missing = sorted(QUEUE_REQUIRED - fields.keys())
-    unexpected = sorted(fields.keys() - QUEUE_FIELDS)
-    if missing or unexpected:
-        detail = []
-        if missing:
-            detail.append(f"missing={','.join(missing)}")
-        if unexpected:
-            detail.append(f"unexpected={','.join(unexpected)}")
-        raise OrchestrateError(f"invalid queue front matter ({'; '.join(detail)})")
-    try:
-        queue_version = int(fields["queue_version"])
-        order = int(fields["order"])
-        generation = int(fields["lease_generation"])
-    except ValueError as exc:
-        raise OrchestrateError(
-            "queue_version, order, and lease_generation must be integers"
-        ) from exc
-    if queue_version != QUEUE_VERSION:
-        raise OrchestrateError(
-            f"unsupported queue_version={queue_version}; expected {QUEUE_VERSION}"
-        )
-    if order < 0 or order > 999999:
-        raise OrchestrateError("queue order must be between 0 and 999999")
-    if generation < 1 or generation > 9999:
-        raise OrchestrateError("lease_generation must be between 1 and 9999")
-    item_id = require_identifier(fields["item_id"], label="item-id")
-    lease_id = require_identifier(fields["lease_id"], label="lease-id")
-    role = fields["role"]
-    if role not in QUEUE_ROLES:
-        raise OrchestrateError(
-            f"queue role must be a normal writer/reviewer role: {role!r}"
-        )
-    if fields.get("hard_critical_axes", "none") != "none":
-        raise OrchestrateError(
-            "durable queues accept normal writer/reviewer work only; "
-            "hard_critical_axes must be none"
-        )
-    basis_sha = exact_commit(root, fields["basis_sha"], label="basis_sha")
-    if not "\n".join(lines[end + 1 :]).strip():
-        raise OrchestrateError(f"queue item body is empty: {source}")
-    return {
-        "queue_version": queue_version,
-        "item_id": item_id,
-        "order": order,
-        "role": role,
-        "lease_id": lease_id,
-        "lease_generation": generation,
-        "basis_sha": basis_sha,
-        "hard_critical_axes": "none",
-    }
-
-
-def validate_queue_binding(
-    item: dict[str, Any],
-    *,
-    role: str,
-    lease_id: str,
-    generation: int,
-) -> None:
-    expected = {
-        "role": role,
-        "lease_id": lease_id,
-        "lease_generation": generation,
-    }
-    for field, value in expected.items():
-        if item[field] != value:
-            raise OrchestrateError(
-                f"queue item {field}={item[field]!r}, expected {value!r}"
-            )
-
-
-def queue_filename(item: dict[str, Any]) -> str:
-    return f"{item['order']:06d}-{item['item_id']}.md"
-
-
-def queue_item_evidence(
-    item: dict[str, Any], *, path: Path, data: bytes
-) -> dict[str, Any]:
-    return {
-        **item,
-        "path": str(path),
-        "sha256": sha256_bytes(data),
-    }
-
-
-def scan_queue(
-    root: Path,
-    directory: Path,
-    *,
-    role: str,
-    lease_id: str,
-    generation: int,
-) -> tuple[list[dict[str, Any]], list[str], list[str]]:
-    if not directory.exists():
-        return [], [], []
-    if directory.is_symlink() or not directory.is_dir():
-        raise OrchestrateError(f"queue path must be a directory: {directory}")
-    items: list[dict[str, Any]] = []
-    pending: list[str] = []
-    unexpected: list[str] = []
-    seen_ids: set[str] = set()
-    seen_orders: set[int] = set()
-    for path in sorted(directory.iterdir(), key=lambda item: item.name):
-        if path.name.startswith(".") and ".pending-" in path.name:
-            pending.append(path.name)
-            continue
-        if path.suffix != ".md" or path.is_symlink() or not path.is_file():
-            unexpected.append(path.name)
-            continue
-        data = path.read_bytes()
-        item = parse_queue_item(data, root=root, source=str(path))
-        validate_queue_binding(
-            item, role=role, lease_id=lease_id, generation=generation
-        )
-        expected_name = queue_filename(item)
-        if path.name != expected_name:
-            raise OrchestrateError(
-                f"queue filename {path.name!r}, expected {expected_name!r}"
-            )
-        if item["item_id"] in seen_ids:
-            raise OrchestrateError(f"duplicate queue item_id: {item['item_id']}")
-        if item["order"] in seen_orders:
-            raise OrchestrateError(f"duplicate queue order: {item['order']}")
-        seen_ids.add(item["item_id"])
-        seen_orders.add(item["order"])
-        items.append(queue_item_evidence(item, path=path, data=data))
-    items.sort(key=lambda item: (item["order"], item["item_id"]))
-    return items, pending, unexpected
-
-
-def lock_queue_directory(directory: Path, *, exclusive: bool) -> int:
-    descriptor = os.open(directory, os.O_RDONLY)
-    try:
-        fcntl.flock(
-            descriptor,
-            fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH,
-        )
-    except BaseException:
-        os.close(descriptor)
-        raise
-    return descriptor
-
-
-def unlock_queue_directory(descriptor: int) -> None:
-    try:
-        fcntl.flock(descriptor, fcntl.LOCK_UN)
-    finally:
-        os.close(descriptor)
-
-
-def queue_operation_base(
-    *,
-    operation: str,
-    root: Path,
-    directory: Path,
-    task_id: str,
-    role: str,
-    lease_id: str,
-    generation: int,
-    started: float,
-) -> dict[str, Any]:
-    return {
-        "ok": True,
-        "operation": operation,
-        "root": str(root),
-        "task_id": task_id,
-        "role": role,
-        "lease_id": lease_id,
-        "lease_generation": generation,
-        "queue_path": str(directory),
-        "queue_version": QUEUE_VERSION,
-        "completion_inferred": False,
-        "observed_at": datetime.now(UTC).isoformat(),
-        "duration_ms": round((time.monotonic() - started) * 1000),
-    }
-
-
-def command_queue_inspect(args: argparse.Namespace) -> dict[str, Any]:
-    started = time.monotonic()
-    requested_root = Path(args.root).resolve()
-    root, directory = queue_directory(
-        requested_root,
-        task_id=args.task_id,
-        lease_id=args.lease_id,
-        generation=args.generation,
-    )
-    if directory.exists():
-        descriptor = lock_queue_directory(directory, exclusive=False)
-        try:
-            items, pending, unexpected = scan_queue(
-                root,
-                directory,
-                role=args.role,
-                lease_id=args.lease_id,
-                generation=args.generation,
-            )
-        finally:
-            unlock_queue_directory(descriptor)
-    else:
-        items, pending, unexpected = [], [], []
-    return {
-        **queue_operation_base(
-            operation="queue-inspect",
-            root=root,
-            directory=directory,
-            task_id=args.task_id,
-            role=args.role,
-            lease_id=args.lease_id,
-            generation=args.generation,
-            started=started,
-        ),
-        "items": items,
-        "pending_artifacts": pending,
-        "unexpected_artifacts": unexpected,
-    }
-
-
-def command_queue_publish(args: argparse.Namespace) -> dict[str, Any]:
-    started = time.monotonic()
-    requested_root = Path(args.root).resolve()
-    root, directory = queue_directory(
-        requested_root,
-        task_id=args.task_id,
-        lease_id=args.lease_id,
-        generation=args.generation,
-    )
-    candidates: list[tuple[dict[str, Any], bytes]] = []
-    seen_ids: set[str] = set()
-    seen_orders: set[int] = set()
-    for input_path in args.input:
-        data, source = read_queue_input(input_path)
-        item = parse_queue_item(data, root=root, source=str(source))
-        validate_queue_binding(
-            item,
-            role=args.role,
-            lease_id=args.lease_id,
-            generation=args.generation,
-        )
-        if item["item_id"] in seen_ids:
-            raise OrchestrateError(f"duplicate input item_id: {item['item_id']}")
-        if item["order"] in seen_orders:
-            raise OrchestrateError(f"duplicate input order: {item['order']}")
-        seen_ids.add(item["item_id"])
-        seen_orders.add(item["order"])
-        candidates.append((item, data))
-    candidates.sort(
-        key=lambda candidate: (candidate[0]["order"], candidate[0]["item_id"])
-    )
-    directory.mkdir(parents=True, exist_ok=True)
-    if directory.is_symlink():
-        raise OrchestrateError(f"queue directory must not be a symlink: {directory}")
-    descriptor = lock_queue_directory(directory, exclusive=True)
-    try:
-        existing, pending, unexpected = scan_queue(
-            root,
-            directory,
-            role=args.role,
-            lease_id=args.lease_id,
-            generation=args.generation,
-        )
-        if pending or unexpected:
-            raise OrchestrateError(
-                "queue contains unreconciled artifacts; inspect before publishing"
-            )
-        existing_ids = {item["item_id"] for item in existing}
-        existing_orders = {item["order"] for item in existing}
-        to_publish: list[tuple[dict[str, Any], bytes]] = []
-        recovered: list[dict[str, Any]] = []
-        for item, data in candidates:
-            destination = directory / queue_filename(item)
-            if destination.exists():
-                # A prior run landed this item; rerunning after an abort
-                # reports instead of failing, but only on exact content.
-                if destination.is_symlink() or not destination.is_file():
-                    raise OrchestrateError(
-                        f"queue destination is not a regular file: {destination}"
-                    )
-                if destination.read_bytes() != data:
-                    raise OrchestrateError(
-                        f"queue item already exists with different content:"
-                        f" {item['item_id']} order={item['order']}"
-                    )
-                evidence = queue_item_evidence(item, path=destination, data=data)
-                evidence["recovered"] = "already-published"
-                recovered.append(evidence)
-                continue
-            if item["item_id"] in existing_ids or item["order"] in existing_orders:
-                raise OrchestrateError(
-                    f"queue item already exists: {item['item_id']} order={item['order']}"
-                )
-            to_publish.append((item, data))
-        published: list[dict[str, Any]] = list(recovered)
-        for item, data in to_publish:
-            destination = directory / queue_filename(item)
-            handle, temporary_name = tempfile.mkstemp(
-                prefix=f".{destination.name}.pending-",
-                dir=directory,
-            )
-            temporary = Path(temporary_name)
-            try:
-                with os.fdopen(handle, "wb") as stream:
-                    stream.write(data)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                if destination.exists():
-                    raise OrchestrateError(f"queue destination appeared: {destination}")
-                os.replace(temporary, destination)
-                os.fsync(descriptor)
-            finally:
-                if temporary.exists():
-                    temporary.unlink()
-            published.append(queue_item_evidence(item, path=destination, data=data))
-    finally:
-        unlock_queue_directory(descriptor)
-    return {
-        **queue_operation_base(
-            operation="queue-publish",
-            root=root,
-            directory=directory,
-            task_id=args.task_id,
-            role=args.role,
-            lease_id=args.lease_id,
-            generation=args.generation,
-            started=started,
-        ),
-        "items": published,
-        "producer_authority_inferred": False,
-        "readiness_inferred": False,
-    }
-
-
-def command_queue_remove(args: argparse.Namespace) -> dict[str, Any]:
-    started = time.monotonic()
-    requested_root = Path(args.root).resolve()
-    root, directory = queue_directory(
-        requested_root,
-        task_id=args.task_id,
-        lease_id=args.lease_id,
-        generation=args.generation,
-    )
-    item_id = require_identifier(args.item_id, label="item-id")
-    if args.order < 0 or args.order > 999999:
-        raise OrchestrateError("queue order must be between 0 and 999999")
-    if not SHA256_PATTERN.fullmatch(args.expected_sha256):
-        raise OrchestrateError(
-            "expected-sha256 must be 64 lowercase hexadecimal digits"
-        )
-    stale_reconciliation = bool(args.stale_reconciliation_confirmed)
-    retraction_reason = (args.reason or "").strip()
-    if stale_reconciliation and (
-        not args.consumer_ended_confirmed or not retraction_reason
-    ):
-        raise OrchestrateError(
-            "stale reconciliation requires --consumer-ended-confirmed and --reason"
-        )
-    if not directory.is_dir() or directory.is_symlink():
-        raise OrchestrateError(f"queue directory not found: {directory}")
-    descriptor = lock_queue_directory(directory, exclusive=True)
-    try:
-        destination = directory / f"{args.order:06d}-{item_id}.md"
-        if destination.is_symlink() or not destination.is_file():
-            raise OrchestrateError(f"queue item not found: {destination}")
-        data = destination.read_bytes()
-        observed_sha256 = sha256_bytes(data)
-        if observed_sha256 != args.expected_sha256:
-            raise OrchestrateError(
-                "queue item hash mismatch; retain the item and reconcile before retrying"
-            )
-        item = parse_queue_item(data, root=root, source=str(destination))
-        validate_queue_binding(
-            item,
-            role=args.role,
-            lease_id=args.lease_id,
-            generation=args.generation,
-        )
-        if item["item_id"] != item_id or item["order"] != args.order:
-            raise OrchestrateError("queue item envelope does not match removal request")
-        destination.unlink()
-        os.fsync(descriptor)
-    finally:
-        unlock_queue_directory(descriptor)
-    return {
-        **queue_operation_base(
-            operation="queue-remove",
-            root=root,
-            directory=directory,
-            task_id=args.task_id,
-            role=args.role,
-            lease_id=args.lease_id,
-            generation=args.generation,
-            started=started,
-        ),
-        "item_id": item_id,
-        "order": args.order,
-        "removed_sha256": observed_sha256,
-        "terminal_delivery_declared": bool(args.terminal_delivery_confirmed),
-        "terminal_delivery_inferred": False,
-        "removal_authorization": (
-            "stale-reconciliation" if stale_reconciliation else "terminal-delivery"
-        ),
-        "consumer_ended_declared": bool(args.consumer_ended_confirmed),
-        "retraction_reason": retraction_reason if stale_reconciliation else None,
-    }
 
 
 def managed_worktree_root(root: Path) -> Path:
@@ -2227,18 +814,10 @@ def command_review_checkout(args: argparse.Namespace) -> dict[str, Any]:
     evidence = worktree_evidence(target, started=started)
     if evidence["branch"] is not None or evidence["head"] != target_sha:
         raise OrchestrateError("review checkout is not detached at the requested SHA")
-    expected_receipt = (
-        common_repo_root(root)
-        / ".agent_state"
-        / "orchestrate"
-        / "receipts"
-        / f"review-{label}.json"
-    )
     result = {
         "ok": True,
         "operation": "review-checkout",
         "subject_sha": target_sha,
-        "expected_receipt": str(expected_receipt),
         **evidence,
     }
     if recovered:
@@ -2246,111 +825,16 @@ def command_review_checkout(args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
-def require_registered_worktree(root: Path, target: Path) -> dict[str, Any]:
-    resolved = str(target.resolve())
-    record = next(
-        (
-            record
-            for record in worktree_records(root)
-            if record.get("worktree") == resolved
-        ),
-        None,
-    )
-    if record is None:
-        raise OrchestrateError(f"not a registered worktree: {target}")
-    return record
-
-
-def command_review_verdict(args: argparse.Namespace) -> dict[str, Any]:
-    payload, data = read_json_object(args.receipt, label="review receipt")
-    errors = validate_review_receipt(payload)
-    if not errors and args.subject_sha:
-        if not EXACT_SHA_PATTERN.fullmatch(args.subject_sha):
-            raise OrchestrateError(
-                "subject-sha must be an exact hexadecimal commit SHA"
-            )
-        if payload["subject_sha"].lower() != args.subject_sha.lower():
-            errors.append(
-                f"receipt binds {payload['subject_sha']}, not the expected subject"
-                f" {args.subject_sha}"
-            )
-    receipt_path = str(Path(args.receipt).resolve()) if args.receipt != "-" else "-"
-    result: dict[str, Any] = {
-        "ok": not errors,
-        "operation": "review-verdict",
-        "read_only": True,
-        "receipt": receipt_path,
-        "receipt_sha256": sha256_bytes(data),
-        "errors": errors,
-    }
-    if errors:
-        result["next_action"] = "unusable-evidence"
-        return result
-    verdict = payload["verdict"]
-    result.update(
-        item_id=payload["item_id"],
-        subject_sha=payload["subject_sha"],
-        review_kind=payload.get("review_kind"),
-        verdict=verdict,
-        findings=payload["findings"],
-        authorizes_collect=verdict == "pass",
-    )
-    if verdict == "pass":
-        result["next_action"] = "collect"
-        result["collect_hint"] = (
-            "collect --integration-worktree <task checkout> --task-ref task/<task>"
-            f" --lane-ref <lane> --expected-lane-sha {payload['subject_sha']}"
-            f" --receipt {receipt_path}"
-        )
-    elif verdict == "needs_fix":
-        result["next_action"] = "return-findings-to-original-writer"
-    else:
-        result["next_action"] = "root-adjudication"
-    return result
-
-
-def collect_authorization(args: argparse.Namespace) -> tuple[str, str, dict[str, Any]]:
-    """Resolve collect authority from a review receipt or an explicit declaration."""
-    if args.receipt:
-        if args.authorized_sha or args.review_kind:
-            raise OrchestrateError(
-                "--receipt replaces --authorized-sha/--review-kind; pass exactly one"
-                " authorization source"
-            )
-        payload, data = read_json_object(args.receipt, label="review receipt")
-        errors = validate_review_receipt(payload)
-        if errors:
-            raise OrchestrateError("invalid review receipt: " + "; ".join(errors))
-        if payload["verdict"] != "pass":
-            raise OrchestrateError(
-                f"review receipt verdict is {payload['verdict']};"
-                " only pass authorizes collection"
-            )
-        return (
-            payload["subject_sha"],
-            payload["review_kind"],
-            {
-                "authorization_source": "receipt",
-                "receipt_sha256": sha256_bytes(data),
-                "receipt_item_id": payload["item_id"],
-                "reviewer_agent_id": payload["reviewer_agent_id"],
-                "profile_requested": payload["profile_requested"],
-                "profile_effective": payload["profile_effective"],
-            },
-        )
-    if not (args.authorized_sha and args.review_kind):
-        raise OrchestrateError(
-            "collect requires either --receipt or both --authorized-sha and"
-            " --review-kind"
-        )
-    return args.authorized_sha, args.review_kind, {"authorization_source": "declared"}
-
-
 def command_collect(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
     root = Path(args.root).resolve()
     require_task_lane_refs(args.task_ref, args.lane_ref)
-    authorized_value, review_kind, authorization = collect_authorization(args)
+    if not (args.authorized_sha and args.review_kind):
+        raise OrchestrateError(
+            "collect requires both --authorized-sha and --review-kind"
+        )
+    authorized_value, review_kind = args.authorized_sha, args.review_kind
+    authorization = {"authorization_source": "declared"}
     expected = exact_commit(root, args.expected_lane_sha, label="expected lane SHA")
     authorized = exact_commit(root, authorized_value, label="authorized SHA")
     if expected != authorized:
@@ -2393,23 +877,6 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
     lane_head = run_git(root, "rev-parse", f"{args.lane_ref}^{{commit}}").stdout.strip()
     if lane_head != expected:
         raise OrchestrateError(f"lane target drifted: {lane_head} != {expected}")
-    scope_evidence: dict[str, Any] = {}
-    if args.scope:
-        manifest, manifest_data = read_scope_manifest(args.scope)
-        changed = changed_paths_since_fork(root, task_head, expected)
-        violations = scope_violations(changed, manifest)
-        if violations:
-            raise OrchestrateError(
-                "lane writes leave the declared scope: "
-                + ", ".join(
-                    f"{item['path']} ({item['reason']})" for item in violations[:20]
-                )
-            )
-        scope_evidence = {
-            "scope_item_id": manifest["item_id"],
-            "scope_manifest_sha256": sha256_bytes(manifest_data),
-            "scope_changed_paths": len(changed),
-        }
     before = run_git(root, "rev-parse", "HEAD").stdout.strip()
     preflight = run_git(root, "merge-tree", "--write-tree", before, expected)
     merge_tree = preflight.stdout.splitlines()[0].strip()
@@ -2431,7 +898,6 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
         "declared_review_kind": review_kind,
         "verdict_inferred": False,
         **authorization,
-        **scope_evidence,
         "before": before,
         "preflight_tree": merge_tree,
         **evidence,
@@ -2465,33 +931,6 @@ def landing_checkout_dirt(root: Path) -> tuple[list[str], list[str]]:
     return staged, dirty
 
 
-def landing_gate_state(
-    gate_receipt: str | None, task_sha: str
-) -> dict[str, Any]:
-    if not gate_receipt:
-        return {
-            "state": "missing",
-            "hint": "write a gate receipt for the final gate bound to the task head",
-        }
-    payload, data = read_json_object(gate_receipt, label="gate receipt")
-    errors = validate_gate_receipt(payload)
-    if errors:
-        return {"state": "invalid", "errors": errors}
-    bound = payload["subject_sha"].lower() == task_sha.lower()
-    if not bound:
-        state = "stale-subject"
-    elif payload["status"] == "passed":
-        state = "passed"
-    else:
-        state = payload["status"]
-    return {
-        "state": state,
-        "status": payload["status"],
-        "subject_sha": payload["subject_sha"],
-        "receipt_sha256": sha256_bytes(data),
-    }
-
-
 _HELD_LOCKS: list[Any] = []
 
 
@@ -2522,7 +961,6 @@ def command_land_status(args: argparse.Namespace) -> dict[str, Any]:
     target_ref = declaration["target_ref"]
     task_sha = run_git(root, "rev-parse", f"{args.task_ref}^{{commit}}").stdout.strip()
     target_sha = run_git(root, "rev-parse", f"{target_ref}^{{commit}}").stdout.strip()
-    gate = landing_gate_state(args.gate_receipt, task_sha)
     branch = run_git(root, "symbolic-ref", "--quiet", "--short", "HEAD", check=False)
     on_target = branch.returncode == 0 and branch.stdout.strip() == target_ref
     staged, dirty = landing_checkout_dirt(root)
@@ -2562,14 +1000,10 @@ def command_land_status(args: argparse.Namespace) -> dict[str, Any]:
         else "authorized"
     )
     steps = {
-        "final_gate": gate,
         "landing_authority": {"policy": policy, "state": authority_state},
         "landing_lock": {
             "state": "built-in",
-            "hint": (
-                "land finish takes the landing lock itself; the merge-slot"
-                " protocol (scripts/merge_slot.py) is only for concurrent roots"
-            ),
+            "hint": "land finish takes the landing lock itself",
         },
         "squash_landing": {
             "state": "done" if landed else "pending",
@@ -2593,8 +1027,6 @@ def command_land_status(args: argparse.Namespace) -> dict[str, Any]:
         next_step = "cleanup --absorbed, then delete the task branch"
     elif landed:
         next_step = "delete the task branch (tree identity already holds)"
-    elif gate["state"] != "passed":
-        next_step = "final gate: produce a passed gate receipt bound to the task head"
     elif not based:
         next_step = "rebase the task onto the target tip, rerun the gate"
     else:
@@ -2637,13 +1069,6 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
     task_head = run_git(root, "rev-parse", f"{args.task_ref}^{{commit}}").stdout.strip()
     if task_head != expected:
         raise OrchestrateError(f"task head drifted: {task_head} != {expected}")
-    gate = landing_gate_state(args.gate_receipt, expected)
-    if gate["state"] != "passed":
-        raise OrchestrateError(
-            f"gate receipt state is {gate['state']}"
-            + ("; " + "; ".join(gate["errors"]) if "errors" in gate else "")
-            + " — only a passed receipt bound to the task head authorizes landing"
-        )
     evidence = {
         "operation": "land-finish",
         "task_ref": args.task_ref,
@@ -2651,8 +1076,6 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
         "policy": policy,
         "task_sha": expected,
         "declaration_sha256": sha256_bytes(decl_data),
-        "gate_receipt_sha256": gate["receipt_sha256"],
-        "merge_slot_held": "declared" if args.merge_slot_held else "not-declared",
     }
     target_sha = run_git(root, "rev-parse", f"{target_ref}^{{commit}}").stdout.strip()
     if (
@@ -2708,7 +1131,7 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
     ):
         raise OrchestrateError(
             "task head is not based on the current target tip: rebase off-slot,"
-            " rerun the final gate on the new tree, then rerun land finish"
+            " then rerun land finish"
         )
     message = args.message or f"land {task_id}: squash of {expected[:12]}"
     run_git(root, "merge", "--squash", args.task_ref)
@@ -2726,8 +1149,6 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
         "cleanup --absorbed to sweep lanes and review checkouts",
         f"git branch -D {args.task_ref} (authorized by this tree identity proof)",
     ]
-    if args.merge_slot_held:
-        next_steps.insert(0, "release the merge slot with the owner token")
     if policy == "publish-authorized":
         next_steps.append(f"git push <remote> {target_ref}")
     return {
@@ -2916,33 +1337,6 @@ def command_cleanup_absorbed(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def load_review_receipts(
-    directory: Path,
-) -> tuple[dict[str, dict[str, Any]], list[str]]:
-    by_sha: dict[str, dict[str, Any]] = {}
-    invalid: list[str] = []
-    if not directory.is_dir():
-        return by_sha, invalid
-    for path in sorted(directory.glob("*.json")):
-        try:
-            payload = json.loads(path.read_bytes())
-        except (OSError, json.JSONDecodeError):
-            invalid.append(str(path))
-            continue
-        if not isinstance(payload, dict) or payload.get("kind") != "review":
-            continue
-        if validate_review_receipt(payload):
-            invalid.append(str(path))
-            continue
-        by_sha[payload["subject_sha"].lower()] = {
-            "path": str(path),
-            "item_id": payload["item_id"],
-            "review_kind": payload.get("review_kind"),
-            "verdict": payload["verdict"],
-        }
-    return by_sha, invalid
-
-
 def command_slice_status(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
     root = Path(args.root).resolve()
@@ -2951,12 +1345,6 @@ def command_slice_status(args: argparse.Namespace) -> dict[str, Any]:
         raise OrchestrateError(f"task ref must use task/<task>: {task_ref!r}")
     task_id = require_identifier(task_ref.split("/", 1)[1], label="task ref id")
     task_sha = run_git(root, "rev-parse", f"{task_ref}^{{commit}}").stdout.strip()
-    receipts_dir = (
-        Path(args.receipts_dir).resolve()
-        if args.receipts_dir
-        else common_repo_root(root) / ".agent_state" / "orchestrate" / "receipts"
-    )
-    receipts, invalid = load_review_receipts(receipts_dir)
     worktrees = {
         str(record.get("branch", "")).removeprefix("refs/heads/"): record
         for record in worktree_records(root)
@@ -2988,16 +1376,9 @@ def command_slice_status(args: argparse.Namespace) -> dict[str, Any]:
         entry["changed_path_count"] = len(changed)
         lane_changed[branch] = set(changed)
         absorption = lane_absorption(root, head, task_sha)
-        receipt = receipts.get(head.lower())
-        if receipt is not None:
-            entry["receipt"] = receipt
         if absorption is not None:
             entry["state"] = "absorbed"
             entry["absorption"] = absorption
-        elif receipt is not None and receipt["verdict"] == "pass":
-            entry["state"] = "authorized_to_collect"
-        elif receipt is not None and receipt["verdict"] == "needs_fix":
-            entry["state"] = "needs_fix"
         else:
             entry["state"] = "writing"
         lanes.append(entry)
@@ -3014,29 +1395,11 @@ def command_slice_status(args: argparse.Namespace) -> dict[str, Any]:
         "read_only": True,
         "task_ref": task_ref,
         "task_sha": task_sha,
-        "receipts_dir": str(receipts_dir),
-        "invalid_receipts": invalid,
         "write_set_overlaps": overlaps,
         "lanes": lanes,
         "observed_at": datetime.now(UTC).isoformat(),
         "duration_ms": round((time.monotonic() - started) * 1000),
     }
-
-
-def section_text(text: str, heading: str) -> str:
-    lines = text.splitlines()
-    try:
-        start = (
-            next(index for index, line in enumerate(lines) if line.strip() == heading)
-            + 1
-        )
-    except StopIteration:
-        return ""
-    end = next(
-        (index for index in range(start, len(lines)) if lines[index].startswith("## ")),
-        len(lines),
-    )
-    return "\n".join(lines[start:end]).strip()
 
 
 def add_root(command: argparse.ArgumentParser) -> None:
@@ -3063,115 +1426,6 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("--runtime", choices=("codex", "claude"))
     diff.set_defaults(handler=command_diff)
 
-    packet = commands.add_parser(
-        "packet", help="publish or inspect immutable direct-dispatch packets"
-    )
-    packet_commands = packet.add_subparsers(dest="packet_command", required=True)
-    packet_publish = packet_commands.add_parser(
-        "publish", help="validate and atomically publish content-addressed work"
-    )
-    add_root(packet_publish)
-    packet_publish.add_argument("--task-id", required=True)
-    packet_publish.add_argument("--input", required=True)
-    packet_publish.set_defaults(
-        handler=command_packet_publish, requires_release_preflight=True
-    )
-    packet_inspect = packet_commands.add_parser(
-        "inspect", help="read and verify one exact content-addressed packet"
-    )
-    add_root(packet_inspect)
-    packet_inspect.add_argument("--task-id", required=True)
-    packet_inspect.add_argument("--sha256", required=True)
-    packet_inspect.set_defaults(handler=command_packet_inspect)
-
-    milestone = commands.add_parser("milestone", help="lint one semantic role event")
-    milestone_commands = milestone.add_subparsers(
-        dest="milestone_command", required=True
-    )
-    milestone_lint = milestone_commands.add_parser("lint")
-    milestone_lint.add_argument("--role", choices=DISPATCH_ROLES, required=True)
-    milestone_lint.add_argument(
-        "--input", required=True, help="milestone JSON path, or '-' for stdin"
-    )
-    milestone_lint.set_defaults(handler=command_milestone_lint)
-
-    gate = commands.add_parser(
-        "gate", help="baseline-relative comparison of two gate run summaries"
-    )
-    gate_commands = gate.add_subparsers(dest="gate_command", required=True)
-    gate_compare = gate_commands.add_parser("compare")
-    gate_compare.add_argument(
-        "--baseline", required=True, help="baseline gate run summary JSON path"
-    )
-    gate_compare.add_argument(
-        "--current", required=True, help="current gate run summary JSON path"
-    )
-    gate_compare.add_argument("--item-id", required=True)
-    gate_compare.add_argument(
-        "--output", help="write the receipt draft here (never overwrites)"
-    )
-    gate_compare.set_defaults(handler=command_gate_compare)
-
-    receipt = commands.add_parser(
-        "receipt", help="lint one hand-written verdict or contract receipt"
-    )
-    receipt_commands = receipt.add_subparsers(dest="receipt_command", required=True)
-    receipt_lint = receipt_commands.add_parser("lint")
-    receipt_lint.add_argument(
-        "--kind",
-        choices=RECEIPT_KINDS,
-        help="override; defaults to the receipt's own kind field",
-    )
-    receipt_lint.add_argument(
-        "--input", required=True, help="receipt JSON path, or '-' for stdin"
-    )
-    receipt_lint.set_defaults(handler=command_receipt_lint)
-
-    queue = commands.add_parser(
-        "queue", help="guard the bounded per-agent durable delivery spool"
-    )
-    queue_commands = queue.add_subparsers(dest="queue_command", required=True)
-
-    def add_queue_binding(command: argparse.ArgumentParser) -> None:
-        add_root(command)
-        command.add_argument("--task-id", required=True)
-        command.add_argument("--role", choices=QUEUE_ROLES, required=True)
-        command.add_argument("--lease-id", required=True)
-        command.add_argument("--generation", type=int, required=True)
-
-    queue_publish = queue_commands.add_parser(
-        "publish", help="atomically publish immutable ready item files"
-    )
-    add_queue_binding(queue_publish)
-    queue_publish.add_argument("--input", action="append", required=True)
-    queue_publish.set_defaults(
-        handler=command_queue_publish, requires_release_preflight=True
-    )
-
-    queue_inspect = queue_commands.add_parser(
-        "inspect", help="read and validate one lease generation without mutation"
-    )
-    add_queue_binding(queue_inspect)
-    queue_inspect.set_defaults(handler=command_queue_inspect)
-
-    queue_remove = queue_commands.add_parser(
-        "remove", help="remove one exact terminal or root-reconciled stale item"
-    )
-    add_queue_binding(queue_remove)
-    queue_remove.add_argument("--item-id", required=True)
-    queue_remove.add_argument("--order", type=int, required=True)
-    queue_remove.add_argument("--expected-sha256", required=True)
-    removal_authorization = queue_remove.add_mutually_exclusive_group(required=True)
-    removal_authorization.add_argument(
-        "--terminal-delivery-confirmed", action="store_true"
-    )
-    removal_authorization.add_argument(
-        "--stale-reconciliation-confirmed", action="store_true"
-    )
-    queue_remove.add_argument("--consumer-ended-confirmed", action="store_true")
-    queue_remove.add_argument("--reason")
-    queue_remove.set_defaults(handler=command_queue_remove)
-
     lane = commands.add_parser("lane", help="explicit lane lifecycle guards")
     lane_commands = lane.add_subparsers(dest="lane_command", required=True)
     lane_create = lane_commands.add_parser("create")
@@ -3194,15 +1448,6 @@ def build_parser() -> argparse.ArgumentParser:
     checkout.set_defaults(
         handler=command_review_checkout, requires_release_preflight=True
     )
-    review_verdict = review_commands.add_parser("verdict")
-    review_verdict.add_argument(
-        "--receipt", required=True, help="review receipt JSON path, or '-' for stdin"
-    )
-    review_verdict.add_argument(
-        "--subject-sha",
-        help="fail when the receipt binds a different subject SHA",
-    )
-    review_verdict.set_defaults(handler=command_review_verdict)
 
     land = commands.add_parser(
         "land", help="declared-policy squash landing with tree-identity proof"
@@ -3214,7 +1459,6 @@ def build_parser() -> argparse.ArgumentParser:
     land_status.add_argument(
         "--declaration", required=True, help="landing declaration JSON path"
     )
-    land_status.add_argument("--gate-receipt")
     land_status.set_defaults(handler=command_land_status)
     land_finish = land_commands.add_parser("finish")
     add_root(land_finish)
@@ -3222,13 +1466,6 @@ def build_parser() -> argparse.ArgumentParser:
     land_finish.add_argument("--task-sha", required=True)
     land_finish.add_argument(
         "--declaration", required=True, help="landing declaration JSON path"
-    )
-    land_finish.add_argument("--gate-receipt", required=True)
-    land_finish.add_argument(
-        "--merge-slot-held",
-        action="store_true",
-        help="declare an external merge-slot claim (concurrent-roots protocol);"
-        " the built-in landing lock is always taken",
     )
     land_finish.add_argument(
         "--confirmed",
@@ -3253,51 +1490,11 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--task-ref", required=True)
     collect.add_argument("--lane-ref", required=True)
     collect.add_argument("--expected-lane-sha", required=True)
-    collect.add_argument("--authorized-sha")
-    collect.add_argument("--review-kind", choices=COLLECT_REVIEW_KINDS)
+    collect.add_argument("--authorized-sha", required=True)
     collect.add_argument(
-        "--receipt", help="review receipt JSON path replacing the two flags above"
-    )
-    collect.add_argument(
-        "--scope",
-        help="lane scope manifest JSON; writes outside the declared scope fail collect",
+        "--review-kind", choices=COLLECT_REVIEW_KINDS, required=True
     )
     collect.set_defaults(handler=command_collect, requires_release_preflight=True)
-
-    scope = commands.add_parser(
-        "scope", help="validate a declared write scope against the actual diff"
-    )
-    scope_commands = scope.add_subparsers(dest="scope_command", required=True)
-    scope_lint = scope_commands.add_parser("lint")
-    scope_lint.add_argument(
-        "--input", required=True, help="scope manifest JSON path, or '-' for stdin"
-    )
-    scope_lint.set_defaults(handler=command_scope_lint)
-    scope_check = scope_commands.add_parser("check")
-    add_root(scope_check)
-    scope_check.add_argument("--base", required=True)
-    scope_check.add_argument("--head", required=True)
-    scope_check.add_argument("--manifest", required=True)
-    scope_check.set_defaults(handler=command_scope_check)
-    scope_amend = scope_commands.add_parser("amend")
-    scope_amend.add_argument(
-        "--manifest", required=True, help="current scope manifest JSON path"
-    )
-    scope_amend.add_argument(
-        "--add-owned", action="append", help="owned path pattern to add (repeatable)"
-    )
-    scope_amend.add_argument(
-        "--add-shared-read-only",
-        action="append",
-        help="shared read-only path pattern to add (repeatable)",
-    )
-    scope_amend.add_argument(
-        "--reason", required=True, help="why the declared scope must grow"
-    )
-    scope_amend.add_argument(
-        "--output", required=True, help="amended manifest path (never overwrites)"
-    )
-    scope_amend.set_defaults(handler=command_scope_amend)
 
     sweep = commands.add_parser(
         "cleanup",
@@ -3318,16 +1515,12 @@ def build_parser() -> argparse.ArgumentParser:
     sweep.set_defaults(handler=command_cleanup_absorbed)
 
     slice_parser = commands.add_parser(
-        "slice", help="derive read-only slice states from Git plus receipts"
+        "slice", help="derive read-only slice states from Git alone"
     )
     slice_commands = slice_parser.add_subparsers(dest="slice_command", required=True)
     slice_status = slice_commands.add_parser("status")
     add_root(slice_status)
     slice_status.add_argument("--task-ref", required=True)
-    slice_status.add_argument(
-        "--receipts-dir",
-        help="review receipt directory (default .agent_state/orchestrate/receipts)",
-    )
     slice_status.set_defaults(handler=command_slice_status)
 
     pin = commands.add_parser(

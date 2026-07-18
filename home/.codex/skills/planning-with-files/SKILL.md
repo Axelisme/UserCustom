@@ -2,7 +2,7 @@
 name: planning-with-files
 description: 以 explicit task-id 管理 repo-local durable task narrative；只在跨回合、critical或資訊量確有需要時使用。
 user-invocable: true
-skill_version: 7
+skill_version: 8
 ---
 
 # Planning with Files
@@ -54,7 +54,9 @@ task_plan decision／commit 引用。交接的唯一載體是 packet＋task_plan
 多 domain 並行的 task 才拆成`domains/<domain>.md`（同 plan 目錄下，一 domain 一頁）。固定欄位是`Domain`、
 `Owner / Reviewer`、`Current SHA`、`Frozen decisions`、`Superseded decisions`、`Open stop conditions`、
 `Review debt`（已宣告待審的 SHA 與 run-ahead 位置）、`Finding ledger`（active／deferred review findings
-含嚴重度）、`Anomalies`（unusable evidence 的指令與替代證據）、`Source map`與`Next acceptance gate`。
+含嚴重度）、`Anomalies`（unusable evidence 的指令與替代證據）、`Active hypotheses`（未驗證假設與
+unverified claims，一行摘要＋指標）、`Negative constraints`（不做什麼＋為什麼）、`Source map`與
+`Next acceptance gate`。
 沒有的值明寫`none`，不能省略欄位；packet是task_plan之上的當前狀態
 快取——決策只在task_plan/ADR記一次，packet只放指標＋一行摘要，在lease交接或checkpoint邊界整頁覆寫，
 domain完成即刪。domain lease不因Phase、checkpoint、commit或turn完成而清除。
@@ -75,8 +77,9 @@ pointer回到目前生效的decision，不可自行選擇較舊敘述。
 - validation/review得到會影響下一步的結果；
 - handoff、blocked、resume或task closure。
 
-Current State／packet 除進度外也承載**active hypotheses、unverified claims、負面約束（不做什麼＋為什麼）**
-——這些是 context 壓縮最容易失真的內容，必須放在永不壓縮的載體裡，不能只留在對話。
+Current State／packet 的`Active hypotheses`與`Negative constraints`欄位承載 context 壓縮最容易失真的
+內容，不能只留在對話；欄位只放一行摘要＋指標，證據與細節仍歸`findings.md`（沿用 decision 只記一次、
+packet 放指標的既有模式）。失效的假設在 checkpoint／handoff 邊界隨其他 stale 語彙一併清除。
 
 decision被取代時，在唯一decision ledger把舊項標成`superseded`並指向replacement；不能只新增一段相反文字。
 checkpoint／handoff時同時清除`Current State`與packet內已失效的workflow語彙，不必等Phase數量達到壓縮門檻。
@@ -100,6 +103,7 @@ authority來源，不得自行宣告validation、review或merge authority。
 - `task_plan.md`詳細Phase超過10個或超過budget時，每批只搬最舊5個；五個都必須在Phase table標成
   `completed`，且每個`### Phase N — Topic`都有唯一非空`Conclusion / Commit`。Current State、active
   decision、domain packet、open review debt永不壓縮；live檔留下Historical Phase Summary列。
+  只靠這些永不壓縮內容就超過budget時Fast Fail（與`findings.md`同規則），先在boundary清除stale項再重試。
 - `progress.md`超過40筆任一table row或budget時，搬移舊prefix並各保留最近20筆。一般writer仍只append；
   compactor是唯一可搬移sealed prefix的角色。Current State不在此檔，因此history不取得authority。
 - `findings.md`只在超過budget時搬移`Status=resolved`且有`Evidence / Closure`pointer的Discoveries row。

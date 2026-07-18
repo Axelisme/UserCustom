@@ -60,7 +60,8 @@ effort 級的關閉動作，orchestrate 只關自己的 task，不關這些：
 - **wayfinder**：destination、out-of-scope、領域詞彙、不可逆軸向選擇（persistence／
   wire schema 哲學、ownership 劃分）、價值取捨——能活過 refactor 的層次。
 - **to-spec / to-tickets**：模組級介面概念、schema 形狀、測試 seam（HITL 確認）、
-  垂直切片＋驗收＋blocking edges。不寫 file path／code（prototype 固化的決策片段例外）。
+  垂直切片的初始切法＋blocking edges（執行期可再拆，見下）、驗收（凍結）。
+  不寫 file path／code（prototype 固化的決策片段例外）。
 - **planner（執行期）**：精確 integration point、write scope 切分、wave 內順序、
   targeted-test 指令——一切從當前程式碼可推導的。
 

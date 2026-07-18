@@ -751,6 +751,14 @@ def worktree_evidence(path: Path, *, started: float) -> dict[str, Any]:
 
 
 SEAM_READY_PATTERN = re.compile(r"^Seam-Ready:\s*true\s*$", re.IGNORECASE | re.MULTILINE)
+SPECULATIVE_BASE_PATTERN = re.compile(
+    r"^Speculative-Base:\s*true\s*$", re.IGNORECASE | re.MULTILINE
+)
+DEPENDS_LANE_PATTERN = re.compile(
+    r"^Depends-Lane:\s*([0-9a-fA-F]{40,64})\s*$", re.MULTILINE
+)
+ITEM_TRAILER_PATTERN = re.compile(r"^Item:\s*(\S+)\s*$", re.MULTILINE)
+CLOSES_FINDING_PATTERN = re.compile(r"^Closes-Finding:\s*(\S+)\s*$", re.MULTILINE)
 
 
 def lane_absorption(root: Path, lane_sha: str, task_sha: str) -> str | None:
@@ -850,6 +858,96 @@ def command_lane_create(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def command_compose_base(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    root = Path(args.root).resolve()
+    task_id = require_identifier(args.task_id, label="task-id")
+    name = require_identifier(args.name, label="name")
+    base = exact_commit(root, args.base, label="base")
+    lanes = [
+        exact_commit(root, value, label=f"lane[{index}]")
+        for index, value in enumerate(args.lane)
+    ]
+    if len(set(lanes)) != len(lanes):
+        raise OrchestrateError("duplicate lane SHAs in compose-base")
+    branch = f"spec/{task_id}/{name}"
+    ref = f"refs/heads/{branch}"
+    if run_git(root, "show-ref", "--verify", "--quiet", ref, check=False).returncode == 0:
+        # A prior run completed; verify the same inputs and report instead of failing.
+        head = run_git(root, "rev-parse", ref).stdout.strip()
+        for required in (base, *lanes):
+            if (
+                run_git(
+                    root, "merge-base", "--is-ancestor", required, head, check=False
+                ).returncode
+                != 0
+            ):
+                raise OrchestrateError(
+                    f"spec branch {branch} exists but does not contain {required};"
+                    " pick a new --name for different inputs"
+                )
+        return {
+            "ok": True,
+            "operation": "compose-base",
+            "recovered": "already-composed",
+            "spec_ref": branch,
+            "composite_sha": head,
+            "base": base,
+            "lanes": lanes,
+            "observed_at": datetime.now(UTC).isoformat(),
+            "duration_ms": round((time.monotonic() - started) * 1000),
+        }
+    current = base
+    for lane_sha in lanes:
+        if (
+            run_git(
+                root, "merge-base", "--is-ancestor", lane_sha, current, check=False
+            ).returncode
+            == 0
+        ):
+            continue
+        merged = run_git(
+            root, "merge-tree", "--write-tree", current, lane_sha, check=False
+        )
+        if merged.returncode != 0:
+            raise OrchestrateError(
+                f"lanes textually collide at {lane_sha}: structural hazard —"
+                " recut the seam or serialize; compose-base never resolves conflicts"
+            )
+        tree = merged.stdout.splitlines()[0].strip()
+        message = (
+            f"compose speculative base {task_id}/{name}\n\n"
+            "Speculative-Base: true\n"
+            f"Depends-Lane: {lane_sha}\n"
+        )
+        current = run_git(
+            root,
+            "commit-tree",
+            tree,
+            "-p",
+            current,
+            "-p",
+            lane_sha,
+            "-m",
+            message,
+        ).stdout.strip()
+    if current == base:
+        raise OrchestrateError("all lanes are already contained in the base")
+    run_git(root, "branch", branch, current)
+    return {
+        "ok": True,
+        "operation": "compose-base",
+        "spec_ref": branch,
+        "composite_sha": current,
+        "base": base,
+        "lanes": lanes,
+        "speculative": True,
+        "note": "not integrable until every Depends-Lane SHA is on the task branch",
+        "observed_at": datetime.now(UTC).isoformat(),
+        "duration_ms": round((time.monotonic() - started) * 1000),
+    }
+
+
 def command_review_checkout(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
     root = Path(args.root).resolve()
@@ -902,6 +1000,90 @@ def command_review_checkout(args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
+def command_review_advance(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    root = Path(args.root).resolve()
+    from_sha = exact_commit(root, args.from_sha, label="--from SHA")
+    to_sha = exact_commit(root, args.to_sha, label="--to SHA")
+    target = require_managed_worktree(
+        root, Path(args.worktree).resolve(), kind="review"
+    )
+    if not target.name.startswith("review-"):
+        raise OrchestrateError("review worktree name must start with 'review-'")
+    if not any(
+        record.get("worktree") == str(target) for record in worktree_records(root)
+    ):
+        raise OrchestrateError(f"not a registered worktree: {target}")
+    evidence = worktree_evidence(target, started=started)
+    if evidence["branch"] is not None:
+        raise OrchestrateError("review worktree is not detached")
+    if not evidence["clean"]:
+        raise OrchestrateError("review worktree is dirty; evidence would be void")
+    if evidence["head"] == to_sha:
+        # A prior run completed; rerunning after an abort reports instead of failing.
+        return {
+            "ok": True,
+            "operation": "review-advance",
+            "recovered": "already-advanced",
+            "subject_sha": to_sha,
+            "previous_subject_sha": from_sha,
+            **evidence,
+        }
+    if evidence["head"] != from_sha:
+        raise OrchestrateError(
+            f"review worktree HEAD is {evidence['head']}, not the declared --from;"
+            " the subject history would break"
+        )
+    run_git(target, "checkout", "--detach", to_sha)
+    evidence = worktree_evidence(target, started=started)
+    if evidence["head"] != to_sha or not evidence["clean"]:
+        raise OrchestrateError("review advance did not reach a clean detached --to")
+    return {
+        "ok": True,
+        "operation": "review-advance",
+        "subject_sha": to_sha,
+        "previous_subject_sha": from_sha,
+        **evidence,
+    }
+
+
+def command_slice_milestone(args: argparse.Namespace) -> dict[str, Any]:
+    started = time.monotonic()
+    root = Path(args.root).resolve()
+    item_id = require_identifier(args.item, label="item")
+    head = run_git(root, "rev-parse", "HEAD").stdout.strip()
+    parents = run_git(
+        root, "rev-list", "--parents", "-1", head
+    ).stdout.strip().split()[1:]
+    body = run_git(root, "log", "-1", "--format=%B", head).stdout
+    item_match = ITEM_TRAILER_PATTERN.search(body)
+    if item_match is not None and item_match.group(1) != item_id:
+        raise OrchestrateError(
+            f"HEAD carries Item: {item_match.group(1)}, not {item_id};"
+            " commit the item's work first or fix the --item"
+        )
+    evidence = worktree_evidence(root, started=started)
+    payload = {
+        "ok": True,
+        "operation": "slice-milestone",
+        "read_only": True,
+        "item_id": item_id,
+        "subject_sha": head,
+        "parents": parents,
+        "item_trailer_present": item_match is not None,
+        "seam_ready": bool(SEAM_READY_PATTERN.search(body)),
+        "closes_findings": CLOSES_FINDING_PATTERN.findall(body),
+        "outcome": args.outcome,
+        "evidence": None,
+        **evidence,
+    }
+    if not evidence["clean"]:
+        payload["warning"] = (
+            "worktree is dirty: subject_sha does not carry the uncommitted work"
+        )
+    return payload
+
+
 def command_collect(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
     root = Path(args.root).resolve()
@@ -938,6 +1120,30 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
             "observed_at": datetime.now(UTC).isoformat(),
             "duration_ms": round((time.monotonic() - started) * 1000),
         }
+    speculative_log = run_git(
+        root, "log", "--format=%H%x1f%B%x1e", f"{task_head}..{expected}"
+    ).stdout
+    for chunk in speculative_log.split("\x1e"):
+        sha, _, body = chunk.strip().partition("\x1f")
+        if not sha or not SPECULATIVE_BASE_PATTERN.search(body):
+            continue
+        for dependency in DEPENDS_LANE_PATTERN.findall(body):
+            if (
+                run_git(
+                    root,
+                    "merge-base",
+                    "--is-ancestor",
+                    dependency,
+                    task_head,
+                    check=False,
+                ).returncode
+                != 0
+            ):
+                raise OrchestrateError(
+                    f"lane stacks on speculative composite base {sha[:12]} whose"
+                    f" dependency {dependency[:12]} is not on {args.task_ref};"
+                    " collect that lane first"
+                )
     git_dir = Path(run_git(root, "rev-parse", "--absolute-git-dir").stdout.strip())
     if (git_dir / "MERGE_HEAD").exists():
         raise OrchestrateError(
@@ -1515,6 +1721,22 @@ def build_parser() -> argparse.ArgumentParser:
         handler=command_lane_create, requires_release_preflight=True
     )
 
+    compose = commands.add_parser(
+        "compose-base",
+        help="merge seam-ready lanes into a marked speculative base (spec/<task>/<name>)",
+    )
+    add_root(compose)
+    compose.add_argument("--task-id", required=True)
+    compose.add_argument("--name", required=True)
+    compose.add_argument("--base", required=True)
+    compose.add_argument(
+        "--lane",
+        action="append",
+        required=True,
+        help="seam-ready lane SHA (repeatable)",
+    )
+    compose.set_defaults(handler=command_compose_base, requires_release_preflight=True)
+
     review = commands.add_parser("review", help="detached exact-SHA review worktrees")
     review_commands = review.add_subparsers(dest="review_command", required=True)
     checkout = review_commands.add_parser("checkout")
@@ -1524,6 +1746,14 @@ def build_parser() -> argparse.ArgumentParser:
     checkout.add_argument("--worktree")
     checkout.set_defaults(
         handler=command_review_checkout, requires_release_preflight=True
+    )
+    advance = review_commands.add_parser("advance")
+    add_root(advance)
+    advance.add_argument("--worktree", required=True)
+    advance.add_argument("--from", dest="from_sha", required=True)
+    advance.add_argument("--to", dest="to_sha", required=True)
+    advance.set_defaults(
+        handler=command_review_advance, requires_release_preflight=True
     )
 
     land = commands.add_parser(
@@ -1599,6 +1829,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_root(slice_status)
     slice_status.add_argument("--task-ref", required=True)
     slice_status.set_defaults(handler=command_slice_status)
+    slice_milestone = slice_commands.add_parser("milestone")
+    add_root(slice_milestone)
+    slice_milestone.add_argument("--item", required=True)
+    slice_milestone.add_argument("--outcome")
+    slice_milestone.set_defaults(handler=command_slice_milestone)
 
     pin = commands.add_parser(
         "pin", help="pin a task to the installed orchestrate release"

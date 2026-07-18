@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 92
+skill_version: 93
 ---
 
 # Orchestrate
@@ -39,6 +39,13 @@ review as a **shadow station** beside the line — most slices never enter it (d
 ladder), and it blocks the line only at a critical checkpoint. Freeze and integrate are
 root-serial; implement and review fan out. Root is therefore the throughput ceiling:
 batch harvests, keep the serial stations short, keep the parallel stations fed.
+
+Read the same loop as a cooperative scheduler — lanes are processes (isolated worktrees),
+agents threads, slices the scheduled tasks, root the scheduler, an agent's context its
+cache: same-domain work returns to its original writer for cache affinity, and
+interrupting a running assignee is a preemption that discards a reasoning cache, so it is
+spent only on a fault (liveness trigger) or a contract fault (correction), never on a
+poll.
 
 Two axes of parallelism:
 
@@ -104,15 +111,22 @@ ownership or dependency seams, not per mechanical edit.
 Everything optional; create nothing without a live need, and count unused artifacts at
 close as defects. What remains:
 
-- **Worktree/lane commands** — `lane create`, `review checkout`, `collect`, `cleanup`,
-  `slice status`, `land status|finish` via
-  `<repo-python> <skill-dir>/scripts/orchestrate.py --help`. Idempotent guards over plain
-  git: a rerun after an aborted turn reports what already happened (`recovered: …`).
+- **Worktree/lane commands** — `lane create`, `review checkout`, `review advance`,
+  `compose-base`, `collect`, `cleanup`, `slice status`, `slice milestone`,
+  `land status|finish` via `<repo-python> <skill-dir>/scripts/orchestrate.py --help`.
+  Idempotent guards over plain git: a rerun after an aborted turn reports what already
+  happened (`recovered: …`). `slice milestone` generates envelope Git facts so SHAs are
+  never hand-typed; `compose-base` builds a marked speculative base for a successor that
+  depends on two unvalidated lanes; `review advance` moves one detached review workspace
+  to the next subject SHA instead of accreting worktrees.
 - **Version pin** — `pin set` at task start; state-entering commands fail fast if the
   installed skill moves mid-task; adopt a release at a safe boundary with `pin migrate`,
   which reports the changed documents to re-read. Cut a release with the one-shot
   `release` command (bump + manifest + doctor, rolled back together on failure); never
-  edit `skill_version` by hand.
+  edit `skill_version` by hand. Because the installed skill is a live overlay, cut the
+  release inside a task worktree and land it by merge — the worktree is the staging area,
+  the merge the atomic switch — so the installed path never shows a half-written release;
+  `doctor` it once after the merge.
 - **Task plan** — planning-with-files at `.agent_state/plans/<task-id>/` for cross-session
   or information-heavy work. It carries state (decisions, open findings, review debt,
   lane positions), never procedure.
@@ -122,7 +136,9 @@ close as defects. What remains:
 
 Read [coordination](references/coordination.md) before the first dispatch, review, or
 landing of a task; the matching runtime binding ([runtime-codex.md](runtime-codex.md) or
-[runtime-claude.md](runtime-claude.md)) before the first agent action.
+[runtime-claude.md](runtime-claude.md)) before the first agent action;
+[publication-review](references/publication-review.md) only when a slice touches authority
+publication (schedulers, projections, event streams, receipts, callbacks).
 
 ## Definition of done
 

@@ -11,7 +11,12 @@ checkpoint budget in observable units (commits, items — never wall-clock). Acc
 gates are **verbatim commands** — exact command line, workdir, environment — never a
 described intent like "affected pyright" for the assignee to interpret. Named risk axes
 double as the writer's adversarial self-check list before terminal; the reviewer still
-verifies the same axes independently. Keep it lean: boilerplate lives in the profile;
+verifies the same axes independently. For slices touching ownership schedulers,
+projections, event streams, receipts, or callbacks, name
+[publication-review](publication-review.md) as a risk axis — its matrix replaces
+re-deriving the same race checklist every review, and its post-commit failure taxonomy
+is frozen with the contract for any slice with persistence or publication side effects.
+Keep it lean: boilerplate lives in the profile;
 root writes only the contract, risk axes, acceptance, and non-goals. Long contracts go
 in a plain file whose path the dispatch names.
 
@@ -33,7 +38,13 @@ A milestone is one semantic envelope per observable boundary (for a writer: each
 plus one terminal envelope per item — `item_id`, `outcome`, `evidence`, plus `subject_sha`
 for anything validated/reviewed and finding ids for `needs_fix`. Delivery is at-least-once,
 deduplicated by `item_id`; a sender repeats an unacknowledged terminal envelope in its
-final response. A runtime completion event means only that the turn ended.
+final response. A runtime completion event means only that the turn ended. Envelope
+Git facts (`subject_sha`, parents, tree, clean state, trailers) are generated with
+`slice milestone --item <id>`, never hand-transcribed — retyped SHAs have bound reviews
+to the wrong commit. A schema-complete milestone that was received stands as evidence
+even if the sender's final transport later errors — a runtime completion error never
+retroactively voids it; conversely, with no terminal milestone, no verdict may be
+inferred from any other signal.
 
 Liveness recovery has three triggers: the runtime reports the identity errored; the runtime
 declares its lease lost; or the declared checkpoint budget passes with no milestone.
@@ -50,7 +61,10 @@ critical boundary → the barrier below. Two consecutive reviews yielding only m
 domain or risk axis starts at its own default; any major finding restores it.
 
 A reviewer inspects source first, then runs thin probes from a **detached checkout at the
-exact target SHA** (`review checkout`; a live-writer tree voids the evidence). Challenge
+exact target SHA** (`review checkout`; a live-writer tree voids the evidence). For a
+finding-closure chain, `review advance --from <reviewed> --to <fix>` moves the same
+detached workspace to the new subject with the same proofs, instead of piling up one
+worktree per round. Challenge
 the oracle, ownership, lifecycle, and dangerous failures — green tests prove behavior, not
 that the seam is correct. The verdict is `pass` or `needs_fix`, delivered in the terminal
 milestone with subject SHA, findings (severity, path, observed behavior, evidence), and a
@@ -117,6 +131,13 @@ surface, and keep unexplained risk blocking.
   **Cross-identity work bases only on a seam-ready SHA** (the writer's declared-stable
   commit, `Seam-Ready: true` trailer, or the slice's terminal validated SHA) — never an
   announced SHA that later work already stacks on; findings land as follow-up commits.
+- A successor needing **two seam-ready but unvalidated lanes** starts from a
+  `compose-base` composite: a merge of the named lane SHAs on `spec/<task>/<name>`,
+  marked `Speculative-Base: true` with one `Depends-Lane` per input. It is a base for
+  run-ahead only — `collect` refuses any lane whose history carries a composite whose
+  dependencies are not yet on the task branch, so speculation never leaks into
+  validated integration. A textual conflict while composing is a structural hazard
+  surfacing early: recut or serialize, never hand-resolve the composite.
 - Commit trailers carry attribution across run-ahead: every slice commit names
   `Item: <id>`; a finding fix adds `Closes-Finding: <id>`, even when it lands on a
   successor's branch. Re-review binds to the commits carrying `Closes-Finding`, not the
@@ -144,7 +165,10 @@ read-only and names the first missing step.
 ## Wave close
 
 Reconcile Git and the durable plan; collapse each closed decision into a one-line pointer;
-task_plan carries active items only. Record three discipline counters, each expected zero —
+task_plan carries active items only. Reconcile `git worktree list` against the plan's
+lanes and review debt, sorting every worktree into: active writer, holding open review
+debt, validated/closed (delete now, one batch), or orphan with no durable evidence —
+an orphan is an adoption defect, counted, then deleted. Record three discipline counters, each expected zero —
 unprompted contacts to a running assignee, per-slice reviews without a named risk, repeat
 dispatches for one slice — and name any nonzero count in the wave record rather than
 defending it. Then answer four steering questions against the wave's evidence: **shape

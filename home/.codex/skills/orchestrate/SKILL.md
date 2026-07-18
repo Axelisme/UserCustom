@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 87
+skill_version: 88
 ---
 
 # Orchestrate
@@ -68,7 +68,9 @@ close as defects. What remains:
   git: a rerun after an aborted turn reports what already happened (`recovered: …`).
 - **Version pin** — `pin set` at task start; state-entering commands fail fast if the
   installed skill moves mid-task; adopt a release at a safe boundary with `pin migrate`,
-  which reports the changed documents to re-read.
+  which reports the changed documents to re-read. Cut a release with the one-shot
+  `release` command (bump + manifest + doctor, rolled back together on failure); never
+  edit `skill_version` by hand.
 - **Task plan** — planning-with-files at `.agent_state/plans/<task-id>/` for cross-session
   or information-heavy work. It carries state (decisions, open findings, review debt,
   lane positions), never procedure.

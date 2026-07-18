@@ -37,8 +37,14 @@ an independent surface-disjoint continuation was frozen. Do not occupy a slot wa
 work when the runtime cannot park you.
 
 When the dispatched cadence passes, send one progress milestone with confirmed evidence.
-Report a retract-class finding immediately with a mid-turn message tool; without one, stop the
-review and end the turn at once — the terminal envelope is the immediate report. Close
+Findings have three delivery tiers — never conflate them:
+- **confirmed major**: send immediately with a mid-turn message tool, then keep reviewing
+  the surfaces independent of it; do not hold it for the terminal envelope.
+- **ordinary findings**: accumulate into the one terminal milestone.
+- **contract overturned**: stop the review and end the turn at once — the terminal
+  envelope is the immediate report.
+If no mid-turn message tool exists, a confirmed major is delivered like contract-overturned:
+end the turn so the envelope arrives now. Close
 each target with one terminal milestone: `outcome=pass|needs_fix|blocked|needs_decision`,
 exact `subject_sha` when review ran (it must equal your detached checkout HEAD), evidence,
 and finding IDs.

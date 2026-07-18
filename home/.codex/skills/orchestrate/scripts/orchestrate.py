@@ -235,14 +235,15 @@ def load_manifest(skill_dir: Path, version: int) -> dict[str, Any]:
     return payload
 
 
-def command_release_manifest(args: argparse.Namespace) -> dict[str, Any]:
-    skill_dir = Path(args.skill_dir).resolve()
-    payload = build_manifest(skill_dir, args.version)
-    if args.previous_version is not None:
-        previous = load_manifest(skill_dir, args.previous_version)
+def write_release_manifest(
+    skill_dir: Path, version: int, previous_version: int | None, output: Path
+) -> dict[str, Any]:
+    payload = build_manifest(skill_dir, version)
+    if previous_version is not None:
+        previous = load_manifest(skill_dir, previous_version)
         comparison = compare_manifests(previous, payload)
         payload["release_delta"] = {
-            "from_version": args.previous_version,
+            "from_version": previous_version,
             "changed_sections": {
                 item["path"]: item["changed_sections"]
                 for item in comparison["changed_documents"]
@@ -250,12 +251,78 @@ def command_release_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "changed_profiles": comparison["changed_profiles"],
             "must_reread": comparison["must_reread"],
         }
-    output = Path(args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
-    return {"ok": True, "output": str(output), "skill_version": args.version}
+    return payload
+
+
+def command_release_manifest(args: argparse.Namespace) -> dict[str, Any]:
+    skill_dir = Path(args.skill_dir).resolve()
+    write_release_manifest(
+        skill_dir, args.version, args.previous_version, Path(args.output).resolve()
+    )
+    return {"ok": True, "output": str(args.output), "skill_version": args.version}
+
+
+def command_release(args: argparse.Namespace) -> dict[str, Any]:
+    skill_dir = Path(args.skill_dir).resolve()
+    skill_md = skill_dir / "SKILL.md"
+    original = skill_md.read_text(encoding="utf-8")
+    match = VERSION_PATTERN.search(original)
+    if match is None:
+        raise OrchestrateError("SKILL.md has no skill_version")
+    current = int(match.group(1))
+    target = args.version if args.version is not None else current + 1
+    if target == current:
+        # Rerun after an aborted release: the bump landed but the manifest or
+        # doctor pass may be missing — finish or confirm, never double-bump.
+        if manifest_path(skill_dir, target).is_file():
+            result = verify_release(skill_dir)
+            if not result["ok"]:
+                raise OrchestrateError(
+                    f"v{target} manifest exists but the release is not clean:"
+                    f" {'; '.join(result['errors'])}"
+                )
+            result["recovered"] = "already-released"
+            return result
+        previous = target - 1
+    elif target == current + 1:
+        previous = current
+    else:
+        raise OrchestrateError(
+            f"release target must be v{current} (finish an aborted release) or"
+            f" v{current + 1}, got v{target}"
+        )
+    if target != current:
+        # write_text truncates in place, so the installed hard link keeps its inode
+        skill_md.write_text(
+            VERSION_PATTERN.sub(f"skill_version: {target}", original, count=1),
+            encoding="utf-8",
+        )
+    output = manifest_path(skill_dir, target)
+    try:
+        write_release_manifest(
+            skill_dir,
+            target,
+            previous if manifest_path(skill_dir, previous).is_file() else None,
+            output,
+        )
+        result = verify_release(skill_dir)
+        if not result["ok"]:
+            raise OrchestrateError(
+                "post-release doctor failed: " + "; ".join(result["errors"])
+            )
+    except BaseException:
+        # Roll the half-release back so the installed skill never sits mid-window.
+        skill_md.write_text(original, encoding="utf-8")
+        output.unlink(missing_ok=True)
+        raise
+    result["released_version"] = target
+    result["from_version"] = current
+    result["manifest"] = str(output)
+    return result
 
 
 def verify_release(skill_dir: Path) -> dict[str, Any]:
@@ -1537,11 +1604,23 @@ def build_parser() -> argparse.ArgumentParser:
     add_root(pin_migrate)
     pin_migrate.set_defaults(handler=command_pin_migrate)
 
-    release = commands.add_parser("release-manifest", help=argparse.SUPPRESS)
-    release.add_argument("--version", required=True, type=int)
-    release.add_argument("--previous-version", type=int)
-    release.add_argument("--output", required=True)
-    release.set_defaults(handler=command_release_manifest)
+    release = commands.add_parser(
+        "release",
+        help="atomic release: bump skill_version, write the manifest, run doctor",
+    )
+    release.add_argument(
+        "--version",
+        type=int,
+        help="target version (default: current+1; pass the current version to"
+        " finish an aborted release)",
+    )
+    release.set_defaults(handler=command_release)
+
+    release_manifest = commands.add_parser("release-manifest", help=argparse.SUPPRESS)
+    release_manifest.add_argument("--version", required=True, type=int)
+    release_manifest.add_argument("--previous-version", type=int)
+    release_manifest.add_argument("--output", required=True)
+    release_manifest.set_defaults(handler=command_release_manifest)
     return parser
 
 

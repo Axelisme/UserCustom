@@ -7,9 +7,13 @@ before the first dispatch; the iron rules in `../SKILL.md` stay authoritative.
 
 Root alone freezes work, grants authority, decides deferral, and integrates. A dispatch
 names: bounded objective, workdir/scope, exact base, acceptance, stop conditions, and a
-checkpoint budget in observable units (commits, items — never wall-clock). Keep it lean:
-boilerplate lives in the profile; root writes only the contract, risk axes, acceptance,
-and non-goals. Long contracts go in a plain file whose path the dispatch names.
+checkpoint budget in observable units (commits, items — never wall-clock). Acceptance
+gates are **verbatim commands** — exact command line, workdir, environment — never a
+described intent like "affected pyright" for the assignee to interpret. Named risk axes
+double as the writer's adversarial self-check list before terminal; the reviewer still
+verifies the same axes independently. Keep it lean: boilerplate lives in the profile;
+root writes only the contract, risk axes, acceptance, and non-goals. Long contracts go
+in a plain file whose path the dispatch names.
 
 Keep the same identity for the same domain; finding fixes return to the original writer,
 finding closure to the original reviewer. Spawn a new identity for independent review, a
@@ -45,8 +49,14 @@ the oracle, ownership, lifecycle, and dangerous failures — green tests prove b
 that the seam is correct. The verdict is `pass` or `needs_fix`, delivered in the terminal
 milestone with subject SHA, findings (severity, path, observed behavior, evidence), and a
 proposed routing: gates-the-slice, follow-up-to-writer, task-plan concern, or backlog.
-Root decides deferral. A confirmed major finding is reported immediately so root can hold
-dependent work. Re-review is finding-focused; one full review closes a named-risk surface.
+Root decides deferral. Findings route in three tiers: a **confirmed major** is sent
+mid-review the moment it is confirmed — root routes it to the original writer at once
+while the reviewer keeps scanning independent surfaces; **ordinary findings** accumulate
+into the one terminal milestone; a **contract-overturning** finding stops the review and
+holds every axis that depends on the broken invariant. Waiting for a terminal exact SHA
+before reviewing is necessary (a moving tree voids evidence); waiting for the whole
+review to end before fixing a confirmed major is waste — never do it. Re-review is
+finding-focused; one full review closes a named-risk surface.
 
 **Critical checkpoint** (both features named at freeze — a dangerous state a follow-up
 commit cannot cheaply undo, **and** named dependent work about to stack on it): freeze the
@@ -134,4 +144,7 @@ create`, `review checkout`, `collect`, `land finish`) fail fast if the installed
 moves mid-task, while maintenance commands stay unguarded so a stale pin never blocks
 closing down. Adopt a new version at a safe boundary with `orchestrate pin migrate`, which
 repins and reports the changed documents so root re-reads exactly those. Sub-agents never
-load orchestrate; root sends only the effective delta.
+load orchestrate; root sends only the effective delta. Releases are cut only with the
+one-shot `orchestrate release` (version bump + manifest + doctor succeed or roll back
+together); rerunning it after an abort finishes or confirms the release
+(`recovered: already-released`).

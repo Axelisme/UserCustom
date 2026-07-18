@@ -87,7 +87,7 @@ Root is the only producer; the bound lease holder is the single consumer. Files 
 gitignored task-local generation:
 
 ```text
-.agent_state/orchestrate/<task-id>/queues/<lease-id>/g<generation>/
+.agent_state/orchestrate/<task-id>/queues/<lease-id>/g<generation, zero-padded to 4: g0001>/
   000010-<item-id>.md
 ```
 

@@ -1205,18 +1205,25 @@ def command_scope_amend(args: argparse.Namespace) -> dict[str, Any]:
     if errors:
         raise OrchestrateError("amended manifest is invalid: " + "; ".join(errors))
     output = Path(args.output).resolve()
-    if output.exists():
-        raise OrchestrateError(
-            f"output already exists: {output}; amendments never overwrite —"
-            " each proposal is its own file"
-        )
-    output.parent.mkdir(parents=True, exist_ok=True)
     serialized = (
         json.dumps(amended, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     )
-    output.write_text(serialized, encoding="utf-8")
+    recovered = None
+    if output.exists():
+        # A prior run wrote this exact amendment; rerunning after an abort
+        # reports instead of failing. Anything else never overwrites.
+        if output.read_text(encoding="utf-8") != serialized:
+            raise OrchestrateError(
+                f"output already exists: {output}; amendments never overwrite —"
+                " each proposal is its own file"
+            )
+        recovered = "already-amended"
+    else:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(serialized, encoding="utf-8")
     return {
         "ok": True,
+        **({"recovered": recovered} if recovered else {}),
         "operation": "scope-amend",
         "item_id": manifest["item_id"],
         "previous_manifest_sha256": sha256_bytes(data),
@@ -1511,7 +1518,7 @@ def command_packet_publish(args: argparse.Namespace) -> dict[str, Any]:
             created = True
     finally:
         unlock_queue_directory(descriptor)
-    return {
+    result = {
         **dispatch_packet_evidence(
             root=root,
             directory=directory,
@@ -1523,6 +1530,9 @@ def command_packet_publish(args: argparse.Namespace) -> dict[str, Any]:
         "operation": "packet-publish",
         "created": created,
     }
+    if not created:
+        result["recovered"] = "already-published"
+    return result
 
 
 def command_packet_inspect(args: argparse.Namespace) -> dict[str, Any]:
@@ -1876,18 +1886,33 @@ def command_queue_publish(args: argparse.Namespace) -> dict[str, Any]:
             )
         existing_ids = {item["item_id"] for item in existing}
         existing_orders = {item["order"] for item in existing}
-        for item, _ in candidates:
+        to_publish: list[tuple[dict[str, Any], bytes]] = []
+        recovered: list[dict[str, Any]] = []
+        for item, data in candidates:
             destination = directory / queue_filename(item)
-            if (
-                destination.exists()
-                or item["item_id"] in existing_ids
-                or item["order"] in existing_orders
-            ):
+            if destination.exists():
+                # A prior run landed this item; rerunning after an abort
+                # reports instead of failing, but only on exact content.
+                if destination.is_symlink() or not destination.is_file():
+                    raise OrchestrateError(
+                        f"queue destination is not a regular file: {destination}"
+                    )
+                if destination.read_bytes() != data:
+                    raise OrchestrateError(
+                        f"queue item already exists with different content:"
+                        f" {item['item_id']} order={item['order']}"
+                    )
+                evidence = queue_item_evidence(item, path=destination, data=data)
+                evidence["recovered"] = "already-published"
+                recovered.append(evidence)
+                continue
+            if item["item_id"] in existing_ids or item["order"] in existing_orders:
                 raise OrchestrateError(
                     f"queue item already exists: {item['item_id']} order={item['order']}"
                 )
-        published: list[dict[str, Any]] = []
-        for item, data in candidates:
+            to_publish.append((item, data))
+        published: list[dict[str, Any]] = list(recovered)
+        for item, data in to_publish:
             destination = directory / queue_filename(item)
             handle, temporary_name = tempfile.mkstemp(
                 prefix=f".{destination.name}.pending-",
@@ -2179,10 +2204,26 @@ def command_review_checkout(args: argparse.Namespace) -> dict[str, Any]:
     )
     if not target.name.startswith("review-"):
         raise OrchestrateError("review worktree name must start with 'review-'")
+    recovered = None
     if target.exists():
-        raise OrchestrateError(f"review worktree path already exists: {target}")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    run_git(root, "worktree", "add", "--detach", str(target), target_sha)
+        # A prior run completed; rerunning after an abort reports instead of failing.
+        record = next(
+            (
+                record
+                for record in worktree_records(root)
+                if record.get("worktree") == str(target)
+            ),
+            None,
+        )
+        if record is None:
+            raise OrchestrateError(
+                f"review worktree path already exists but is not a registered"
+                f" worktree: {target}"
+            )
+        recovered = "already-created"
+    else:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        run_git(root, "worktree", "add", "--detach", str(target), target_sha)
     evidence = worktree_evidence(target, started=started)
     if evidence["branch"] is not None or evidence["head"] != target_sha:
         raise OrchestrateError("review checkout is not detached at the requested SHA")
@@ -2193,13 +2234,16 @@ def command_review_checkout(args: argparse.Namespace) -> dict[str, Any]:
         / "receipts"
         / f"review-{label}.json"
     )
-    return {
+    result = {
         "ok": True,
         "operation": "review-checkout",
         "subject_sha": target_sha,
         "expected_receipt": str(expected_receipt),
         **evidence,
     }
+    if recovered:
+        result["recovered"] = recovered
+    return result
 
 
 def require_registered_worktree(root: Path, target: Path) -> dict[str, Any]:

@@ -117,7 +117,9 @@ aborted suites, and unproved tree equivalence are invalid substitutes.
 Word review dispatches in neutral engineering vocabulary — correctness, negative path,
 boundary probe, lifecycle probe, transaction safety — and reserve hostile/adversarial/security
 framing for surfaces that genuinely cross a security boundary. Only `pass` and `needs_fix`
-are verdicts; an incomplete turn, execution failure, platform-classifier abort, or invalid
+are review verdicts; `blocked` and `needs_decision` are valid non-verdict terminal outcomes
+of the same receipt field — findings carriers that route to root and never authorize
+collect. An incomplete turn, execution failure, platform-classifier abort, or invalid
 checkout evidence is **unusable evidence** with its own small root-set retry budget (reword
 the dispatch, rerun with a fresh identity). Finding rounds are unlimited and never count
 against that budget.
@@ -196,10 +198,13 @@ independent adversarial proof leaves this branch for [Critical review](critical-
 A receipt is a plain JSON file its author writes with native file tools at the
 dispatch-named path; `orchestrate receipt lint` validates one and `collect --receipt`
 consumes one — aliases over the file, never a required control plane. A reviewer closes
-review by writing a **review receipt** whose core is small: exact subject SHA, verdict,
-finding ids, evidence. Only a `pass` receipt — the one that authorizes collect — also
-carries the authorization block: reviewer runtime identity, requested/effective profile,
-review kind, and detached/clean checkout evidence whose HEAD equals the subject SHA (a
+review by writing a **review receipt** whose core is small: the receipt envelope
+(`receipt_version`, `kind: "review"`, `item_id`), exact `subject_sha`, `verdict`,
+`findings` ids, `evidence`. The schema is closed — an unexpected field is a lint error, and
+`receipt lint` reports the exact field names. Only a `pass` receipt — the one that
+authorizes collect — also carries the authorization block: reviewer runtime identity
+(`reviewer_agent_id`), requested/effective profile, `review_kind`, and detached/clean
+checkout evidence (`checkout_detached`, `checkout_clean`, `checkout_head`) whose HEAD equals the subject SHA (a
 drifted receipt cannot authorize; `profile_effective` discloses a generic adapter when the
 runtime loaded no profile). `needs_fix`/`blocked` receipts are findings carriers and need
 none of that block. The terminal envelope points at the receipt, and collect consumes it
@@ -238,8 +243,10 @@ may differ.
 ## Skill upgrades
 
 Pin a role turn to the profile/dispatch it loaded. Pin the task itself at task start with
-`orchestrate pin set`; state-entering guards then fail fast if the installed skill moves
-mid-task. Adopt a new orchestrate version at a safe
+`orchestrate pin set`; the state-entering commands — packet/queue publish, `lane create`,
+`review checkout`, `collect`, `land finish` — then fail fast if the installed skill moves
+mid-task (maintenance commands like `cleanup` stay unguarded so a stale pin never blocks
+closing down). Adopt a new orchestrate version at a safe
 boundary—before dispatch, after a milestone, or after turn completion—by running
 `orchestrate pin migrate`, which repins and reports the manifest delta so root re-reads
 exactly the changed documents. An immutable review

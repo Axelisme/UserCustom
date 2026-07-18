@@ -6,9 +6,10 @@ the root session must hand off.
 ## Gate evidence scope
 
 Gate evidence has one carrier: the hand-written **gate receipt**
-(`orchestrate receipt lint`) — exact subject SHA, the exact command, one status
+(`orchestrate receipt lint`) — the receipt envelope (`receipt_version`, `kind: "gate"`,
+`item_id`), exact subject SHA, the exact command, one status
 (`passed | failed_current | failed_baseline | environment_blocked | unverified`), and an
-explicit `exclusions` list; scope (`affected|wave|task`), covered surface, baseline SHA, and
+explicit `exclusions` list — the schema is closed, so an unexpected field is a lint error; scope (`affected|wave|task`), covered surface, baseline SHA, and
 invalidation notes go in `details` when they matter. Every deselected, skipped, or excluded
 test carries its exact test node id, reason, baseline comparison evidence, whether it
 affects acceptance, and a follow-up pointer; a receipt with an acceptance-affecting

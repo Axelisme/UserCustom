@@ -41,7 +41,10 @@ Root may use the `orchestrate` pseudo aliases from the entrypoint instead. They 
 stateless idempotent guards around these same operations: exact inputs only, JSON evidence,
 Git recheck immediately before mutation, Fast Fail on dirty/drifted/unabsorbed state, and
 after an aborted turn the rerun itself is the reconciliation — it reports what a prior run
-already applied (`recovered: already-created|already-collected|already-removed|…`). They
+already applied (`recovered: already-created|already-collected|already-removed|…`). The one
+deliberate exception is spool-item removal (`queue remove`): item absence alone cannot
+distinguish already-removed from never-existed, so its rerun fails and the consumer
+reconciles by evidence comparison instead ([File transports](transports.md)). They
 never infer a verdict or queue state; Git remains the only topology truth carrier.
 
 - `lane create` — lane branch plus worktree at an exact base.

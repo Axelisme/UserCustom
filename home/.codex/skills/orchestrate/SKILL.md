@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 84
+skill_version: 85
 ---
 
 # Orchestrate
@@ -34,7 +34,7 @@ user authority.
 | **4. Dispatch** | Issue only ready, self-contained work with a bounded lease and explicit discretion/stop boundary. After dispatch, root contacts a running assignee only for a public-contract correction, confirmed major finding, user override/stop, or a fired liveness trigger — never for progress or status. | The consumer can act without chat history and knows when it may run ahead or must stop. |
 | **5. Harvest** | Classify the returned milestone as progress, validated state, review verdict, or decision stop; batch routine harvests rather than reacting per slice. | Conclusions bind to the actual exact SHA/tree; tests/anomalies are usable and each finding has an owner. |
 | **6. Integrate** | Collect accepted work in batches of a few slices — one preflight, serial merges inside the batch — after any named review risk is resolved. | Ancestry/tree identity is proved, every lane change is accounted for, and the integration checkout is clean. |
-| **7. Re-observe or close** | Integration changes reality: repeat from Observe, or close against the final integrated tree. | Necessary final gates/review, user authority, cleanup, and durable narrative are current rather than inherited from an older tree. |
+| **7. Re-observe or close** | Integration changes reality: repeat from Observe, or close against the final integrated tree. A wave boundary also runs the wave-close steering review — discipline counts plus shape/cut/parallelism/adoption — from [Delegation and review](references/delegation-and-review.md). | Necessary final gates/review, user authority, cleanup, and durable narrative are current rather than inherited from an older tree. |
 
 ## Pipeline shapes
 

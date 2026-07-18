@@ -170,6 +170,24 @@ pointers only. Record lightweight counts (findings per review, review rounds, wa
 the next wave's default depth one level (focused → root spot-check → none); any major finding
 restores named-risk review immediately.
 
+Add three discipline counters, each expected zero — unprompted contacts to a running
+assignee, per-slice reviews without a named risk, repeat dispatches for one slice. A nonzero
+count is drift to name in the wave record, not defend. Then answer four steering questions
+against the wave's evidence before the next freeze:
+
+- **Shape fit** — did any slice's freeze+dispatch+harvest overhead exceed the work itself
+  (demote to root-only), or did serialization hide genuine independence?
+- **Cut quality** — did any slice exceed a single context, stall, or need repeat dispatch?
+  Recut the next wave.
+- **Parallelism** — bounded by shared-state ownership, or by habit? Any needless wait on the
+  critical path?
+- **Adoption** — were fired triggers' artifacts actually used, and unfired ones left unbuilt?
+  (consumes the artifacts-vs-triggers count)
+
+Each answer is "keep" or a one-line next-freeze adjustment recorded in task_plan.
+Adjustments act forward only — frozen contracts, acceptance, and dispatched work stand.
+Rule-level observations get one backlog line and wait for effort close-out.
+
 Normal queue mechanics live in [File transports](transports.md). A boundary that needs
 independent adversarial proof leaves this branch for [Critical review](critical-review.md).
 

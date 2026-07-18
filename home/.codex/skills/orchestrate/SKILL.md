@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 82
+skill_version: 83
 ---
 
 # Orchestrate
@@ -27,7 +27,7 @@ user authority.
 
 | step | action | completion criterion |
 |---|---|---|
-| **1. Observe** | Read repo instructions and relevant decisions; inspect Git, worktrees, user dirt, current narrative, and existing evidence. A context compaction re-triggers this step: the summary narrative is hypothesis, not authority — re-read the durable plan, relevant ADRs, and Git state before continuing. | The authoritative tree, user-owned changes, live task state, and largest unresolved uncertainty are named. |
+| **1. Observe** | Read repo instructions and relevant decisions; inspect Git, worktrees, user dirt, current narrative, and existing evidence. A context compaction re-triggers this step: the summary narrative is hypothesis, not authority — re-read the durable plan, relevant ADRs, and Git state, and treat already-triggered skill rules (this SKILL and any fired context pointers) as unread — the summary keeps the fact of having read them while dropping their content. | The authoritative tree, user-owned changes, live task state, and largest unresolved uncertainty are named. |
 | **2. Freeze** | Freeze only the public seam of the next bounded outcome: objective, public contract, acceptance, non-goals, write scope, exact base, landing policy, and any named review risk. Internal design is writer discretion, recorded after the fact. | The assignee can act without guessing the public contract, ownership, or acceptance; everything inside the seam is theirs to decide. |
 | **3. Shape** | Choose the cheapest pipeline that retires the uncertainty; when freeze+dispatch+harvest overhead would exceed the work itself, root does the work directly. Serialize shared files, contracts, schemas, fixtures, and authority. | Every ready item has an owner, base, scope, acceptance, dependency, and any named review barrier; conflicting authority is serialized. |
 | **4. Dispatch** | Issue only ready, self-contained work with a bounded lease and explicit discretion/stop boundary. After dispatch, root contacts a running assignee only for a public-contract correction, confirmed major finding, user override/stop, or a fired liveness trigger — never for progress or status. | The consumer can act without chat history and knows when it may run ahead or must stop. |

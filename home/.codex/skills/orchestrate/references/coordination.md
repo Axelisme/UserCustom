@@ -15,6 +15,11 @@ verifies the same axes independently. Keep it lean: boilerplate lives in the pro
 root writes only the contract, risk axes, acceptance, and non-goals. Long contracts go
 in a plain file whose path the dispatch names.
 
+Keep each lane double-buffered: while its current slice runs, freeze the successor, so a
+seam-ready writer starts the next slice instead of idling for a shadow review
+(contract-planner can keep this one-deep chain stocked). Refresh at each harvest; never
+stock deeper than one.
+
 Keep the same identity for the same domain; finding fixes return to the original writer,
 finding closure to the original reviewer. Spawn a new identity for independent review, a
 changed domain, or genuine parallel scope. An identity can never independently review work
@@ -54,8 +59,10 @@ mid-review the moment it is confirmed — root routes it to the original writer 
 while the reviewer keeps scanning independent surfaces; **ordinary findings** accumulate
 into the one terminal milestone; a **contract-overturning** finding stops the review and
 holds every axis that depends on the broken invariant. Waiting for a terminal exact SHA
-before reviewing is necessary (a moving tree voids evidence); waiting for the whole
-review to end before fixing a confirmed major is waste — never do it. Re-review is
+before reviewing is necessary (a moving tree voids evidence); waiting for a review
+verdict before stacking the successor, or for the whole review to end before fixing a
+confirmed major, is waste — review is a shadow station, and only a critical checkpoint
+puts it on the line. Re-review is
 finding-focused; one full review closes a named-risk surface.
 
 **Critical checkpoint** (both features named at freeze — a dangerous state a follow-up

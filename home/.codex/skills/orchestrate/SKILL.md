@@ -1,16 +1,18 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 88
+skill_version: 89
 ---
 
 # Orchestrate
 
-Run a control loop that retires the most consequential uncertainty with the largest move
-you can still prove safe. Git is the only topology truth carrier; the planning-with-files
-task plan is the only durable narrative; everything else is root judgment, not protocol.
-Optimize **critical-path lead time**, not agent utilization; a redone slice is cheaper
-than machinery that prevents redoing it.
+This skill exists for two things: **parallel lanes and the pipeline that keeps them
+full**; everything else is supporting infrastructure. Run a control loop that retires the
+most consequential uncertainty with the largest move you can still prove safe. Git is the
+only topology truth carrier; the planning-with-files task plan is the only durable
+narrative; everything else is root judgment, not protocol. Optimize **critical-path lead
+time**, not agent utilization; a redone slice is cheaper than machinery that prevents
+redoing it.
 
 ## Iron rules
 
@@ -26,7 +28,41 @@ survive context compaction; everything else in this skill degrades gracefully �
 4. After a context compaction, re-read this SKILL and the durable plan before the next
    dispatch; the summary is hypothesis, not authority.
 
-## Control loop
+## Pipeline model
+
+The unit that flows is a **slice**: frozen contract → seam-ready SHA → verdict →
+integrated commit. The stations are **freeze → implement → integrate**, with independent
+review as a **shadow station** beside the line — most slices never enter it (depth
+ladder), and it blocks the line only at a critical checkpoint. Freeze and integrate are
+root-serial; implement and review fan out. Root is therefore the throughput ceiling:
+batch harvests, keep the serial stations short, keep the parallel stations fed.
+
+Two axes of parallelism:
+
+- **Lanes (spatial)** — disjoint write scopes, one writer + worktree each.
+- **Overlap (temporal)** — within a lane: review of slice N runs beside implementation of
+  N+1; finding fixes run beside the remaining review.
+
+A stall is legitimate only as one of three hazards:
+
+- **Structural** — two slices need the same file/interface: serialize, and read it as a
+  poor cut; fix the plan, not the machinery.
+- **Data** — a successor needs a predecessor's seam: forward on the **seam-ready SHA**; a
+  review verdict is never the wait condition.
+- **Control** — a finding overturns the contract: flush only the work stacked on the
+  broken invariant.
+
+**Run-ahead is the default, not a concession.** Once a slice is seam-ready, its successor
+starts immediately while review proceeds in the shadow; a finding lands as a follow-up
+commit on the published SHA. *Holding* a successor is what needs a named reason: a
+critical checkpoint, an unstable public seam, or a write-scope conflict. The speculation
+test: if a follow-up commit can absorb a wrong bet, run; only where it cannot, barrier.
+
+**Starvation is a root defect, not a writer state.** Keep each lane double-buffered — one
+slice running, its successor already frozen — refreshed at each harvest. Depth one only:
+deeper stock goes stale and rots into ritual.
+
+## Control loop — root's serial duty cycle
 
 | step | action |
 |---|---|
@@ -46,8 +82,8 @@ Not a taxonomy — judgment guides, in the spirit of "simple = 1 agent, complex 
 - **Single writer** when one coherent surface dominates: one vertical slice, targeted
   gates, writer self-review, root spot-check.
 - **Wave** when two or more slices are genuinely independent (disjoint write sets): one
-  writer per worktree, writers run ahead on their own unreviewed SHAs, root batch-collects.
-  A later finding lands as a follow-up fix, not a rewrite.
+  writer per worktree, root batch-collects; the pipeline model above governs run-ahead
+  within each lane.
 - **Critical checkpoint** only where a wrong intermediate state cannot be undone by a
   follow-up commit **and** named dependent work is about to stack on it (both, named at
   freeze — a scary-sounding domain alone never qualifies). Carve that core into its own

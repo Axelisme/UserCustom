@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 93
+skill_version: 94
 ---
 
 # Orchestrate
@@ -119,14 +119,11 @@ close as defects. What remains:
   never hand-typed; `compose-base` builds a marked speculative base for a successor that
   depends on two unvalidated lanes; `review advance` moves one detached review workspace
   to the next subject SHA instead of accreting worktrees.
-- **Version pin** — `pin set` at task start; state-entering commands fail fast if the
-  installed skill moves mid-task; adopt a release at a safe boundary with `pin migrate`,
-  which reports the changed documents to re-read. Cut a release with the one-shot
-  `release` command (bump + manifest + doctor, rolled back together on failure); never
-  edit `skill_version` by hand. Because the installed skill is a live overlay, cut the
-  release inside a task worktree and land it by merge — the worktree is the staging area,
-  the merge the atomic switch — so the installed path never shows a half-written release;
-  `doctor` it once after the merge.
+- **Version pin** — `pin set` at task start guards the state-entering commands; `pin
+  migrate` adopts a release at a safe boundary and names the documents to re-read; cut
+  releases only with the one-shot `release`, never a hand-edited `skill_version`. The
+  lifecycle and the worktree-staged release flow live in
+  [coordination](references/coordination.md).
 - **Task plan** — planning-with-files at `.agent_state/plans/<task-id>/` for cross-session
   or information-heavy work. It carries state (decisions, open findings, review debt,
   lane positions), never procedure.

@@ -13,17 +13,12 @@ described intent like "affected pyright" for the assignee to interpret. Named ri
 double as the writer's adversarial self-check list before terminal; the reviewer still
 verifies the same axes independently. For slices touching ownership schedulers,
 projections, event streams, receipts, or callbacks, name
-[publication-review](publication-review.md) as a risk axis — its matrix replaces
-re-deriving the same race checklist every review, and its post-commit failure taxonomy
-is frozen with the contract for any slice with persistence or publication side effects.
-Keep it lean: boilerplate lives in the profile;
-root writes only the contract, risk axes, acceptance, and non-goals. Long contracts go
-in a plain file whose path the dispatch names.
+[publication-review](publication-review.md) as a risk axis. Boilerplate lives in the
+profile; root writes only the contract, risk axes, acceptance, and non-goals. Long
+contracts go in a plain file whose path the dispatch names.
 
-Keep each lane double-buffered: while its current slice runs, freeze the successor, so a
-seam-ready writer starts the next slice instead of idling for a shadow review
-(contract-planner can keep this one-deep chain stocked). Refresh at each harvest; never
-stock deeper than one.
+Double-buffer each lane per the SKILL pipeline model; contract-planner can keep the
+one-deep chain stocked, refreshed at each harvest.
 
 Keep the same identity for the same domain; finding fixes return to the original writer,
 finding closure to the original reviewer. Spawn a new identity for independent review, a
@@ -117,11 +112,10 @@ surface, and keep unexplained risk blocking.
   create`, `review checkout`, `collect`, `cleanup`, `slice status`) wrap the same
   operations with exact-input checks and idempotent rerun reports.
 - Declare each writer's file scope in a sentence; same-file or same-interface work is
-  serial. A scope conflict means the split was poor — prefer splitting the seam
-  (prefactor) so scopes become disjoint; fix the plan, not the machinery. Sole overlap
-  exception: root may declare a file **append-only shared** (registration lists, import
-  blocks, changelogs — no semantic coupling between entries); writers may touch it
-  concurrently and the textual merge is trusted.
+  serial (a scope conflict is a structural hazard — recut per the SKILL pipeline model).
+  The sole overlap exception is a root-declared **append-only shared** file (registration
+  lists, import blocks, changelogs — no semantic coupling between entries); writers touch
+  it concurrently and the textual merge is trusted.
 - While two lanes run, a zero-cost `git merge-tree <merge-base> <laneA> <laneB>` dry run
   surfaces textual collisions before either terminals — an early warning to correct a
   contract, never a license to overlap. A clean result proves nothing semantic: interface
@@ -190,14 +184,16 @@ branches, and exact SHAs before dispatching anything.
 
 ## Skill upgrades
 
-Pin the task at start with `orchestrate pin set`; the state-entering commands (`lane
-create`, `review checkout`, `collect`, `land finish`) fail fast if the installed skill
-moves mid-task, while maintenance commands stay unguarded so a stale pin never blocks
-closing down. Adopt a new version at a safe boundary with `orchestrate pin migrate`, which
-repins and reports the changed documents so root re-reads exactly those; removed
+Pin the task at start with `orchestrate pin set`; every command that creates or mutates
+lane/spec/review/integration/persistence state fails fast if the installed skill moves
+mid-task, while read-only and maintenance commands stay unguarded so a stale pin never
+blocks closing down. Adopt a new version at a safe boundary with `orchestrate pin migrate`,
+which repins and reports the changed documents so root re-reads exactly those; removed
 documents are listed separately (`acknowledge_removed`) — acknowledge they are gone, do
-not hunt for them. Sub-agents never
-load orchestrate; root sends only the effective delta. Releases are cut only with the
-one-shot `orchestrate release` (version bump + manifest + doctor succeed or roll back
-together); rerunning it after an abort finishes or confirms the release
-(`recovered: already-released`).
+not hunt for them. Sub-agents never load orchestrate; root sends only the effective delta.
+Releases are cut only with the one-shot `orchestrate release` (version bump + manifest +
+doctor succeed or roll back together); rerunning it after an abort finishes or confirms the
+release (`recovered: already-released`). Because the installed skill is a live overlay, cut
+the release inside a task worktree and land it by merge — the worktree is the staging area,
+the merge the atomic switch — so the installed path never shows a half-written release,
+then `doctor` the installed path once after the merge.

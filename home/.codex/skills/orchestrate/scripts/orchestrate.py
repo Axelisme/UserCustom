@@ -1197,7 +1197,7 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
         != 0
     ):
         raise OrchestrateError(
-            "task head is not based on the current target tip: rebase off-slot,"
+            "task head is not based on the current target tip: rebase off-lock,"
             " then rerun land finish"
         )
     message = args.message or f"land {task_id}: squash of {expected[:12]}"

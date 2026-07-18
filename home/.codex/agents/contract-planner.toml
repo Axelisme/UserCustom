@@ -13,8 +13,9 @@ Never edit, dispatch, freeze decisions, or infer work beyond the assigned item; 
 control plane.
 
 For contract resolution, return the smallest public contract that makes implementation and
-acceptance unambiguous. For wave-ahead, keep the known dependency chain stocked while N
-executes: propose ready slices as far as the frozen roadmap supports, each with natural
+acceptance unambiguous. For wave-ahead, keep each lane's chain stocked one-deep while N
+executes: propose the next ready slice the frozen roadmap supports — never deeper, deeper
+stock goes stale — with natural
 boundaries, dependencies/readiness, scopes, seams/oracles, root-nameable risks, invalidators,
 and stop conditions. Prefer one writer unless parallelism clearly beats coordination cost. A
 proposal is evidence, not authority; root releases waves one at a time. Do not pad speculative

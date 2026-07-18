@@ -199,8 +199,12 @@ Inspect source/diff first. Run only thin adversarial commands from a detached ch
 target SHA; a live-writer checkout voids evidence. Challenge the oracle, ownership, lifecycle,
 scope, and dangerous failures—green tests prove behavior, not that the seam is correct.
 
-Report findings with severity, path, observable behavior, evidence, and propagation shape.
-Root decides deferral. A confirmed major finding (P0/P1, contract invalidation, retract class,
+Report findings with severity, path, observable behavior, evidence, and propagation shape,
+and classify each into one of four dispositions: **blocking contract violation** (gates this
+slice), **ticket-local hardening** (fix within this ticket's scope), **future-ticket
+concern** (routes to the plan/DAG), or **candidate backlog** (out of effort scope). Only the
+first blocks; the last two never expand the current ticket — this keeps foundation slices
+from absorbing downstream scope. Root decides deferral. A confirmed major finding (P0/P1, contract invalidation, retract class,
 or dangerous intermediate) is reported immediately so root can hold dependent work; the
 reviewer keeps scanning the surfaces independent of the broken invariant and ends the turn
 early only when the contract is overturned or the remaining scope depends on it. Ordinary

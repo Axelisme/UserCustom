@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .primitives import ID_PATTERN, OrchestrateError, read_json_object, require_json_fields, sha256_bytes, validate_json_enum
-from .git_ops import common_repo_root, exact_commit, run_git
+from .git_ops import exact_commit, run_git
 
 LANDING_VERSION = 1
 
@@ -99,8 +99,12 @@ def acquire_landing_lock(root: Path) -> None:
 
     The handle is held until process exit so the flock outlives this frame.
     """
-    lock_path = common_repo_root(root) / ".agent_state" / "orchestrate" / "land.lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    git_common_dir = Path(
+        run_git(
+            root, "rev-parse", "--path-format=absolute", "--git-common-dir"
+        ).stdout.strip()
+    )
+    lock_path = git_common_dir / "orchestrate-land.lock"
     handle = open(lock_path, "w")
     try:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -110,6 +114,35 @@ def acquire_landing_lock(root: Path) -> None:
             f"another landing holds the lock: {lock_path}; wait for it to finish"
         ) from exc
     _HELD_LOCKS.append(handle)
+
+
+def rollback_landing_publication(
+    root: Path,
+    *,
+    target_full_ref: str,
+    target_sha: str,
+    landed_sha: str,
+    reason: str,
+) -> None:
+    rollback = run_git(
+        root, "update-ref", target_full_ref, target_sha, landed_sha, check=False
+    )
+    if rollback.returncode != 0:
+        raise OrchestrateError(
+            "durability uncertain: landing publication and compensating ref rollback"
+            f" both failed ({reason}); reconcile before retry"
+        )
+    checkout = run_git(root, "reset", "--hard", target_sha, check=False)
+    head = run_git(root, "rev-parse", "HEAD", check=False).stdout.strip()
+    staged, dirty = landing_checkout_dirt(root)
+    if checkout.returncode != 0 or head != target_sha or staged or dirty:
+        raise OrchestrateError(
+            "landing publication was rolled back but checkout compensation is"
+            f" incomplete ({reason}); inspect the target checkout before retry"
+        )
+    raise OrchestrateError(
+        f"landing publication was rolled back after {reason}; retry from the clean target"
+    )
 
 
 def command_land_status(args: argparse.Namespace) -> dict[str, Any]:
@@ -328,33 +361,23 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
     run_git(root, "update-ref", target_full_ref, landed, target_sha)
     try:
         run_git(root, "reset", "--hard", landed)
-    except OrchestrateError as exc:
-        rollback = run_git(
-            root, "update-ref", target_full_ref, target_sha, landed, check=False
+    except OrchestrateError:
+        rollback_landing_publication(
+            root,
+            target_full_ref=target_full_ref,
+            target_sha=target_sha,
+            landed_sha=landed,
+            reason="checkout synchronization failed",
         )
-        if rollback.returncode != 0:
-            raise OrchestrateError(
-                "durability uncertain: landing ref published but checkout sync and"
-                " compensating ref rollback both failed; reconcile before retry"
-            ) from exc
-        raise OrchestrateError(
-            "landing publication was rolled back after checkout synchronization failed;"
-            " inspect and clean the target checkout before retry"
-        ) from exc
     synced_head = run_git(root, "rev-parse", "HEAD").stdout.strip()
     synced_staged, synced_dirty = landing_checkout_dirt(root)
     if synced_head != landed or synced_staged or synced_dirty:
-        rollback = run_git(
-            root, "update-ref", target_full_ref, target_sha, landed, check=False
-        )
-        if rollback.returncode != 0:
-            raise OrchestrateError(
-                "durability uncertain: landing ref published but checkout verification"
-                " and compensating ref rollback both failed"
-            )
-        raise OrchestrateError(
-            "landing publication was rolled back because target checkout verification"
-            " failed; inspect and clean the checkout before retry"
+        rollback_landing_publication(
+            root,
+            target_full_ref=target_full_ref,
+            target_sha=target_sha,
+            landed_sha=landed,
+            reason="checkout verification failed",
         )
     next_steps = [
         "run reconcile, then cleanup each safe-to-remove exact --worktree target",

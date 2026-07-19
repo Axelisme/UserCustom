@@ -183,12 +183,16 @@ class ReviewRegressionTests(unittest.TestCase):
                 encoding="utf-8",
             )
             original_run_git = landing.run_git
+            reset_attempts = 0
 
             def fail_reset(
                 command_root: Path, *arguments: str, check: bool = True
             ) -> subprocess.CompletedProcess[str]:
+                nonlocal reset_attempts
                 if arguments[:2] == ("reset", "--hard"):
-                    raise OrchestrateError("simulated checkout sync failure")
+                    reset_attempts += 1
+                    if reset_attempts == 1:
+                        raise OrchestrateError("simulated checkout sync failure")
                 return original_run_git(command_root, *arguments, check=check)
 
             with patch.object(landing, "run_git", fail_reset):
@@ -204,6 +208,52 @@ class ReviewRegressionTests(unittest.TestCase):
                         )
                     )
             self.assertEqual(git(root, "rev-parse", "main"), base)
+            self.assertEqual(git(root, "status", "--porcelain"), "")
+
+    def test_landing_lock_is_not_worktree_visible_without_agent_state_ignore(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            root = workspace / "repo"
+            root.mkdir()
+            git(root, "init", "-b", "main")
+            git(root, "config", "user.name", "No Ignore")
+            git(root, "config", "user.email", "no-ignore@example.invalid")
+            (root / "base.txt").write_text("base\n", encoding="utf-8")
+            git(root, "add", "base.txt")
+            git(root, "commit", "-m", "base")
+            base = git(root, "rev-parse", "HEAD")
+            git(root, "branch", "task/demo", base)
+            task = workspace / "task"
+            git(root, "worktree", "add", str(task), "task/demo")
+            (task / "approved.txt").write_text("approved\n", encoding="utf-8")
+            git(task, "add", "approved.txt")
+            git(task, "commit", "-m", "approved")
+            expected = git(root, "rev-parse", "task/demo")
+            declaration = workspace / "landing.json"
+            declaration.write_text(
+                json.dumps(
+                    {
+                        "landing_version": 1,
+                        "task_id": "demo",
+                        "policy": "commit-authorized",
+                        "target_ref": "main",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            payload = landing.command_land_finish(
+                argparse.Namespace(
+                    root=str(root),
+                    declaration=str(declaration),
+                    task_ref="task/demo",
+                    task_sha=expected,
+                    confirmed=False,
+                    message=None,
+                )
+            )
+            self.assertTrue(payload["tree_identity"])
+            self.assertFalse((root / ".agent_state").exists())
+            self.assertTrue((root / ".git" / "orchestrate-land.lock").is_file())
             self.assertEqual(git(root, "status", "--porcelain"), "")
 
     def test_cleanup_mutation_gets_release_preflight_but_dry_run_does_not(self) -> None:

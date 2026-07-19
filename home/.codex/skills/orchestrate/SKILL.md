@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 96
+skill_version: 97
 ---
 
 # Orchestrate
@@ -38,7 +38,12 @@ SHA; validated = every named review debt closed; retired = integrated with the f
 green. "The successor can run" reads seam-ready and never implies "the predecessor can
 integrate", which reads validated. The stations are **freeze → implement → integrate**, with independent
 review as a **shadow station** beside the line — most slices never enter it (depth
-ladder), and it blocks the line only at a critical checkpoint. Freeze and integrate are
+ladder), and it blocks the line only at a critical checkpoint. Review's unit is the **diff**
+at a seam-ready SHA, advancing against the validated base — never a re-scan of settled
+surface. Two altitudes ride two risk classes: *intra-slice* correctness reviews in the
+shadow during the wave; *inter-slice/emergent* risk (contract parity, lifecycle ordering,
+cross-module regression) is visible only once integrated, so it sits at the **wave boundary**
+by data dependency, not policy, batched into root's next-wave freeze. Freeze and integrate are
 root-serial; implement and review fan out. Root is therefore the throughput ceiling:
 batch harvests, keep the serial stations short, keep the parallel stations fed.
 

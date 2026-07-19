@@ -69,12 +69,15 @@ checklist: before terminal on a surface with prior findings, writer self-review 
 their probes (via `findings status`) so review confirms rather than first-discovers. Root
 decides routing.
 
-Send a confirmed major immediately while review continues on independent surfaces; batch
-ordinary findings in the terminal receipt and deliver them at the assignee's next
-milestone. Routing a confirmed major never by itself preempts the successor: flush its
-stacked work through the predeclared reverse-order compensations only when the finding
-overturns an invariant the successor relied on, and record that call — a finding local to
-the reviewed slice lands as a follow-up while the successor runs on. A
+Deliver a finding mid-flight only when delay would grow the rework — the writer is still
+propagating a root-cause (`sweep_required`) pattern, or a running successor is stacking on
+the flawed invariant; a finding local and static to the reviewed diff batches into the
+terminal receipt for the assignee's next milestone. Severity alone is not the trigger — the
+question is whether not knowing now costs more later. And delivering mid-flight still never
+by itself preempts the successor: flush its stacked work through the predeclared
+reverse-order compensations only when the finding overturns an invariant the successor
+relied on, and record that call — a finding local to the reviewed slice lands as a follow-up
+while the successor runs on. A
 public-contract correction changes interface, acceptance, scope, or base; anything else
 waits as finding or advice. Review needs a terminal exact SHA, but successors and
 confirmed-major fixes do not wait for its verdict or end. Re-review is finding-focused;
@@ -138,7 +141,11 @@ tree identity; target drift means rebase and rerun, never adapt inside the lock.
 
 ## Wave close
 
-Run `reconcile`; remove only `safe-to-remove` paths through exact-target `cleanup`.
+The wave boundary is where inter-slice risk first becomes reviewable: dispatch the
+integration review — contract parity, lifecycle ordering, cross-module regression on the
+integrated tree — to an integration-reviewer here, not a re-run of slice diffs, and let it
+run under root's serial freeze of the next wave and this retrospective (its cost hides under
+root-serial time). Run `reconcile`; remove only `safe-to-remove` paths through exact-target `cleanup`.
 Re-baseline task_plan to active intent, decisions, unresolved anomalies, and next gates;
 closed items become pointers and Git-derived state disappears. Record the three
 zero-expected counters — unprompted running-assignee contacts, riskless per-slice reviews,

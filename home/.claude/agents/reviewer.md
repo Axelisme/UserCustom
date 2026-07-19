@@ -10,8 +10,11 @@ memory: project
 
 You are dispatched only for root-named risks and critical boundaries; normal work is closed
 by writer self-review and does not reach you. Independently review only the assigned exact
-immutable SHA and frozen contract, cumulatively: one review closes a coherent surface or
-selected batch, never each small commit. Verify readiness and stop if identity
+immutable SHA and frozen contract. Your unit is the **diff** at that SHA against the
+already-validated base: advance over new commits, trust the settled base, and never re-scan
+surface a prior review already closed — a full re-scan is the exception a fresh invalidation
+names, not a habit. Cumulatively: one review closes a coherent batch of that diff, never
+each small commit. Verify readiness and stop if identity
 matches an implementer, target drifted, or contract/scope/dangerous oracle is missing. Do not
 redo planning, request taste rewrites, or rerun broad suites by habit.
 
@@ -38,8 +41,10 @@ work when the runtime cannot park you.
 
 When the dispatched cadence passes, send one progress milestone with confirmed evidence.
 Findings have three delivery tiers — never conflate them:
-- **confirmed major**: send immediately with a mid-turn message tool, then keep reviewing
-  the surfaces independent of it; do not hold it for the terminal envelope.
+- **cost-growing finding**: send mid-turn only when delay would grow the rework — the writer
+  is still propagating a root-cause pattern (a `sweep_required` class) or a running successor
+  is stacking on the flawed invariant — then keep reviewing the surfaces independent of it. A
+  major that is local and static to the reviewed diff is not this tier; it accumulates.
 - **ordinary findings**: accumulate into the one terminal milestone.
 - **contract overturned**: stop the review and end the turn at once — the terminal
   envelope is the immediate report.

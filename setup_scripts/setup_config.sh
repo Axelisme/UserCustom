@@ -41,6 +41,7 @@ backup_cp() {
 backup_cp_one() {
   src=$(realpath $1)
   dst=$2
+  mkdir -p $(dirname $dst)
   if [ -e $dst ]; then
     if [ ! -L $dst ]; then
       if [ $dst -ef $src ]; then
@@ -61,6 +62,10 @@ backup_cp $UserCustom/home/.config $HOME/.config
 backup_cp_one $UserCustom/home/.codex/AGENTS.md $HOME/.codex/AGENTS.md
 backup_cp $UserCustom/home/.codex/skills $HOME/.codex/skills
 backup_cp $UserCustom/home/.codex/agents $HOME/.codex/agents
+backup_cp_one $UserCustom/home/.pi/agent/settings.json $HOME/.pi/agent/settings.json
+backup_cp_one $UserCustom/home/.pi/agent/APPEND_SYSTEM.md $HOME/.pi/agent/APPEND_SYSTEM.md
+backup_cp $UserCustom/home/.pi/agent/skills $HOME/.pi/agent/skills
+backup_cp $UserCustom/home/.pi/agent/agents $HOME/.pi/agent/agents
 backup_cp $UserCustom/home/.claude/skills $HOME/.claude/skills
 backup_cp $UserCustom/home/.claude/agents $HOME/.claude/agents
 backup_cp $UserCustom/home/.local/include $HOME/.local/include

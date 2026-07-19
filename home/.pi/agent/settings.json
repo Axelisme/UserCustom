@@ -1,0 +1,13 @@
+{
+  "theme": "dark",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
+  "defaultThinkingLevel": "xhigh",
+  "packages": [
+    "npm:@juicesharp/rpiv-ask-user-question",
+    "npm:pi-subagents",
+    "npm:pi-mcp-adapter",
+    "npm:pi-native-search"
+  ],
+  "lastChangelogVersion": "0.80.10"
+}

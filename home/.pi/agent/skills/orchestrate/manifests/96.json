@@ -1,0 +1,154 @@
+{
+  "documents": {
+    "SKILL.md": {
+      "bytes": 9845,
+      "sections": {
+        "Control loop \u2014 root's serial duty cycle": "46c739ac6250b809af6c801d805070718d7bd58c65f340772911d3b5e77acf47",
+        "Definition of done": "09f3ab44d89a6be623882227c99e22d19bbde2ffa52a3dd4a9386d9cae57da7e",
+        "Iron rules": "5391617bb4925ba367b7827eb3671d6f2c409534f8b40b1303f343135901146e",
+        "Machinery": "402534358d6ba1ba7c0f40f0a6f7482e860e04b93868338d0a59b3d9ed3b82c8",
+        "Orchestrate": "b845ecdd3a7386b432a9a77fc2a92f41278c8dac42a49b92863bdd4ac5a8d8ca",
+        "Pipeline model": "f1a2c71cf382750ce335e598d041d5f04a2965009d01238dc503064142003648",
+        "Shaping heuristics": "981f45b69bc0e18fd8976ec75c514b38debad5319182943d09f377b93bec3a4b"
+      },
+      "sha256": "c5088a01524c763e5ca79d0a98c6af4e4cf74e6e8bb1339858a027f80762a6f2"
+    },
+    "references/coordination.md": {
+      "bytes": 14214,
+      "sections": {
+        "Coordination": "f18a1d469493b2ad5b14d3e8294712470e60559f7fc8b914f22154090a1de3ab",
+        "Git topology": "2abd3d64b813b07e78a3272f38576a526acb6fd15642a1c51db3030b662d27c5",
+        "Handoff": "ee2bf3dfeceab65280a0ad72f98838272cb618ddfd9025f16bcfe194b6faed86",
+        "Landing": "b086f845f94a01ec4cd9598e1adc94154f98e43e54c81c996318aec4f99f186b",
+        "Milestones and liveness": "067bcd82b060714d595e40e24e7ee122184ab41247ae385edb3b9df89d6f24a9",
+        "Review": "f408ed431d76bf275bf970da1177fa5d3d6e245f1d08d69166a0fccb73edcbe8",
+        "Roles and dispatch": "7c29e826edaed3a20da1f0a86685a4ecb1f047e184e7f9e8b67fb3dfb4e54ae6",
+        "Skill upgrades": "959463c1290aba799f3e4dc037e8663695c1ba52528d1db1f34a3e86b16becfe",
+        "Wave close": "8ff5984ea2f11172d401a5bc154c037d935af1fe3aebf2d7ee0eda114adcacd8"
+      },
+      "sha256": "fcd383bf0c935401163ba2a3528f8009bcf10d3526cd630a3353b82cead8672f"
+    },
+    "references/publication-review.md": {
+      "bytes": 2864,
+      "sections": {
+        "Authority publication matrix": "bc7753d956c15439f41b7776e4ff81a35c8cd666c0ccf862b52e606315e1ecae",
+        "Post-commit failure taxonomy": "4a86132352adf4d4edf17bf7d3ebbcee2e3a67b1bd278cd521316bc994ac7c9f",
+        "Publication review": "5acd2992bb268b1f4c8f2795c5a7932293d08d9173eba6968b9ece164092d3c9"
+      },
+      "sha256": "2dffc138e7cc7b88dc8040161c5af2563f2b80c5f3b6785a7db51942225e6ae6"
+    },
+    "runtime-claude.md": {
+      "bytes": 2076,
+      "sections": {
+        "Capability boundaries": "e58a3c3613156c253ae9761a2a30cb2329a1d74fcc3eb6bf0643d17c62255307",
+        "Milestones and flow control": "03e45d0be6dcb40f431cf88900fddd87f8e1efd74ef88cc502ff1610863c8ee0",
+        "Orchestrate \u2014 Claude Code runtime binding": "edbde56dfdb0dde4625c0938c3b4d8725aee70af76469b28086f67c9f3c374fe",
+        "Tool and profile binding": "6253e5ac21e024f8622ea031ab348fe22f24de2353b9077fecc91efdf31faf35"
+      },
+      "sha256": "e8e3b20533072bafb3a211bf56f274093b1659323ed61be1ef26c72c68df5d61"
+    },
+    "runtime-codex.md": {
+      "bytes": 4116,
+      "sections": {
+        "Milestones": "6f8b615de25976b0ec8660699f9e6d8d577fc017ac452f1d8a4c06c77edc2f3e",
+        "Orchestrate \u2014 Codex runtime binding": "23e172e426c9a9a924722ead80e3fb151afdc8731112df32d9b2e65f7ceae10f",
+        "Profile bootstrap and dispatch": "194f2b71f046f060811d1a104b35ec398b14891a2325fa534aa9033824d700a8",
+        "Runtime limits": "6bbabc9cee767a8e5c1820184eb6ebe5541b55e8544df8aa3ea56efe69efc3f0",
+        "Tool binding": "47a37c6c358a1af4339f4bbffa7d68c4fc523e3ebb3604e8c13ae554653a7afa"
+      },
+      "sha256": "d3dc113ee2c7a0b2d3462af69528547457623727c30cc908480f0618c5bd933f"
+    },
+    "runtime-pi.md": {
+      "bytes": 4136,
+      "sections": {
+        "Activation and leases": "5fd6687d9f6fcfa3aed63c322da029a3aece8ca37f541ff5d90d55ac6d396b6d",
+        "Capability boundaries": "e6c64f813edbc126d61199e68e1727fc718bf9adb6ef00bef32d4ba33312f45c",
+        "Milestones and flow control": "11c39787d7dc289116315118a52eead708e968b7921e89419667fbe4f09327dd",
+        "Orchestrate \u2014 Pi runtime binding": "8f9646483993934c61935ac3ce773f92c998a27cad39a49db1a2c06e24306a4d",
+        "Tool and profile binding": "f1230db14feffb56381ff243cc06517a16e0bfcc4d20af07e34ee1dae4183c69"
+      },
+      "sha256": "b7bcff3d7205dab7f4443acb6a5304b066e04067a6ee27731e459701cbe73fc3"
+    },
+    "scripts/orchestrate.py": {
+      "bytes": 72164,
+      "sections": {
+        "__file__": "aae6c3a26a9383be49bf4b37b4475ad7938dc029ba44ce8ecfef2aa77f33ef9d"
+      },
+      "sha256": "aae6c3a26a9383be49bf4b37b4475ad7938dc029ba44ce8ecfef2aa77f33ef9d"
+    }
+  },
+  "orchestrate_compat": 96,
+  "profiles": {
+    ".claude/agents/contract-planner.md": {
+      "bytes": 1608,
+      "sha256": "11406bbbc2f3695f91c94d6bf0e3ad5c0ced858687da00720d9ea9e494921245",
+      "standing_orders_sha256": "955bf8c442b16b862d045744c04c182c13566fc1daff6804ad6a017902b30e64"
+    },
+    ".claude/agents/implementer.md": {
+      "bytes": 3159,
+      "sha256": "0f3e34722d180fce3f7a1208f7cdcb1faeb3ca8e6dc37d2103a61f4bb7d01d69",
+      "standing_orders_sha256": "c7c3b29507d90308b5ca3b07c3675f15f9b52e60669b17cabd0a4d196c883f0f"
+    },
+    ".claude/agents/reviewer.md": {
+      "bytes": 3408,
+      "sha256": "4d2520d203db498d0ef361d0ce4687fc8bee349211295a1c9d99ddaff2445d62",
+      "standing_orders_sha256": "6ed67f93c200e78e7ed163b402dc82fdc631946a57a26769ffd9f78679d9a679"
+    },
+    ".codex/agents/contract-planner.toml": {
+      "bytes": 1680,
+      "sha256": "134fd6e53515d8849cfa0185f3b1997b36ec9fbdff11f6a836492833ed7e32ed",
+      "standing_orders_sha256": "955bf8c442b16b862d045744c04c182c13566fc1daff6804ad6a017902b30e64"
+    },
+    ".codex/agents/implementer.toml": {
+      "bytes": 3236,
+      "sha256": "416fea1a0f62f063a8dfc5e31692cf722bba1c07276b9a0968dcfb5fcd9a324a",
+      "standing_orders_sha256": "c7c3b29507d90308b5ca3b07c3675f15f9b52e60669b17cabd0a4d196c883f0f"
+    },
+    ".codex/agents/reviewer.toml": {
+      "bytes": 3484,
+      "sha256": "60028fc398e2af920f388fa361150ecbff84d2c18e202c2c079d3cfe5b7ded07",
+      "standing_orders_sha256": "6ed67f93c200e78e7ed163b402dc82fdc631946a57a26769ffd9f78679d9a679"
+    },
+    ".pi/agent/agents/contract-planner.md": {
+      "bytes": 1717,
+      "sha256": "af309a1697977f52e9a3e6b1b09291a140885c61fad7c3c3f1b3ed4ca297a160",
+      "standing_orders_sha256": "955bf8c442b16b862d045744c04c182c13566fc1daff6804ad6a017902b30e64"
+    },
+    ".pi/agent/agents/implementer.md": {
+      "bytes": 3280,
+      "sha256": "b1bbaa83e99d95c78ccb50ce66a21201e1ac7c92242bd18283ca35835f6f4b64",
+      "standing_orders_sha256": "c7c3b29507d90308b5ca3b07c3675f15f9b52e60669b17cabd0a4d196c883f0f"
+    },
+    ".pi/agent/agents/reviewer.md": {
+      "bytes": 3528,
+      "sha256": "f61f91af0cf85da7b8b1ecf18a75ac6c507340c67ad647227241cd8899ad3a4a",
+      "standing_orders_sha256": "6ed67f93c200e78e7ed163b402dc82fdc631946a57a26769ffd9f78679d9a679"
+    }
+  },
+  "release_delta": {
+    "acknowledge_removed": [],
+    "changed_profiles": [],
+    "changed_sections": {
+      "SKILL.md": [
+        "Machinery",
+        "Pipeline model"
+      ],
+      "references/coordination.md": [
+        "Git topology"
+      ],
+      "runtime-pi.md": [
+        "Activation and leases",
+        "Orchestrate \u2014 Pi runtime binding",
+        "Tool and profile binding"
+      ]
+    },
+    "from_version": 95,
+    "must_reread": [
+      "SKILL.md",
+      "references/coordination.md",
+      "runtime-pi.md"
+    ]
+  },
+  "schema_version": 1,
+  "skill_version": 96
+}

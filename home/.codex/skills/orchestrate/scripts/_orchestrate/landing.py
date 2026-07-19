@@ -245,6 +245,24 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
         run_git(root, "diff", "--quiet", expected, target_sha, check=False).returncode
         == 0
     ):
+        branch = run_git(
+            root, "symbolic-ref", "--quiet", "--short", "HEAD", check=False
+        )
+        if branch.returncode != 0 or branch.stdout.strip() != target_ref:
+            raise OrchestrateError(
+                "landing commit exists but target checkout cannot be verified;"
+                " run land status from the target checkout"
+            )
+        staged, dirty = landing_checkout_dirt(root)
+        if staged or dirty:
+            raise OrchestrateError(
+                "landing commit exists but checkout synchronization is incomplete: "
+                + ", ".join(sorted(set(staged) | set(dirty))[:20])
+            )
+        if run_git(root, "rev-parse", "HEAD").stdout.strip() != target_sha:
+            raise OrchestrateError(
+                "landing commit exists but target checkout HEAD is not synchronized"
+            )
         return {
             "ok": True,
             "recovered": "already-landed",
@@ -308,7 +326,36 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
         target_ref if target_ref.startswith("refs/") else f"refs/heads/{target_ref}"
     )
     run_git(root, "update-ref", target_full_ref, landed, target_sha)
-    run_git(root, "reset", "--hard", landed)
+    try:
+        run_git(root, "reset", "--hard", landed)
+    except OrchestrateError as exc:
+        rollback = run_git(
+            root, "update-ref", target_full_ref, target_sha, landed, check=False
+        )
+        if rollback.returncode != 0:
+            raise OrchestrateError(
+                "durability uncertain: landing ref published but checkout sync and"
+                " compensating ref rollback both failed; reconcile before retry"
+            ) from exc
+        raise OrchestrateError(
+            "landing publication was rolled back after checkout synchronization failed;"
+            " inspect and clean the target checkout before retry"
+        ) from exc
+    synced_head = run_git(root, "rev-parse", "HEAD").stdout.strip()
+    synced_staged, synced_dirty = landing_checkout_dirt(root)
+    if synced_head != landed or synced_staged or synced_dirty:
+        rollback = run_git(
+            root, "update-ref", target_full_ref, target_sha, landed, check=False
+        )
+        if rollback.returncode != 0:
+            raise OrchestrateError(
+                "durability uncertain: landing ref published but checkout verification"
+                " and compensating ref rollback both failed"
+            )
+        raise OrchestrateError(
+            "landing publication was rolled back because target checkout verification"
+            " failed; inspect and clean the checkout before retry"
+        )
     next_steps = [
         "run reconcile, then cleanup each safe-to-remove exact --worktree target",
         f"git branch -D {args.task_ref} (authorized by this tree identity proof)",

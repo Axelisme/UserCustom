@@ -145,6 +145,66 @@ class ReviewRegressionTests(unittest.TestCase):
             )
             self.assertFalse((root / "injected.txt").exists())
             self.assertEqual(git(root, "status", "--porcelain"), "")
+            (root / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+            with self.assertRaisesRegex(OrchestrateError, "synchronization is incomplete"):
+                landing.command_land_finish(
+                    argparse.Namespace(
+                        root=str(root),
+                        declaration=str(declaration),
+                        task_ref="task/demo",
+                        task_sha=expected,
+                        confirmed=False,
+                        message=None,
+                    )
+                )
+
+    def test_land_finish_rolls_back_ref_when_checkout_sync_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            base = init_repo(root)
+            git(root, "branch", "task/demo", base)
+            task = root / ".agent_state" / "worktrees" / "task-demo"
+            task.parent.mkdir(parents=True)
+            git(root, "worktree", "add", str(task), "task/demo")
+            (task / "approved.txt").write_text("approved\n", encoding="utf-8")
+            git(task, "add", "approved.txt")
+            git(task, "commit", "-m", "approved")
+            expected = git(root, "rev-parse", "task/demo")
+            declaration = root / ".agent_state" / "landing.json"
+            declaration.write_text(
+                json.dumps(
+                    {
+                        "landing_version": 1,
+                        "task_id": "demo",
+                        "policy": "commit-authorized",
+                        "target_ref": "main",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            original_run_git = landing.run_git
+
+            def fail_reset(
+                command_root: Path, *arguments: str, check: bool = True
+            ) -> subprocess.CompletedProcess[str]:
+                if arguments[:2] == ("reset", "--hard"):
+                    raise OrchestrateError("simulated checkout sync failure")
+                return original_run_git(command_root, *arguments, check=check)
+
+            with patch.object(landing, "run_git", fail_reset):
+                with self.assertRaisesRegex(OrchestrateError, "publication was rolled back"):
+                    landing.command_land_finish(
+                        argparse.Namespace(
+                            root=str(root),
+                            declaration=str(declaration),
+                            task_ref="task/demo",
+                            task_sha=expected,
+                            confirmed=False,
+                            message=None,
+                        )
+                    )
+            self.assertEqual(git(root, "rev-parse", "main"), base)
+            self.assertEqual(git(root, "status", "--porcelain"), "")
 
     def test_cleanup_mutation_gets_release_preflight_but_dry_run_does_not(self) -> None:
         mutation = [

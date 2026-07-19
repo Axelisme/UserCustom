@@ -19,16 +19,16 @@ def normalized(path: Path) -> str:
 
 
 class OrchestrateContractTests(unittest.TestCase):
-    def test_release_97_keeps_iron_rules_and_pipeline_byte_exact(self) -> None:
+    def test_release_98_keeps_iron_rules_and_pipeline_byte_exact(self) -> None:
         text = (ORCHESTRATE / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("skill_version: 97", text)
+        self.assertIn("skill_version: 98", text)
         iron = section_bytes(text, "## Iron rules", "## Pipeline model")
         pipeline = section_bytes(text, "## Pipeline model", "## Control loop")
-        # Iron rules are unchanged since v95; the pipeline section gains the v97
-        # diff-scoped review + two-review-altitude wording.
+        # v98 aligns the resident contact rule with the v97 cost-growth delivery
+        # threshold; the pipeline section remains byte-exact from v97.
         self.assertEqual(
             hashlib.sha256(iron).hexdigest(),
-            "3286619d96092f4def006d60db6607490f20be0e87d4e938d8226d9e84263cd5",
+            "42c8f0c80e10d3f9b7b5f559714870ad064497a8b4bf581d8d243ff1136872be",
         )
         self.assertEqual(
             hashlib.sha256(pipeline).hexdigest(),

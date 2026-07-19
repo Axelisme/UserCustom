@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 97
+skill_version: 98
 ---
 
 # Orchestrate
@@ -21,9 +21,10 @@ agent utilization; a redone slice is cheaper than machinery that prevents redoin
 Installed in the always-resident runtime context (`~/.codex/AGENTS.md`) because they must
 survive context compaction; everything else in this skill degrades gracefully — these do not.
 
-1. After dispatch, contact a running assignee only for a public-contract correction, a
-   confirmed major finding, a user override/stop, or a fired liveness trigger — never for
-   progress or status, and never on a fixed polling interval.
+1. After dispatch, contact a running assignee only for a cost-growing finding — a
+   public-contract correction, contract overturn, root-cause propagation, or successor
+   stacking on a broken invariant — a user override/stop, or a fired liveness trigger;
+   never for progress or status, and never on a fixed polling interval.
 2. Review and integration bind to an exact commit SHA inspected from a clean detached
    checkout — never a live writer tree, and never a compaction summary's claim of green.
 3. Landing on a persistence branch requires current user authority.

@@ -10,7 +10,7 @@ from .release import command_diff, command_doctor, command_pin_migrate, command_
 from .findings import command_findings_record, command_findings_status
 from .lanes import COLLECT_REVIEW_KINDS, command_collect, command_compose_base, command_compose_base_revalidate, command_lane_create, command_slice_milestone, command_slice_status
 from .review import command_review_advance, command_review_audit, command_review_checkout
-from .worktrees import command_cleanup, command_reconcile
+from .worktrees import command_cleanup, command_reconcile, command_wave_status
 from .landing import command_land_finish, command_land_status
 
 def add_root(command: argparse.ArgumentParser) -> None:
@@ -217,6 +217,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_root(reconcile)
     reconcile.set_defaults(handler=command_reconcile)
+
+    wave = commands.add_parser(
+        "wave", help="read-only wave rollups composed from git-derived reads"
+    )
+    wave_commands = wave.add_subparsers(dest="wave_command", required=True)
+    wave_status = wave_commands.add_parser(
+        "status",
+        help="read-only: slice + findings + reconcile in one report, with a"
+        " restart-oriented handoff summary (never dispatches or lands)",
+    )
+    add_root(wave_status)
+    wave_status.add_argument("--task-ref", required=True)
+    wave_status.set_defaults(handler=command_wave_status)
 
     pin = commands.add_parser(
         "pin", help="pin a task to the installed orchestrate release"

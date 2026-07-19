@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 98
+skill_version: 99
 ---
 
 # Orchestrate
@@ -123,7 +123,7 @@ close as defects. What remains:
 
 - **Git guards** — `lane create`, `review checkout|advance|audit`, `compose-base`,
   `revalidate`, `findings record|status`, `slice status|milestone`, `collect`, `reconcile`,
-  `cleanup`, and `land status|finish` via
+  `wave status` (read-only rollup + restart handoff), `cleanup`, and `land status|finish` via
   `<repo-python> <skill-dir>/scripts/orchestrate.py --help`. They derive or validate Git
   facts; consult per-command `--help`, never restate arguments.
 - **Version pin** — `pin set` at task start guards the state-entering commands; `pin

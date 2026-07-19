@@ -14,6 +14,14 @@ self-check and reviewer scope; authority-publication slices name
 contracts travel by named file. For speculative work, stop conditions also name the
 idempotent compensation to run in reverse if a later finding overturns its prerequisite.
 
+Before freezing, run the cross-cutting readiness checks a first implementation usually
+misses — cheaper here than a re-freeze after the writer stacks work on a half-frozen seam:
+do success and failure paths share one commit fence; is every public digest/fixture the
+contract exposes updated in the same freeze; does the failure path terminate at the real
+production owner, not a stub; is restart/recovery semantics backed by test evidence, not
+assumed. These are prompts, not a gate — a contract that cannot answer them is not ready to
+dispatch.
+
 Double-buffer each lane per the SKILL pipeline model; contract-planner can keep the
 one-deep chain stocked as drafts, each re-confirmed against the predecessor's actual result
 at harvest before it dispatches. Successive items on one authority surface stay in that
@@ -100,7 +108,11 @@ integration owns ancestry/tree checks and the final repo/risk-required gate on t
 candidate. A missing behavior returns to the writer for a failing regression before the
 fix. An abort, crash, or timeout is not a pass and never becomes one by retrying until
 green — record it, replace it with the smallest split evidence that still covers the
-surface, and keep unexplained risk blocking.
+surface, and keep unexplained risk blocking. Distinguish a product failure from a gate the
+sandbox could not run — a required capability the environment withheld (loopback socket,
+real adapter, network) makes the gate `blocked`/inconclusive, not `needs_fix`; name the
+missing capability and rerun in an authorized environment rather than reading the
+environment's refusal as a defect.
 
 ## Git topology
 
@@ -117,6 +129,11 @@ surface, and keep unexplained risk blocking.
   root merges serially in the integration checkout. The `orchestrate` aliases (`lane
   create`, `review checkout`, `collect`, `cleanup`, `slice status`) wrap the same
   operations with exact-input checks and idempotent rerun reports.
+- All scratch stays **repo-local**: `review checkout`, `lane create`, and the managed
+  aliases place worktrees under `.agent_state/worktrees/` and reject any path outside it, so
+  no gate depends on the mount, permissions, or cleanup policy of the system `/tmp`. Reach
+  for the alias rather than a raw `git worktree add /tmp/...`; a hand-placed out-of-repo
+  checkout forfeits that guarantee and the tool's exact-input and cleanup checks.
 - Writers are **single-threaded per artifact**; declared scopes remain the semantic guard.
   A root-declared append-only shared file is the sole overlap exception.
 - `slice status` derives path overlaps. If one is a shared prerequisite, recut it as a
@@ -145,7 +162,10 @@ The wave boundary is where inter-slice risk first becomes reviewable: dispatch t
 integration review — contract parity, lifecycle ordering, cross-module regression on the
 integrated tree — to an integration-reviewer here, not a re-run of slice diffs, and let it
 run under root's serial freeze of the next wave and this retrospective (its cost hides under
-root-serial time). Run `reconcile`; remove only `safe-to-remove` paths through exact-target `cleanup`.
+root-serial time). `wave status` rolls the slice states, finding ledger, and worktree reconciliation into one
+read-only report with a restart handoff summary — read it to steer, but it never dispatches,
+lands, or writes the plan for you. Run `reconcile`; remove only `safe-to-remove` paths
+through exact-target `cleanup`.
 Re-baseline task_plan to active intent, decisions, unresolved anomalies, and next gates;
 closed items become pointers and Git-derived state disappears. Record the three
 zero-expected counters — unprompted running-assignee contacts, riskless per-slice reviews,

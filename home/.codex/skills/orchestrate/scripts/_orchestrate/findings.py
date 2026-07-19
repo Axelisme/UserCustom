@@ -33,6 +33,13 @@ FINDING_RECEIPT_REQUIRED = ("subject_sha", "verdict", "findings")
 FINDING_REQUIRED = ("id", "severity", "propagation")
 
 
+# A clean review (verdict=pass, no findings) records one marker row instead of a
+# finding, so a passing review has a durable, Git-derivable home rather than living
+# only in prose. Markers carry `kind` and never a `propagation`; downstream finding
+# consumers skip them via `dedup_findings`.
+REVIEW_PASS_KIND = "review-pass"
+
+
 def findings_ledger_path(root: Path, task_id: str) -> Path:
     return (
         common_repo_root(root)
@@ -61,10 +68,23 @@ def read_findings_ledger(root: Path, task_id: str) -> list[dict[str, Any]]:
 
 
 def dedup_findings(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """First occurrence of each finding id, preserving ledger order."""
+    """First occurrence of each finding id, preserving ledger order. Review-pass
+    markers are not findings and are excluded here, so every finding consumer
+    (collect gating, worktree cleanup, status) sees only true finding rows."""
     seen: dict[str, dict[str, Any]] = {}
     for rec in records:
+        if rec.get("kind") == REVIEW_PASS_KIND:
+            continue
         seen.setdefault(rec["id"], rec)
+    return seen
+
+
+def dedup_review_pass(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """First occurrence of each review-pass marker id, preserving ledger order."""
+    seen: dict[str, dict[str, Any]] = {}
+    for rec in records:
+        if rec.get("kind") == REVIEW_PASS_KIND:
+            seen.setdefault(rec["id"], rec)
     return seen
 
 
@@ -96,9 +116,28 @@ def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
         raise OrchestrateError("invalid finding receipt: " + "; ".join(errors))
     subject = exact_commit(root, payload["subject_sha"], label="receipt subject_sha")
     findings = payload["findings"]
-    if not isinstance(findings, list) or not findings:
-        raise OrchestrateError("finding receipt 'findings' must be a non-empty list")
+    if not isinstance(findings, list):
+        raise OrchestrateError("finding receipt 'findings' must be a list")
+    verdict = payload["verdict"]
     normalized: list[dict[str, Any]] = []
+    if not findings:
+        # A clean review is only meaningful for a pass; a needs_fix with no
+        # findings has nothing to close, so keep rejecting that.
+        if verdict != "pass":
+            raise OrchestrateError(
+                "finding receipt 'findings' must be a non-empty list unless"
+                " verdict is 'pass'"
+            )
+        normalized.append(
+            {
+                "id": f"{REVIEW_PASS_KIND}:{subject}",
+                "kind": REVIEW_PASS_KIND,
+                "subject_sha": subject,
+                "verdict": "pass",
+                "evidence": payload.get("evidence"),
+                "recorded_at": datetime.now(UTC).isoformat(),
+            }
+        )
     for raw in findings:
         if not isinstance(raw, dict):
             raise OrchestrateError("each finding must be an object")
@@ -161,14 +200,17 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     task_id = require_identifier(args.task_id, label="task-id")
     reachable = args.task_ref or "HEAD"
+    records = read_findings_ledger(root, task_id)
     closed = closed_finding_ids(root, reachable)
     open_recs: list[dict[str, Any]] = []
     closed_recs: list[dict[str, Any]] = []
-    for fid, rec in dedup_findings(read_findings_ledger(root, task_id)).items():
+    for fid, rec in dedup_findings(records).items():
         entry = {**rec, "closed_by": closed.get(fid)}
         (closed_recs if fid in closed else open_recs).append(entry)
     gating_open = [r["id"] for r in open_recs if r["propagation"] == "gates-the-slice"]
     sweep_open = [r["id"] for r in open_recs if r.get("sweep_required")]
+    review_pass = list(dedup_review_pass(records).values())
+    reviewed_clean = sorted({r["subject_sha"] for r in review_pass})
     return {
         "ok": True,
         "operation": "findings-status",
@@ -180,4 +222,6 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
         "gating_open": gating_open,
         "sweep_open": sweep_open,
         "collect_blocked": bool(gating_open),
+        "review_pass": review_pass,
+        "reviewed_clean": reviewed_clean,
     }

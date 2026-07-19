@@ -9,8 +9,14 @@ from typing import Any
 
 from .primitives import OrchestrateError
 from .git_ops import exact_commit, is_ancestor, lane_absorption, managed_worktree_root, require_managed_worktree, run_git, worktree_metadata_writability_preflight, worktree_records
-from .findings import closed_finding_ids, dedup_findings, read_findings_ledger
-from .lanes import speculative_dependency_records
+from .findings import (
+    closed_finding_ids,
+    command_findings_status,
+    dedup_findings,
+    read_findings_ledger,
+    task_id_from_ref,
+)
+from .lanes import command_slice_status, speculative_dependency_records
 
 WORKTREE_CLASSES = (
     "safe-to-remove",
@@ -206,6 +212,49 @@ def command_reconcile(args: argparse.Namespace) -> dict[str, Any]:
         "safe_to_remove": [
             entry["path"] for entry in worktrees if entry["cleanup_eligible"]
         ],
+    }
+
+
+def command_wave_status(args: argparse.Namespace) -> dict[str, Any]:
+    """Read-only wave rollup: compose the derived reads a wave boundary already needs
+    (slice states, finding ledger, worktree reconciliation) into one report plus a
+    restart-oriented handoff summary. It never dispatches, lands, or writes the task
+    plan — those stay root's decision; this only saves hand-stitching the same reads."""
+    task_ref = args.task_ref
+    if not task_ref.startswith("task/") or task_ref.count("/") != 1:
+        raise OrchestrateError(f"task ref must use task/<task>: {task_ref!r}")
+    task_id = task_id_from_ref(task_ref)
+    slice_report = command_slice_status(
+        argparse.Namespace(root=args.root, task_ref=task_ref)
+    )
+    findings_report = command_findings_status(
+        argparse.Namespace(root=args.root, task_id=task_id, task_ref=task_ref)
+    )
+    reconcile_report = command_reconcile(argparse.Namespace(root=args.root))
+    handoff = {
+        "task_ref": task_ref,
+        "task_sha": slice_report["task_sha"],
+        "lanes": [
+            {"lane_ref": lane["lane_ref"], "head": lane["head"], "state": lane["state"]}
+            for lane in slice_report["lanes"]
+        ],
+        "write_set_overlaps": slice_report["write_set_overlaps"],
+        "open_findings": [rec["id"] for rec in findings_report["open"]],
+        "gating_open": findings_report["gating_open"],
+        "collect_blocked": findings_report["collect_blocked"],
+        "reviewed_clean": findings_report["reviewed_clean"],
+        "safe_to_remove": reconcile_report["safe_to_remove"],
+    }
+    return {
+        "ok": True,
+        "operation": "wave-status",
+        "read_only": True,
+        "task_ref": task_ref,
+        "task_id": task_id,
+        "slice": slice_report,
+        "findings": findings_report,
+        "reconcile": reconcile_report,
+        "handoff": handoff,
     }
 
 

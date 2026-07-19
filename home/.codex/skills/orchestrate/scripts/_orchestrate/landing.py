@@ -132,7 +132,17 @@ def rollback_landing_publication(
             "durability uncertain: landing publication and compensating ref rollback"
             f" both failed ({reason}); reconcile before retry"
         )
-    checkout = run_git(root, "reset", "--hard", target_sha, check=False)
+    checkout = run_git(
+        root, "read-tree", "--reset", "-u", target_sha, check=False
+    )
+    current_target = run_git(
+        root, "rev-parse", f"{target_full_ref}^{{commit}}", check=False
+    ).stdout.strip()
+    if current_target != target_sha:
+        raise OrchestrateError(
+            "durability uncertain: target ref advanced during checkout compensation;"
+            " the concurrent commit was preserved, reconcile the checkout before retry"
+        )
     head = run_git(root, "rev-parse", "HEAD", check=False).stdout.strip()
     staged, dirty = landing_checkout_dirt(root)
     if checkout.returncode != 0 or head != target_sha or staged or dirty:
@@ -359,9 +369,16 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
         target_ref if target_ref.startswith("refs/") else f"refs/heads/{target_ref}"
     )
     run_git(root, "update-ref", target_full_ref, landed, target_sha)
-    try:
-        run_git(root, "reset", "--hard", landed)
-    except OrchestrateError:
+    checkout = run_git(root, "read-tree", "--reset", "-u", landed, check=False)
+    current_target = run_git(
+        root, "rev-parse", f"{target_full_ref}^{{commit}}", check=False
+    ).stdout.strip()
+    if current_target != landed:
+        raise OrchestrateError(
+            "durability uncertain: target ref advanced during landing checkout sync;"
+            " the concurrent commit was preserved, reconcile the checkout before retry"
+        )
+    if checkout.returncode != 0:
         rollback_landing_publication(
             root,
             target_full_ref=target_full_ref,

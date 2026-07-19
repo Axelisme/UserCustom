@@ -183,19 +183,24 @@ class ReviewRegressionTests(unittest.TestCase):
                 encoding="utf-8",
             )
             original_run_git = landing.run_git
-            reset_attempts = 0
+            sync_attempts = 0
 
-            def fail_reset(
+            def fail_sync(
                 command_root: Path, *arguments: str, check: bool = True
             ) -> subprocess.CompletedProcess[str]:
-                nonlocal reset_attempts
-                if arguments[:2] == ("reset", "--hard"):
-                    reset_attempts += 1
-                    if reset_attempts == 1:
-                        raise OrchestrateError("simulated checkout sync failure")
+                nonlocal sync_attempts
+                if arguments[:3] == ("read-tree", "--reset", "-u"):
+                    sync_attempts += 1
+                    if sync_attempts == 1:
+                        return subprocess.CompletedProcess(
+                            args=["git", "read-tree"],
+                            returncode=1,
+                            stdout="",
+                            stderr="simulated checkout sync failure",
+                        )
                 return original_run_git(command_root, *arguments, check=check)
 
-            with patch.object(landing, "run_git", fail_reset):
+            with patch.object(landing, "run_git", fail_sync):
                 with self.assertRaisesRegex(OrchestrateError, "publication was rolled back"):
                     landing.command_land_finish(
                         argparse.Namespace(
@@ -209,6 +214,156 @@ class ReviewRegressionTests(unittest.TestCase):
                     )
             self.assertEqual(git(root, "rev-parse", "main"), base)
             self.assertEqual(git(root, "status", "--porcelain"), "")
+
+    def test_rollback_never_clobbers_a_concurrent_target_advance(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            base = init_repo(root)
+            git(root, "branch", "task/demo", base)
+            task = root / ".agent_state" / "worktrees" / "task-demo"
+            task.parent.mkdir(parents=True)
+            git(root, "worktree", "add", str(task), "task/demo")
+            (task / "approved.txt").write_text("approved\n", encoding="utf-8")
+            git(task, "add", "approved.txt")
+            git(task, "commit", "-m", "approved")
+            expected = git(root, "rev-parse", "task/demo")
+            declaration = root / ".agent_state" / "landing.json"
+            declaration.write_text(
+                json.dumps(
+                    {
+                        "landing_version": 1,
+                        "task_id": "demo",
+                        "policy": "commit-authorized",
+                        "target_ref": "main",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            original_run_git = landing.run_git
+            sync_attempts = 0
+
+            def fail_then_race(
+                command_root: Path, *arguments: str, check: bool = True
+            ) -> subprocess.CompletedProcess[str]:
+                nonlocal sync_attempts
+                if arguments[:3] == ("read-tree", "--reset", "-u"):
+                    sync_attempts += 1
+                    if sync_attempts == 1:
+                        # Force the success-path sync to fail so command_land_finish
+                        # invokes rollback_landing_publication.
+                        return subprocess.CompletedProcess(
+                            args=["git", "read-tree"],
+                            returncode=1,
+                            stdout="",
+                            stderr="simulated checkout sync failure",
+                        )
+                    if sync_attempts == 2:
+                        # A concurrent actor lands on `main` in the window between
+                        # the rollback's CAS update-ref and its own checkout sync.
+                        other = root / "concurrent.txt"
+                        other.write_text("concurrent\n", encoding="utf-8")
+                        original_run_git(command_root, "add", "concurrent.txt")
+                        original_run_git(
+                            command_root, "commit", "-m", "concurrent landing"
+                        )
+                return original_run_git(command_root, *arguments, check=check)
+
+            with patch.object(landing, "run_git", fail_then_race):
+                with self.assertRaisesRegex(
+                    OrchestrateError, "target ref advanced during checkout compensation"
+                ):
+                    landing.command_land_finish(
+                        argparse.Namespace(
+                            root=str(root),
+                            declaration=str(declaration),
+                            task_ref="task/demo",
+                            task_sha=expected,
+                            confirmed=False,
+                            message=None,
+                        )
+                    )
+            # The concurrent commit — landed while rollback tried to restore
+            # `base` — must remain the ref tip; rollback must never force it
+            # back to `base` and silently discard it.
+            concurrent_sha = git(root, "rev-parse", "main")
+            self.assertNotEqual(concurrent_sha, base)
+            body = git(root, "log", "-1", "--format=%s", concurrent_sha)
+            self.assertEqual(body, "concurrent landing")
+            self.assertEqual(git(root, "rev-parse", f"{concurrent_sha}^"), base)
+
+    def test_land_finish_never_clobbers_a_concurrent_target_advance(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            base = init_repo(root)
+            git(root, "branch", "task/demo", base)
+            task = root / ".agent_state" / "worktrees" / "task-demo"
+            task.parent.mkdir(parents=True)
+            git(root, "worktree", "add", str(task), "task/demo")
+            (task / "approved.txt").write_text("approved\n", encoding="utf-8")
+            git(task, "add", "approved.txt")
+            git(task, "commit", "-m", "approved")
+            expected = git(root, "rev-parse", "task/demo")
+            declaration = root / ".agent_state" / "landing.json"
+            declaration.write_text(
+                json.dumps(
+                    {
+                        "landing_version": 1,
+                        "task_id": "demo",
+                        "policy": "commit-authorized",
+                        "target_ref": "main",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            original_run_git = landing.run_git
+            landed_holder: list[str] = []
+
+            def inject_concurrent_advance(
+                command_root: Path, *arguments: str, check: bool = True
+            ) -> subprocess.CompletedProcess[str]:
+                if arguments[:3] == ("read-tree", "--reset", "-u"):
+                    # Simulate a concurrent actor landing on `main` in the window
+                    # between this transaction's CAS update-ref and its checkout
+                    # sync — before this call actually runs.
+                    landed_holder.append(arguments[3])
+                    other = root / "concurrent.txt"
+                    other.write_text("concurrent\n", encoding="utf-8")
+                    original_run_git(command_root, "add", "concurrent.txt")
+                    original_run_git(
+                        command_root, "commit", "-m", "concurrent landing"
+                    )
+                return original_run_git(command_root, *arguments, check=check)
+
+            with patch.object(landing, "run_git", inject_concurrent_advance):
+                with self.assertRaisesRegex(
+                    OrchestrateError, "target ref advanced during landing checkout sync"
+                ):
+                    landing.command_land_finish(
+                        argparse.Namespace(
+                            root=str(root),
+                            declaration=str(declaration),
+                            task_ref="task/demo",
+                            task_sha=expected,
+                            confirmed=False,
+                            message=None,
+                        )
+                    )
+            # The invariant NEW-REV-013 protects is the ref, not the working
+            # tree: `main` must not have been silently force-reset back onto
+            # this transaction's `landed` SHA, discarding the concurrent commit.
+            self.assertEqual(len(landed_holder), 1)
+            landed_sha = landed_holder[0]
+            concurrent_sha = git(root, "rev-parse", "main")
+            self.assertNotEqual(
+                concurrent_sha,
+                landed_sha,
+                "main must not equal `landed` — the concurrent commit must be"
+                " the ref tip, not silently overwritten",
+            )
+            body = git(root, "log", "-1", "--format=%s", concurrent_sha)
+            self.assertEqual(body, "concurrent landing")
+            parent = git(root, "rev-parse", f"{concurrent_sha}^")
+            self.assertEqual(parent, landed_sha)
 
     def test_landing_lock_is_not_worktree_visible_without_agent_state_ignore(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

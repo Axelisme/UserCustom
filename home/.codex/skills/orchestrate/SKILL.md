@@ -1,18 +1,20 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 94
+skill_version: 95
 ---
 
 # Orchestrate
 
 This skill exists for two things: **parallel lanes and the pipeline that keeps them
-full**; everything else is supporting infrastructure. Run a control loop that retires the
-most consequential uncertainty with the largest move you can still prove safe. Git is the
-only topology truth carrier; the planning-with-files task plan is the only durable
-narrative; everything else is root judgment, not protocol. Optimize **critical-path lead
-time**, not agent utilization; a redone slice is cheaper than machinery that prevents
-redoing it.
+full**; everything else is supporting infrastructure. You **own the control flow** — the
+loop, its stops, its dispatch and its integration are yours, not a framework's and not the
+assignees'. Run it to retire the most consequential uncertainty with the largest move you
+can still prove safe. **Git is the durable log**: commits, SHAs, and trailers are the
+state of record — current state, what was reviewed, whether a lane is absorbed are each a
+*derived read* of git, never a hand-kept copy that drifts. The task plan carries only what
+git cannot derive: intent, decisions, judgment. Optimize **critical-path lead time**, not
+agent utilization; a redone slice is cheaper than machinery that prevents redoing it.
 
 ## Iron rules
 
@@ -111,22 +113,19 @@ ownership or dependency seams, not per mechanical edit.
 Everything optional; create nothing without a live need, and count unused artifacts at
 close as defects. What remains:
 
-- **Worktree/lane commands** — `lane create`, `review checkout`, `review advance`,
-  `compose-base`, `collect`, `cleanup`, `slice status`, `slice milestone`,
-  `land status|finish` via `<repo-python> <skill-dir>/scripts/orchestrate.py --help`.
-  Idempotent guards over plain git: a rerun after an aborted turn reports what already
-  happened (`recovered: …`). `slice milestone` generates envelope Git facts so SHAs are
-  never hand-typed; `compose-base` builds a marked speculative base for a successor that
-  depends on two unvalidated lanes; `review advance` moves one detached review workspace
-  to the next subject SHA instead of accreting worktrees.
+- **Git guards** — `lane create`, `review checkout|advance|audit`, `compose-base`,
+  `revalidate`, `findings record|status`, `slice status|milestone`, `collect`, `reconcile`,
+  `cleanup`, and `land status|finish` via
+  `<repo-python> <skill-dir>/scripts/orchestrate.py --help`. They derive or validate Git
+  facts; consult per-command `--help`, never restate arguments.
 - **Version pin** — `pin set` at task start guards the state-entering commands; `pin
   migrate` adopts a release at a safe boundary and names the documents to re-read; cut
   releases only with the one-shot `release`, never a hand-edited `skill_version`. The
   lifecycle and the worktree-staged release flow live in
   [coordination](references/coordination.md).
 - **Task plan** — planning-with-files at `.agent_state/plans/<task-id>/` for cross-session
-  or information-heavy work. It carries state (decisions, open findings, review debt,
-  lane positions), never procedure.
+  or information-heavy work. It carries only intent, decisions, anomalies, and next gates,
+  with Git state as SHA pointers; never procedure or finding status.
 - **Landing declaration** — a tiny hand-written JSON naming the user's landing policy
   (`validate-only | land-with-confirmation | commit-authorized | publish-authorized`); it
   carries landing authority so the close never stalls at "validated but unlanded".

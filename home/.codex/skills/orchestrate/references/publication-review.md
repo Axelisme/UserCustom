@@ -6,43 +6,38 @@ this file as a risk axis in the dispatch; it then binds twice — the writer wal
 adversarial self-check before terminal, and the reviewer verifies the same axes
 independently. It is not loaded for slices outside these domains.
 
-## Authority publication matrix
+## The authority transaction
 
-Walk every claim/publication seam through each cut point; at each one, name who owns the
-truth and what a concurrent actor observes:
+Model every authority as a transaction; the seam is correct only if each transition names
+**owner, lock, witness, rollback, capacity effect** and what a concurrent actor observes.
+Name the transition — do not re-derive claim/settle/rollback per review:
 
-- **Before claim** — can two actors claim the same authority? Is the claim itself
-  published atomically with its precondition check?
-- **After claim / before callback** — is the claimed-but-unpublished window observable?
-  Who may supersede the claimant here (generation/epoch bump)?
-- **Inside callback** — can the generation be superseded mid-callback? Does the callback
-  re-validate its epoch before publishing results?
-- **After callback / before settle** — direct reply vs live queue: can both deliver
-  (double publication)? Which one is authoritative and how is the loser suppressed?
-- **Detach / replacement at every cut** — at each point above, what happens if the
-  subject is detached or replaced right now? Name the witness that proves the old
-  authority stopped publishing.
-- **Ordinals and revisions** — cursor, delivery ordinal, and resource revision are three
-  different sequences; any comparison across them is a finding.
-- **Capacity and cleanup** — is each limit process-wide or per-instance, and is that the
-  contract's intent? Do terminal waiters run after rollback/cleanup, never before?
-- **Resource exhaustion** — at every cut point, what does exhaustion do to the
-  half-published state?
+`provisional claim → reserved authority → externally published → recoverably retained → retired`
+
+- **→ provisional claim** — can two actors claim the same authority? Is the claim published
+  atomically with its precondition check?
+- **→ reserved authority** — is the claimed-but-unpublished window observable? Who may
+  supersede here (generation/epoch bump), and does the callback re-validate its epoch before
+  it publishes?
+- **→ externally published** — direct reply vs live queue: can both deliver (double
+  publication)? Which is authoritative, and how is the loser suppressed?
+- **→ recoverably retained / retired** — if the subject is detached or replaced at any
+  point, name the witness that proves the old authority stopped publishing.
+
+Three concerns cut across every transition: **ordinals** (cursor, delivery ordinal, and
+resource revision are three sequences; any comparison across them is a finding); **capacity**
+(is each limit process-wide or per-instance, and is that the contract's intent? do terminal
+waiters run after rollback/cleanup, never before?); **resource exhaustion** (at every
+transition, what does it do to the half-published state?).
 
 ## Post-commit failure taxonomy
 
-For any slice whose contract includes persistence or outward publication side effects,
-the freeze names the outcome states the implementation must distinguish — a generic
-exception for "truth changed but publication failed" is a defect, not an outcome:
+Outward publication makes the work a saga: before each outward transition, bind an
+idempotent compensation to the transaction's existing `rollback` slot; on failure unwind
+completed transitions in reverse. This is not snapshot rollback — when success is
+ambiguous, compensation must be safe whether the step landed or not.
 
-1. **Definitely not committed** — truth unchanged; safe retry.
-2. **Committed and published** — done; witness names the published artifact.
-3. **Committed, publication incomplete** — truth changed, observers stale; requires a
-   named repair path, not a raw exception.
-4. **Durability outcome uncertain** — neither commit nor abort proven; must escalate to
-   reconciliation, never silently retried.
-5. **Reconciliation required** — a named procedure re-derives publication from truth.
-
-Every state carries a **witness** (how the caller proves it is in this state), a
-**cleanup** owner, and a **caller-visible closed outcome**. A state without all three is
-an unfinished contract; the reviewer treats it as a major finding.
+After a truth-changing attempt, expose exactly four outcomes: **not committed** (safe
+retry), **committed and published** (done), **committed but publication incomplete**
+(repair), or **durability uncertain** (reconcile, never blind retry). Each names a witness,
+cleanup owner, and caller-visible closed outcome; missing any is a major finding.

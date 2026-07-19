@@ -146,12 +146,12 @@ class PlanningWithFilesCompactionTests(unittest.TestCase):
 
     def test_skill_contract_routes_explicit_bounded_compaction(self) -> None:
         text = " ".join((SKILL / "SKILL.md").read_text(encoding="utf-8").split())
-        self.assertIn("skill_version: 6", text)
+        self.assertIn("skill_version: 8", text)
         self.assertIn("checkpoint <task-id>", text)
         self.assertIn("compact <task-id>", text)
         self.assertIn("`status`永遠read-only", text)
         self.assertIn("最多16 KiB", text)
-        self.assertIn("最舊5個", text)
+        self.assertIn("最舊的", text)
         self.assertIn("最近20筆", text)
         self.assertIn("open finding", text)
         self.assertIn("immutable cold原文", text)
@@ -277,7 +277,7 @@ class PlanningWithFilesCompactionTests(unittest.TestCase):
             result = run_plan(root, "compact", "demo")
 
             self.assertEqual(result.returncode, 2)
-            self.assertIn("oldest five phase notes must be completed", result.stderr)
+            self.assertIn("without an archivable", result.stderr)
             self.assertEqual(task_plan.read_bytes(), before)
             self.assertFalse((directory / "history").exists())
 
@@ -416,6 +416,77 @@ class PlanningWithFilesCompactionTests(unittest.TestCase):
                 if path.is_file()
             }
             self.assertEqual(after, before)
+
+    def test_status_reports_zombie_audit_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            directory = self.init(root)
+            path = directory / "task_plan.md"
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "| Phase 1 | pending |",
+                    "| Phase 1 | pending |\n| Phase 1 | pending |",
+                ),
+                encoding="utf-8",
+            )
+            before = path.read_bytes()
+
+            result = run_plan(root, "status", "demo")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["zombie_count"], 1)
+            self.assertEqual(
+                payload["audit"]["issues"][0]["code"], "duplicate-phase-row"
+            )
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_zombie_audit_blocks_writers_before_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            directory = self.init(root)
+            path = directory / "task_plan.md"
+            path.write_text(phase_plan().replace("Commit 1", "pending"), encoding="utf-8")
+            before = path.read_bytes()
+
+            checkpoint = run_plan(root, "checkpoint", "demo")
+            self.assertEqual(checkpoint.returncode, 2)
+            self.assertIn("completed-phase-placeholder-conclusion", checkpoint.stderr)
+            self.assertEqual(path.read_bytes(), before)
+            self.assertFalse((directory / "history").exists())
+
+            check = run_plan(root, "check", "demo")
+            self.assertEqual(check.returncode, 2)
+            self.assertIn("completed-phase-placeholder-conclusion", check.stderr)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_zombie_audit_expands_double_dot_decision_ranges(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            directory = self.init(root)
+            path = directory / "task_plan.md"
+            text = path.read_text(encoding="utf-8")
+            text = text.replace(
+                "| D-001 | active | <決策與理由。> | <被取代decision或ADR；沒有則寫none> |",
+                "\n".join(
+                    (
+                        "| D-001 | active | First. | none |",
+                        "| D-002 | superseded | Second. | D-003 |",
+                        "| D-003 | active | Replacement. | none |",
+                    )
+                ),
+            ).replace(
+                "- Frozen decisions: <目前生效的決策>",
+                "- Frozen decisions: D-001..D-002",
+            )
+            path.write_text(text, encoding="utf-8")
+
+            result = run_plan(root, "status", "demo")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            codes = {issue["code"] for issue in payload["audit"]["issues"]}
+            self.assertIn("packet-decision-status-mismatch", codes)
 
 
 if __name__ == "__main__":

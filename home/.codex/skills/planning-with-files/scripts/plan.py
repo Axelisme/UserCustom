@@ -411,6 +411,229 @@ def unfinished_phases(text: str) -> list[str]:
     return [match.group(1) for match in UNFINISHED_PHASE_PATTERN.finditer(section)]
 
 
+def _loose_section(lines: list[str], heading: str) -> tuple[int, int] | None:
+    try:
+        start = next(index for index, line in enumerate(lines) if line.strip() == heading)
+    except StopIteration:
+        return None
+    end = next(
+        (index for index in range(start + 1, len(lines)) if lines[index].startswith("## ")),
+        len(lines),
+    )
+    return start + 1, end
+
+
+def _loose_table_rows(
+    lines: list[str], heading: str
+) -> list[tuple[int, tuple[str, ...]]]:
+    bounds = _loose_section(lines, heading)
+    if bounds is None:
+        return []
+    start, end = bounds
+    rows: list[tuple[int, tuple[str, ...]]] = []
+    for index in range(start, end):
+        line = lines[index]
+        if not line.strip().startswith("|"):
+            continue
+        try:
+            cells = table_cells(line)
+        except PlanError:
+            continue
+        if cells and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
+            continue
+        rows.append((index, cells))
+    return rows[1:] if rows else []
+
+
+def _audit_issue(code: str, message: str, *, line: int | None = None) -> dict[str, Any]:
+    issue: dict[str, Any] = {"code": code, "message": message}
+    if line is not None:
+        issue["line"] = line + 1
+    return issue
+
+
+def _placeholder(value: str) -> bool:
+    stripped = value.strip().lower()
+    return (
+        not stripped
+        or stripped in EMPTY_CLOSURE_VALUES
+        or (stripped.startswith("<") and stripped.endswith(">"))
+        or stripped in {"todo", "tbd", "placeholder"}
+    )
+
+
+def _decision_refs(value: str) -> list[str]:
+    if _placeholder(value):
+        return []
+    found: list[str] = []
+    range_pattern = re.compile(
+        r"D-(?P<first>[0-9]+)\s*(?:\.\.|-|–|—|to)\s*D-(?P<last>[0-9]+)",
+        re.IGNORECASE,
+    )
+    covered: set[str] = set()
+    for match in range_pattern.finditer(value):
+        first, last = int(match.group("first")), int(match.group("last"))
+        for number in range(min(first, last), max(first, last) + 1):
+            decision_id = f"D-{number:03d}"
+            found.append(decision_id)
+            covered.add(decision_id)
+    for match in re.finditer(r"D-[0-9]+", value, flags=re.IGNORECASE):
+        decision_id = f"D-{int(match.group(0)[2:]):03d}"
+        if decision_id not in covered:
+            found.append(decision_id)
+    return found
+
+
+def audit_task_plan(root: Path, text: str) -> dict[str, Any]:
+    """Detect deterministic stale narrative (zombie) states without mutating a plan."""
+    lines = text.splitlines()
+    issues: list[dict[str, Any]] = []
+    phase_rows = _loose_table_rows(lines, "## Phase Status")
+    phases: dict[str, tuple[str, int]] = {}
+    for index, cells in phase_rows:
+        if len(cells) < 2:
+            continue
+        phase, status = cells[0].strip(), cells[1].strip().lower()
+        if phase in phases:
+            issues.append(
+                _audit_issue(
+                    "duplicate-phase-row",
+                    f"Phase Status contains duplicate row {phase}",
+                    line=index,
+                )
+            )
+        phases.setdefault(phase, (status, index))
+
+    notes_bounds = _loose_section(lines, "## Active Notes")
+    notes: dict[str, tuple[str, int]] = {}
+    if notes_bounds is not None:
+        start, end = notes_bounds
+        current_line = 0
+        for index in range(start, end):
+            match = PHASE_HEADING_PATTERN.fullmatch(lines[index])
+            if match:
+                phase_id = match.group(1)
+                current_line = index
+                conclusion = ""
+                for candidate in range(index + 1, end):
+                    if candidate != index and lines[candidate].startswith("### "):
+                        break
+                    if lines[candidate].startswith("- Conclusion / Commit:"):
+                        conclusion = lines[candidate].split(":", 1)[1].strip()
+                        break
+                if phase_id in notes:
+                    continue
+                notes[phase_id] = (conclusion, current_line)
+        for phase, (conclusion, index) in notes.items():
+            if phase not in phases:
+                issues.append(
+                    _audit_issue(
+                        "active-notes-phase-absent",
+                        f"Active Notes phase {phase} is absent from Phase Status",
+                        line=index,
+                    )
+                )
+            elif phases[phase][0] == "completed" and _placeholder(conclusion):
+                issues.append(
+                    _audit_issue(
+                        "completed-phase-placeholder-conclusion",
+                        f"completed {phase} has a pending or placeholder conclusion",
+                        line=index,
+                    )
+                )
+
+    decisions: dict[str, tuple[str, tuple[str, ...], int]] = {}
+    for index, cells in _loose_table_rows(lines, "## Decisions"):
+        if len(cells) < 2:
+            continue
+        decision_id = cells[0].strip()
+        status = cells[1].strip().lower()
+        decisions[decision_id] = (status, cells, index)
+        if status not in {"active", "superseded"}:
+            issues.append(
+                _audit_issue(
+                    "invalid-decision-status",
+                    f"decision {decision_id} has invalid status {cells[1]!r}",
+                    line=index,
+                )
+            )
+        if status == "superseded":
+            pointer = cells[3].strip() if len(cells) > 3 else ""
+            if _placeholder(pointer):
+                issues.append(
+                    _audit_issue(
+                        "superseded-decision-without-pointer",
+                        f"superseded decision {decision_id} lacks a replacement or ADR pointer",
+                        line=index,
+                    )
+                )
+
+    packet_bounds = _loose_section(lines, "## Active Domain Packets")
+    if packet_bounds is not None:
+        start, end = packet_bounds
+        for index in range(start, end):
+            line = lines[index]
+            if not line.startswith("- ") or ":" not in line:
+                continue
+            field, value = line[2:].split(":", 1)
+            field = field.strip().lower()
+            value = value.strip()
+            if field in {"frozen decisions", "superseded decisions"}:
+                expected = "active" if field == "frozen decisions" else "superseded"
+                for decision_id in _decision_refs(value):
+                    decision = decisions.get(decision_id)
+                    if decision is None:
+                        issues.append(
+                            _audit_issue(
+                                "packet-decision-missing",
+                                f"{field} references missing {decision_id}",
+                                line=index,
+                            )
+                        )
+                    elif decision[0] != expected:
+                        issues.append(
+                            _audit_issue(
+                                "packet-decision-status-mismatch",
+                                f"{field} references {decision_id} with status {decision[0]!r}, expected {expected!r}",
+                                line=index,
+                            )
+                        )
+            elif field == "next acceptance gate" and not _placeholder(value):
+                named = re.findall(r"Phase\s+[0-9]+", value, flags=re.IGNORECASE)
+                if any(phases.get(phase, ("", 0))[0] == "completed" for phase in named):
+                    issues.append(
+                        _audit_issue(
+                            "next-gate-completed-phase",
+                            "Next acceptance gate still names a completed Phase",
+                            line=index,
+                        )
+                    )
+            elif field == "current sha" and re.fullmatch(r"[0-9a-fA-F]{40}", value):
+                commit = subprocess.run(
+                    ["git", "cat-file", "-e", f"{value}^{{commit}}"],
+                    cwd=root,
+                    check=False,
+                    capture_output=True,
+                )
+                if commit.returncode != 0:
+                    issues.append(
+                        _audit_issue(
+                            "current-sha-not-commit",
+                            f"Current SHA {value} is not a commit in this repository",
+                            line=index,
+                        )
+                    )
+    return {"issues": issues, "zombie_count": len(issues)}
+
+
+def reject_zombie_plan(root: Path, text: str) -> dict[str, Any]:
+    audit = audit_task_plan(root, text)
+    if audit["zombie_count"]:
+        codes = ", ".join(issue["code"] for issue in audit["issues"])
+        raise PlanError(f"zombie audit found {audit['zombie_count']} issue(s): {codes}")
+    return audit
+
+
 def markdown_cell(value: str) -> str:
     return " ".join(value.replace("|", r"\|").split())
 
@@ -754,6 +977,7 @@ def run_compaction(args: argparse.Namespace, *, operation: str) -> dict[str, Any
     root = Path(args.root).resolve()
     validate_task_id(args.task_id)
     directory = require_plan(root, args.task_id)
+    reject_zombie_plan(root, (directory / "task_plan.md").read_text(encoding="utf-8"))
     prepared = prepare_compaction(directory)
     history_files = write_prepared_compaction(directory, prepared)
     return {
@@ -823,6 +1047,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
     validate_task_id(args.task_id)
     directory = require_plan(root, args.task_id)
     task_text = (directory / "task_plan.md").read_text(encoding="utf-8")
+    audit = audit_task_plan(root, task_text)
     optional: dict[str, str] = {}
     for filename in OPTIONAL_TEMPLATES:
         path = directory / filename
@@ -836,6 +1061,8 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         "plan_dir": str(directory),
         "files": sorted(path.name for path in directory.iterdir() if path.is_file()),
         "unfinished_phases": unfinished_phases(task_text),
+        "audit": audit,
+        "zombie_count": audit["zombie_count"],
         "task_plan_head": "\n".join(task_text.splitlines()[:60]),
         "optional_tails": optional,
         "git": git_summary(root),
@@ -847,6 +1074,7 @@ def command_check(args: argparse.Namespace) -> dict[str, Any]:
     validate_task_id(args.task_id)
     directory = require_plan(root, args.task_id)
     task_text = (directory / "task_plan.md").read_text(encoding="utf-8")
+    reject_zombie_plan(root, task_text)
     unfinished = unfinished_phases(task_text)
     if unfinished:
         raise PlanError(
@@ -865,6 +1093,7 @@ def command_archive(args: argparse.Namespace) -> dict[str, Any]:
     validate_task_id(args.task_id)
     source = require_plan(root, args.task_id)
     task_text = (source / "task_plan.md").read_text(encoding="utf-8")
+    reject_zombie_plan(root, task_text)
     unfinished = unfinished_phases(task_text)
     if unfinished:
         raise PlanError(

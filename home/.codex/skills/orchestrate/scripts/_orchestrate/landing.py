@@ -184,7 +184,10 @@ def command_land_status(args: argparse.Namespace) -> dict[str, Any]:
             " needs a new user-authorized declaration"
         )
     elif landed and lanes:
-        next_step = "cleanup --absorbed, then delete the task branch"
+        next_step = (
+            "run reconcile, cleanup each safe-to-remove exact --worktree target,"
+            " then delete the task branch"
+        )
     elif landed:
         next_step = "delete the task branch (tree identity already holds)"
     elif not based:
@@ -282,6 +285,11 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
             + ", ".join(dirty_overlap[:20])
         )
     acquire_landing_lock(root)
+    task_head = run_git(root, "rev-parse", f"{args.task_ref}^{{commit}}").stdout.strip()
+    if task_head != expected:
+        raise OrchestrateError(
+            f"task head drifted while acquiring landing lock: {task_head} != {expected}"
+        )
     target_sha = run_git(root, "rev-parse", f"{target_ref}^{{commit}}").stdout.strip()
     if (
         run_git(
@@ -294,7 +302,7 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
             " then rerun land finish"
         )
     message = args.message or f"land {task_id}: squash of {expected[:12]}"
-    run_git(root, "merge", "--squash", args.task_ref)
+    run_git(root, "merge", "--squash", expected)
     run_git(root, "commit", "-m", message)
     landed = run_git(root, "rev-parse", "HEAD").stdout.strip()
     if (
@@ -306,7 +314,7 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
             " do not delete the task branch — investigate"
         )
     next_steps = [
-        "cleanup --absorbed to sweep lanes and review checkouts",
+        "run reconcile, then cleanup each safe-to-remove exact --worktree target",
         f"git branch -D {args.task_ref} (authorized by this tree identity proof)",
     ]
     if policy == "publish-authorized":

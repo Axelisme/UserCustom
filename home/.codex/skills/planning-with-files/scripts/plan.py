@@ -599,12 +599,13 @@ def audit_task_plan(root: Path, text: str) -> dict[str, Any]:
                             )
                         )
             elif field == "next acceptance gate" and not _placeholder(value):
-                named = re.findall(r"Phase\s+[0-9]+", value, flags=re.IGNORECASE)
-                if any(phases.get(phase, ("", 0))[0] == "completed" for phase in named):
+                direct_gate = re.match(r"^Phase\s+([0-9]+)\b", value, re.IGNORECASE)
+                phase = f"Phase {direct_gate.group(1)}" if direct_gate else None
+                if phase is not None and phases.get(phase, ("", 0))[0] == "completed":
                     issues.append(
                         _audit_issue(
                             "next-gate-completed-phase",
-                            "Next acceptance gate still names a completed Phase",
+                            "Next acceptance gate directly targets a completed Phase",
                             line=index,
                         )
                     )

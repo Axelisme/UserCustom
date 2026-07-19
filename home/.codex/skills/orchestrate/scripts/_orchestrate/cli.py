@@ -257,7 +257,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         release_preflight = None
-        if getattr(args, "requires_release_preflight", False):
+        cleanup_mutation = (
+            args.command == "cleanup"
+            and bool(getattr(args, "worktree", None))
+            and not bool(getattr(args, "dry_run", False))
+        )
+        if cleanup_mutation or getattr(args, "requires_release_preflight", False):
             release_preflight = require_release_preflight(
                 Path(args.skill_dir), root=getattr(args, "root", None)
             )

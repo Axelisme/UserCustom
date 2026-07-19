@@ -10,7 +10,7 @@ from typing import Any
 
 from .primitives import OrchestrateError, require_identifier
 
-EXACT_SHA_PATTERN = re.compile(r"^[0-9a-fA-F]{40,64}$")
+HEX_OBJECT_ID_PATTERN = re.compile(r"^[0-9a-fA-F]+$")
 
 
 def run_git(
@@ -31,8 +31,21 @@ def run_git(
     return completed
 
 
+def object_id_length(root: Path) -> int:
+    object_format = run_git(root, "rev-parse", "--show-object-format").stdout.strip()
+    if object_format == "sha1":
+        return 40
+    if object_format == "sha256":
+        return 64
+    raise OrchestrateError(f"unsupported git object format: {object_format!r}")
+
+
 def exact_commit(root: Path, value: str, *, label: str) -> str:
-    if not EXACT_SHA_PATTERN.fullmatch(value):
+    expected_length = object_id_length(root)
+    if (
+        len(value) != expected_length
+        or HEX_OBJECT_ID_PATTERN.fullmatch(value) is None
+    ):
         probe = run_git(
             root, "rev-parse", "--verify", "--quiet", f"{value}^{{commit}}", check=False
         )
@@ -43,12 +56,13 @@ def exact_commit(root: Path, value: str, *, label: str) -> str:
             else ""
         )
         raise OrchestrateError(
-            f"{label} must be an exact hexadecimal commit SHA{hint}"
+            f"{label} must be a full {expected_length}-character hexadecimal commit SHA"
+            + hint
         )
     resolved = run_git(
         root, "rev-parse", "--verify", f"{value}^{{commit}}"
     ).stdout.strip()
-    if not resolved.lower().startswith(value.lower()):
+    if resolved.lower() != value.lower():
         raise OrchestrateError(f"{label} does not identify one exact commit: {value}")
     return resolved
 
@@ -153,7 +167,12 @@ def merge_tree_probe(root: Path, first: str, second: str) -> dict[str, Any]:
             "error": detail or "merge-tree reported a conflict",
         }
     tree = next((line.strip() for line in probe.stdout.splitlines() if line.strip()), None)
-    if tree is None or not re.fullmatch(r"[0-9a-fA-F]{40}", tree):
+    object_length = object_id_length(root)
+    if (
+        tree is None
+        or len(tree) != object_length
+        or HEX_OBJECT_ID_PATTERN.fullmatch(tree) is None
+    ):
         return {
             "clean": False,
             "tree": None,

@@ -134,12 +134,20 @@ def command_lane_create(args: argparse.Namespace) -> dict[str, Any]:
             raise OrchestrateError(
                 f"lane branch is already checked out elsewhere: {existing}"
             )
+        evidence = worktree_evidence(target, started=started)
+        if evidence["head"] != base:
+            raise OrchestrateError(
+                f"existing lane has advanced to {evidence['head']}; it is not a"
+                f" recovery of creation at requested base {base}"
+            )
+        if not evidence["clean"]:
+            raise OrchestrateError("existing lane worktree is dirty")
         return {
             "ok": True,
             "operation": "lane-create",
             "base": base,
             "recovered": "already-created",
-            **worktree_evidence(target, started=started),
+            **evidence,
         }
     if target.exists():
         raise OrchestrateError(f"worktree path already exists: {target}")
@@ -196,6 +204,16 @@ def command_compose_base(args: argparse.Namespace) -> dict[str, Any]:
                     f"spec branch {branch} exists but does not contain {required};"
                     " pick a new --name for different inputs"
                 )
+        recorded = flatten_speculative_dependencies(
+            speculative_dependency_records(root, head, exclude=base),
+            context=f"existing spec branch {branch}",
+        )
+        effective_lanes = [lane for lane in lanes if not is_ancestor(root, lane, base)]
+        if len(recorded) != len(effective_lanes) or set(recorded) != set(effective_lanes):
+            raise OrchestrateError(
+                f"spec branch {branch} was composed from different lane inputs;"
+                " pick a new --name"
+            )
         return {
             "ok": True,
             "operation": "compose-base",

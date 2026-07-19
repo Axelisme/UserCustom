@@ -95,7 +95,7 @@ class OrchestrateCliTests(unittest.TestCase):
                 "HEAD",
             )
             self.assertEqual(result.returncode, 2)
-            self.assertIn("must be an exact hexadecimal commit SHA", result.stderr)
+            self.assertIn("must be a full 40-character hexadecimal commit SHA", result.stderr)
             self.assertFalse((root / ".agent_state").exists())
 
 

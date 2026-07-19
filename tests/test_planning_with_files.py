@@ -460,6 +460,40 @@ class PlanningWithFilesCompactionTests(unittest.TestCase):
             self.assertIn("completed-phase-placeholder-conclusion", check.stderr)
             self.assertEqual(path.read_bytes(), before)
 
+    def test_next_gate_guard_distinguishes_reference_from_direct_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            directory = self.init(root)
+            path = directory / "task_plan.md"
+            text = path.read_text(encoding="utf-8").replace(
+                "| Phase 1 | pending |", "| Phase 1 | completed |"
+            ).replace(
+                "- Conclusion / Commit: <完成時填入結論與 exact commit；未完成時寫 pending>",
+                "- Conclusion / Commit: completed",
+            ).replace(
+                "- Next acceptance gate: <下一個可機械驗收的 gate>",
+                "- Next acceptance gate: Verify the artifact produced by Phase 1 before release",
+            )
+            path.write_text(text, encoding="utf-8")
+
+            reference = run_plan(root, "status", "demo")
+            self.assertEqual(reference.returncode, 0, reference.stderr)
+            self.assertEqual(json.loads(reference.stdout)["zombie_count"], 0)
+
+            path.write_text(
+                text.replace(
+                    "Verify the artifact produced by Phase 1 before release",
+                    "Phase 1 — rerun completed work",
+                ),
+                encoding="utf-8",
+            )
+            direct = run_plan(root, "status", "demo")
+            codes = {
+                issue["code"]
+                for issue in json.loads(direct.stdout)["audit"]["issues"]
+            }
+            self.assertIn("next-gate-completed-phase", codes)
+
     def test_zombie_audit_expands_double_dot_decision_ranges(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -75,9 +75,40 @@ def _review_test_metrics(tree: ast.AST) -> dict[str, Any]:
     }
 
 
-def _review_blob(root: Path, sha: str, path: str) -> str | None:
+def _review_blob(root: Path, sha: str, path: str | None) -> str | None:
+    if path is None:
+        return None
     blob = run_git(root, "show", f"{sha}:{path}", check=False)
     return blob.stdout if blob.returncode == 0 else None
+
+
+def _review_test_changes(
+    root: Path, base: str, subject: str
+) -> list[dict[str, str | None]]:
+    output = run_git(root, "diff", "--name-status", "-M", base, subject).stdout
+    changes: list[dict[str, str | None]] = []
+    for line in output.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        status = parts[0]
+        if status.startswith(("R", "C")) and len(parts) >= 3:
+            old_path, new_path = parts[1], parts[2]
+        elif status == "A":
+            old_path, new_path = None, parts[1]
+        elif status == "D":
+            old_path, new_path = parts[1], None
+        else:
+            old_path = new_path = parts[1]
+        if not any(
+            path is not None and _review_test_path(path)
+            for path in (old_path, new_path)
+        ):
+            continue
+        changes.append(
+            {"status": status, "old_path": old_path, "new_path": new_path}
+        )
+    return changes
 
 
 def command_review_audit(args: argparse.Namespace) -> dict[str, Any]:
@@ -86,15 +117,14 @@ def command_review_audit(args: argparse.Namespace) -> dict[str, Any]:
     subject = exact_commit(root, args.subject, label="subject")
     if not is_ancestor(root, base, subject):
         raise OrchestrateError("base must be an ancestor of subject")
-    changed = [
-        path.strip()
-        for path in run_git(root, "diff", "--name-only", base, subject).stdout.splitlines()
-        if path.strip() and _review_test_path(path.strip())
-    ]
+    changes = _review_test_changes(root, base, subject)
     signals: list[dict[str, Any]] = []
-    for path in changed:
-        old_source = _review_blob(root, base, path)
-        new_source = _review_blob(root, subject, path)
+    for change in changes:
+        old_path = change["old_path"]
+        new_path = change["new_path"]
+        path = str(new_path or old_path)
+        old_source = _review_blob(root, base, old_path)
+        new_source = _review_blob(root, subject, new_path)
         old_tree: ast.AST | None = None
         new_tree: ast.AST | None = None
         parse_failed = False
@@ -177,7 +207,8 @@ def command_review_audit(args: argparse.Namespace) -> dict[str, Any]:
         "read_only": True,
         "base_sha": base,
         "subject_sha": subject,
-        "changed_paths": changed,
+        "changed_paths": [str(change["new_path"] or change["old_path"]) for change in changes],
+        "changes": changes,
         "signals": signals,
         "signal_count": len(signals),
         "manual_review_required": bool(signals),
@@ -225,6 +256,8 @@ def command_review_checkout(args: argparse.Namespace) -> dict[str, Any]:
     evidence = worktree_evidence(target, started=started)
     if evidence["branch"] is not None or evidence["head"] != target_sha:
         raise OrchestrateError("review checkout is not detached at the requested SHA")
+    if not evidence["clean"]:
+        raise OrchestrateError("review worktree is dirty; evidence would be void")
     result = {
         "ok": True,
         "operation": "review-checkout",
@@ -241,6 +274,10 @@ def command_review_advance(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     from_sha = exact_commit(root, args.from_sha, label="--from SHA")
     to_sha = exact_commit(root, args.to_sha, label="--to SHA")
+    if not is_ancestor(root, from_sha, to_sha):
+        raise OrchestrateError(
+            "--to must descend from --from; use a new review checkout for unrelated history"
+        )
     target = require_managed_worktree(
         root, Path(args.worktree).resolve(), kind="review"
     )

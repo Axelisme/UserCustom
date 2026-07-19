@@ -19,18 +19,20 @@ def normalized(path: Path) -> str:
 
 
 class OrchestrateContractTests(unittest.TestCase):
-    def test_release_95_keeps_iron_rules_and_pipeline_byte_exact(self) -> None:
+    def test_release_96_keeps_iron_rules_and_pipeline_byte_exact(self) -> None:
         text = (ORCHESTRATE / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("skill_version: 95", text)
+        self.assertIn("skill_version: 96", text)
         iron = section_bytes(text, "## Iron rules", "## Pipeline model")
         pipeline = section_bytes(text, "## Pipeline model", "## Control loop")
+        # Iron rules are unchanged from v95; the pipeline section gains the v96
+        # draft-not-freeze double-buffer wording (M3).
         self.assertEqual(
             hashlib.sha256(iron).hexdigest(),
             "3286619d96092f4def006d60db6607490f20be0e87d4e938d8226d9e84263cd5",
         )
         self.assertEqual(
             hashlib.sha256(pipeline).hexdigest(),
-            "5e79d94eaf2c5217d8ad4786e971d5c8503a33e41d37977b2b38ddc967228008",
+            "4979238ba7b6a8602b59483ce3bb91202513c35b91c2fcebe928bf4802d26371",
         )
 
     def test_skill_is_mental_model_plus_tools_not_argument_manual(self) -> None:

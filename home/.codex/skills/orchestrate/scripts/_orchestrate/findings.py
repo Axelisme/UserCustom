@@ -106,6 +106,14 @@ def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
         require_json_fields(raw, FINDING_REQUIRED, ferrors)
         validate_json_enum(raw, "severity", FINDING_SEVERITIES, ferrors)
         validate_json_enum(raw, "propagation", FINDING_PROPAGATIONS, ferrors)
+        sweep_required = bool(raw.get("sweep_required", False))
+        if sweep_required and raw.get("propagation") != "gates-the-slice":
+            # A root-cause sweep must block collect until fixed surface-wide;
+            # allowing a follow-up/backlog propagation would let a partially
+            # swept pattern pass integration with adjacent instances still live.
+            ferrors.append(
+                "sweep_required finding must use propagation 'gates-the-slice'"
+            )
         if ferrors:
             raise OrchestrateError("invalid finding: " + "; ".join(ferrors))
         normalized.append(
@@ -115,6 +123,8 @@ def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
                 "propagation": raw["propagation"],
                 "owner": raw.get("owner", "original-writer"),
                 "path": raw.get("path"),
+                "root_cause": raw.get("root_cause"),
+                "sweep_required": sweep_required,
                 "requires_refreshed_review": bool(
                     raw.get("requires_refreshed_review", False)
                 ),
@@ -158,6 +168,7 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
         entry = {**rec, "closed_by": closed.get(fid)}
         (closed_recs if fid in closed else open_recs).append(entry)
     gating_open = [r["id"] for r in open_recs if r["propagation"] == "gates-the-slice"]
+    sweep_open = [r["id"] for r in open_recs if r.get("sweep_required")]
     return {
         "ok": True,
         "operation": "findings-status",
@@ -167,5 +178,6 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
         "open": open_recs,
         "closed": closed_recs,
         "gating_open": gating_open,
+        "sweep_open": sweep_open,
         "collect_blocked": bool(gating_open),
     }

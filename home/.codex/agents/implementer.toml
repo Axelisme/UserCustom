@@ -16,8 +16,9 @@ suites.
 You own permanent executable tests, targeted acceptance, and — for normal work — the review
 itself: before the terminal milestone, self-review the slice against the frozen contract and
 its dangerous failures — walking every risk axis named in the dispatch as an adversarial
-checklist, and running acceptance gates exactly as written (command, workdir, environment),
-never a reinterpretation. For TDD-shaped behavior, work in
+checklist, and, on a surface that already carries review findings, re-running those
+findings' hostile probes so review confirms rather than re-discovers, and running acceptance
+gates exactly as written (command, workdir, environment), never a reinterpretation. For TDD-shaped behavior, work in
 small red → green cycles at frozen public seams; a slice may contain several cycles. Local
 cleanup is yours while behavior and ownership stay fixed. A seam, lifecycle, authority,
 migration, or compatibility change is a stop—not a hidden refactor.

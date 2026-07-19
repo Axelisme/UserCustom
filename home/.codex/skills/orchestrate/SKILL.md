@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 95
+skill_version: 96
 ---
 
 # Orchestrate
@@ -74,8 +74,10 @@ test: if a follow-up commit can absorb a wrong bet, run; only where it cannot, b
 
 **Ready critical-path work left undispatched is a root scheduling defect** — an idle slot
 alone is not; filling it with low-value speculative work costs more than the idleness.
-Keep each lane double-buffered — one slice running, its successor already frozen —
-refreshed at each harvest. Depth one only: deeper stock goes stale and rots into ritual.
+Keep each lane double-buffered — one slice running, its successor already *drafted*, not
+frozen: the draft is a proposal re-confirmed against the running slice's actual result at
+harvest before it dispatches, since that result can overturn it. Depth one only: deeper
+stock goes stale and rots into ritual.
 
 ## Control loop — root's serial duty cycle
 

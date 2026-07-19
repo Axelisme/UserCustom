@@ -15,7 +15,10 @@ contracts travel by named file. For speculative work, stop conditions also name 
 idempotent compensation to run in reverse if a later finding overturns its prerequisite.
 
 Double-buffer each lane per the SKILL pipeline model; contract-planner can keep the
-one-deep chain stocked, refreshed at each harvest.
+one-deep chain stocked as drafts, each re-confirmed against the predecessor's actual result
+at harvest before it dispatches. Successive items on one authority surface stay in that
+surface's single lane and writer; collect them once cumulatively after the surface's review
+passes, never a fresh lane/worktree per item.
 
 Keep the same identity for the same domain; finding fixes return to the original writer,
 finding closure to the original reviewer. Spawn a new identity for independent review, a
@@ -58,12 +61,20 @@ failure axes from `review checkout` at the exact target SHA; `review advance` re
 checkout for closure commits, and `review audit` flags mechanical oracle weakening. The
 terminal milestone carries `pass|needs_fix`, subject SHA, and evidence; record `needs_fix`
 items through `findings record`. `findings status` derives closure from `Closes-Finding`,
-and `collect` blocks open `gates-the-slice` debt. Root decides routing.
+and `collect` blocks open `gates-the-slice` debt. A finding whose cause is a named pattern,
+not a lone instance, is recorded `sweep_required` — which forces `gates-the-slice`: fix
+every occurrence in the frozen scope in one commit, and re-review verifies enumeration
+completeness, not just the reported site. The ledger is each surface's accumulating hostile
+checklist: before terminal on a surface with prior findings, writer self-review re-runs
+their probes (via `findings status`) so review confirms rather than first-discovers. Root
+decides routing.
 
 Send a confirmed major immediately while review continues on independent surfaces; batch
 ordinary findings in the terminal receipt and deliver them at the assignee's next
-milestone. A contract-overturning finding stops review and triggers the predeclared
-reverse-order compensations only for descendants of the broken invariant. A
+milestone. Routing a confirmed major never by itself preempts the successor: flush its
+stacked work through the predeclared reverse-order compensations only when the finding
+overturns an invariant the successor relied on, and record that call — a finding local to
+the reviewed slice lands as a follow-up while the successor runs on. A
 public-contract correction changes interface, acceptance, scope, or base; anything else
 waits as finding or advice. Review needs a terminal exact SHA, but successors and
 confirmed-major fixes do not wait for its verdict or end. Re-review is finding-focused;

@@ -54,7 +54,8 @@ class ReviewRegressionTests(unittest.TestCase):
             root = Path(temporary)
             base = init_repo(root)
             git(root, "branch", "task/demo", base)
-            task = root / "task"
+            task = root / ".agent_state" / "worktrees" / "task-demo"
+            task.parent.mkdir(parents=True)
             git(root, "worktree", "add", str(task), "task/demo")
             (task / "approved.txt").write_text("approved\n", encoding="utf-8")
             git(task, "add", "approved.txt")
@@ -65,7 +66,7 @@ class ReviewRegressionTests(unittest.TestCase):
             git(task, "commit", "-m", "late")
             late = git(root, "rev-parse", "task/demo")
             git(root, "update-ref", "refs/heads/task/demo", expected)
-            declaration = root / "landing.json"
+            declaration = root / ".agent_state" / "landing.json"
             declaration.write_text(
                 json.dumps(
                     {
@@ -96,6 +97,54 @@ class ReviewRegressionTests(unittest.TestCase):
                     landing.command_land_finish(args)
             self.assertEqual(git(root, "rev-parse", "main"), before)
             self.assertFalse((root / "late.txt").exists())
+
+    def test_land_finish_verifies_candidate_before_atomic_publication(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            base = init_repo(root)
+            git(root, "branch", "task/demo", base)
+            task = root / ".agent_state" / "worktrees" / "task-demo"
+            task.parent.mkdir(parents=True)
+            git(root, "worktree", "add", str(task), "task/demo")
+            (task / "approved.txt").write_text("approved\n", encoding="utf-8")
+            git(task, "add", "approved.txt")
+            git(task, "commit", "-m", "approved")
+            expected = git(root, "rev-parse", "task/demo")
+            declaration = root / ".agent_state" / "landing.json"
+            declaration.write_text(
+                json.dumps(
+                    {
+                        "landing_version": 1,
+                        "task_id": "demo",
+                        "policy": "commit-authorized",
+                        "target_ref": "main",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            hook = root / ".git" / "hooks" / "pre-commit"
+            hook.write_text(
+                "#!/bin/sh\nprintf injected > injected.txt\ngit add injected.txt\n",
+                encoding="utf-8",
+            )
+            hook.chmod(0o755)
+            payload = landing.command_land_finish(
+                argparse.Namespace(
+                    root=str(root),
+                    declaration=str(declaration),
+                    task_ref="task/demo",
+                    task_sha=expected,
+                    confirmed=False,
+                    message=None,
+                )
+            )
+            self.assertTrue(payload["tree_identity"])
+            self.assertEqual(
+                git(root, "rev-parse", "main^{tree}"),
+                git(root, "rev-parse", f"{expected}^{{tree}}"),
+            )
+            self.assertFalse((root / "injected.txt").exists())
+            self.assertEqual(git(root, "status", "--porcelain"), "")
 
     def test_cleanup_mutation_gets_release_preflight_but_dry_run_does_not(self) -> None:
         mutation = [
@@ -232,6 +281,39 @@ class ReviewRegressionTests(unittest.TestCase):
             args.lane = [lane_shas[0]]
             with self.assertRaisesRegex(OrchestrateError, "different lane inputs"):
                 lanes.command_compose_base(args)
+
+    def test_compose_recovery_ignores_nested_input_compose_history(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            base = init_repo(root)
+            lane_shas = []
+            for name in ("a", "b", "c"):
+                git(root, "checkout", "-b", name, base)
+                (root / f"{name}.txt").write_text(f"{name}\n", encoding="utf-8")
+                git(root, "add", f"{name}.txt")
+                git(root, "commit", "-m", name)
+                lane_shas.append(git(root, "rev-parse", "HEAD"))
+            git(root, "checkout", "main")
+            inner = lanes.command_compose_base(
+                argparse.Namespace(
+                    root=str(root),
+                    task_id="demo",
+                    name="inner",
+                    base=base,
+                    lane=lane_shas[:2],
+                )
+            )["composite_sha"]
+            args = argparse.Namespace(
+                root=str(root),
+                task_id="demo",
+                name="outer",
+                base=base,
+                lane=[inner, lane_shas[2]],
+            )
+            first = lanes.command_compose_base(args)
+            recovered = lanes.command_compose_base(args)
+            self.assertEqual(recovered["recovered"], "already-composed")
+            self.assertEqual(recovered["composite_sha"], first["composite_sha"])
 
     def test_review_advance_rejects_unrelated_history(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

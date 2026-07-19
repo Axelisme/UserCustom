@@ -480,6 +480,14 @@ class PlanningWithFilesCompactionTests(unittest.TestCase):
             self.assertEqual(reference.returncode, 0, reference.stderr)
             self.assertEqual(json.loads(reference.stdout)["zombie_count"], 0)
 
+            prefix_reference = text.replace(
+                "Verify the artifact produced by Phase 1 before release",
+                "Phase 1 artifact checksum matches the release manifest",
+            )
+            path.write_text(prefix_reference, encoding="utf-8")
+            prefix = run_plan(root, "status", "demo")
+            self.assertEqual(json.loads(prefix.stdout)["zombie_count"], 0)
+
             path.write_text(
                 text.replace(
                     "Verify the artifact produced by Phase 1 before release",

@@ -266,23 +266,11 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
             f"landing checkout is {current_branch}, expected {target_ref}"
         )
     staged, dirty = landing_checkout_dirt(root)
-    if staged:
+    if staged or dirty:
+        paths = sorted(set(staged) | set(dirty))
         raise OrchestrateError(
-            "staged changes present in the landing checkout would leak into the"
-            " squash commit: " + ", ".join(staged[:20])
-        )
-    changed = [
-        line.strip()
-        for line in run_git(
-            root, "diff", "--name-only", target_sha, expected
-        ).stdout.splitlines()
-        if line.strip()
-    ]
-    dirty_overlap = sorted(set(dirty) & set(changed))
-    if dirty_overlap:
-        raise OrchestrateError(
-            "user-owned dirty paths overlap the landing diff: "
-            + ", ".join(dirty_overlap[:20])
+            "landing checkout must be fully clean before atomic publication: "
+            + ", ".join(paths[:20])
         )
     acquire_landing_lock(root)
     task_head = run_git(root, "rev-parse", f"{args.task_ref}^{{commit}}").stdout.strip()
@@ -302,17 +290,25 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
             " then rerun land finish"
         )
     message = args.message or f"land {task_id}: squash of {expected[:12]}"
-    run_git(root, "merge", "--squash", expected)
-    run_git(root, "commit", "-m", message)
-    landed = run_git(root, "rev-parse", "HEAD").stdout.strip()
-    if (
-        run_git(root, "diff", "--quiet", expected, landed, check=False).returncode
-        != 0
-    ):
+    candidate_tree = run_git(root, "rev-parse", f"{expected}^{{tree}}").stdout.strip()
+    landed = run_git(
+        root,
+        "commit-tree",
+        candidate_tree,
+        "-p",
+        target_sha,
+        "-m",
+        message,
+    ).stdout.strip()
+    if run_git(root, "diff", "--quiet", expected, landed, check=False).returncode != 0:
         raise OrchestrateError(
-            f"tree identity proof failed after squash: {expected} vs {landed};"
-            " do not delete the task branch — investigate"
+            f"candidate tree identity proof failed before publication: {expected} vs {landed}"
         )
+    target_full_ref = (
+        target_ref if target_ref.startswith("refs/") else f"refs/heads/{target_ref}"
+    )
+    run_git(root, "update-ref", target_full_ref, landed, target_sha)
+    run_git(root, "reset", "--hard", landed)
     next_steps = [
         "run reconcile, then cleanup each safe-to-remove exact --worktree target",
         f"git branch -D {args.task_ref} (authorized by this tree identity proof)",

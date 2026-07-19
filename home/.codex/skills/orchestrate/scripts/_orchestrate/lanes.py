@@ -68,6 +68,51 @@ def flatten_speculative_dependencies(
     return dependencies
 
 
+def compose_dependency_chain(root: Path, composite: str) -> dict[str, Any]:
+    """Read only the synthetic first-parent chain created by one compose operation."""
+    current = composite
+    signature: str | None = None
+    commits: list[str] = []
+    dependencies: list[str] = []
+    while True:
+        body = run_git(root, "log", "-1", "--format=%B", current).stdout
+        first_line = body.splitlines()[0].strip() if body.splitlines() else ""
+        if not SPECULATIVE_BASE_PATTERN.search(body):
+            break
+        if signature is None:
+            signature = first_line
+        elif first_line != signature:
+            break
+        recorded = [
+            exact_commit(root, dep, label=f"Depends-Lane in {current[:12]}")
+            for dep in DEPENDS_LANE_PATTERN.findall(body)
+        ]
+        if not recorded:
+            raise OrchestrateError(
+                f"speculative compose commit {current[:12]} has no Depends-Lane trailer"
+            )
+        commits.append(current)
+        dependencies.extend(recorded)
+        parents = run_git(root, "rev-list", "--parents", "-1", current).stdout.split()
+        if len(parents) < 2:
+            raise OrchestrateError(
+                f"speculative compose commit {current[:12]} has no first parent"
+            )
+        current = parents[1]
+    if not commits:
+        raise OrchestrateError(
+            f"{composite[:12]} is not the head of a compose-base synthetic chain"
+        )
+    if len(set(dependencies)) != len(dependencies):
+        raise OrchestrateError("duplicate dependencies in compose-base synthetic chain")
+    return {
+        "base": current,
+        "signature": signature,
+        "commits": commits,
+        "dependencies": dependencies,
+    }
+
+
 def match_final_dependencies(
     root: Path, recorded: list[str], finals: list[str]
 ) -> dict[str, str]:
@@ -204,12 +249,16 @@ def command_compose_base(args: argparse.Namespace) -> dict[str, Any]:
                     f"spec branch {branch} exists but does not contain {required};"
                     " pick a new --name for different inputs"
                 )
-        recorded = flatten_speculative_dependencies(
-            speculative_dependency_records(root, head, exclude=base),
-            context=f"existing spec branch {branch}",
-        )
+        chain = compose_dependency_chain(root, head)
         effective_lanes = [lane for lane in lanes if not is_ancestor(root, lane, base)]
-        if len(recorded) != len(effective_lanes) or set(recorded) != set(effective_lanes):
+        recorded = chain["dependencies"]
+        expected_signature = f"compose speculative base {task_id}/{name}"
+        if (
+            chain["base"] != base
+            or chain["signature"] != expected_signature
+            or len(recorded) != len(effective_lanes)
+            or set(recorded) != set(effective_lanes)
+        ):
             raise OrchestrateError(
                 f"spec branch {branch} was composed from different lane inputs;"
                 " pick a new --name"
@@ -291,13 +340,7 @@ def command_compose_base_revalidate(args: argparse.Namespace) -> dict[str, Any]:
     if not is_ancestor(root, composite, successor):
         raise OrchestrateError("successor must descend from composite")
     task_head = run_git(root, "rev-parse", f"{task_ref}^{{commit}}").stdout.strip()
-    records = speculative_dependency_records(root, composite)
-    recorded = flatten_speculative_dependencies(records, context="composite")
-    if not recorded:
-        raise OrchestrateError(
-            f"{composite[:12]} carries no Speculative-Base/Depends-Lane trailers;"
-            " it is not a compose-base composite"
-        )
+    recorded = compose_dependency_chain(root, composite)["dependencies"]
     matches = match_final_dependencies(root, recorded, finals)
     deps: list[dict[str, Any]] = []
     followup_files: set[str] = set()

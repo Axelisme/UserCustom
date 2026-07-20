@@ -66,11 +66,11 @@
       "sha256": "a5fddb2f6b6e3eddc1307c9af0770a246c594b21ef3f45c513bba3ca535ac2c2"
     },
     "scripts/_orchestrate/cli.py": {
-      "bytes": 12854,
+      "bytes": 12858,
       "sections": {
-        "__file__": "501f576bc0d075c43cb3741b01e30ea03f6762b0e15b003eb4886ec9411d2ec8"
+        "__file__": "58766754d0cad80fd0b8b5e5064f5a5a8052bd07bac663e28c77d93b7ceb5e86"
       },
-      "sha256": "501f576bc0d075c43cb3741b01e30ea03f6762b0e15b003eb4886ec9411d2ec8"
+      "sha256": "58766754d0cad80fd0b8b5e5064f5a5a8052bd07bac663e28c77d93b7ceb5e86"
     },
     "scripts/_orchestrate/findings.py": {
       "bytes": 13413,
@@ -173,7 +173,10 @@
     "acknowledge_removed": [],
     "changed_profiles": [],
     "changed_sections": {
-      "SKILL.md": []
+      "SKILL.md": [],
+      "scripts/_orchestrate/cli.py": [
+        "__file__"
+      ]
     },
     "from_version": 102,
     "must_reread": []

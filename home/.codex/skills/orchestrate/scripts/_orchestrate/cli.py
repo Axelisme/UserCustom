@@ -203,7 +203,7 @@ def build_parser() -> argparse.ArgumentParser:
     findings_status.add_argument(
         "--slice-sha",
         dest="slice_sha",
-        help="split gating findings into slice_blocking vs task_wide for this slice",
+        help="also report slice_blocking: the gating findings reachable from this slice",
     )
     findings_status.set_defaults(handler=command_findings_status)
 

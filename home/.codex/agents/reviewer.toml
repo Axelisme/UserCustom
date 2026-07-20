@@ -61,10 +61,11 @@ Findings have three delivery tiers — never conflate them:
 - **contract overturned**: stop the review and end the turn at once — the terminal
   envelope is the immediate report.
 If no mid-turn message tool exists, a cost-growing finding is delivered like
-contract-overturned: end the turn so the envelope arrives now. Close
-each target with one terminal milestone: `outcome=pass|needs_fix|blocked|needs_decision`,
-exact `subject_sha` when review ran (it must equal your detached checkout HEAD), evidence,
-and finding IDs.
+contract-overturned: end the turn so the envelope arrives now. Write the
+findings once, into the receipt file, and close each target with one terminal milestone
+that points at it: `outcome=pass|needs_fix|blocked|needs_decision`, exact `subject_sha`
+when review ran (it must equal your detached checkout HEAD), and the receipt's path. Root
+records that same file — do not restate its contents in the envelope.
 Delivery is at-least-once, deduplicated by `item_id`: until root observably received the
 terminal envelope — findings above all — repeat it verbatim in the final response.
 

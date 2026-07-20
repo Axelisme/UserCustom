@@ -11,7 +11,7 @@
         "Pipeline model": "c9a2f3af4d6a059c9d82c5183b6d6dfe9b9d97c13ea7759f7cbf8874f76320e7",
         "Shaping heuristics": "cbeda8b27d20c7934663a1cb36a81f9656e8fb8e4d391ff7f4fbe3e58c92fc01"
       },
-      "sha256": "f3c338c9b0b7c2bd51a14555f2508a4c2a158d4f5ffd511f74b6a0dda3c01cea"
+      "sha256": "28b95afdee710a4c82c2d169215ec36571adb39760769df0dc797f154cdad649"
     },
     "references/coordination.md": {
       "bytes": 13165,
@@ -136,7 +136,7 @@
       "sha256": "ed42e8798b1cd3078cb3bd7716c5ebc483709d9f793a554e3424f9b9ceee3c07"
     }
   },
-  "orchestrate_compat": 102,
+  "orchestrate_compat": 103,
   "profiles": {
     ".claude/agents/contract-planner.md": {
       "bytes": 1608,
@@ -171,35 +171,13 @@
   },
   "release_delta": {
     "acknowledge_removed": [],
-    "changed_profiles": [
-      ".claude/agents/reviewer.md",
-      ".codex/agents/reviewer.toml"
-    ],
+    "changed_profiles": [],
     "changed_sections": {
-      "SKILL.md": [
-        "Shaping heuristics"
-      ],
-      "references/coordination.md": [
-        "Review",
-        "Roles and dispatch"
-      ],
-      "runtime-claude.md": [
-        "Milestones and flow control"
-      ],
-      "scripts/_orchestrate/findings.py": [
-        "__file__"
-      ],
-      "scripts/_orchestrate/worktrees.py": [
-        "__file__"
-      ]
+      "SKILL.md": []
     },
-    "from_version": 101,
-    "must_reread": [
-      "SKILL.md",
-      "references/coordination.md",
-      "runtime-claude.md"
-    ]
+    "from_version": 102,
+    "must_reread": []
   },
   "schema_version": 1,
-  "skill_version": 102
+  "skill_version": 103
 }

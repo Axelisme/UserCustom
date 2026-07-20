@@ -43,13 +43,14 @@ FINDING_RECEIPT_REQUIRED = ("subject_sha", "verdict", "findings")
 FINDING_REQUIRED = ("propagation",)
 
 
-# A review that produced no findings still happened: pass, blocked and needs_decision
-# each record one marker row so the outcome has a durable home instead of living only
-# in prose. needs_fix is fully represented by its findings and takes no marker.
-# Markers carry `kind` and never a `propagation`; finding consumers skip them via
-# `dedup_findings`.
+# Every review records exactly one outcome row, whatever its verdict. v102 exempted
+# needs_fix on the theory that its findings say everything, but the receipt's own
+# evidence — what the reviewer did to reach the verdict — belongs to no single
+# finding, so exempting needs_fix silently discarded it in the one case where the
+# evidence matters most. Markers carry `kind` and never a `propagation`; finding
+# consumers skip them via `dedup_findings`.
 REVIEW_PASS_KIND = "review-pass"
-MARKER_VERDICTS = ("pass", "blocked", "needs_decision")
+MARKER_VERDICTS = FINDING_VERDICTS
 MARKER_KINDS = frozenset(f"review-{verdict}" for verdict in MARKER_VERDICTS)
 
 
@@ -170,8 +171,9 @@ def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
             " 'needs_fix'"
         )
     if verdict in MARKER_VERDICTS:
-        # The outcome itself is recorded, so a review that ended blocked or
-        # undecided has a durable home instead of being dropped for lack of findings.
+        # The outcome itself is recorded, carrying the receipt's own evidence, so a
+        # review has a durable home whatever it concluded and whether or not it
+        # produced findings.
         normalized.append(
             {
                 "id": f"review-{verdict}:{subject}",
@@ -214,6 +216,12 @@ def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
                 "propagation": raw["propagation"],
                 "owner": raw.get("owner", "original-writer"),
                 "path": raw.get("path"),
+                # The reviewer is asked to name the observable behavior and the
+                # evidence for it; both used to be dropped on the floor. They are
+                # free text and deliberately stay out of the identity hash — the
+                # same defect described in different words is one finding, not two.
+                "behavior": raw.get("behavior"),
+                "evidence": raw.get("evidence"),
                 "root_cause": raw.get("root_cause"),
                 "sweep_required": sweep_required,
                 "requires_refreshed_review": bool(

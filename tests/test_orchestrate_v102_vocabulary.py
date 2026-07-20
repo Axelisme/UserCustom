@@ -231,3 +231,69 @@ class MarkerOverlapTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewerOutputIsKeptTests(unittest.TestCase):
+    """v103: the reviewer is asked for five things per finding; all five must be
+    readable back. Two of them used to be discarded silently."""
+
+    def test_behavior_and_evidence_survive_recording(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            result = record(
+                root,
+                [
+                    {
+                        "severity": "major",
+                        "propagation": "gates-the-slice",
+                        "path": "auth.py",
+                        "behavior": "token refresh drops the tenant scope on retry",
+                        "evidence": ["repro output line 42"],
+                    }
+                ],
+                "needs_fix",
+                evidence=["ran targeted repro: 3 cases"],
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            finding = status(root)["open"][0]
+            self.assertEqual(
+                finding["behavior"], "token refresh drops the tenant scope on retry"
+            )
+            self.assertEqual(finding["evidence"], ["repro output line 42"])
+
+    def test_needs_fix_keeps_the_receipts_own_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            record(
+                root,
+                [{"propagation": "backlog", "path": "a.py"}],
+                "needs_fix",
+                evidence=["read the auth boundary"],
+            )
+            outcomes = status(root)["review_outcomes"]
+            # Every review leaves exactly one outcome row, needs_fix included.
+            self.assertEqual(len(outcomes), 1)
+            self.assertEqual(outcomes[0]["verdict"], "needs_fix")
+            self.assertEqual(outcomes[0]["evidence"], ["read the auth boundary"])
+
+    def test_rewording_a_finding_does_not_create_a_second_one(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            base = {"propagation": "gates-the-slice", "path": "a.py"}
+            record(root, [{**base, "behavior": "drops scope"}], "needs_fix")
+            record(root, [{**base, "behavior": "loses the tenant scope"}], "needs_fix")
+            # Free text is stored but must not enter the identity: the same defect
+            # described differently is one finding, not two.
+            self.assertEqual(len(status(root)["open"]), 1)
+
+    def test_a_needs_fix_outcome_row_never_gates_collect(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            record(root, [{"propagation": "backlog", "path": "a.py"}], "needs_fix")
+            st = status(root)
+            self.assertEqual(st["gating_open"], [])
+            self.assertFalse(st["collect_blocked"])

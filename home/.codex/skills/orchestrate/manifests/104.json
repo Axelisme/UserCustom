@@ -14,7 +14,7 @@
       "sha256": "5bf1ffd8dfd397ddad2146a59f0183dd06b97b6eb74ad145a6cb49bf7edbe647"
     },
     "references/coordination.md": {
-      "bytes": 15094,
+      "bytes": 14831,
       "sections": {
         "Coordination": "f18a1d469493b2ad5b14d3e8294712470e60559f7fc8b914f22154090a1de3ab",
         "Git topology": "1ea39751b4de0fb45abc12fe3ebba20b162fa91e51d6fae1ff5cce7f4965740b",
@@ -24,9 +24,9 @@
         "Review": "8d78d8c13609faa7a02f66aee6f93dd7b8484dfb90bbd1cdd3f35a14a68d6b40",
         "Roles and dispatch": "98f266a0d0962c3201de4efcb239fbb517d5c6f52d5ca9454ba39afbd76d2a7f",
         "Skill upgrades": "dfb3283c6d236a2235b4d581345fb5e40daf432773bda086c266ea0917e2a2ae",
-        "Wave close": "5a115340d0daa0b3f01a6ef13d0eff2a6f3a10f3d90b8758d5eea3afe7161a30"
+        "Wave close": "a6daf708934f89fd671ef981efe3f3b190f90290e44425dd6d0b4c218aa63cb1"
       },
-      "sha256": "5e140a2240ec4f77de9279dd99b679260187900037faf67ba4db75f65110d3b2"
+      "sha256": "28022862c7bb26499458f0112fc3a390d5f361f3a813d4f79e1a6fe41a25e682"
     },
     "references/publication-review.md": {
       "bytes": 2622,

@@ -173,21 +173,17 @@ root-serial time). `wave status` rolls the slice states, finding ledger, and wor
 read-only report with a restart handoff summary — read it to steer, but it never dispatches,
 lands, or writes the plan for you. Its `--summary` reports `wave_boundary_removable`: this
 task's lane worktrees. When it is non-empty and you judge the boundary safe, `cleanup
---wave-boundary` clears them — abandoned, dirty, or absorbed alike, since a half-finished or
-forgotten lane is the target here, not work to protect — scoped to this task's
-`agent/<task>/*` and never touching the integration checkout. It deliberately skips detached
-review worktrees, which carry no task identity in ref or path; remove those by exact-target
-`cleanup --worktree`. When the count is zero, skip the step — do not run a tidy with nothing
-to tidy.
+--wave-boundary` clears them — abandoned, dirty, or absorbed alike, since a half-finished
+lane is the target, not work to protect — scoped to `agent/<task>/*`, never the integration
+checkout. It skips detached review worktrees, which carry no task identity; remove those by
+exact-target `cleanup --worktree`. When the count is zero, skip the step.
 
 Invite process feedback here: ask the subagents this wave dispatched for any reaction to
-orchestrate or to working under you, and have each record it with `feedback record` — an
-append-only note, gating nothing. The human may ask only after several waves, so the file,
-not your memory, is what must not forget; it is deduped by no machine, because a word's
-difference would defeat that. Read it on demand — when the human asks and at task close —
-and organize it by judgment then, rather than carrying it in context each wave. The same
-economy applies to task_plan and the ledgers: read them when a decision needs them, not
-wholesale every turn.
+orchestrate or to working under you, recorded via `feedback record` — append-only, gating
+nothing, deduped by no machine (a word's difference defeats a hash). The human may ask only
+after several waves, so the file, not your memory, carries it; read it on demand — when
+asked and at close — and merge by judgment then. Read task_plan and the ledgers the same
+way: when a decision needs them, not wholesale.
 
 Re-baseline task_plan to active intent, decisions, unresolved anomalies, and next gates;
 closed items become pointers and Git-derived state disappears. The finding ledger is not part

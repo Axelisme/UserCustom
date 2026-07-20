@@ -1,7 +1,7 @@
 # Orchestrate — Claude Code runtime binding
 
 Current tool availability is authoritative. Claude subagents start fresh; their prompt must
-carry the objective, workdir/scope, basis, acceptance, authority, stop conditions,
+carry the objective, workdir/scope, basis, task-id, acceptance, authority, stop conditions,
 checkpoint budget, and artifact pointers.
 
 ## Tool and profile binding

@@ -6,7 +6,9 @@ before the first dispatch; the iron rules in `../SKILL.md` stay authoritative.
 ## Roles and dispatch
 
 Root alone freezes work, grants authority, decides deferral, and integrates. A dispatch
-names the bounded objective, scope/workdir, exact base, acceptance, non-goals, and stop
+names the bounded objective, scope/workdir, exact base, the task-id (the ledger key an
+assignee needs to self-query `findings status` for a surface's prior findings), acceptance,
+non-goals, and stop
 conditions; add a checkpoint budget in observable units (commits/items, never wall-clock)
 only when the work spans several boundaries — on a single-boundary slice the terminal
 milestone is the budget, and stating one is ceremony;

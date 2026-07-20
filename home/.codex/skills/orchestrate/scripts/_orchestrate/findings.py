@@ -65,14 +65,18 @@ def derived_finding_id(subject: str, raw: dict[str, Any]) -> str:
         "root_cause": raw.get("root_cause"),
         "sweep_required": bool(raw.get("sweep_required", False)),
     }
-    # Fields added later join the hash only when actually used, so widening the set
-    # separates findings that differ in them without renumbering every finding that
-    # does not — a receipt replayed across the widening still dedups instead of
-    # landing a second copy that no Closes-Finding trailer will ever close.
-    if raw.get("owner") is not None:
-        fields["owner"] = raw["owner"]
-    if raw.get("requires_refreshed_review"):
-        fields["requires_refreshed_review"] = True
+    # EVERY field added from here on must go through `widen`, never into the dict
+    # above: an unconditional field renumbers every finding recorded before it
+    # existed, so a replayed receipt lands a second copy that no Closes-Finding
+    # trailer will ever close. That is exactly how this function broke once already.
+    def widen(key: str, value: Any) -> None:
+        """Join the identity only when actually used, so adding a field separates
+        the findings that use it without renumbering the ones that do not."""
+        if value is not None and value is not False:
+            fields[key] = value
+
+    widen("owner", raw.get("owner"))
+    widen("requires_refreshed_review", raw.get("requires_refreshed_review") or None)
     identity = json.dumps(fields, sort_keys=True)
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:8]
     return f"{subject[:12]}-{digest}"

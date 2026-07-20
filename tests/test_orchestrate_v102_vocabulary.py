@@ -65,6 +65,21 @@ def status(root: Path) -> dict:
     return json.loads(run_cli(root, "findings", "status", "--task-id", "demo").stdout)
 
 
+def clean(st: dict) -> list[str]:
+    """Subjects whose review ended pass — derived, as callers now must."""
+    return sorted(
+        m["subject_sha"] for m in st["review_outcomes"] if m.get("verdict") == "pass"
+    )
+
+
+def incomplete(st: dict) -> list[str]:
+    """Subjects with a review outcome that is not a pass and no later pass."""
+    return sorted(
+        {m["subject_sha"] for m in st["review_outcomes"] if m.get("verdict") != "pass"}
+        - set(clean(st))
+    )
+
+
 class VerdictVocabularyTests(unittest.TestCase):
     """v102: the ledger speaks the same four outcomes as the milestone envelope, so an
     honestly-reported blocked review is recorded instead of rejected."""
@@ -83,10 +98,10 @@ class VerdictVocabularyTests(unittest.TestCase):
             )
             st = status(root)
             # A blocked review is not a pass: it must not read as clean evidence.
-            self.assertEqual(st["review_incomplete"], [subject])
-            self.assertEqual(st["reviewed_clean"], [])
+            self.assertEqual(incomplete(st), [subject])
+            self.assertEqual(clean(st), [])
             self.assertFalse(st["collect_blocked"])
-            marker = st["review_pass"][0]
+            marker = st["review_outcomes"][0]
             self.assertEqual(marker["verdict"], "blocked")
             self.assertEqual(marker["evidence"], ["loopback socket EPERM in sandbox"])
 
@@ -96,7 +111,7 @@ class VerdictVocabularyTests(unittest.TestCase):
             init_repo(root)
             result = record(root, [], "needs_decision", evidence=["contract ambiguous"])
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(status(root)["review_incomplete"], [git(root, "rev-parse", "HEAD")])
+            self.assertEqual(incomplete(status(root)), [git(root, "rev-parse", "HEAD")])
 
     def test_pass_clean_still_reads_as_clean(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -105,8 +120,8 @@ class VerdictVocabularyTests(unittest.TestCase):
             subject = git(root, "rev-parse", "HEAD")
             self.assertEqual(record(root, [], "pass").returncode, 0)
             st = status(root)
-            self.assertEqual(st["reviewed_clean"], [subject])
-            self.assertEqual(st["review_incomplete"], [])
+            self.assertEqual(clean(st), [subject])
+            self.assertEqual(incomplete(st), [])
 
     def test_needs_fix_with_no_findings_is_still_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -210,8 +225,8 @@ class MarkerOverlapTests(unittest.TestCase):
             self.assertEqual(record(root, [], "blocked").returncode, 0)
             self.assertEqual(record(root, [], "pass").returncode, 0)
             st = status(root)
-            self.assertEqual(st["reviewed_clean"], [subject])
-            self.assertEqual(st["review_incomplete"], [])
+            self.assertEqual(clean(st), [subject])
+            self.assertEqual(incomplete(st), [])
 
 
 if __name__ == "__main__":

@@ -73,11 +73,11 @@
       "sha256": "501f576bc0d075c43cb3741b01e30ea03f6762b0e15b003eb4886ec9411d2ec8"
     },
     "scripts/_orchestrate/findings.py": {
-      "bytes": 13711,
+      "bytes": 12874,
       "sections": {
-        "__file__": "b45e18bc77bc3ab8c5af2cc744fe90904664f1eae0a83419e15b8943f41e39ff"
+        "__file__": "786271b4c26d47867255dc28a3ca785f0df6ac09819bec3d53cbc36f70fb3ba9"
       },
-      "sha256": "b45e18bc77bc3ab8c5af2cc744fe90904664f1eae0a83419e15b8943f41e39ff"
+      "sha256": "786271b4c26d47867255dc28a3ca785f0df6ac09819bec3d53cbc36f70fb3ba9"
     },
     "scripts/_orchestrate/git_ops.py": {
       "bytes": 7790,
@@ -122,11 +122,11 @@
       "sha256": "f9403b1c0103b9662ed17dc56d4e3cae556efa643ed4f56450524a8412cc23e2"
     },
     "scripts/_orchestrate/worktrees.py": {
-      "bytes": 20197,
+      "bytes": 20506,
       "sections": {
-        "__file__": "a4ba4ad53768becacc12db1fc746ae59ccff485c23c10cb10c50e4087054b0a2"
+        "__file__": "afb2676bb6366b05fb6b759ca8725a7e27b67d8c2f1c00fd13c8e1d3f25befb6"
       },
-      "sha256": "a4ba4ad53768becacc12db1fc746ae59ccff485c23c10cb10c50e4087054b0a2"
+      "sha256": "afb2676bb6366b05fb6b759ca8725a7e27b67d8c2f1c00fd13c8e1d3f25befb6"
     },
     "scripts/orchestrate.py": {
       "bytes": 227,
@@ -187,6 +187,9 @@
         "Milestones and flow control"
       ],
       "scripts/_orchestrate/findings.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/worktrees.py": [
         "__file__"
       ]
     },

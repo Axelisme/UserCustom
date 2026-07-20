@@ -74,11 +74,13 @@ class ReviewPassReceiptTests(unittest.TestCase):
             status = run_cli(root, "findings", "status", "--task-id", "demo")
             self.assertEqual(status.returncode, 0, status.stderr)
             st = json.loads(status.stdout)
-            self.assertEqual(st["reviewed_clean"], [subject])
+            self.assertEqual(
+                [m["subject_sha"] for m in st["review_outcomes"]], [subject]
+            )
             self.assertEqual(st["open"], [])
             self.assertEqual(st["closed"], [])
             self.assertFalse(st["collect_blocked"])
-            marker = st["review_pass"][0]
+            marker = st["review_outcomes"][0]
             self.assertEqual(marker["kind"], "review-pass")
             self.assertEqual(marker["evidence"], ["suite: 55 passed"])
 
@@ -98,7 +100,7 @@ class ReviewPassReceiptTests(unittest.TestCase):
             status = json.loads(
                 run_cli(root, "findings", "status", "--task-id", "demo").stdout
             )
-            self.assertEqual(len(status["review_pass"]), 1)
+            self.assertEqual(len(status["review_outcomes"]), 1)
 
     def test_needs_fix_with_no_findings_is_still_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -127,7 +129,7 @@ class ReviewPassReceiptTests(unittest.TestCase):
             # The marker is not a finding: only F1 gates, and reviewed_clean stands.
             self.assertEqual(status["gating_open"], ["F1"])
             self.assertEqual([r["id"] for r in status["open"]], ["F1"])
-            self.assertTrue(status["reviewed_clean"])
+            self.assertTrue(status["review_outcomes"])
 
 
 class WaveStatusTests(unittest.TestCase):

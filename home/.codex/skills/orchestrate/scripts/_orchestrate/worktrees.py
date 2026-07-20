@@ -280,7 +280,14 @@ def command_wave_status(args: argparse.Namespace) -> dict[str, Any]:
         "open_findings": [rec["id"] for rec in findings_report["open"]],
         "gating_open": findings_report["gating_open"],
         "collect_blocked": findings_report["collect_blocked"],
-        "reviewed_clean": findings_report["reviewed_clean"],
+        # Derived here rather than carried as its own ledger key: a review that
+        # ended blocked is not clean, and one place deciding that cannot drift
+        # from another.
+        "reviewed_clean": sorted(
+            marker["subject_sha"]
+            for marker in findings_report["review_outcomes"]
+            if marker.get("verdict") == "pass"
+        ),
         "safe_to_remove": reconcile_report["safe_to_remove"],
     }
     result = {

@@ -102,7 +102,10 @@ class SweepFindingTests(unittest.TestCase):
             status = run_cli(root, "findings", "status", "--task-id", "demo")
             self.assertEqual(status.returncode, 0, status.stderr)
             payload = json.loads(status.stdout)
-            self.assertEqual(payload["sweep_open"], ["SWEEP-1"])
+            self.assertEqual(
+                [r["id"] for r in payload["open"] if r.get("sweep_required")],
+                ["SWEEP-1"],
+            )
             self.assertIn("SWEEP-1", payload["gating_open"])
             self.assertTrue(payload["collect_blocked"])
             opened = payload["open"][0]
@@ -126,7 +129,9 @@ class SweepFindingTests(unittest.TestCase):
             self.assertEqual(record.returncode, 0, record.stderr)
             status = run_cli(root, "findings", "status", "--task-id", "demo")
             payload = json.loads(status.stdout)
-            self.assertEqual(payload["sweep_open"], [])
+            self.assertEqual(
+                [r["id"] for r in payload["open"] if r.get("sweep_required")], []
+            )
             self.assertEqual(payload["gating_open"], ["PLAIN-1"])
             self.assertFalse(payload["open"][0]["sweep_required"])
             self.assertIsNone(payload["open"][0]["root_cause"])

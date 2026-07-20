@@ -260,40 +260,26 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
         entry = {**rec, "closed_by": closed.get(fid)}
         (closed_recs if fid in closed else open_recs).append(entry)
     gating_open = [r["id"] for r in open_recs if r["propagation"] == "gates-the-slice"]
-    sweep_open = [r["id"] for r in open_recs if r.get("sweep_required")]
-    review_pass = list(dedup_review_pass(records).values())
-    reviewed_clean = sorted(
-        {r["subject_sha"] for r in review_pass if r.get("verdict") == "pass"}
-    )
-    # A blocked or undecided review is not a pass: the slice has no complete
-    # evidence, and root has to see that rather than infer it from silence. A later
-    # pass on the same subject settles it, so the two lists never both claim a sha.
-    review_incomplete = sorted(
-        {r["subject_sha"] for r in review_pass if r.get("verdict") != "pass"}
-        - set(reviewed_clean)
-    )
-    # Scope buckets answer "does this block *my* slice", which the flat open list
-    # cannot: a gating finding on another lane is not this slice's problem. The
-    # ancestry test mirrors what collect itself gates on, so the display can never
-    # disagree with the gate. `collect_blocked` keeps its task-wide meaning.
-    unrelated_open = [
-        r["id"] for r in open_recs if r["propagation"] != "gates-the-slice"
-    ]
+    review_outcomes = list(dedup_review_pass(records).values())
+    # Only what the caller cannot compute from the lists above is reported. Every
+    # extra projection is another view that can disagree with its source — which is
+    # exactly how a subject once appeared as both clean and incomplete at once.
+    # `slice_blocking` stays because it needs git ancestry, which the caller lacks:
+    # a gating finding on another lane does not block this slice, and the test
+    # mirrors what collect itself gates on so display can never contradict the gate.
     slice_blocking: list[str] | None = None
-    task_wide = list(gating_open)
     slice_sha = getattr(args, "slice_sha", None)
     if slice_sha:
         subject = exact_commit(root, slice_sha, label="slice SHA")
-        slice_blocking = []
-        task_wide = []
-        for rec in open_recs:
-            if rec["propagation"] != "gates-the-slice":
-                continue
-            rec_subject = rec.get("subject_sha")
-            if not rec_subject or is_ancestor(root, rec_subject, subject):
-                slice_blocking.append(rec["id"])
-            else:
-                task_wide.append(rec["id"])
+        slice_blocking = [
+            rec["id"]
+            for rec in open_recs
+            if rec["propagation"] == "gates-the-slice"
+            and (
+                not rec.get("subject_sha")
+                or is_ancestor(root, rec["subject_sha"], subject)
+            )
+        ]
     return {
         "ok": True,
         "operation": "findings-status",
@@ -303,12 +289,7 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
         "open": open_recs,
         "closed": closed_recs,
         "gating_open": gating_open,
-        "sweep_open": sweep_open,
         "collect_blocked": bool(gating_open),
         "slice_blocking": slice_blocking,
-        "task_wide": task_wide,
-        "unrelated_open": unrelated_open,
-        "review_pass": review_pass,
-        "reviewed_clean": reviewed_clean,
-        "review_incomplete": review_incomplete,
+        "review_outcomes": review_outcomes,
     }

@@ -94,7 +94,7 @@ class SpellingUnificationTests(unittest.TestCase):
             # The bare id reads the very same ledger.
             status = cli("findings", "status", "--root", str(root), "--task-id", "demo")
             self.assertEqual(status.returncode, 0, status.stderr)
-            self.assertTrue(json.loads(status.stdout)["reviewed_clean"])
+            self.assertTrue(json.loads(status.stdout)["review_outcomes"])
 
 
 if __name__ == "__main__":

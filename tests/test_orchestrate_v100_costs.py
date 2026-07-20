@@ -267,8 +267,15 @@ class FindingsScopeAndSchemaTests(unittest.TestCase):
             status = json.loads(
                 run_cli(root, "findings", "status", "--task-id", "demo").stdout
             )
-            self.assertEqual(status["task_wide"], ["GATE-1"])
-            self.assertEqual(status["unrelated_open"], ["NOTE-1"])
+            self.assertEqual(status["gating_open"], ["GATE-1"])
+            self.assertEqual(
+                [
+                    r["id"]
+                    for r in status["open"]
+                    if r["propagation"] != "gates-the-slice"
+                ],
+                ["NOTE-1"],
+            )
             # Without --slice-sha the slice split is undetermined, not guessed.
             self.assertIsNone(status["slice_blocking"])
             # Gate semantics are unchanged.

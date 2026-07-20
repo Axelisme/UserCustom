@@ -6,8 +6,10 @@ before the first dispatch; the iron rules in `../SKILL.md` stay authoritative.
 ## Roles and dispatch
 
 Root alone freezes work, grants authority, decides deferral, and integrates. A dispatch
-names the bounded objective, scope/workdir, exact base, acceptance, non-goals, stop
-conditions, and a checkpoint budget in observable units (commits/items, never wall-clock);
+names the bounded objective, scope/workdir, exact base, acceptance, non-goals, and stop
+conditions; add a checkpoint budget in observable units (commits/items, never wall-clock)
+only when the work spans several boundaries — on a single-boundary slice the terminal
+milestone is the budget, and stating one is ceremony;
 acceptance gates are verbatim command + workdir + environment. Named risks are both writer
 self-check and reviewer scope; authority-publication slices name
 [publication-review](publication-review.md). Boilerplate stays in the profile; long
@@ -65,8 +67,10 @@ critical boundary → the barrier below. Two consecutive reviews yielding only m
 domain or risk axis starts at its own default; any major finding restores it.
 
 A reviewer reads source, then probes the named oracle, ownership, lifecycle, and dangerous
-failure axes from `review checkout` at the exact target SHA; `review advance` reuses that
-checkout for closure commits, and `review audit` flags mechanical oracle weakening. The
+failure axes from its own `review checkout` at the exact SHA the dispatch froze — root
+names the SHA, the reviewer opens the checkout, and the terminal `subject_sha` must equal
+that checkout's HEAD, so a wrong target is caught on arrival rather than prevented by an
+extra root round-trip. `review advance` reuses that checkout for closure commits, and `review audit` flags mechanical oracle weakening. The
 terminal milestone carries `pass|needs_fix`, subject SHA, and evidence; record `needs_fix`
 items through `findings record`. `findings status` derives closure from `Closes-Finding`,
 and `collect` blocks open `gates-the-slice` debt. A finding whose cause is a named pattern,

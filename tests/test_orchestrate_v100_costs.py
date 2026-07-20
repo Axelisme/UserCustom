@@ -215,7 +215,7 @@ class FindingsScopeAndSchemaTests(unittest.TestCase):
             self.assertEqual(len(status["gating_open"]), 1)
             self.assertTrue(status["collect_blocked"])
 
-    def test_severity_and_propagation_are_never_inferred(self) -> None:
+    def test_propagation_is_never_inferred(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             init_repo(root)
@@ -240,9 +240,9 @@ class FindingsScopeAndSchemaTests(unittest.TestCase):
                 str(receipt),
             )
             self.assertNotEqual(result.returncode, 0)
-            combined = result.stderr + result.stdout
-            self.assertIn("severity", combined)
-            self.assertIn("propagation", combined)
+            # v102: severity became optional (no consumer branches on it), but
+            # propagation decides gating and is still never inferred.
+            self.assertIn("propagation", result.stderr + result.stdout)
 
     def test_scope_buckets_separate_unrelated_from_gating(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

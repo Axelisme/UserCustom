@@ -25,23 +25,32 @@ FINDING_PROPAGATIONS = (
 )
 
 
-FINDING_VERDICTS = ("pass", "needs_fix")
+# One vocabulary for "how did the review end", shared with the milestone envelope.
+# Before v102 the ledger took only pass/needs_fix while reviewers were told to close
+# with pass|needs_fix|blocked|needs_decision, so an honestly-reported blocked review
+# — a gate the sandbox could not run — was rejected outright and fell on the floor.
+FINDING_VERDICTS = ("pass", "needs_fix", "blocked", "needs_decision")
 
 
 FINDING_RECEIPT_REQUIRED = ("subject_sha", "verdict", "findings")
 
 
-# `id` is deliberately absent: it is mechanical and auto-derived when omitted.
-# `severity` and `propagation` never are — propagation decides whether a finding
-# gates collect, and a tool guessing a gating decision would silently weaken the gate.
-FINDING_REQUIRED = ("severity", "propagation")
+# `id` is mechanical and auto-derived when omitted. `severity` is optional: nothing
+# branches on it, so requiring it only made reviewers grade every finding for no
+# consumer — it stays available as a human signal. `propagation` is never optional
+# and never inferred: it decides whether a finding gates collect, and a tool guessing
+# a gating decision would silently weaken the gate.
+FINDING_REQUIRED = ("propagation",)
 
 
-# A clean review (verdict=pass, no findings) records one marker row instead of a
-# finding, so a passing review has a durable, Git-derivable home rather than living
-# only in prose. Markers carry `kind` and never a `propagation`; downstream finding
-# consumers skip them via `dedup_findings`.
+# A review that produced no findings still happened: pass, blocked and needs_decision
+# each record one marker row so the outcome has a durable home instead of living only
+# in prose. needs_fix is fully represented by its findings and takes no marker.
+# Markers carry `kind` and never a `propagation`; finding consumers skip them via
+# `dedup_findings`.
 REVIEW_PASS_KIND = "review-pass"
+MARKER_VERDICTS = ("pass", "blocked", "needs_decision")
+MARKER_KINDS = frozenset(f"review-{verdict}" for verdict in MARKER_VERDICTS)
 
 
 def derived_finding_id(subject: str, raw: dict[str, Any]) -> str:
@@ -54,6 +63,12 @@ def derived_finding_id(subject: str, raw: dict[str, Any]) -> str:
             "path": raw.get("path"),
             "root_cause": raw.get("root_cause"),
             "sweep_required": bool(raw.get("sweep_required", False)),
+            # Included so two findings differing only in a bookkeeping field stay
+            # distinct rather than colliding and dropping the second silently.
+            "owner": raw.get("owner"),
+            "requires_refreshed_review": bool(
+                raw.get("requires_refreshed_review", False)
+            ),
         },
         sort_keys=True,
     )
@@ -94,17 +109,17 @@ def dedup_findings(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     (collect gating, worktree cleanup, status) sees only true finding rows."""
     seen: dict[str, dict[str, Any]] = {}
     for rec in records:
-        if rec.get("kind") == REVIEW_PASS_KIND:
+        if rec.get("kind") in MARKER_KINDS:
             continue
         seen.setdefault(rec["id"], rec)
     return seen
 
 
 def dedup_review_pass(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """First occurrence of each review-pass marker id, preserving ledger order."""
+    """First occurrence of each review-outcome marker id, preserving ledger order."""
     seen: dict[str, dict[str, Any]] = {}
     for rec in records:
-        if rec.get("kind") == REVIEW_PASS_KIND:
+        if rec.get("kind") in MARKER_KINDS:
             seen.setdefault(rec["id"], rec)
     return seen
 
@@ -141,20 +156,22 @@ def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
         raise OrchestrateError("finding receipt 'findings' must be a list")
     verdict = payload["verdict"]
     normalized: list[dict[str, Any]] = []
-    if not findings:
-        # A clean review is only meaningful for a pass; a needs_fix with no
-        # findings has nothing to close, so keep rejecting that.
-        if verdict != "pass":
-            raise OrchestrateError(
-                "finding receipt 'findings' must be a non-empty list unless"
-                " verdict is 'pass'"
-            )
+    if not findings and verdict == "needs_fix":
+        # needs_fix is represented entirely by its findings; with none there is
+        # nothing to close, so it stays rejected.
+        raise OrchestrateError(
+            "finding receipt 'findings' must be a non-empty list when verdict is"
+            " 'needs_fix'"
+        )
+    if verdict in MARKER_VERDICTS:
+        # The outcome itself is recorded, so a review that ended blocked or
+        # undecided has a durable home instead of being dropped for lack of findings.
         normalized.append(
             {
-                "id": f"{REVIEW_PASS_KIND}:{subject}",
-                "kind": REVIEW_PASS_KIND,
+                "id": f"review-{verdict}:{subject}",
+                "kind": f"review-{verdict}",
                 "subject_sha": subject,
-                "verdict": "pass",
+                "verdict": verdict,
                 "evidence": payload.get("evidence"),
                 "recorded_at": datetime.now(UTC).isoformat(),
             }
@@ -187,7 +204,7 @@ def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
                     raw["id"] if raw.get("id") else derived_finding_id(subject, raw),
                     label="finding id",
                 ),
-                "severity": raw["severity"],
+                "severity": raw.get("severity"),
                 "propagation": raw["propagation"],
                 "owner": raw.get("owner", "original-writer"),
                 "path": raw.get("path"),
@@ -239,7 +256,14 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
     gating_open = [r["id"] for r in open_recs if r["propagation"] == "gates-the-slice"]
     sweep_open = [r["id"] for r in open_recs if r.get("sweep_required")]
     review_pass = list(dedup_review_pass(records).values())
-    reviewed_clean = sorted({r["subject_sha"] for r in review_pass})
+    reviewed_clean = sorted(
+        {r["subject_sha"] for r in review_pass if r.get("verdict") == "pass"}
+    )
+    # A blocked or undecided review is not a pass: the slice has no complete
+    # evidence, and root has to see that rather than infer it from silence.
+    review_incomplete = sorted(
+        {r["subject_sha"] for r in review_pass if r.get("verdict") != "pass"}
+    )
     # Scope buckets answer "does this block *my* slice", which the flat open list
     # cannot: a gating finding on another lane is not this slice's problem. The
     # ancestry test mirrors what collect itself gates on, so the display can never
@@ -278,4 +302,5 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
         "unrelated_open": unrelated_open,
         "review_pass": review_pass,
         "reviewed_clean": reviewed_clean,
+        "review_incomplete": review_incomplete,
     }

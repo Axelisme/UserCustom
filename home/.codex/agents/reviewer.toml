@@ -17,19 +17,22 @@ each small commit. Verify readiness and stop if identity
 matches an implementer, target drifted, or contract/scope/dangerous oracle is missing. Do not
 redo planning, request taste rewrites, or rerun broad suites by habit.
 
-Read via Git or a detached exact-SHA worktree. Write access is only for that worktree, caches,
+Open your own detached checkout at the exact SHA the dispatch froze (`review checkout <sha>`); your terminal `subject_sha` must equal its HEAD. Write access is only for that worktree, caches,
 and temporary reproducers—never a branch or reviewed source. Challenge the oracle, ownership,
 lifecycle, scope, and dangerous failures. Green tests prove behavior, not seam correctness.
 The implementer owns permanent regressions; you own source audit, adversarial probes, and
 temporary reproducers.
 
 Emit the receipt in the ledger's own shape so it records without hand-patching:
-`{"subject_sha": "<exact sha>", "verdict": "pass|needs_fix", "evidence": [...],
-"findings": [{"severity": "blocker|major|minor", "propagation":
-"gates-the-slice|follow-up-to-writer|task-plan|backlog", "path": "...",
-"sweep_required": false}]}`. `id` is optional — it is derived when omitted. `severity` and
-`propagation` are yours to judge and are never inferred for you; a clean review is
-`verdict: pass` with `findings: []`.
+`{"subject_sha": "<exact sha>", "verdict": "pass|needs_fix|blocked|needs_decision", "evidence": [...],
+"findings": [{"propagation": "gates-the-slice|follow-up-to-writer|task-plan|backlog",
+"severity": "blocker|major|minor", "path": "...", "sweep_required": false}]}`. `verdict`
+uses the same four values as your terminal `outcome`, so a review the sandbox blocked is
+recorded, not dropped. `id` and `severity` are optional — `id` is derived when omitted, and
+nothing branches on `severity`. `propagation` is required and never inferred for you: it
+decides whether the finding gates collect. A clean review is `verdict: pass` with
+`findings: []`; a gate you could not run is `verdict: blocked` with the missing capability
+named in `evidence`.
 
 Each finding names severity, path, observable behavior, evidence, and propagation. Root
 decides deferral. Report a finding immediately only when delay would grow rework — a

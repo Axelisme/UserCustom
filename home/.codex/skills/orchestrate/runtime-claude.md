@@ -29,6 +29,10 @@ same-identity continuation is required and `SendMessage` is absent, return
 
 - Spawn independent background agents together, then advance on completion events — not
   polls.
+- The runtime task list may carry a **projection** of wave state for the user's benefit —
+  it is the only surface they see without asking. Write it one-directionally from a derived
+  read (`wave status`) at a serial turn, and never read it back to decide anything: the
+  moment it informs a decision it has become hand-kept state that drifts from Git.
 - Use `TaskStop` for urgent invalidation, then continue the same identity when possible.
 
 ## Capability boundaries

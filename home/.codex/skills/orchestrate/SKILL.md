@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 101
+skill_version: 102
 ---
 
 # Orchestrate
@@ -111,6 +111,13 @@ Not a taxonomy — judgment guides, in the spirit of "simple = 1 agent, complex 
   follow-up commit **and** named dependent work is about to stack on it (both, named at
   freeze — a scary-sounding domain alone never qualifies). Carve that core into its own
   small slice, review it before the fan-out, keep the shell normal.
+
+Root's cost scales with **round-trips, not fields per dispatch**: a contract is written
+once and cheaply, while every harvest re-enters context that was exported at dispatch. So
+the lever is fewer exchanges, not shorter ones — return same-domain work to the writer that
+already holds the context (a reuse costs no export at all), batch harvests instead of
+reacting per slice, and when freeze plus harvest would cost more than the work, keep it.
+A slice cut so thin that coordinating it exceeds doing it is a cut defect, not diligence.
 
 Default review posture is **cumulative**: one review closes a coherent surface; per-slice
 review needs a root-named risk. Prefer one writer for a coherent vertical slice; split at

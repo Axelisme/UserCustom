@@ -19,9 +19,9 @@ def normalized(path: Path) -> str:
 
 
 class OrchestrateContractTests(unittest.TestCase):
-    def test_release_100_keeps_iron_rules_and_pipeline_byte_exact(self) -> None:
+    def test_release_101_keeps_iron_rules_and_pipeline_byte_exact(self) -> None:
         text = (ORCHESTRATE / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("skill_version: 100", text)
+        self.assertIn("skill_version: 101", text)
         iron = section_bytes(text, "## Iron rules", "## Pipeline model")
         pipeline = section_bytes(text, "## Pipeline model", "## Control loop")
         # v100 touches collect/findings/worktrees behavior and prose, but the iron

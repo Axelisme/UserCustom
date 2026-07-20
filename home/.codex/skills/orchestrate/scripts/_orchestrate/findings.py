@@ -110,7 +110,7 @@ def closed_finding_ids(root: Path, reachable_from: str) -> dict[str, str]:
 
 def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
-    task_id = require_identifier(args.task_id, label="task-id")
+    task_id = require_identifier(task_id_from_ref(args.task_id), label="task-id")
     payload, _ = read_json_object(args.receipt, label="finding receipt")
     errors: list[str] = []
     require_json_fields(payload, FINDING_RECEIPT_REQUIRED, errors)
@@ -206,7 +206,7 @@ def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
 
 def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
-    task_id = require_identifier(args.task_id, label="task-id")
+    task_id = require_identifier(task_id_from_ref(args.task_id), label="task-id")
     reachable = args.task_ref or "HEAD"
     records = read_findings_ledger(root, task_id)
     closed = closed_finding_ids(root, reachable)

@@ -88,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_root(audit)
     audit.add_argument("--base", required=True)
-    audit.add_argument("--subject", required=True)
+    audit.add_argument("--subject-sha", "--subject", dest="subject", required=True)
     audit.set_defaults(handler=command_review_audit)
 
     land = commands.add_parser(
@@ -122,6 +122,8 @@ def build_parser() -> argparse.ArgumentParser:
     collect = commands.add_parser(
         "collect", help="preflight and merge one explicitly authorized exact lane SHA"
     )
+    # Deliberately not spelled --root: task identity is derived from *this* checkout's
+    # branch, so the name has to say which checkout it is. Tests pin the distinction.
     collect.add_argument(
         "--integration-worktree",
         dest="root",
@@ -159,6 +161,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sweep.add_argument(
         "--subject-sha",
+        "--subject",
+        dest="subject_sha",
         help="review targets only: fail fast when the checkout HEAD drifted",
     )
     sweep.set_defaults(handler=command_cleanup)
@@ -209,9 +213,19 @@ def build_parser() -> argparse.ArgumentParser:
         " final SHAs (are follow-ups absorbed, must you recompose)",
     )
     add_root(revalidate)
-    revalidate.add_argument("--composite", required=True)
-    revalidate.add_argument("--task-ref", required=True)
-    revalidate.add_argument("--successor", required=True)
+    revalidate.add_argument(
+        "--composite",
+        required=True,
+        help="exact SHA of the compose-base composite being revalidated",
+    )
+    revalidate.add_argument(
+        "--task-ref", required=True, help="task/<task> the composite must land on"
+    )
+    revalidate.add_argument(
+        "--successor",
+        required=True,
+        help="exact SHA of the lane stacked on that composite",
+    )
     revalidate.add_argument(
         "--lane",
         action="append",

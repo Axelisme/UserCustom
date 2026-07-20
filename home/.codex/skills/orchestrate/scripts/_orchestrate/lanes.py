@@ -145,7 +145,7 @@ def match_final_dependencies(
 def command_lane_create(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
     root = Path(args.root).resolve()
-    task_id = require_identifier(args.task_id, label="task-id")
+    task_id = require_identifier(task_id_from_ref(args.task_id), label="task-id")
     lane = require_identifier(args.lane, label="lane")
     base = exact_commit(root, args.base, label="base")
     branch = f"agent/{task_id}/{lane}"
@@ -224,7 +224,7 @@ def command_lane_create(args: argparse.Namespace) -> dict[str, Any]:
 def command_compose_base(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
     root = Path(args.root).resolve()
-    task_id = require_identifier(args.task_id, label="task-id")
+    task_id = require_identifier(task_id_from_ref(args.task_id), label="task-id")
     name = require_identifier(args.name, label="name")
     base = exact_commit(root, args.base, label="base")
     lanes = [

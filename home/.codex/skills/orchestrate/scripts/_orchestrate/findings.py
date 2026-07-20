@@ -56,20 +56,23 @@ MARKER_KINDS = frozenset(f"review-{verdict}" for verdict in MARKER_VERDICTS)
 def derived_finding_id(subject: str, raw: dict[str, Any]) -> str:
     """Stable id for a finding that did not name one, keyed on the finding's semantic
     content so distinct findings on one subject never collide and identical ones dedup."""
+    fields = {
+        "severity": raw.get("severity"),
+        "propagation": raw.get("propagation"),
+        "path": raw.get("path"),
+        "root_cause": raw.get("root_cause"),
+        "sweep_required": bool(raw.get("sweep_required", False)),
+        # Included so two findings differing only in a bookkeeping field stay
+        # distinct rather than colliding and dropping the second silently.
+        "owner": raw.get("owner"),
+        "requires_refreshed_review": bool(raw.get("requires_refreshed_review", False)),
+    }
+    # Keys left at their default carry no identity, so they are omitted rather than
+    # hashed as null/false. Adding a field therefore cannot change the id of a
+    # finding that does not use it — otherwise a receipt replayed across a version
+    # that widened this set would land a second, unclosed copy of the same finding.
     identity = json.dumps(
-        {
-            "severity": raw.get("severity"),
-            "propagation": raw.get("propagation"),
-            "path": raw.get("path"),
-            "root_cause": raw.get("root_cause"),
-            "sweep_required": bool(raw.get("sweep_required", False)),
-            # Included so two findings differing only in a bookkeeping field stay
-            # distinct rather than colliding and dropping the second silently.
-            "owner": raw.get("owner"),
-            "requires_refreshed_review": bool(
-                raw.get("requires_refreshed_review", False)
-            ),
-        },
+        {key: value for key, value in fields.items() if value not in (None, False)},
         sort_keys=True,
     )
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:8]
@@ -260,9 +263,11 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
         {r["subject_sha"] for r in review_pass if r.get("verdict") == "pass"}
     )
     # A blocked or undecided review is not a pass: the slice has no complete
-    # evidence, and root has to see that rather than infer it from silence.
+    # evidence, and root has to see that rather than infer it from silence. A later
+    # pass on the same subject settles it, so the two lists never both claim a sha.
     review_incomplete = sorted(
         {r["subject_sha"] for r in review_pass if r.get("verdict") != "pass"}
+        - set(reviewed_clean)
     )
     # Scope buckets answer "does this block *my* slice", which the flat open list
     # cannot: a gating finding on another lane is not this slice's problem. The

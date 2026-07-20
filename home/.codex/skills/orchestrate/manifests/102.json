@@ -14,19 +14,19 @@
       "sha256": "f3c338c9b0b7c2bd51a14555f2508a4c2a158d4f5ffd511f74b6a0dda3c01cea"
     },
     "references/coordination.md": {
-      "bytes": 12876,
+      "bytes": 13009,
       "sections": {
         "Coordination": "f18a1d469493b2ad5b14d3e8294712470e60559f7fc8b914f22154090a1de3ab",
         "Git topology": "1ea39751b4de0fb45abc12fe3ebba20b162fa91e51d6fae1ff5cce7f4965740b",
         "Handoff": "9b6bb472369de6aa0cffb49316239bab7fe8e21d10a8357a4ec98273deb674af",
         "Landing": "e434fb3052cb07316f60bf33cdc98b7486046e81eecda989e9faff6883c26cd9",
         "Milestones and liveness": "aeca40ae15801611bfbb2dfa554224f8263205f80cea318a16085e841c6f2750",
-        "Review": "d800e00e9d68b42ec01cbd87c867a4f435282a088ae60895ce00ad583f343f1d",
+        "Review": "4fa6e2026a5b5403dcdc82ef771157147b5e37711a87318f68e457d0e1e59de9",
         "Roles and dispatch": "98f266a0d0962c3201de4efcb239fbb517d5c6f52d5ca9454ba39afbd76d2a7f",
         "Skill upgrades": "dfb3283c6d236a2235b4d581345fb5e40daf432773bda086c266ea0917e2a2ae",
         "Wave close": "463b01d4d3fba73ddd9967452c07998cd73865d8f8feb6ef7ffa16cfbd1a0474"
       },
-      "sha256": "9a11138899cdf111c406497d469972d87afa7c7c651af57fccbf8be10b9a74bd"
+      "sha256": "b12f481d2ce074dbf6a206c6da9bf03a8a8cb83eb6bda5533ffff1e51e05e802"
     },
     "references/publication-review.md": {
       "bytes": 2622,
@@ -73,11 +73,11 @@
       "sha256": "501f576bc0d075c43cb3741b01e30ea03f6762b0e15b003eb4886ec9411d2ec8"
     },
     "scripts/_orchestrate/findings.py": {
-      "bytes": 13026,
+      "bytes": 13499,
       "sections": {
-        "__file__": "baf402dd5725df5e066b12fc87f3c963ad950033d7268117b8f78525d9a07ae2"
+        "__file__": "979e0a50d0489e9a2d320d5c29490b683e98ed804cde83077584e461db99dd73"
       },
-      "sha256": "baf402dd5725df5e066b12fc87f3c963ad950033d7268117b8f78525d9a07ae2"
+      "sha256": "979e0a50d0489e9a2d320d5c29490b683e98ed804cde83077584e461db99dd73"
     },
     "scripts/_orchestrate/git_ops.py": {
       "bytes": 7790,

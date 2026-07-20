@@ -71,8 +71,9 @@ failure axes from its own `review checkout` at the exact SHA the dispatch froze 
 names the SHA, the reviewer opens the checkout, and the terminal `subject_sha` must equal
 that checkout's HEAD, so a wrong target is caught on arrival rather than prevented by an
 extra root round-trip. `review advance` reuses that checkout for closure commits, and `review audit` flags mechanical oracle weakening. The
-terminal milestone carries `pass|needs_fix`, subject SHA, and evidence; record `needs_fix`
-items through `findings record`. `findings status` derives closure from `Closes-Finding`,
+terminal milestone carries `pass|needs_fix|blocked|needs_decision`, subject SHA, and
+evidence; record it through `findings record`, which takes those same four outcomes — a gate
+the environment could not run is recorded `blocked`, never silently dropped. `findings status` derives closure from `Closes-Finding`,
 and `collect` blocks open `gates-the-slice` debt. A finding whose cause is a named pattern,
 not a lone instance, is recorded `sweep_required` — which forces `gates-the-slice`: fix
 every occurrence in the frozen scope in one commit, and re-review verifies enumeration

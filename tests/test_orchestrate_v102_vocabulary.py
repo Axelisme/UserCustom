@@ -155,5 +155,46 @@ class OwnerCollisionTests(unittest.TestCase):
             self.assertEqual(owners, ["alice", "bob"])
 
 
+class DerivedIdStabilityTests(unittest.TestCase):
+    """Finding A: widening the identity set must not renumber findings that do not
+    use the new fields, or a replayed receipt lands an unclosed duplicate."""
+
+    def test_default_valued_fields_do_not_enter_the_id(self) -> None:
+        sys.path.insert(
+            0, str(ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts")
+        )
+        from _orchestrate.findings import derived_finding_id
+
+        sha = "a" * 40
+        bare = {"propagation": "backlog", "path": "b.py"}
+        # Explicit defaults and absent keys are the same finding.
+        self.assertEqual(
+            derived_finding_id(sha, bare),
+            derived_finding_id(
+                sha, {**bare, "owner": None, "requires_refreshed_review": False}
+            ),
+        )
+        # A real value still separates them.
+        self.assertNotEqual(
+            derived_finding_id(sha, bare),
+            derived_finding_id(sha, {**bare, "owner": "alice"}),
+        )
+
+
+class MarkerOverlapTests(unittest.TestCase):
+    """Finding C: a subject cannot be both clean and incomplete."""
+
+    def test_a_later_pass_settles_an_earlier_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            subject = git(root, "rev-parse", "HEAD")
+            self.assertEqual(record(root, [], "blocked").returncode, 0)
+            self.assertEqual(record(root, [], "pass").returncode, 0)
+            st = status(root)
+            self.assertEqual(st["reviewed_clean"], [subject])
+            self.assertEqual(st["review_incomplete"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -22,12 +22,12 @@
 
 - Domain: <domain id / bounded responsibility>
 - Owner / Reviewer: <domain owner / independent reviewer；沒有則寫 none>
-- Current SHA: <full SHA；尚未形成則寫 none>
+- Current SHA: <full SHA snapshot（寫下時為準，會過時；現況一律以 Git 為準）；尚未形成則寫 none>
 - Frozen decisions: <目前生效的決策>
 - Superseded decisions: <已被取代的決策；沒有則寫 none>
 - Open stop conditions: <仍會停止工作的條件；沒有則寫 none>
-- Review debt: <已宣告待審的 SHA 與 run-ahead 位置；沒有則寫 none>
-- Finding ledger: <active／deferred review findings（severity＋path＋一行行為）；沒有則寫 none>
+- Review debt: <不在此手抄；由 `findings status` / `wave status` 導出>
+- Finding ledger: <不在此手抄；由 `findings status` 導出（ledger 才是真相）>
 - Anomalies: <unusable-evidence 指令與替代證據；沒有則寫 none>
 - Source map: <artifact path；沒有則寫 none>
 - Next acceptance gate: <下一個可機械驗收的 gate>

@@ -303,8 +303,12 @@ class Phase3OrchestrateTests(unittest.TestCase):
             review_entry = next(
                 item for item in payload["worktrees"] if item["path"] == str(review)
             )
-            self.assertEqual(review_entry["class"], "unknown")
-            self.assertFalse(review_entry["cleanup_eligible"])
+            # v100: a detached review whose subject is already absorbed into a task
+            # ref is moot, so it classifies like an absorbed lane instead of the old
+            # blanket "unknown". Removal still needs explicit cleanup authorization.
+            self.assertEqual(review_entry["class"], "safe-to-remove")
+            self.assertEqual(review_entry["absorbed_into"], "task/demo")
+            self.assertTrue(review_entry["cleanup_eligible"])
 
             target = run_cli(
                 root, "cleanup", "--worktree", str(lane), "--dry-run"

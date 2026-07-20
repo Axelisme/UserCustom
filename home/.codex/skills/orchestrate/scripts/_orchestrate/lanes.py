@@ -479,6 +479,22 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
         raise OrchestrateError(
             f"lane target differs from authorized SHA: {lane_head} != {authorized}"
         )
+    # A reused lane ref is git-valid but collects the wrong work. Derive the lane's
+    # Item so a reuse is always visible, and enforce it when --item names one — the
+    # same trailer semantics `slice milestone` already uses.
+    lane_item_match = ITEM_TRAILER_PATTERN.search(
+        run_git(root, "log", "-1", "--format=%B", lane_head).stdout
+    )
+    lane_item = lane_item_match.group(1) if lane_item_match is not None else None
+    requested = getattr(args, "item", None)
+    if requested is not None:
+        requested_item = require_identifier(requested, label="item")
+        if lane_item is not None and lane_item != requested_item:
+            raise OrchestrateError(
+                f"lane {args.lane_ref} carries Item: {lane_item}, not {requested_item};"
+                " a reused lane ref collects the wrong item — verify the lane or"
+                " fix --item"
+            )
     speculative_records = speculative_dependency_records(
         root, authorized, exclude=task_head
     )
@@ -541,6 +557,8 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
         "authorized_sha": authorized,
         "declared_review_kind": review_kind,
         "verdict_inferred": False,
+        "item_id": lane_item,
+        "item_trailer_present": lane_item is not None,
         **authorization,
         "before": task_head,
         "speculative_dependencies": speculative_records,

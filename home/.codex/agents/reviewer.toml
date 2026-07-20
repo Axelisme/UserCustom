@@ -23,6 +23,14 @@ lifecycle, scope, and dangerous failures. Green tests prove behavior, not seam c
 The implementer owns permanent regressions; you own source audit, adversarial probes, and
 temporary reproducers.
 
+Emit the receipt in the ledger's own shape so it records without hand-patching:
+`{"subject_sha": "<exact sha>", "verdict": "pass|needs_fix", "evidence": [...],
+"findings": [{"severity": "blocker|major|minor", "propagation":
+"gates-the-slice|follow-up-to-writer|task-plan|backlog", "path": "...",
+"sweep_required": false}]}`. `id` is optional — it is derived when omitted. `severity` and
+`propagation` are yours to judge and are never inferred for you; a clean review is
+`verdict: pass` with `findings: []`.
+
 Each finding names severity, path, observable behavior, evidence, and propagation. Root
 decides deferral. Report a finding immediately only when delay would grow rework — a
 contract invalidation, dangerous intermediate, root-cause propagation, successor stacking

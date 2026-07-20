@@ -84,11 +84,49 @@ def classify_worktree(root: Path, record: dict[str, Any]) -> dict[str, Any]:
         "cleanup_eligible": False,
     }
     if "detached" in record or branch is None:
+        # A reviewer's liveness is genuinely unknowable, but the review's *relevance*
+        # is not: once the subject is absorbed into a task branch the review is moot,
+        # and that is derived from Git alone — no sidecar state that could drift and
+        # strand or wrongly delete a checkout someone still holds.
+        base["kind"] = "review"
+        if not isinstance(head, str):
+            base.update({"class": "unknown", "reason": "missing worktree HEAD"})
+            return base
+        if not path.exists():
+            base.update(
+                {"class": "unknown", "reason": "worktree directory is missing"}
+            )
+            return base
+        dirty = bool(run_git(path, "status", "--porcelain").stdout.strip())
+        base["dirty"] = dirty
+        absorbed_into = next(
+            (
+                candidate
+                for candidate in run_git(
+                    root,
+                    "for-each-ref",
+                    "--format=%(refname:short)",
+                    "refs/heads/task/",
+                ).stdout.split()
+                if is_ancestor(root, head, candidate)
+            ),
+            None,
+        )
+        base["absorbed_into"] = absorbed_into
+        if dirty:
+            classification = "active"
+            reason = "review worktree is dirty; it may hold a reproducer"
+        elif absorbed_into is not None:
+            classification = "safe-to-remove"
+            reason = f"review subject is absorbed into {absorbed_into}"
+        else:
+            classification = "active"
+            reason = "review subject is not absorbed; a reviewer may still hold it"
         base.update(
             {
-                "class": "unknown",
-                "kind": "review",
-                "reason": "detached review liveness is unknowable from Git",
+                "class": classification,
+                "reason": reason,
+                "cleanup_eligible": classification == "safe-to-remove" and not dirty,
             }
         )
         return base
@@ -245,16 +283,23 @@ def command_wave_status(args: argparse.Namespace) -> dict[str, Any]:
         "reviewed_clean": findings_report["reviewed_clean"],
         "safe_to_remove": reconcile_report["safe_to_remove"],
     }
-    return {
+    result = {
         "ok": True,
         "operation": "wave-status",
         "read_only": True,
         "task_ref": task_ref,
         "task_id": task_id,
+        "handoff": handoff,
+    }
+    if getattr(args, "summary", False):
+        # The handoff rollup is the summary; the three full reports are what make
+        # the default output large enough to crowd a context window.
+        return result
+    return {
+        **result,
         "slice": slice_report,
         "findings": findings_report,
         "reconcile": reconcile_report,
-        "handoff": handoff,
     }
 
 

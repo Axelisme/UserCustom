@@ -53,8 +53,9 @@ task_plan decision／commit 引用。交接的唯一載體是 packet＋task_plan
 長任務為每個active domain維持一份短小packet：單 domain task 直接放在`task_plan.md`的「當前狀態」節；
 多 domain 並行的 task 才拆成`domains/<domain>.md`（同 plan 目錄下，一 domain 一頁）。固定欄位是`Domain`、
 `Owner / Reviewer`、`Current SHA`、`Frozen decisions`、`Superseded decisions`、`Open stop conditions`、
-`Review debt`（已宣告待審的 SHA 與 run-ahead 位置）、`Finding ledger`（active／deferred review findings
-含嚴重度）、`Anomalies`（unusable evidence 的指令與替代證據）、`Active hypotheses`（未驗證假設與
+`Review debt`、`Finding ledger`（兩者在有導出來源時**不手抄**——例如 orchestrate 任務一律由
+`findings status` / `wave status` 導出，計劃只寫「由導出命令取得」；手抄的副本必然落後於 Git）、
+`Anomalies`（unusable evidence 的指令與替代證據）、`Active hypotheses`（未驗證假設與
 unverified claims，一行摘要＋指標）、`Negative constraints`（不做什麼＋為什麼）、`Source map`與
 `Next acceptance gate`。
 沒有的值明寫`none`，不能省略欄位；packet是task_plan之上的當前狀態

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .primitives import OrchestrateError, read_json_object, require_identifier, require_json_fields, validate_json_enum
-from .git_ops import common_repo_root, exact_commit, run_git
+from .git_ops import common_repo_root, exact_commit, is_ancestor, run_git
 
 CLOSES_FINDING_PATTERN = re.compile(r"^Closes-Finding:\s*(\S+)\s*$", re.MULTILINE)
 
@@ -30,7 +30,10 @@ FINDING_VERDICTS = ("pass", "needs_fix")
 FINDING_RECEIPT_REQUIRED = ("subject_sha", "verdict", "findings")
 
 
-FINDING_REQUIRED = ("id", "severity", "propagation")
+# `id` is deliberately absent: it is mechanical and auto-derived when omitted.
+# `severity` and `propagation` never are — propagation decides whether a finding
+# gates collect, and a tool guessing a gating decision would silently weaken the gate.
+FINDING_REQUIRED = ("severity", "propagation")
 
 
 # A clean review (verdict=pass, no findings) records one marker row instead of a
@@ -138,7 +141,7 @@ def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
                 "recorded_at": datetime.now(UTC).isoformat(),
             }
         )
-    for raw in findings:
+    for index, raw in enumerate(findings, start=1):
         if not isinstance(raw, dict):
             raise OrchestrateError("each finding must be an object")
         ferrors: list[str] = []
@@ -157,7 +160,12 @@ def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
             raise OrchestrateError("invalid finding: " + "; ".join(ferrors))
         normalized.append(
             {
-                "id": require_identifier(raw["id"], label="finding id"),
+                # Deterministic from (subject, position), so re-recording the same
+                # receipt yields the same ids and dedups instead of duplicating.
+                "id": require_identifier(
+                    raw["id"] if raw.get("id") else f"{subject[:12]}-{index}",
+                    label="finding id",
+                ),
                 "severity": raw["severity"],
                 "propagation": raw["propagation"],
                 "owner": raw.get("owner", "original-writer"),
@@ -211,6 +219,28 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
     sweep_open = [r["id"] for r in open_recs if r.get("sweep_required")]
     review_pass = list(dedup_review_pass(records).values())
     reviewed_clean = sorted({r["subject_sha"] for r in review_pass})
+    # Scope buckets answer "does this block *my* slice", which the flat open list
+    # cannot: a gating finding on another lane is not this slice's problem. The
+    # ancestry test mirrors what collect itself gates on, so the display can never
+    # disagree with the gate. `collect_blocked` keeps its task-wide meaning.
+    unrelated_open = [
+        r["id"] for r in open_recs if r["propagation"] != "gates-the-slice"
+    ]
+    slice_blocking: list[str] | None = None
+    task_wide = list(gating_open)
+    slice_sha = getattr(args, "slice_sha", None)
+    if slice_sha:
+        subject = exact_commit(root, slice_sha, label="slice SHA")
+        slice_blocking = []
+        task_wide = []
+        for rec in open_recs:
+            if rec["propagation"] != "gates-the-slice":
+                continue
+            rec_subject = rec.get("subject_sha")
+            if not rec_subject or is_ancestor(root, rec_subject, subject):
+                slice_blocking.append(rec["id"])
+            else:
+                task_wide.append(rec["id"])
     return {
         "ok": True,
         "operation": "findings-status",
@@ -222,6 +252,9 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
         "gating_open": gating_open,
         "sweep_open": sweep_open,
         "collect_blocked": bool(gating_open),
+        "slice_blocking": slice_blocking,
+        "task_wide": task_wide,
+        "unrelated_open": unrelated_open,
         "review_pass": review_pass,
         "reviewed_clean": reviewed_clean,
     }

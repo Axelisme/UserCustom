@@ -137,6 +137,10 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument(
         "--review-kind", choices=COLLECT_REVIEW_KINDS, required=True
     )
+    collect.add_argument(
+        "--item",
+        help="expected Item id; rejects a reused lane whose head carries another Item",
+    )
     collect.set_defaults(handler=command_collect, requires_release_preflight=True)
 
     sweep = commands.add_parser(
@@ -147,7 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
     sweep.add_argument(
         "--absorbed",
         action="store_true",
-        help="deprecated compatibility flag; only --dry-run is accepted without --worktree",
+        help="authorize the multi-worktree sweep; required unless --worktree names one target",
     )
     sweep.add_argument("--dry-run", action="store_true")
     sweep.add_argument(
@@ -192,6 +196,11 @@ def build_parser() -> argparse.ArgumentParser:
     findings_status.add_argument(
         "--task-ref", help="ref whose history supplies Closes-Finding closure (default HEAD)"
     )
+    findings_status.add_argument(
+        "--slice-sha",
+        dest="slice_sha",
+        help="split gating findings into slice_blocking vs task_wide for this slice",
+    )
     findings_status.set_defaults(handler=command_findings_status)
 
     revalidate = commands.add_parser(
@@ -229,6 +238,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_root(wave_status)
     wave_status.add_argument("--task-ref", required=True)
+    wave_status.add_argument(
+        "--summary",
+        action="store_true",
+        help="emit only the handoff rollup, not the three full reports",
+    )
     wave_status.set_defaults(handler=command_wave_status)
 
     pin = commands.add_parser(

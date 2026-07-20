@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Manage explicit repo-local planning artifacts for one task."""
+"""Task-scoped durable memory: a small INDEX entry over append/addressable stores.
+
+The entry file (`INDEX.md`) is the only file read to reorient after a compaction or
+handoff, and the only bounded one. Everything else — phase records, the progress log,
+investigation findings — is a store: complete, append-structured, addressable, and read
+on demand, never loaded whole. This mirrors git's own shape: INDEX is refs, the stores
+are the object log.
+"""
 
 from __future__ import annotations
 
@@ -8,79 +15,36 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import tempfile
-from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
 TASK_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-UNFINISHED_PHASE_PATTERN = re.compile(r"\|[^|]+\|\s*(pending|in_progress|blocked)\s*\|")
-OPTIONAL_TEMPLATES = {
-    "findings.md": "findings.md",
-    "progress.md": "progress.md",
-}
-LIVE_FILE_LIMIT_BYTES = 16_384
-HISTORY_FILE_LIMIT_BYTES = 16_384
-MAX_DETAILED_PHASES = 10
-PHASE_COMPACTION_BATCH = 5
-PROGRESS_MAX_ROWS = 40
-PROGRESS_KEEP_ROWS = 20
-PHASE_HEADING_PATTERN = re.compile(r"^### (Phase [0-9]+) — (.+)$")
-HISTORY_FILE_PATTERN = re.compile(
-    r"^(?P<number>[0-9]{4})-(?P<kind>task-plan|progress|findings)\.md$"
-)
-EMPTY_CLOSURE_VALUES = {"", "none", "n/a", "na", "pending", "unknown", "-"}
+SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+PHASE_FILE_PATTERN = re.compile(r"^(?P<num>[0-9]{2,})-(?P<slug>[a-z0-9][a-z0-9-]*)\.md$")
+
+INDEX_FILE = "INDEX.md"
+PHASES_DIR = "phases"
+PROGRESS_FILE = "progress.jsonl"
+FINDINGS_FILE = "findings.md"
+
+INDEX_LIMIT_BYTES = 16_384
+PHASE_STATUSES = ("pending", "in_progress", "blocked", "completed")
+OPEN_STATUSES = ("pending", "in_progress", "blocked")
+
+INDEX_TITLE_PATTERN = re.compile(r"^# (\S.*)$", re.MULTILINE)
+GOAL_PATTERN = re.compile(r"^\*\*Goal:\*\*", re.MULTILINE)
+REQUIRED_HEADINGS = ("## Current State", "## Decisions", "## Phase board", "## Stores")
+BOARD_HEADING = "## Phase board"
+PHASE_FIELDS = ("Status", "Scope", "Decisions made", "Conclusion", "Commit", "Evidence")
 
 
 class PlanError(RuntimeError):
     pass
 
 
-@dataclass(frozen=True)
-class MarkdownRow:
-    index: int
-    line: str
-    cells: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class MarkdownTable:
-    data_start: int
-    data_end: int
-    rows: tuple[MarkdownRow, ...]
-
-
-@dataclass(frozen=True)
-class PhaseBlock:
-    phase: str
-    topic: str
-    conclusion: str
-    start: int
-    end: int
-    lines: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class HistorySegment:
-    kind: str
-    source: str
-    body: str
-
-
-@dataclass
-class PreparedCompaction:
-    replacements: dict[Path, str] = field(default_factory=dict)
-    history: list[HistorySegment] = field(default_factory=list)
-    counts: dict[str, int] = field(
-        default_factory=lambda: {
-            "task_plan_phases": 0,
-            "progress_timeline_rows": 0,
-            "progress_verification_rows": 0,
-            "findings_rows": 0,
-        }
-    )
+# ---- paths and safety -------------------------------------------------------
 
 
 def validate_task_id(task_id: str) -> None:
@@ -118,27 +82,16 @@ def reject_symlink_tree(root: Path, directory: Path) -> None:
 def require_plan(root: Path, task_id: str) -> Path:
     path = plan_dir(root, task_id)
     reject_symlink_tree(root, path)
-    if not (path / "task_plan.md").is_file():
-        raise PlanError(f"plan not found: {path}")
+    if not (path / INDEX_FILE).is_file():
+        raise PlanError(f"plan not found (no {INDEX_FILE}): {path}")
     return path
+
+
+# ---- io ---------------------------------------------------------------------
 
 
 def template_dir() -> Path:
     return Path(__file__).resolve().parent.parent / "templates"
-
-
-def render_template(name: str, task_id: str, *, goal: str | None = None) -> str:
-    path = template_dir() / name
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise PlanError(f"cannot read template {path}: {exc}") from exc
-    text = text.replace("<task-id>", task_id).replace(
-        "YYYY-MM-DD", date.today().isoformat()
-    )
-    if goal is not None:
-        text = text.replace("<用一段話描述本 task 要達成的具體結果。>", goal)
-    return text
 
 
 def atomic_write(path: Path, text: str) -> None:
@@ -157,965 +110,588 @@ def atomic_write(path: Path, text: str) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def atomic_create(path: Path, text: str) -> None:
-    """Create an immutable file without ever replacing an existing path."""
+def create_new(path: Path, text: str) -> None:
+    """Write a file that must not already exist."""
+    if path.exists():
+        raise PlanError(f"already exists: {path}")
+    atomic_write(path, text)
+
+
+def append_line(path: Path, line: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent, text=True
-    )
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
-            stream.write(text)
-            stream.flush()
-            os.fsync(stream.fileno())
-        try:
-            os.link(temporary, path)
-        except FileExistsError as exc:
-            raise PlanError(f"immutable history already exists: {path}") from exc
-    finally:
-        temporary.unlink(missing_ok=True)
+    with path.open("a", encoding="utf-8", newline="\n") as stream:
+        stream.write(line + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
 
 
 def utf8_size(text: str) -> int:
     return len(text.encode("utf-8"))
 
 
-def update_last_updated(text: str) -> str:
-    replacement = f"**Last updated:** {date.today().isoformat()}"
-    updated, count = re.subn(
-        r"^\*\*Last updated:\*\* .+$",
-        replacement,
-        text,
-        count=1,
-        flags=re.MULTILINE,
-    )
-    if count != 1:
-        raise PlanError("planning file must contain exactly one Last updated field")
-    return updated
+def slugify(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
-def section_bounds(lines: list[str], heading: str) -> tuple[int, int]:
-    matches = [index for index, line in enumerate(lines) if line.strip() == heading]
-    if len(matches) != 1:
-        raise PlanError(f"planning file must contain exactly one {heading} section")
-    start = matches[0] + 1
-    end = next(
-        (index for index in range(start, len(lines)) if lines[index].startswith("## ")),
-        len(lines),
-    )
+def today() -> str:
+    return date.today().isoformat()
+
+
+def now_ts() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+# ---- INDEX parsing ----------------------------------------------------------
+
+
+def read_index(plan: Path) -> str:
+    return (plan / INDEX_FILE).read_text(encoding="utf-8")
+
+
+def section_span(lines: list[str], heading: str) -> tuple[int, int]:
+    """[start, end) line range of a `## Heading` section, end at the next `## ` or EOF."""
+    start = next((i for i, line in enumerate(lines) if line.strip() == heading), -1)
+    if start < 0:
+        raise PlanError(f"INDEX is missing the '{heading}' section")
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("## "):
+            end = index
+            break
     return start, end
 
 
-def table_cells(line: str) -> tuple[str, ...]:
-    stripped = line.strip()
-    if not (stripped.startswith("|") and stripped.endswith("|")):
-        raise PlanError(f"invalid Markdown table row: {line!r}")
-    cells: list[str] = []
-    current: list[str] = []
-    content = stripped[1:-1]
-    index = 0
-    while index < len(content):
-        character = content[index]
-        if character == "\\" and index + 1 < len(content) and content[index + 1] == "|":
-            current.append("|")
-            index += 2
-            continue
-        if character == "|":
-            cells.append("".join(current).strip())
-            current = []
-        else:
-            current.append(character)
-        index += 1
-    cells.append("".join(current).strip())
-    return tuple(cells)
+def row_cells(line: str) -> list[str]:
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
 
 
-def markdown_table(
-    lines: list[str], heading: str, expected_header: tuple[str, ...]
-) -> MarkdownTable:
-    start, end = section_bounds(lines, heading)
-    table_start = next(
-        (index for index in range(start, end) if lines[index].strip().startswith("|")),
-        None,
-    )
-    if table_start is None or table_start + 1 >= end:
-        raise PlanError(f"{heading} must contain a Markdown table")
-    if table_cells(lines[table_start]) != expected_header:
-        raise PlanError(f"{heading} table header does not match the current template")
-    separator = table_cells(lines[table_start + 1])
-    if len(separator) != len(expected_header) or any(
-        not re.fullmatch(r":?-{3,}:?", cell) for cell in separator
-    ):
-        raise PlanError(f"{heading} table separator is invalid")
-    rows: list[MarkdownRow] = []
-    index = table_start + 2
-    while index < end and lines[index].strip().startswith("|"):
-        cells = table_cells(lines[index])
-        if len(cells) != len(expected_header):
-            raise PlanError(f"{heading} row has the wrong number of columns")
-        rows.append(MarkdownRow(index=index, line=lines[index], cells=cells))
-        index += 1
-    return MarkdownTable(
-        data_start=table_start + 2,
-        data_end=index,
-        rows=tuple(rows),
-    )
-
-
-def phase_blocks(lines: list[str]) -> tuple[PhaseBlock, ...]:
-    start, end = section_bounds(lines, "## Active Notes")
-    headings: list[tuple[int, re.Match[str]]] = []
-    for index in range(start, end):
-        if lines[index].startswith("### "):
-            match = PHASE_HEADING_PATTERN.fullmatch(lines[index])
-            if match is None:
-                raise PlanError(
-                    "Active Notes phase headings must use '### Phase N — Topic'"
-                )
-            headings.append((index, match))
-    content_before_first = lines[start : headings[0][0] if headings else end]
-    if any(line.strip() for line in content_before_first):
-        raise PlanError(
-            "Active Notes contains unstructured content outside a Phase block"
-        )
-    blocks: list[PhaseBlock] = []
-    for position, (block_start, match) in enumerate(headings):
-        block_end = headings[position + 1][0] if position + 1 < len(headings) else end
-        conclusion_lines = [
-            line.removeprefix("- Conclusion / Commit:").strip()
-            for line in lines[block_start + 1 : block_end]
-            if line.startswith("- Conclusion / Commit:")
-        ]
-        if len(conclusion_lines) != 1 or not conclusion_lines[0]:
-            raise PlanError(
-                f"{match.group(1)} must contain one non-empty Conclusion / Commit field"
-            )
-        blocks.append(
-            PhaseBlock(
-                phase=match.group(1),
-                topic=match.group(2).strip(),
-                conclusion=conclusion_lines[0],
-                start=block_start,
-                end=block_end,
-                lines=tuple(lines[block_start:block_end]),
-            )
-        )
-    phase_ids = [block.phase for block in blocks]
-    if len(set(phase_ids)) != len(phase_ids):
-        raise PlanError("Active Notes contains duplicate Phase headings")
-    return tuple(blocks)
-
-
-def replace_lines(
-    lines: list[str], *, remove: set[int], insert_before: dict[int, list[str]]
-) -> str:
-    output: list[str] = []
-    for index, line in enumerate(lines):
-        output.extend(insert_before.get(index, ()))
-        if index not in remove:
-            output.append(line)
-    output.extend(insert_before.get(len(lines), ()))
-    return "\n".join(output).rstrip() + "\n"
-
-
-def history_segments(
-    *,
-    kind: str,
-    source: str,
-    section_header: str,
-    units: list[str],
-    separator: str = "\n\n",
-) -> list[HistorySegment]:
-    if not units:
-        return []
-    segments: list[HistorySegment] = []
-    current: list[str] = []
-    for unit in units:
-        candidate = separator.join([section_header, *current, unit]).rstrip() + "\n"
-        rendered = render_history(kind=kind, source=source, body=candidate)
-        if utf8_size(rendered) <= HISTORY_FILE_LIMIT_BYTES:
-            current.append(unit)
-            continue
-        if not current:
-            raise PlanError(
-                f"one {kind} history unit exceeds {HISTORY_FILE_LIMIT_BYTES} bytes"
-            )
-        body = separator.join([section_header, *current]).rstrip() + "\n"
-        segments.append(HistorySegment(kind=kind, source=source, body=body))
-        current = [unit]
-        rendered = render_history(
-            kind=kind,
-            source=source,
-            body=separator.join([section_header, unit]).rstrip() + "\n",
-        )
-        if utf8_size(rendered) > HISTORY_FILE_LIMIT_BYTES:
-            raise PlanError(
-                f"one {kind} history unit exceeds {HISTORY_FILE_LIMIT_BYTES} bytes"
-            )
-    body = separator.join([section_header, *current]).rstrip() + "\n"
-    segments.append(HistorySegment(kind=kind, source=source, body=body))
-    return segments
-
-
-def render_history(*, kind: str, source: str, body: str) -> str:
-    title = kind.replace("-", " ").title()
-    return (
-        "---\n"
-        "planning_compat: 6\n"
-        f"history_kind: {kind}\n"
-        f"source: {source}\n"
-        "---\n\n"
-        f"# Archived {title}\n\n"
-        f"{body}"
-    )
-
-
-def git_summary(root: Path) -> dict[str, str]:
-    summary: dict[str, str] = {}
-    for key, args in {
-        "diff_stat": ("diff", "--stat"),
-        "status_short": ("status", "--short"),
-    }.items():
-        completed = subprocess.run(
-            ["git", *args],
-            cwd=root,
-            check=False,
-            text=True,
-            capture_output=True,
-        )
-        summary[key] = completed.stdout.strip() or completed.stderr.strip()
-    return summary
-
-
-def phase_status_section(text: str) -> str:
+def read_board(text: str) -> list[dict[str, str]]:
     lines = text.splitlines()
-    try:
-        start = next(
-            index
-            for index, line in enumerate(lines)
-            if line.strip() == "## Phase Status"
-        )
-    except StopIteration:
-        return ""
-    section: list[str] = []
-    for line in lines[start + 1 :]:
-        if line.startswith("## "):
-            break
-        section.append(line)
-    return "\n".join(section)
+    start, end = section_span(lines, BOARD_HEADING)
+    rows: list[dict[str, str]] = []
+    data = [line for line in lines[start:end] if line.lstrip().startswith("|")]
+    for line in data[2:]:  # skip header + separator
+        cells = row_cells(line)
+        if len(cells) >= 3 and cells[0]:
+            rows.append({"phase": cells[0], "status": cells[1], "record": cells[2]})
+    return rows
 
 
-def unfinished_phases(text: str) -> list[str]:
-    section = phase_status_section(text)
-    return [match.group(1) for match in UNFINISHED_PHASE_PATTERN.finditer(section)]
-
-
-def _loose_section(lines: list[str], heading: str) -> tuple[int, int] | None:
-    try:
-        start = next(index for index, line in enumerate(lines) if line.strip() == heading)
-    except StopIteration:
-        return None
-    end = next(
-        (index for index in range(start + 1, len(lines)) if lines[index].startswith("## ")),
-        len(lines),
-    )
-    return start + 1, end
-
-
-def _loose_table_rows(
-    lines: list[str], heading: str
-) -> list[tuple[int, tuple[str, ...]]]:
-    bounds = _loose_section(lines, heading)
-    if bounds is None:
-        return []
-    start, end = bounds
-    rows: list[tuple[int, tuple[str, ...]]] = []
+def upsert_board_row(text: str, phase: str, status: str, record: str) -> str:
+    lines = text.splitlines()
+    start, end = section_span(lines, BOARD_HEADING)
+    row = f"| {phase} | {status} | {record} |"
+    # Replace an existing row for this phase in place.
     for index in range(start, end):
         line = lines[index]
-        if not line.strip().startswith("|"):
-            continue
-        try:
-            cells = table_cells(line)
-        except PlanError:
-            continue
-        if cells and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
-            continue
-        rows.append((index, cells))
-    return rows[1:] if rows else []
+        if line.lstrip().startswith("|"):
+            cells = row_cells(line)
+            if len(cells) >= 3 and cells[0] == phase and cells[1] not in ("Phase",):
+                lines[index] = row
+                return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
+    # Otherwise append after the last table line in the section.
+    last_table = start
+    for index in range(start, end):
+        if lines[index].lstrip().startswith("|"):
+            last_table = index
+    lines.insert(last_table + 1, row)
+    return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
 
 
-def _audit_issue(code: str, message: str, *, line: int | None = None) -> dict[str, Any]:
-    issue: dict[str, Any] = {"code": code, "message": message}
-    if line is not None:
-        issue["line"] = line + 1
-    return issue
+# ---- phase files ------------------------------------------------------------
 
 
-def _placeholder(value: str) -> bool:
-    stripped = value.strip().lower()
-    return (
-        not stripped
-        or stripped in EMPTY_CLOSURE_VALUES
-        or (stripped.startswith("<") and stripped.endswith(">"))
-        or stripped in {"todo", "tbd", "placeholder"}
-    )
+def phases_path(plan: Path) -> Path:
+    return plan / PHASES_DIR
 
 
-def _decision_refs(value: str) -> list[str]:
-    if _placeholder(value):
-        return []
-    found: list[str] = []
-    range_pattern = re.compile(
-        r"D-(?P<first>[0-9]+)\s*(?:\.\.|-|–|—|to)\s*D-(?P<last>[0-9]+)",
-        re.IGNORECASE,
-    )
-    covered: set[str] = set()
-    for match in range_pattern.finditer(value):
-        first, last = int(match.group("first")), int(match.group("last"))
-        for number in range(min(first, last), max(first, last) + 1):
-            decision_id = f"D-{number:03d}"
-            found.append(decision_id)
-            covered.add(decision_id)
-    for match in re.finditer(r"D-[0-9]+", value, flags=re.IGNORECASE):
-        decision_id = f"D-{int(match.group(0)[2:]):03d}"
-        if decision_id not in covered:
-            found.append(decision_id)
-    return found
-
-
-def audit_task_plan(root: Path, text: str) -> dict[str, Any]:
-    """Detect deterministic stale narrative (zombie) states without mutating a plan."""
-    lines = text.splitlines()
-    issues: list[dict[str, Any]] = []
-    phase_rows = _loose_table_rows(lines, "## Phase Status")
-    phases: dict[str, tuple[str, int]] = {}
-    for index, cells in phase_rows:
-        if len(cells) < 2:
-            continue
-        phase, status = cells[0].strip(), cells[1].strip().lower()
-        if phase in phases:
-            issues.append(
-                _audit_issue(
-                    "duplicate-phase-row",
-                    f"Phase Status contains duplicate row {phase}",
-                    line=index,
-                )
-            )
-        phases.setdefault(phase, (status, index))
-
-    notes_bounds = _loose_section(lines, "## Active Notes")
-    notes: dict[str, tuple[str, int]] = {}
-    if notes_bounds is not None:
-        start, end = notes_bounds
-        current_line = 0
-        for index in range(start, end):
-            match = PHASE_HEADING_PATTERN.fullmatch(lines[index])
+def existing_phase_files(plan: Path) -> list[tuple[int, str, Path]]:
+    directory = phases_path(plan)
+    found: list[tuple[int, str, Path]] = []
+    if directory.is_dir():
+        for path in directory.iterdir():
+            match = PHASE_FILE_PATTERN.match(path.name)
             if match:
-                phase_id = match.group(1)
-                current_line = index
-                conclusion = ""
-                for candidate in range(index + 1, end):
-                    if candidate != index and lines[candidate].startswith("### "):
-                        break
-                    if lines[candidate].startswith("- Conclusion / Commit:"):
-                        conclusion = lines[candidate].split(":", 1)[1].strip()
-                        break
-                if phase_id in notes:
-                    continue
-                notes[phase_id] = (conclusion, current_line)
-        for phase, (conclusion, index) in notes.items():
-            if phase not in phases:
-                issues.append(
-                    _audit_issue(
-                        "active-notes-phase-absent",
-                        f"Active Notes phase {phase} is absent from Phase Status",
-                        line=index,
-                    )
-                )
-            elif phases[phase][0] == "completed" and _placeholder(conclusion):
-                issues.append(
-                    _audit_issue(
-                        "completed-phase-placeholder-conclusion",
-                        f"completed {phase} has a pending or placeholder conclusion",
-                        line=index,
-                    )
-                )
-
-    decisions: dict[str, tuple[str, tuple[str, ...], int]] = {}
-    for index, cells in _loose_table_rows(lines, "## Decisions"):
-        if len(cells) < 2:
-            continue
-        decision_id = cells[0].strip()
-        status = cells[1].strip().lower()
-        decisions[decision_id] = (status, cells, index)
-        if status not in {"active", "superseded"}:
-            issues.append(
-                _audit_issue(
-                    "invalid-decision-status",
-                    f"decision {decision_id} has invalid status {cells[1]!r}",
-                    line=index,
-                )
-            )
-        if status == "superseded":
-            pointer = cells[3].strip() if len(cells) > 3 else ""
-            if _placeholder(pointer):
-                issues.append(
-                    _audit_issue(
-                        "superseded-decision-without-pointer",
-                        f"superseded decision {decision_id} lacks a replacement or ADR pointer",
-                        line=index,
-                    )
-                )
-
-    packet_bounds = _loose_section(lines, "## Active Domain Packets")
-    if packet_bounds is not None:
-        start, end = packet_bounds
-        for index in range(start, end):
-            line = lines[index]
-            if not line.startswith("- ") or ":" not in line:
-                continue
-            field, value = line[2:].split(":", 1)
-            field = field.strip().lower()
-            value = value.strip()
-            if field in {"frozen decisions", "superseded decisions"}:
-                expected = "active" if field == "frozen decisions" else "superseded"
-                for decision_id in _decision_refs(value):
-                    decision = decisions.get(decision_id)
-                    if decision is None:
-                        issues.append(
-                            _audit_issue(
-                                "packet-decision-missing",
-                                f"{field} references missing {decision_id}",
-                                line=index,
-                            )
-                        )
-                    elif decision[0] != expected:
-                        issues.append(
-                            _audit_issue(
-                                "packet-decision-status-mismatch",
-                                f"{field} references {decision_id} with status {decision[0]!r}, expected {expected!r}",
-                                line=index,
-                            )
-                        )
-            elif field == "next acceptance gate" and not _placeholder(value):
-                direct_gate = re.match(
-                    r"^Phase\s+([0-9]+)(?:\s*$|\s*(?:—|–|-|:))",
-                    value,
-                    re.IGNORECASE,
-                )
-                phase = f"Phase {direct_gate.group(1)}" if direct_gate else None
-                if phase is not None and phases.get(phase, ("", 0))[0] == "completed":
-                    issues.append(
-                        _audit_issue(
-                            "next-gate-completed-phase",
-                            "Next acceptance gate directly targets a completed Phase",
-                            line=index,
-                        )
-                    )
-            elif field == "current sha" and re.fullmatch(r"[0-9a-fA-F]{40}", value):
-                commit = subprocess.run(
-                    ["git", "cat-file", "-e", f"{value}^{{commit}}"],
-                    cwd=root,
-                    check=False,
-                    capture_output=True,
-                )
-                if commit.returncode != 0:
-                    issues.append(
-                        _audit_issue(
-                            "current-sha-not-commit",
-                            f"Current SHA {value} is not a commit in this repository",
-                            line=index,
-                        )
-                    )
-    return {"issues": issues, "zombie_count": len(issues)}
+                found.append((int(match.group("num")), match.group("slug"), path))
+    return sorted(found)
 
 
-def reject_zombie_plan(root: Path, text: str) -> dict[str, Any]:
-    audit = audit_task_plan(root, text)
-    if audit["zombie_count"]:
-        codes = ", ".join(issue["code"] for issue in audit["issues"])
-        raise PlanError(f"zombie audit found {audit['zombie_count']} issue(s): {codes}")
-    return audit
+def find_phase_file(plan: Path, phase: str) -> Path:
+    number = int(phase)
+    for num, _, path in existing_phase_files(plan):
+        if num == number:
+            return path
+    raise PlanError(f"phase {phase} not found under {phases_path(plan)}")
 
 
-def markdown_cell(value: str) -> str:
-    return " ".join(value.replace("|", r"\|").split())
+def next_phase_number(plan: Path) -> int:
+    files = existing_phase_files(plan)
+    return (files[-1][0] + 1) if files else 1
 
 
-def validate_last_updated(text: str, *, filename: str) -> None:
-    matches = re.findall(r"^\*\*Last updated:\*\* .+$", text, flags=re.MULTILINE)
-    if len(matches) != 1:
-        raise PlanError(f"{filename} must contain exactly one Last updated field")
-
-
-def validate_task_plan(text: str) -> None:
-    validate_last_updated(text, filename="task_plan.md")
-    lines = text.splitlines()
-    phase_table = markdown_table(
-        lines,
-        "## Phase Status",
-        ("Phase", "Status", "Scope", "Acceptance"),
-    )
-    valid_statuses = {"pending", "in_progress", "blocked", "completed"}
-    for row in phase_table.rows:
-        if row.cells[1] not in valid_statuses:
-            raise PlanError(f"phase {row.cells[0]} has invalid status {row.cells[1]!r}")
-    markdown_table(
-        lines,
-        "## Historical Phase Summary",
-        ("Phase", "Topic", "Conclusion / Commit"),
-    )
-    phase_blocks(lines)
-
-
-def validate_progress(text: str) -> None:
-    validate_last_updated(text, filename="progress.md")
-    lines = text.splitlines()
-    markdown_table(lines, "## Timeline", progress_table_header("## Timeline"))
-    markdown_table(
-        lines,
-        "## Verification Log",
-        progress_table_header("## Verification Log"),
-    )
-
-
-def findings_table(text: str) -> tuple[list[str], MarkdownTable]:
-    validate_last_updated(text, filename="findings.md")
-    lines = text.splitlines()
-    header = ("ID", "Status", "Date", "Area", "Finding", "Evidence / Closure")
-    table = markdown_table(lines, "## Discoveries", header)
-    for row in table.rows:
-        if row.cells[1] not in {"open", "resolved"}:
-            raise PlanError(
-                f"finding {row.cells[0]} has invalid status {row.cells[1]!r}"
-            )
-        if (
-            row.cells[1] == "resolved"
-            and row.cells[5].strip().lower() in EMPTY_CLOSURE_VALUES
-        ):
-            raise PlanError(f"resolved finding lacks closure evidence: {row.cells[0]}")
-    return lines, table
-
-
-def compact_task_plan(text: str) -> tuple[str, list[HistorySegment], int]:
-    validate_task_plan(text)
-    working = text
-    archived_units: list[str] = []
-    archived_count = 0
-    while True:
-        lines = working.splitlines()
-        blocks = phase_blocks(lines)
-        needs_compaction = (
-            len(blocks) > MAX_DETAILED_PHASES
-            or utf8_size(working) > LIVE_FILE_LIMIT_BYTES
-        )
-        if not needs_compaction:
-            break
-        phase_table = markdown_table(
-            lines,
-            "## Phase Status",
-            ("Phase", "Status", "Scope", "Acceptance"),
-        )
-        phase_rows = {row.cells[0]: row for row in phase_table.rows}
-        if len(phase_rows) != len(phase_table.rows):
-            raise PlanError("Phase Status contains duplicate Phase rows")
-        # Sealed prefix: only the contiguous run of completed phases at the top
-        # may move to history, capped per batch.
-        candidates = []
-        for block in blocks:
-            row = phase_rows.get(block.phase)
-            if row is None or row.cells[1] != "completed":
-                break
-            candidates.append(block)
-            if len(candidates) == PHASE_COMPACTION_BATCH:
-                break
-        if not candidates:
-            raise PlanError(
-                "task_plan exceeds the live-file budget without an archivable"
-                " completed phase prefix"
-            )
-
-        summary_table = markdown_table(
-            lines,
-            "## Historical Phase Summary",
-            ("Phase", "Topic", "Conclusion / Commit"),
-        )
-        summarized = {row.cells[0] for row in summary_table.rows}
-        if len(summarized) != len(summary_table.rows):
-            raise PlanError("Historical Phase Summary contains duplicate Phase rows")
-        if any(block.phase in summarized for block in candidates):
-            raise PlanError("phase already exists in Historical Phase Summary")
-
-        remove: set[int] = set()
-        summary_rows: list[str] = []
-        for block in candidates:
-            remove.add(phase_rows[block.phase].index)
-            remove.update(range(block.start, block.end))
-            summary_rows.append(
-                "| "
-                + " | ".join(
-                    (
-                        markdown_cell(block.phase),
-                        markdown_cell(block.topic),
-                        markdown_cell(block.conclusion),
-                    )
-                )
-                + " |"
-            )
-            archived_units.append(
-                "\n".join(
-                    (
-                        "```text",
-                        phase_rows[block.phase].line,
-                        "```",
-                        "",
-                        *block.lines,
-                    )
-                ).rstrip()
-            )
-        working = replace_lines(
-            lines,
-            remove=remove,
-            insert_before={summary_table.data_end: summary_rows},
-        )
-        working = update_last_updated(working)
-        archived_count += len(candidates)
-
-    segments = history_segments(
-        kind="task-plan",
-        source="task_plan.md",
-        section_header="## Archived Phase Notes",
-        units=archived_units,
-    )
-    return working, segments, archived_count
-
-
-def progress_table_header(heading: str) -> tuple[str, ...]:
-    if heading == "## Timeline":
-        return ("Time", "Actor", "Action", "Result", "Next")
-    if heading == "## Verification Log":
-        return ("Date", "Command", "Result")
-    raise AssertionError(f"unknown progress heading: {heading}")
-
-
-def progress_history_header(heading: str, header: tuple[str, ...]) -> str:
-    return f"{heading}\n\n| {' | '.join(header)} |\n|{'|'.join('---' for _ in header)}|"
-
-
-def compact_progress(text: str) -> tuple[str, list[HistorySegment], dict[str, int]]:
-    validate_progress(text)
-    lines = text.splitlines()
-    timeline_header = progress_table_header("## Timeline")
-    verification_header = progress_table_header("## Verification Log")
-    timeline = markdown_table(lines, "## Timeline", timeline_header)
-    verification = markdown_table(lines, "## Verification Log", verification_header)
-    over_budget = utf8_size(text) > LIVE_FILE_LIMIT_BYTES
-    if (
-        not over_budget
-        and len(timeline.rows) <= PROGRESS_MAX_ROWS
-        and len(verification.rows) <= PROGRESS_MAX_ROWS
-    ):
-        return (
-            text,
-            [],
-            {
-                "progress_timeline_rows": 0,
-                "progress_verification_rows": 0,
-            },
-        )
-
-    remove_timeline = max(0, len(timeline.rows) - PROGRESS_KEEP_ROWS)
-    remove_verification = max(0, len(verification.rows) - PROGRESS_KEEP_ROWS)
-    if remove_timeline == 0 and remove_verification == 0:
-        raise PlanError(
-            "progress exceeds the live-file budget within its most recent twenty rows"
-        )
-
-    archived_timeline = list(timeline.rows[:remove_timeline])
-    archived_verification = list(verification.rows[:remove_verification])
-    remove = {row.index for row in [*archived_timeline, *archived_verification]}
-    compacted = replace_lines(lines, remove=remove, insert_before={})
-    compacted = update_last_updated(compacted)
-    if utf8_size(compacted) > LIVE_FILE_LIMIT_BYTES:
-        raise PlanError(
-            "progress exceeds the live-file budget after retaining its latest twenty rows"
-        )
-
-    segments = history_segments(
-        kind="progress",
-        source="progress.md",
-        section_header=progress_history_header("## Timeline", timeline_header),
-        units=[row.line for row in archived_timeline],
-        separator="\n",
-    )
-    segments.extend(
-        history_segments(
-            kind="progress",
-            source="progress.md",
-            section_header=progress_history_header(
-                "## Verification Log", verification_header
-            ),
-            units=[row.line for row in archived_verification],
-            separator="\n",
-        )
-    )
+def render_phase(number: str, topic: str) -> str:
+    text = (template_dir() / "phase.md").read_text(encoding="utf-8")
     return (
-        compacted,
-        segments,
-        {
-            "progress_timeline_rows": remove_timeline,
-            "progress_verification_rows": remove_verification,
-        },
+        text.replace("<NN>", number)
+        .replace("<topic>", topic)
+        .replace("- **Status:** pending", "- **Status:** in_progress")
     )
 
 
-def compact_findings(text: str) -> tuple[str, list[HistorySegment], int]:
-    lines, table = findings_table(text)
-    if utf8_size(text) <= LIVE_FILE_LIMIT_BYTES:
-        return text, [], 0
-    header = ("ID", "Status", "Date", "Area", "Finding", "Evidence / Closure")
-
-    resolved = [row for row in table.rows if row.cells[1] == "resolved"]
-    remove: set[int] = set()
-    archived: list[MarkdownRow] = []
-    compacted = text
-    for row in resolved:
-        remove.add(row.index)
-        archived.append(row)
-        compacted = replace_lines(lines, remove=remove, insert_before={})
-        compacted = update_last_updated(compacted)
-        if utf8_size(compacted) <= LIVE_FILE_LIMIT_BYTES:
-            break
-    if utf8_size(compacted) > LIVE_FILE_LIMIT_BYTES:
-        raise PlanError(
-            "findings exceeds the live-file budget after every safely resolved row is removed"
-        )
-
-    section_header = (
-        "## Resolved Discoveries\n\n"
-        f"| {' | '.join(header)} |\n"
-        f"|{'|'.join('---' for _ in header)}|"
-    )
-    segments = history_segments(
-        kind="findings",
-        source="findings.md",
-        section_header=section_header,
-        units=[row.line for row in archived],
-        separator="\n",
-    )
-    return compacted, segments, len(archived)
+def set_phase_field(text: str, field: str, value: str) -> str:
+    pattern = re.compile(rf"^(- \*\*{re.escape(field)}:\*\*).*$", re.MULTILINE)
+    replacement = rf"\1 {value}"
+    updated, count = pattern.subn(replacement, text, count=1)
+    if count != 1:
+        raise PlanError(f"phase record has no '{field}' field")
+    return updated
 
 
-def next_history_number(directory: Path) -> int:
-    history = directory / "history"
-    numbers = [
-        int(match.group("number"))
-        for path in history.glob("*.md")
-        if (match := HISTORY_FILE_PATTERN.fullmatch(path.name)) is not None
-    ]
-    return max(numbers, default=0) + 1
+def read_phase_field(text: str, field: str) -> str:
+    match = re.search(rf"^- \*\*{re.escape(field)}:\*\* *(.*)$", text, re.MULTILINE)
+    return match.group(1).strip() if match else ""
 
 
-def write_prepared_compaction(
-    directory: Path, prepared: PreparedCompaction
-) -> list[str]:
-    history_files: list[str] = []
-    number = next_history_number(directory)
-    for segment in prepared.history:
-        filename = f"{number:04d}-{segment.kind}.md"
-        destination = directory / "history" / filename
-        reject_symlink_components(directory, destination)
-        if destination.exists():
-            raise PlanError(f"history destination already exists: {destination}")
-        rendered = render_history(
-            kind=segment.kind,
-            source=segment.source,
-            body=segment.body,
-        )
-        if utf8_size(rendered) > HISTORY_FILE_LIMIT_BYTES:
-            raise PlanError(f"history segment exceeds byte budget: {filename}")
-        atomic_create(destination, rendered)
-        history_files.append(f"history/{filename}")
-        number += 1
-    for path, text in prepared.replacements.items():
-        atomic_write(path, text)
-    return history_files
+def field_is_unset(value: str) -> bool:
+    """True for an empty, placeholder, or not-yet-filled field value."""
+    lowered = value.strip().lower()
+    return lowered in ("", "none", "pending") or lowered.startswith("<")
 
 
-def prepare_compaction(directory: Path) -> PreparedCompaction:
-    prepared = PreparedCompaction()
-
-    task_plan = directory / "task_plan.md"
-    task_text = task_plan.read_text(encoding="utf-8")
-    compacted_task, task_history, phase_count = compact_task_plan(task_text)
-    if compacted_task != task_text:
-        prepared.replacements[task_plan] = compacted_task
-    prepared.history.extend(task_history)
-    prepared.counts["task_plan_phases"] = phase_count
-
-    progress = directory / "progress.md"
-    if progress.is_file():
-        progress_text = progress.read_text(encoding="utf-8")
-        compacted_progress, progress_history, progress_counts = compact_progress(
-            progress_text
-        )
-        if compacted_progress != progress_text:
-            prepared.replacements[progress] = compacted_progress
-        prepared.history.extend(progress_history)
-        prepared.counts.update(progress_counts)
-
-    findings = directory / "findings.md"
-    if findings.is_file():
-        findings_text = findings.read_text(encoding="utf-8")
-        compacted_findings, findings_history, findings_count = compact_findings(
-            findings_text
-        )
-        if compacted_findings != findings_text:
-            prepared.replacements[findings] = compacted_findings
-        prepared.history.extend(findings_history)
-        prepared.counts["findings_rows"] = findings_count
-    return prepared
-
-
-def run_compaction(args: argparse.Namespace, *, operation: str) -> dict[str, Any]:
-    root = Path(args.root).resolve()
-    validate_task_id(args.task_id)
-    directory = require_plan(root, args.task_id)
-    reject_zombie_plan(root, (directory / "task_plan.md").read_text(encoding="utf-8"))
-    prepared = prepare_compaction(directory)
-    history_files = write_prepared_compaction(directory, prepared)
-    return {
-        "ok": True,
-        "operation": operation,
-        "task_id": args.task_id,
-        "plan_dir": str(directory),
-        "changed": bool(prepared.replacements),
-        "compacted": prepared.counts,
-        "history_files": history_files,
-    }
-
-
-def command_compact(args: argparse.Namespace) -> dict[str, Any]:
-    return run_compaction(args, operation="compact")
-
-
-def command_checkpoint(args: argparse.Namespace) -> dict[str, Any]:
-    """Validate current narrative and compact only when thresholds require it."""
-    return run_compaction(args, operation="checkpoint")
+# ---- commands ---------------------------------------------------------------
 
 
 def command_init(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     validate_task_id(args.task_id)
-    if not args.goal.strip():
-        raise PlanError("goal must not be empty")
-    destination = plan_dir(root, args.task_id)
-    archived = archive_dir(root, args.task_id)
-    reject_symlink_components(root, destination)
-    reject_symlink_components(root, archived)
-    if destination.exists() or archived.exists():
-        raise PlanError(f"task planning namespace already exists: {args.task_id}")
-
-    plans_root = destination.parent
-    plans_root.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=f".{args.task_id}.staging-", dir=plans_root))
-    try:
-        atomic_write(
-            staging / "task_plan.md",
-            render_template("task_plan.md", args.task_id, goal=args.goal),
+    plan = plan_dir(root, args.task_id)
+    reject_symlink_components(root, plan)
+    if plan.exists():
+        raise PlanError(f"plan already exists: {plan}")
+    index = (
+        (template_dir() / INDEX_FILE)
+        .read_text(encoding="utf-8")
+        .replace("<task-id>", args.task_id)
+        .replace(
+            "<一段話描述本 task 要達成的具體結果。穩定,少動。>", args.goal
         )
-        requested_optional = []
-        if args.with_findings:
-            requested_optional.append("findings.md")
-        if args.with_progress:
-            requested_optional.append("progress.md")
-        for filename in requested_optional:
-            atomic_write(
-                staging / filename,
-                render_template(OPTIONAL_TEMPLATES[filename], args.task_id),
-            )
-        os.replace(staging, destination)
-    finally:
-        if staging.exists():
-            shutil.rmtree(staging)
+    )
+    create_new(plan / INDEX_FILE, index)
+    phases_path(plan).mkdir(parents=True, exist_ok=True)
+    created = [INDEX_FILE, f"{PHASES_DIR}/"]
+    if args.with_findings:
+        findings = (
+            (template_dir() / FINDINGS_FILE)
+            .read_text(encoding="utf-8")
+            .replace("<task-id>", args.task_id)
+            .replace("YYYY-MM-DD", today())
+        )
+        create_new(plan / FINDINGS_FILE, findings)
+        created.append(FINDINGS_FILE)
+    return {"ok": True, "operation": "init", "task_id": args.task_id, "created": created}
+
+
+def command_phase_start(args: argparse.Namespace) -> dict[str, Any]:
+    root = Path(args.root).resolve()
+    validate_task_id(args.task_id)
+    plan = require_plan(root, args.task_id)
+    topic = args.topic.strip()
+    if not topic:
+        raise PlanError("phase topic must be non-empty")
+    slug = (args.slug or slugify(topic)).strip()
+    if not SLUG_PATTERN.fullmatch(slug):
+        raise PlanError(
+            f"slug must match {SLUG_PATTERN.pattern}; pass --slug for a non-ASCII topic"
+        )
+    number = f"{next_phase_number(plan):02d}"
+    record = f"{PHASES_DIR}/{number}-{slug}.md"
+    create_new(plan / record, render_phase(number, topic))
+    atomic_write(
+        plan / INDEX_FILE,
+        upsert_board_row(read_index(plan), number, "in_progress", record),
+    )
     return {
         "ok": True,
+        "operation": "phase-start",
+        "phase": number,
+        "record": record,
+    }
+
+
+def command_phase_set(args: argparse.Namespace) -> dict[str, Any]:
+    root = Path(args.root).resolve()
+    validate_task_id(args.task_id)
+    plan = require_plan(root, args.task_id)
+    path = find_phase_file(plan, args.phase)
+    text = path.read_text(encoding="utf-8")
+    if args.status and args.status not in PHASE_STATUSES:
+        raise PlanError(f"status must be one of {PHASE_STATUSES}")
+    if args.commit:
+        text = set_phase_field(text, "Commit", args.commit)
+    if args.conclusion:
+        text = set_phase_field(text, "Conclusion", args.conclusion)
+    if args.note:
+        text = text.rstrip("\n") + f"\n- {args.note}\n"
+    if args.status:
+        if args.status == "completed":
+            commit = args.commit or read_phase_field(text, "Commit")
+            conclusion = args.conclusion or read_phase_field(text, "Conclusion")
+            if field_is_unset(commit) or field_is_unset(conclusion):
+                raise PlanError(
+                    "completing a phase requires a Commit SHA and a Conclusion"
+                )
+        text = set_phase_field(text, "Status", args.status)
+    atomic_write(path, text)
+    number = f"{int(args.phase):02d}"
+    record = f"{PHASES_DIR}/{path.name}"
+    status = args.status or read_phase_field(text, "Status")
+    atomic_write(
+        plan / INDEX_FILE,
+        upsert_board_row(read_index(plan), number, status, record),
+    )
+    return {"ok": True, "operation": "phase-set", "phase": number, "status": status}
+
+
+def command_log(args: argparse.Namespace) -> dict[str, Any]:
+    root = Path(args.root).resolve()
+    validate_task_id(args.task_id)
+    plan = require_plan(root, args.task_id)
+    if args.verify:
+        if not args.command or not args.result:
+            raise PlanError("--verify requires --command and --result")
+        row: dict[str, Any] = {
+            "ts": now_ts(),
+            "kind": "verify",
+            "command": args.command,
+            "result": args.result,
+        }
+        if args.sha:
+            row["sha"] = args.sha
+    else:
+        if not args.action:
+            raise PlanError("an event log requires --action (or use --verify)")
+        row = {
+            "ts": now_ts(),
+            "kind": "event",
+            "actor": args.actor or "root",
+            "action": args.action,
+            "result": args.result or "",
+        }
+        if args.next:
+            row["next"] = args.next
+    append_line(plan / PROGRESS_FILE, json.dumps(row, ensure_ascii=False, sort_keys=True))
+    return {"ok": True, "operation": "log", "kind": row["kind"]}
+
+
+def validate_plan(plan: Path) -> list[str]:
+    """Structural checks across INDEX and the stores; returns human-readable issues."""
+    issues: list[str] = []
+    index = read_index(plan)
+    if not INDEX_TITLE_PATTERN.search(index):
+        issues.append("INDEX has no '# <title>' line")
+    if not GOAL_PATTERN.search(index):
+        issues.append("INDEX has no '**Goal:**' line")
+    for heading in REQUIRED_HEADINGS:
+        if heading not in index:
+            issues.append(f"INDEX is missing the '{heading}' section")
+    board_phases = {row["phase"] for row in read_board(index)} if BOARD_HEADING in index else set()
+    for num, _, path in existing_phase_files(plan):
+        text = path.read_text(encoding="utf-8")
+        for field in PHASE_FIELDS:
+            if not re.search(rf"^- \*\*{re.escape(field)}:\*\*", text, re.MULTILINE):
+                issues.append(f"{path.name} has no '{field}' field")
+        if f"{num:02d}" not in board_phases:
+            issues.append(f"{path.name} is not listed on the INDEX phase board")
+    progress = plan / PROGRESS_FILE
+    if progress.is_file():
+        for lineno, line in enumerate(progress.read_text(encoding="utf-8").splitlines(), 1):
+            if line.strip():
+                try:
+                    json.loads(line)
+                except json.JSONDecodeError:
+                    issues.append(f"{PROGRESS_FILE}:{lineno} is not valid JSON")
+    return issues
+
+
+# ---- migration (old task_plan.md -> new INDEX + stores) ---------------------
+
+
+def _old_section_body(text: str, heading: str) -> str:
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.strip() == heading), -1)
+    if start < 0:
+        return ""
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("## "):
+            end = index
+            break
+    return "\n".join(lines[start + 1 : end]).strip("\n")
+
+
+def _old_table_rows(body: str) -> list[list[str]]:
+    data = [line for line in body.splitlines() if line.lstrip().startswith("|")]
+    rows: list[list[str]] = []
+    for line in data:
+        cells = row_cells(line)
+        joined = "".join(cells)
+        if not joined or set(joined) <= set("-: "):
+            continue  # header separator or blank
+        rows.append(cells)
+    return rows[1:] if rows else rows  # drop the header row
+
+
+def _old_active_notes(text: str) -> dict[str, dict[str, str]]:
+    """Parse `### Phase N — topic` blocks under `## Active Notes`."""
+    body = _old_section_body(text, "## Active Notes")
+    notes: dict[str, dict[str, str]] = {}
+    current: str | None = None
+    for line in body.splitlines():
+        heading = re.match(r"^### Phase\s+([0-9]+)\s*[—-]\s*(.*)$", line)
+        if heading:
+            current = heading.group(1) or ""
+            notes[current] = {"topic": (heading.group(2) or "").strip(), "detail": ""}
+        elif current is not None:
+            notes[current]["detail"] += line + "\n"
+    return notes
+
+
+def replace_section_body(text: str, heading: str, body_lines: list[str]) -> str:
+    lines = text.splitlines()
+    start, end = section_span(lines, heading)
+    new = [lines[start], ""] + body_lines + [""]
+    result = lines[:start] + new + lines[end:]
+    return "\n".join(result) + ("\n" if text.endswith("\n") else "")
+
+
+def command_migrate(args: argparse.Namespace) -> dict[str, Any]:
+    root = Path(args.root).resolve()
+    validate_task_id(args.task_id)
+    plan = plan_dir(root, args.task_id)
+    reject_symlink_tree(root, plan)
+    old = plan / "task_plan.md"
+    if not old.is_file():
+        raise PlanError(
+            f"no old task_plan.md under {plan} (already migrated, or not a plan)"
+        )
+    if (plan / INDEX_FILE).exists():
+        raise PlanError(f"{INDEX_FILE} already exists; refusing to overwrite")
+    text = old.read_text(encoding="utf-8")
+    goal = _old_section_body(text, "## Goal").strip()
+    if not goal:
+        raise PlanError("old task_plan.md has no '## Goal'; migrate by hand")
+
+    punch_list: list[str] = []
+    # INDEX scaffold from the template, then surgically filled.
+    index = (
+        (template_dir() / INDEX_FILE)
+        .read_text(encoding="utf-8")
+        .replace("<task-id>", args.task_id)
+        .replace("<一段話描述本 task 要達成的具體結果。穩定,少動。>", goal)
+    )
+    # Current State = old Current State + Architecture Baseline (root prunes stale).
+    current = _old_section_body(text, "## Current State").splitlines()
+    arch = _old_section_body(text, "## Architecture Baseline").strip()
+    body = [line for line in current if line.strip()] or ["- (migrated; prune me)"]
+    if arch:
+        body += ["", "*Architecture baseline (merge or drop):*"] + [
+            line for line in arch.splitlines() if line.strip()
+        ]
+    body += ["- **Next gate:** <填入下一個可機械驗收動作>"]
+    index = replace_section_body(index, "## Current State", body)
+    punch_list.append("prune Current State to what is still live; set Next gate")
+
+    # Decisions table carried across (old col4 'Supersedes/Authority' -> 'Authority').
+    decision_rows = _old_table_rows(_old_section_body(text, "## Decisions"))
+    if decision_rows:
+        table = ["| ID | Status | Decision | Authority |", "|---|---|---|---|"]
+        for cells in decision_rows:
+            padded = (cells + ["", "", "", ""])[:4]
+            table.append(f"| {padded[0]} | {padded[1]} | {padded[2]} | {padded[3]} |")
+        index = replace_section_body(index, "## Decisions", table)
+        punch_list.append("confirm each decision's Status (active vs superseded)")
+
+    atomic_write(plan / INDEX_FILE, index)
+    phases_path(plan).mkdir(parents=True, exist_ok=True)
+
+    # Phases: union of the Phase Status table and the Active Notes blocks.
+    status_rows = _old_table_rows(_old_section_body(text, "## Phase Status"))
+    hist_rows = _old_table_rows(_old_section_body(text, "## Historical Phase Summary"))
+    notes = _old_active_notes(text)
+    hist_concl = {row[0].replace("Phase", "").strip(): row[-1] for row in hist_rows if row}
+    created_phases: list[str] = []
+    seen: set[str] = set()
+
+    def phase_number(label: str) -> str:
+        digits = re.sub(r"[^0-9]", "", label)
+        return f"{int(digits):02d}" if digits else ""
+
+    ordered: list[tuple[str, str, str, str]] = []  # (num, topic, status, scope)
+    for cells in status_rows:
+        num = phase_number(cells[0])
+        if not num:
+            continue
+        topic = notes.get(str(int(num)), {}).get("topic", "") or (
+            cells[2] if len(cells) > 2 else ""
+        )
+        status = cells[1].strip() if len(cells) > 1 else "pending"
+        scope = cells[2].strip() if len(cells) > 2 else "none"
+        ordered.append((num, topic, status, scope))
+    for pnum, note in notes.items():  # notes without a status row
+        num = f"{int(pnum):02d}"
+        if all(existing[0] != num for existing in ordered):
+            ordered.append((num, note.get("topic", ""), "completed", "none"))
+
+    for num, topic, status, scope in sorted(ordered):
+        if num in seen:
+            continue
+        seen.add(num)
+        slug = slugify(topic) or f"phase-{int(num)}"
+        conclusion = (hist_concl.get(str(int(num)), "") or "").strip() or "pending"
+        detail = notes.get(str(int(num)), {}).get("detail", "").strip()
+        status = status if status in PHASE_STATUSES else "pending"
+        commit_match = re.search(r"\b[0-9a-f]{7,40}\b", conclusion)
+        commit = commit_match.group(0) if commit_match else "none"
+        record = f"{PHASES_DIR}/{num}-{slug}.md"
+        phase_text = (
+            f"# Phase {num} — {topic or slug}\n\n"
+            f"- **Status:** {status}\n"
+            f"- **Scope:** {scope or 'none'}\n"
+            f"- **Decisions made:** none\n"
+            f"- **Conclusion:** {conclusion}\n"
+            f"- **Commit:** {commit}\n"
+            f"- **Evidence:** none\n\n"
+            f"## Notes\n\n"
+            f"{detail or '- (migrated)'}\n"
+        )
+        create_new(plan / record, phase_text)
+        atomic_write(
+            plan / INDEX_FILE, upsert_board_row(read_index(plan), num, status, record)
+        )
+        created_phases.append(record)
+    if created_phases:
+        punch_list.append("check phase slugs and fill any Conclusion left 'pending'")
+
+    # progress.md tables -> progress.jsonl
+    progress_old = plan / "progress.md"
+    progress_rows = 0
+    if progress_old.is_file():
+        ptext = progress_old.read_text(encoding="utf-8")
+        for cells in _old_table_rows(_old_section_body(ptext, "## Timeline")):
+            padded = (cells + ["", "", "", "", ""])[:5]
+            row = {
+                "ts": padded[0] or now_ts(),
+                "kind": "event",
+                "actor": padded[1] or "unknown",
+                "action": padded[2],
+                "result": padded[3],
+            }
+            if padded[4]:
+                row["next"] = padded[4]
+            append_line(plan / PROGRESS_FILE, json.dumps(row, ensure_ascii=False, sort_keys=True))
+            progress_rows += 1
+        for cells in _old_table_rows(_old_section_body(ptext, "## Verification Log")):
+            padded = (cells + ["", "", ""])[:3]
+            row = {"ts": padded[0] or now_ts(), "kind": "verify", "command": padded[1], "result": padded[2]}
+            append_line(plan / PROGRESS_FILE, json.dumps(row, ensure_ascii=False, sort_keys=True))
+            progress_rows += 1
+
+    # Preserve every original under history/pre-migration/ (nothing is deleted).
+    preserved = plan / "history" / "pre-migration"
+    preserved.mkdir(parents=True, exist_ok=True)
+    for name in ("task_plan.md", "progress.md"):
+        source = plan / name
+        if source.is_file():
+            shutil.move(str(source), str(preserved / name))
+    for directory in ("domains", "history"):
+        source = plan / directory
+        if directory == "domains" and source.is_dir():
+            shutil.move(str(source), str(preserved / directory))
+            punch_list.append(f"merge {directory}/ packets into Current State, then drop")
+
+    return {
+        "ok": True,
+        "operation": "migrate",
         "task_id": args.task_id,
-        "plan_dir": str(destination),
-        "files": sorted(path.name for path in destination.iterdir()),
+        "phases": created_phases,
+        "progress_rows": progress_rows,
+        "preserved_under": str(preserved.relative_to(plan)),
+        "punch_list": punch_list,
+    }
+
+
+def command_checkpoint(args: argparse.Namespace) -> dict[str, Any]:
+    root = Path(args.root).resolve()
+    validate_task_id(args.task_id)
+    plan = require_plan(root, args.task_id)
+    issues = validate_plan(plan)
+    if issues:
+        raise PlanError("plan is not schema-valid: " + "; ".join(issues))
+    size = utf8_size(read_index(plan))
+    if size > INDEX_LIMIT_BYTES:
+        raise PlanError(
+            f"{INDEX_FILE} is {size} bytes over the {INDEX_LIMIT_BYTES} budget; prune"
+            " Current State and superseded decisions — phase detail belongs in its"
+            " phases/ record, not the entry"
+        )
+    return {
+        "ok": True,
+        "operation": args.operation if hasattr(args, "operation") else "checkpoint",
+        "task_id": args.task_id,
+        "index_bytes": size,
     }
 
 
 def command_status(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     validate_task_id(args.task_id)
-    directory = require_plan(root, args.task_id)
-    task_text = (directory / "task_plan.md").read_text(encoding="utf-8")
-    audit = audit_task_plan(root, task_text)
-    optional: dict[str, str] = {}
-    for filename in OPTIONAL_TEMPLATES:
-        path = directory / filename
-        if path.is_file():
-            optional[filename] = "\n".join(
-                path.read_text(encoding="utf-8").splitlines()[-20:]
-            )
+    plan = require_plan(root, args.task_id)
+    index = read_index(plan)
+    board = read_board(index)
+    progress = plan / PROGRESS_FILE
+    progress_rows = (
+        sum(1 for line in progress.read_text(encoding="utf-8").splitlines() if line.strip())
+        if progress.is_file()
+        else 0
+    )
     return {
         "ok": True,
+        "operation": "status",
         "task_id": args.task_id,
-        "plan_dir": str(directory),
-        "files": sorted(path.name for path in directory.iterdir() if path.is_file()),
-        "unfinished_phases": unfinished_phases(task_text),
-        "audit": audit,
-        "zombie_count": audit["zombie_count"],
-        "task_plan_head": "\n".join(task_text.splitlines()[:60]),
-        "optional_tails": optional,
-        "git": git_summary(root),
+        "index_bytes": utf8_size(index),
+        "phases": board,
+        "stores": {
+            "phases": len(existing_phase_files(plan)),
+            "progress_rows": progress_rows,
+            "findings": (plan / FINDINGS_FILE).is_file(),
+        },
     }
 
 
 def command_check(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     validate_task_id(args.task_id)
-    directory = require_plan(root, args.task_id)
-    task_text = (directory / "task_plan.md").read_text(encoding="utf-8")
-    reject_zombie_plan(root, task_text)
-    unfinished = unfinished_phases(task_text)
-    if unfinished:
-        raise PlanError(
-            "plan has unfinished phases: " + ", ".join(sorted(set(unfinished)))
-        )
-    return {
-        "ok": True,
-        "task_id": args.task_id,
-        "plan_dir": str(directory),
-        "complete": True,
-    }
+    plan = require_plan(root, args.task_id)
+    open_phases = [row["phase"] for row in read_board(read_index(plan)) if row["status"] in OPEN_STATUSES]
+    if open_phases:
+        raise PlanError(f"phase board still has open phases: {', '.join(open_phases)}")
+    return {"ok": True, "operation": "check", "task_id": args.task_id}
 
 
 def command_archive(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     validate_task_id(args.task_id)
-    source = require_plan(root, args.task_id)
-    task_text = (source / "task_plan.md").read_text(encoding="utf-8")
-    reject_zombie_plan(root, task_text)
-    unfinished = unfinished_phases(task_text)
-    if unfinished:
-        raise PlanError(
-            "cannot archive plan with unfinished phases: "
-            + ", ".join(sorted(set(unfinished)))
-        )
+    plan = require_plan(root, args.task_id)
     destination = archive_dir(root, args.task_id)
     reject_symlink_components(root, destination)
     if destination.exists():
         raise PlanError(f"archive destination already exists: {destination}")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    os.replace(source, destination)
-    return {
-        "ok": True,
-        "task_id": args.task_id,
-        "archive_dir": str(destination),
-    }
+    shutil.move(str(plan), str(destination))
+    return {"ok": True, "operation": "archive", "task_id": args.task_id, "archived_to": str(destination)}
+
+
+# ---- cli --------------------------------------------------------------------
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1127,19 +703,55 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("task_id")
     init.add_argument("--goal", required=True)
     init.add_argument("--with-findings", action="store_true")
-    init.add_argument("--with-progress", action="store_true")
     init.set_defaults(handler=command_init)
 
-    for name, handler in (
-        ("status", command_status),
-        ("checkpoint", command_checkpoint),
-        ("compact", command_compact),
-        ("check", command_check),
-        ("archive", command_archive),
-    ):
+    status = commands.add_parser("status")
+    status.add_argument("task_id")
+    status.set_defaults(handler=command_status)
+
+    phase_start = commands.add_parser("phase-start")
+    phase_start.add_argument("task_id")
+    phase_start.add_argument("--topic", required=True)
+    phase_start.add_argument("--slug")
+    phase_start.set_defaults(handler=command_phase_start)
+
+    phase_set = commands.add_parser("phase-set")
+    phase_set.add_argument("task_id")
+    phase_set.add_argument("--phase", required=True)
+    phase_set.add_argument("--status")
+    phase_set.add_argument("--commit")
+    phase_set.add_argument("--conclusion")
+    phase_set.add_argument("--note")
+    phase_set.set_defaults(handler=command_phase_set)
+
+    log = commands.add_parser("log")
+    log.add_argument("task_id")
+    log.add_argument("--actor")
+    log.add_argument("--action")
+    log.add_argument("--result")
+    log.add_argument("--next")
+    log.add_argument("--verify", action="store_true")
+    log.add_argument("--command")
+    log.add_argument("--sha")
+    log.set_defaults(handler=command_log)
+
+    for name in ("checkpoint", "compact"):
         command = commands.add_parser(name)
         command.add_argument("task_id")
-        command.set_defaults(handler=handler)
+        command.set_defaults(handler=command_checkpoint, operation=name)
+
+    migrate = commands.add_parser("migrate")
+    migrate.add_argument("task_id")
+    migrate.set_defaults(handler=command_migrate)
+
+    check = commands.add_parser("check")
+    check.add_argument("task_id")
+    check.set_defaults(handler=command_check)
+
+    archive = commands.add_parser("archive")
+    archive.add_argument("task_id")
+    archive.set_defaults(handler=command_archive)
+
     return parser
 
 
@@ -1149,7 +761,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         payload = args.handler(args)
     except PlanError as exc:
-        parser.exit(2, f"planning error: {exc}\n")
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
     return 0
 

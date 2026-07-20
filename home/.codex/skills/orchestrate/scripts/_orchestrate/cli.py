@@ -214,6 +214,18 @@ def build_parser() -> argparse.ArgumentParser:
         dest="slice_sha",
         help="also report slice_blocking: the gating findings reachable from this slice",
     )
+    findings_status.add_argument(
+        "--path",
+        action="append",
+        help="report `matched`: findings on this file/dir across the whole task"
+        " (repeatable; a reviewer passes its diff's paths to inherit prior findings)",
+    )
+    findings_status.add_argument(
+        "--sweep",
+        action="store_true",
+        help="report `matched`: the sweep_required root-cause patterns, so a reviewer"
+        " can check the diff has not reintroduced one",
+    )
     findings_status.set_defaults(handler=command_findings_status)
 
     feedback = commands.add_parser(

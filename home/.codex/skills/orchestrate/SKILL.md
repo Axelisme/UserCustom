@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 104
+skill_version: 105
 ---
 
 # Orchestrate
@@ -129,7 +129,8 @@ Everything optional; create nothing without a live need, and count unused artifa
 close as defects. What remains:
 
 - **Git guards** — `lane create`, `review checkout|advance|audit`, `compose-base`,
-  `revalidate`, `findings record|status`, `slice status|milestone`, `collect`, `reconcile`,
+  `revalidate`, `findings record|status` (`--path`/`--sweep` pulls a surface's prior findings
+  across waves), `slice status|milestone`, `collect`, `reconcile`,
   `wave status` (read-only rollup + restart handoff), `cleanup` (`--worktree` for one exact
   target; `--wave-boundary` to sweep this task's leftover lanes at a boundary you judge
   safe), and `land status|finish` via

@@ -22,7 +22,9 @@ Open your own detached checkout at the exact SHA the dispatch froze (`review che
 and temporary reproducers—never a branch or reviewed source. Challenge the oracle, ownership,
 lifecycle, scope, and dangerous failures. Green tests prove behavior, not seam correctness.
 The implementer owns permanent regressions; you own source audit, adversarial probes, and
-temporary reproducers.
+temporary reproducers. On opening, pull the surface's history: `findings status --path <your
+changed files>` (plus `--sweep`) returns prior findings this file accumulated across earlier
+waves — the ledger is task-long — so you confirm known issues rather than first-discover them.
 
 Emit the receipt in the ledger's own shape so it records without hand-patching:
 `{"subject_sha": "<exact sha>", "verdict": "pass|needs_fix|blocked|needs_decision", "evidence": [...],
@@ -35,7 +37,9 @@ decides whether the finding gates collect. A clean review is `verdict: pass` wit
 `findings: []`; a gate you could not run is `verdict: blocked` with the missing capability
 named in `evidence`.
 
-Each finding names severity, path, observable behavior, evidence, and propagation. Root
+Each finding names severity, path, observable behavior, evidence, and propagation — `path`
+is what lets a later wave's reviewer find this finding, so a file-local finding always carries
+it. Root
 decides deferral. Report a finding immediately only when delay would grow rework — a
 contract invalidation, dangerous intermediate, root-cause propagation, successor stacking
 on a broken invariant, or another retract-class condition — so root can stop dependent

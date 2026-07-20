@@ -79,10 +79,13 @@ is recorded `blocked`, never silently dropped. `findings status` derives closure
 and `collect` blocks open `gates-the-slice` debt. A finding whose cause is a named pattern,
 not a lone instance, is recorded `sweep_required` — which forces `gates-the-slice`: fix
 every occurrence in the frozen scope in one commit, and re-review verifies enumeration
-completeness, not just the reported site. The ledger is each surface's accumulating hostile
-checklist: before terminal on a surface with prior findings, writer self-review re-runs
-their probes (via `findings status`) so review confirms rather than first-discovers. Root
-decides routing.
+completeness, not just the reported site. The ledger is task-long, so a finding an earlier
+wave logged on a file outlives that wave: on opening a surface, a reviewer or a writer's
+self-review pulls the prior findings on it — keyed on its own diff's paths
+(`findings status --path <file>`, plus `--sweep` for the cross-cutting root-cause patterns
+a path query cannot reach) — so review confirms rather than first-discovers. That query is
+what makes the ledger consultable across identities and waves rather than write-and-forget;
+for it to reach, a file-local finding must carry its `path`. Root decides routing.
 
 Deliver a finding mid-flight only when delay would grow the rework — the writer is still
 propagating a root-cause (`sweep_required`) pattern, or a running successor is stacking on
@@ -190,10 +193,21 @@ closed items become pointers and Git-derived state disappears. The finding ledge
 of that compaction: it is append-only, and its closed rows are the correct steady state, since
 closure is derived by pairing a raw row with its `Closes-Finding` commit — rewriting it would
 only fork a lossy second copy. Narrative compaction of the plan itself follows
-planning-with-files. Record the three
-zero-expected counters — unprompted running-assignee contacts, riskless per-slice reviews,
-repeat dispatches — and answer shape fit, cut quality, parallelism, and adoption. Each
-nonzero or adjustment becomes one forward-only next-freeze note.
+planning-with-files.
+
+Write one retrospective every wave — waves are few, so the cost of writing beats the cost of
+root skipping it — appended to the task's durable memory, judging **root and the subagents**
+through three lenses:
+
+- **efficiency** — critical-path idleness, riskless per-slice reviews, repeat dispatches,
+  poor cuts (a stall read as a plan defect, not machinery to add).
+- **process-following** — unprompted running-assignee contacts, review bound to an exact SHA,
+  run-ahead held only for a named reason.
+- **tool-utilization** — unused artifacts (a defect at close), aliases used over hand-run git,
+  adoption of the derived reads.
+
+Each nonzero or adjustment becomes one forward-only next-freeze note; deviations worth acting
+on promote to the next Next gate.
 
 ## Handoff
 

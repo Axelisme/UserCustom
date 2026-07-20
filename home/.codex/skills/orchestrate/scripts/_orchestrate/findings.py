@@ -256,6 +256,22 @@ def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _finding_touches(rec: dict[str, Any], query_paths: list[str]) -> bool:
+    """A finding matches a query path when they name the same file, or one is a
+    directory containing the other — so a reviewer's changed file finds findings on
+    that file, on its directory, and vice versa."""
+    path = (rec.get("path") or "").strip().strip("/")
+    if not path:
+        return False
+    for raw in query_paths:
+        query = raw.strip().strip("/")
+        if not query:
+            continue
+        if path == query or path.startswith(query + "/") or query.startswith(path + "/"):
+            return True
+    return False
+
+
 def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     task_id = require_identifier(task_id_from_ref(args.task_id), label="task-id")
@@ -288,6 +304,23 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
                 or is_ancestor(root, rec["subject_sha"], subject)
             )
         ]
+    # Directed pull for a reviewer inheriting a surface across waves: the ledger is
+    # task-long, so a finding an earlier wave logged on a file is still here — the
+    # reviewer just needs to find it without reading the whole ledger. Its own diff's
+    # paths are the query key (bounded by diff size, relevant by construction), and
+    # `--sweep` finds the cross-cutting root-cause patterns a path query cannot. This
+    # is a projection over the same open/closed rows, never a second source: gating
+    # still reads the full set, so a filter can never weaken the gate.
+    query_paths = getattr(args, "path", None)
+    sweep_only = getattr(args, "sweep", False)
+    matched: list[dict[str, Any]] | None = None
+    if query_paths or sweep_only:
+        matched = [
+            rec
+            for rec in (*open_recs, *closed_recs)
+            if (not sweep_only or rec.get("sweep_required"))
+            and (not query_paths or _finding_touches(rec, query_paths))
+        ]
     return {
         "ok": True,
         "operation": "findings-status",
@@ -299,5 +332,6 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
         "gating_open": gating_open,
         "collect_blocked": bool(gating_open),
         "slice_blocking": slice_blocking,
+        "matched": matched,
         "review_outcomes": review_outcomes,
     }

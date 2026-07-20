@@ -193,6 +193,28 @@ class FindingsScopeAndSchemaTests(unittest.TestCase):
             )
             self.assertEqual([r["id"] for r in second["open"]], [derived])
 
+    def test_distinct_findings_on_one_subject_never_share_a_derived_id(self) -> None:
+        # Regression: a position-keyed id let a second receipt's finding collide with
+        # the first's, silently dropping it. When the dropped one gated, collect_blocked
+        # went false and the gate was defeated.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            self._record(
+                root, [{"severity": "minor", "propagation": "backlog"}], "needs_fix"
+            )
+            self._record(
+                root,
+                [{"severity": "blocker", "propagation": "gates-the-slice"}],
+                "needs_fix",
+            )
+            status = json.loads(
+                run_cli(root, "findings", "status", "--task-id", "demo").stdout
+            )
+            self.assertEqual(len(status["open"]), 2)
+            self.assertEqual(len(status["gating_open"]), 1)
+            self.assertTrue(status["collect_blocked"])
+
     def test_severity_and_propagation_are_never_inferred(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

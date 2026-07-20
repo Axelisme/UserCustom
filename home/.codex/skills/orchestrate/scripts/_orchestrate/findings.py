@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from datetime import UTC, datetime
@@ -41,6 +42,23 @@ FINDING_REQUIRED = ("severity", "propagation")
 # only in prose. Markers carry `kind` and never a `propagation`; downstream finding
 # consumers skip them via `dedup_findings`.
 REVIEW_PASS_KIND = "review-pass"
+
+
+def derived_finding_id(subject: str, raw: dict[str, Any]) -> str:
+    """Stable id for a finding that did not name one, keyed on the finding's semantic
+    content so distinct findings on one subject never collide and identical ones dedup."""
+    identity = json.dumps(
+        {
+            "severity": raw.get("severity"),
+            "propagation": raw.get("propagation"),
+            "path": raw.get("path"),
+            "root_cause": raw.get("root_cause"),
+            "sweep_required": bool(raw.get("sweep_required", False)),
+        },
+        sort_keys=True,
+    )
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:8]
+    return f"{subject[:12]}-{digest}"
 
 
 def findings_ledger_path(root: Path, task_id: str) -> Path:
@@ -141,7 +159,7 @@ def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
                 "recorded_at": datetime.now(UTC).isoformat(),
             }
         )
-    for index, raw in enumerate(findings, start=1):
+    for raw in findings:
         if not isinstance(raw, dict):
             raise OrchestrateError("each finding must be an object")
         ferrors: list[str] = []
@@ -160,10 +178,13 @@ def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
             raise OrchestrateError("invalid finding: " + "; ".join(ferrors))
         normalized.append(
             {
-                # Deterministic from (subject, position), so re-recording the same
-                # receipt yields the same ids and dedups instead of duplicating.
+                # Derived from the finding's own content, never its position: two
+                # distinct findings recorded against one subject in separate receipts
+                # would otherwise share an id, and the second — possibly the gating
+                # one — would be silently dropped as a duplicate. Identical content
+                # still dedups, which is what makes re-recording a receipt safe.
                 "id": require_identifier(
-                    raw["id"] if raw.get("id") else f"{subject[:12]}-{index}",
+                    raw["id"] if raw.get("id") else derived_finding_id(subject, raw),
                     label="finding id",
                 ),
                 "severity": raw["severity"],

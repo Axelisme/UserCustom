@@ -52,3 +52,7 @@ required scope expansion. Report the concrete blocker; root decides deferral.
 
 Do not poll or spawn sub-agents. Bulk logs may use the dispatch-provided artifact area;
 milestones carry the digest/pointer, never hidden decisions.
+
+If root invites process feedback — or whenever a step of orchestrate or of working under root
+chafed — record it with `orchestrate feedback record` (any reaction or suggestion, free
+text). This is separate from milestones, gates nothing, and having none is a fine answer.

@@ -19,13 +19,13 @@ def normalized(path: Path) -> str:
 
 
 class OrchestrateContractTests(unittest.TestCase):
-    def test_release_103_keeps_iron_rules_and_pipeline_byte_exact(self) -> None:
+    def test_release_104_keeps_iron_rules_and_pipeline_byte_exact(self) -> None:
         text = (ORCHESTRATE / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("skill_version: 103", text)
+        self.assertIn("skill_version: 104", text)
         iron = section_bytes(text, "## Iron rules", "## Pipeline model")
         pipeline = section_bytes(text, "## Pipeline model", "## Control loop")
-        # v100 touches collect/findings/worktrees behavior and prose, but the iron
-        # and pipeline sections stay byte-exact from v98.
+        # v104 adds the wave-boundary sweep and the feedback channel to machinery/prose,
+        # but the iron and pipeline sections stay byte-exact from v98.
         self.assertEqual(
             hashlib.sha256(iron).hexdigest(),
             "42c8f0c80e10d3f9b7b5f559714870ad064497a8b4bf581d8d243ff1136872be",
@@ -83,6 +83,7 @@ class OrchestrateContractTests(unittest.TestCase):
         expected = {
             "__init__.py",
             "cli.py",
+            "feedback.py",
             "findings.py",
             "git_ops.py",
             "landing.py",

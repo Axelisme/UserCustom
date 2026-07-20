@@ -8,6 +8,7 @@ from typing import Sequence
 from .primitives import OrchestrateError
 from .release import command_diff, command_doctor, command_pin_migrate, command_pin_set, command_pin_status, command_release, command_release_manifest, require_release_preflight
 from .findings import command_findings_record, command_findings_status
+from .feedback import command_feedback_record
 from .lanes import COLLECT_REVIEW_KINDS, command_collect, command_compose_base, command_compose_base_revalidate, command_lane_create, command_slice_milestone, command_slice_status
 from .review import command_review_advance, command_review_audit, command_review_checkout
 from .worktrees import command_cleanup, command_reconcile, command_wave_status
@@ -155,6 +156,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="authorize the multi-worktree sweep; required unless --worktree names one target",
     )
+    sweep.add_argument(
+        "--wave-boundary",
+        dest="wave_boundary",
+        action="store_true",
+        help="sweep this task's lane worktrees (from the checkout's task/<task> branch)"
+        " regardless of absorbed/dirty; skips detached review worktrees; pair with"
+        " --dry-run to preview",
+    )
     sweep.add_argument("--dry-run", action="store_true")
     sweep.add_argument(
         "--worktree", help="remove exactly this managed worktree with full proofs"
@@ -206,6 +215,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="also report slice_blocking: the gating findings reachable from this slice",
     )
     findings_status.set_defaults(handler=command_findings_status)
+
+    feedback = commands.add_parser(
+        "feedback",
+        help="append-only subagent process feedback about orchestrate and working under"
+        " root; gates nothing, not in wave status — root reads the file on demand",
+    )
+    feedback_commands = feedback.add_subparsers(dest="feedback_command", required=True)
+    feedback_record = feedback_commands.add_parser("record")
+    add_root(feedback_record)
+    feedback_record.add_argument("--task-id", required=True)
+    feedback_record.add_argument(
+        "--note", required=True, help="the feedback or suggestion (free text)"
+    )
+    feedback_record.add_argument(
+        "--source", help="recording agent identity (its lane ref or a dispatch label)"
+    )
+    feedback_record.add_argument(
+        "--subject", help="optional exact SHA or item the feedback concerns"
+    )
+    feedback_record.set_defaults(handler=command_feedback_record)
 
     revalidate = commands.add_parser(
         "revalidate",
@@ -300,7 +329,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         release_preflight = None
         cleanup_mutation = (
             args.command == "cleanup"
-            and bool(getattr(args, "worktree", None))
+            and (
+                bool(getattr(args, "worktree", None))
+                or bool(getattr(args, "wave_boundary", False))
+            )
             and not bool(getattr(args, "dry_run", False))
         )
         if cleanup_mutation or getattr(args, "requires_release_preflight", False):

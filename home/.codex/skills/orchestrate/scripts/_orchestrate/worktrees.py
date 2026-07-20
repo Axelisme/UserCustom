@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .primitives import OrchestrateError
+from .primitives import OrchestrateError, require_identifier
 from .git_ops import exact_commit, is_ancestor, lane_absorption, managed_worktree_root, require_managed_worktree, run_git, worktree_metadata_writability_preflight, worktree_records
 from .findings import (
     closed_finding_ids,
@@ -289,6 +289,15 @@ def command_wave_status(args: argparse.Namespace) -> dict[str, Any]:
             if marker.get("verdict") == "pass"
         ),
         "safe_to_remove": reconcile_report["safe_to_remove"],
+        # What `cleanup --wave-boundary` would clear right now: this task's lane
+        # worktrees, whatever their absorbed/dirty state. It is the trigger for the
+        # boundary wrap-up — act on it when it is non-empty, skip the step when it is
+        # empty rather than running a tidy that has nothing to tidy.
+        "wave_boundary_removable": [
+            lane["worktree"]
+            for lane in slice_report["lanes"]
+            if lane.get("worktree")
+        ],
     }
     result = {
         "ok": True,
@@ -384,18 +393,31 @@ def cleanup_single_worktree(
     }
 
 
-def command_cleanup_absorbed(args: argparse.Namespace) -> dict[str, Any]:
-    started = time.monotonic()
-    root = Path(args.root).resolve()
-    if args.worktree:
-        return cleanup_single_worktree(args, root, started)
-    if not args.absorbed:
+def cleanup_wave_boundary(
+    args: argparse.Namespace, root: Path, started: float
+) -> dict[str, Any]:
+    """Remove this task's leftover lane worktrees at a wave boundary root has judged
+    safe. Unlike targeted cleanup this does not require each lane absorbed or clean:
+    a half-abandoned or forgotten lane is exactly the target, and whether the boundary
+    is safe is root's call, not a per-lane proof. What it will not do is guess across
+    task boundaries. Task identity comes from the integration checkout's own branch;
+    only ``agent/<task>/*`` lane worktrees of that task are removed; the integration
+    checkout itself is never touched; and detached review worktrees — which carry no
+    task identity in ref or path — are always skipped, never attributed by guess. That
+    scoping is what lets this reintroduce a bulk sweep the old absorbed-only sweep had
+    to disable, whose hazard was exactly the review worktree it could not attribute."""
+    head = run_git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    if not head.startswith("task/") or head.count("/") != 1:
         raise OrchestrateError(
-            "pass --worktree for one target or --absorbed to authorize the sweep"
+            "wave-boundary cleanup derives its task from the integration checkout's"
+            f" current branch, which must be task/<task>; got {head!r}"
         )
+    task_id = require_identifier(head.split("/", 1)[1], label="task id")
+    lane_prefix = f"agent/{task_id}/"
     if not args.dry_run:
         worktree_metadata_writability_preflight(root)
     managed = managed_worktree_root(root).resolve()
+    root_path = root.resolve()
     entries: list[dict[str, Any]] = []
     for record in worktree_records(root):
         raw = record.get("worktree")
@@ -410,75 +432,51 @@ def command_cleanup_absorbed(args: argparse.Namespace) -> dict[str, Any]:
             continue
         entry: dict[str, Any] = {"path": str(path)}
         entries.append(entry)
+        if path.resolve() == root_path:
+            entry.update(kind="integration", action="skipped",
+                         reason="integration checkout is never swept")
+            continue
         if "detached" in record:
-            entry["kind"] = "review"
-            if not path.exists():
-                entry.update(
-                    action="rejected",
-                    reason="directory missing; run cleanup --worktree to prune metadata",
-                )
-            elif run_git(path, "status", "--porcelain").stdout.strip():
-                entry.update(action="rejected", reason="worktree is dirty")
-            else:
-                entry["head"] = run_git(path, "rev-parse", "HEAD").stdout.strip()
-                if args.dry_run:
-                    entry["action"] = "eligible"
-                else:
-                    run_git(root, "worktree", "remove", str(path))
-                    entry["action"] = "removed"
+            entry.update(
+                kind="review", action="skipped",
+                reason="detached review worktree carries no task identity; remove it"
+                " by exact cleanup --worktree --subject-sha",
+            )
             continue
         branch = str(record.get("branch", "")).removeprefix("refs/heads/")
-        entry["kind"] = "lane"
-        entry["branch"] = branch
-        match = re.fullmatch(r"agent/([^/]+)/[^/]+", branch)
-        if match is None:
-            entry.update(action="rejected", reason="not an agent lane branch")
+        entry.update(kind="lane", branch=branch)
+        if not branch.startswith(lane_prefix):
+            entry.update(action="skipped", reason=f"not a lane of {head}")
             continue
-        task_ref = f"task/{match.group(1)}"
-        if (
-            run_git(
-                root,
-                "show-ref",
-                "--verify",
-                "--quiet",
-                f"refs/heads/{task_ref}",
-                check=False,
-            ).returncode
-            != 0
-        ):
-            entry.update(
-                action="rejected", reason=f"missing integration branch {task_ref}"
-            )
-            continue
-        if not path.exists():
-            entry.update(
-                action="rejected",
-                reason="directory missing; run cleanup --worktree to recover",
-            )
-            continue
-        if run_git(path, "status", "--porcelain").stdout.strip():
-            entry.update(action="rejected", reason="worktree is dirty")
-            continue
-        lane_sha = run_git(root, "rev-parse", f"{branch}^{{commit}}").stdout.strip()
-        task_sha = run_git(root, "rev-parse", f"{task_ref}^{{commit}}").stdout.strip()
-        absorption = lane_absorption(root, lane_sha, task_sha)
-        if absorption is None:
-            entry.update(action="rejected", reason=f"not absorbed by {task_ref}")
-            continue
-        entry.update(lane_sha=lane_sha, task_ref=task_ref, absorption=absorption)
+        exists = path.exists()
+        entry["dirty"] = (
+            bool(run_git(path, "status", "--porcelain").stdout.strip())
+            if exists
+            else None
+        )
         if args.dry_run:
             entry["action"] = "eligible"
+            continue
+        if exists:
+            # --force because dirty leftovers are the point: at a boundary root
+            # declared clean, an uncommitted half-abandoned lane is noise to clear,
+            # not work to protect. A deleted branch is reflog-recoverable; only its
+            # worktree's uncommitted diff is not, and clearing that is the request.
+            run_git(root, "worktree", "remove", "--force", str(path))
         else:
-            run_git(root, "worktree", "remove", str(path))
-            run_git(root, "branch", "-D", branch)
-            entry["action"] = "removed"
+            run_git(root, "worktree", "prune")
+            entry["recovered"] = "pruned-stale-metadata"
+        run_git(root, "branch", "-D", branch)
+        entry["action"] = "removed"
     return {
         "ok": True,
-        "operation": "cleanup-absorbed",
+        "operation": "cleanup-wave-boundary",
+        "task_ref": head,
         "dry_run": bool(args.dry_run),
         "entries": entries,
         "removed": sum(1 for entry in entries if entry.get("action") == "removed"),
-        "rejected": sum(1 for entry in entries if entry.get("action") == "rejected"),
+        "eligible": sum(1 for entry in entries if entry.get("action") == "eligible"),
+        "skipped": sum(1 for entry in entries if entry.get("action") == "skipped"),
         "observed_at": datetime.now(UTC).isoformat(),
         "duration_ms": round((time.monotonic() - started) * 1000),
     }
@@ -487,6 +485,12 @@ def command_cleanup_absorbed(args: argparse.Namespace) -> dict[str, Any]:
 def command_cleanup(args: argparse.Namespace) -> dict[str, Any]:
     """Require an exact target and classifier approval before cleanup mutates state."""
     root = Path(args.root).resolve()
+    if getattr(args, "wave_boundary", False):
+        if args.worktree:
+            raise OrchestrateError(
+                "--wave-boundary sweeps this task's lanes; it takes no --worktree"
+            )
+        return cleanup_wave_boundary(args, root, time.monotonic())
     if not args.worktree:
         reconciliation = command_reconcile(argparse.Namespace(root=str(root)))
         if args.dry_run:

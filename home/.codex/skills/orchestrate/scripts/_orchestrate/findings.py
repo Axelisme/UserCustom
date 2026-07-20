@@ -56,25 +56,24 @@ MARKER_KINDS = frozenset(f"review-{verdict}" for verdict in MARKER_VERDICTS)
 def derived_finding_id(subject: str, raw: dict[str, Any]) -> str:
     """Stable id for a finding that did not name one, keyed on the finding's semantic
     content so distinct findings on one subject never collide and identical ones dedup."""
-    fields = {
+    # The original identity set, hashed exactly as it always was — including explicit
+    # nulls — so ids minted by earlier releases stay reproducible.
+    fields: dict[str, Any] = {
         "severity": raw.get("severity"),
         "propagation": raw.get("propagation"),
         "path": raw.get("path"),
         "root_cause": raw.get("root_cause"),
         "sweep_required": bool(raw.get("sweep_required", False)),
-        # Included so two findings differing only in a bookkeeping field stay
-        # distinct rather than colliding and dropping the second silently.
-        "owner": raw.get("owner"),
-        "requires_refreshed_review": bool(raw.get("requires_refreshed_review", False)),
     }
-    # Keys left at their default carry no identity, so they are omitted rather than
-    # hashed as null/false. Adding a field therefore cannot change the id of a
-    # finding that does not use it — otherwise a receipt replayed across a version
-    # that widened this set would land a second, unclosed copy of the same finding.
-    identity = json.dumps(
-        {key: value for key, value in fields.items() if value not in (None, False)},
-        sort_keys=True,
-    )
+    # Fields added later join the hash only when actually used, so widening the set
+    # separates findings that differ in them without renumbering every finding that
+    # does not — a receipt replayed across the widening still dedups instead of
+    # landing a second copy that no Closes-Finding trailer will ever close.
+    if raw.get("owner") is not None:
+        fields["owner"] = raw["owner"]
+    if raw.get("requires_refreshed_review"):
+        fields["requires_refreshed_review"] = True
+    identity = json.dumps(fields, sort_keys=True)
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:8]
     return f"{subject[:12]}-{digest}"
 

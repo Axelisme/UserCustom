@@ -159,7 +159,31 @@ class DerivedIdStabilityTests(unittest.TestCase):
     """Finding A: widening the identity set must not renumber findings that do not
     use the new fields, or a replayed receipt lands an unclosed duplicate."""
 
-    def test_default_valued_fields_do_not_enter_the_id(self) -> None:
+    def test_ids_minted_before_the_identity_widened_are_reproducible(self) -> None:
+        sys.path.insert(
+            0, str(ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts")
+        )
+        from _orchestrate.findings import derived_finding_id
+
+        sha = "2758dc66408b" + "0" * 28
+        # Ground truth: ids computed by the pre-widening implementation. Pinning the
+        # literals is the point — a hash change that silently renumbers findings
+        # recorded by an earlier release must fail here, and a test that recomputed
+        # them with the current code could never catch that.
+        for raw, expected in (
+            (
+                {"severity": "major", "propagation": "gates-the-slice", "path": "auth.py"},
+                "2758dc66408b-1ceceaf4",
+            ),
+            (
+                {"propagation": "backlog", "path": "b.py"},
+                "2758dc66408b-6665c0d1",
+            ),
+        ):
+            with self.subTest(raw=raw):
+                self.assertEqual(derived_finding_id(sha, raw), expected)
+
+    def test_the_added_fields_still_separate_distinct_findings(self) -> None:
         sys.path.insert(
             0, str(ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts")
         )
@@ -167,18 +191,12 @@ class DerivedIdStabilityTests(unittest.TestCase):
 
         sha = "a" * 40
         bare = {"propagation": "backlog", "path": "b.py"}
-        # Explicit defaults and absent keys are the same finding.
-        self.assertEqual(
-            derived_finding_id(sha, bare),
-            derived_finding_id(
-                sha, {**bare, "owner": None, "requires_refreshed_review": False}
-            ),
-        )
-        # A real value still separates them.
-        self.assertNotEqual(
-            derived_finding_id(sha, bare),
-            derived_finding_id(sha, {**bare, "owner": "alice"}),
-        )
+        for variant in ({"owner": "alice"}, {"requires_refreshed_review": True}):
+            with self.subTest(variant=variant):
+                self.assertNotEqual(
+                    derived_finding_id(sha, bare),
+                    derived_finding_id(sha, {**bare, **variant}),
+                )
 
 
 class MarkerOverlapTests(unittest.TestCase):

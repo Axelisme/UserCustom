@@ -241,15 +241,21 @@ def command_reconcile(args: argparse.Namespace) -> dict[str, Any]:
     summary: dict[str, int] = {name: 0 for name in WORKTREE_CLASSES}
     for entry in worktrees:
         summary[entry["class"]] += 1
+    # Git can prove absorption and dirt, but has no visibility into a runtime
+    # fleet's cwd leases. Keep the legacy name as an equal compatibility alias
+    # while callers migrate to the explicit Git-only projection.
+    git_safe_to_remove = [
+        entry["path"] for entry in worktrees if entry["cleanup_eligible"]
+    ]
     return {
         "ok": True,
         "operation": "reconcile",
         "read_only": True,
+        "runtime_lease_safety": "unchecked",
         "worktrees": worktrees,
         "summary": summary,
-        "safe_to_remove": [
-            entry["path"] for entry in worktrees if entry["cleanup_eligible"]
-        ],
+        "git_safe_to_remove": git_safe_to_remove,
+        "safe_to_remove": git_safe_to_remove,
     }
 
 
@@ -270,11 +276,13 @@ def command_wave_status(args: argparse.Namespace) -> dict[str, Any]:
         argparse.Namespace(root=args.root, task_id=task_id, task_ref=task_ref)
     )
     reconcile_report = command_reconcile(argparse.Namespace(root=args.root))
-    reviewed_pass = [
-        marker["subject_sha"]
-        for marker in findings_report["review_outcomes"]
-        if marker.get("verdict") == "pass"
-    ]
+    reviewed_pass = sorted(
+        {
+            marker["subject_sha"]
+            for marker in findings_report["review_outcomes"]
+            if marker.get("verdict") == "pass"
+        }
+    )
     handoff = {
         "task_ref": task_ref,
         "task_sha": slice_report["task_sha"],
@@ -289,7 +297,7 @@ def command_wave_status(args: argparse.Namespace) -> dict[str, Any]:
         # Derived here rather than carried as its own ledger key: a review that
         # ended blocked is not clean, and one place deciding that cannot drift
         # from another.
-        "reviewed_clean": sorted(reviewed_pass),
+        "reviewed_clean": reviewed_pass,
         # The subset of reviewed_clean not yet on the task branch: a subject that
         # passed review but whose SHA is not an ancestor of the task head. This is
         # the resumable "validated, unlanded" state — after a restart or a landing
@@ -301,6 +309,10 @@ def command_wave_status(args: argparse.Namespace) -> dict[str, Any]:
         "validated_unlanded": sorted(
             sha for sha in reviewed_pass if not is_ancestor(root, sha, slice_report["task_sha"])
         ),
+        # This report only composes Git-derived reads; it cannot inspect a
+        # runtime fleet's cwd leases.
+        "runtime_lease_safety": "unchecked",
+        "git_safe_to_remove": reconcile_report["git_safe_to_remove"],
         "safe_to_remove": reconcile_report["safe_to_remove"],
         # What `cleanup --wave-boundary` would clear right now: this task's lane
         # worktrees, whatever their absorbed/dirty state. It is the trigger for the
@@ -347,6 +359,7 @@ def cleanup_single_worktree(
     result: dict[str, Any] = {
         "ok": True,
         "operation": "cleanup",
+        "runtime_lease_safety": "unchecked",
         "path": str(target),
     }
     if record is None:
@@ -484,6 +497,7 @@ def cleanup_wave_boundary(
     return {
         "ok": True,
         "operation": "cleanup-wave-boundary",
+        "runtime_lease_safety": "unchecked",
         "task_ref": head,
         "dry_run": bool(args.dry_run),
         "entries": entries,
@@ -511,15 +525,19 @@ def command_cleanup(args: argparse.Namespace) -> dict[str, Any]:
                 "ok": True,
                 "operation": "cleanup-dry-run",
                 "read_only": True,
+                "runtime_lease_safety": "unchecked",
                 "bulk_cleanup_disabled": True,
                 "worktrees": reconciliation["worktrees"],
+                "git_safe_to_remove": reconciliation["git_safe_to_remove"],
                 "safe_to_remove": reconciliation["safe_to_remove"],
             }
-        safe = reconciliation["safe_to_remove"]
-        hint = ", ".join(safe) if safe else "none"
+        git_safe_to_remove = reconciliation["git_safe_to_remove"]
+        hint = ", ".join(git_safe_to_remove) if git_safe_to_remove else "none"
         raise OrchestrateError(
-            "bulk cleanup is disabled because reviewer liveness is not durable; run"
-            f" reconcile, then cleanup each exact --worktree target (safe: {hint})"
+            "bulk cleanup is disabled because reviewer liveness is not durable;"
+            f" Git-safe-to-remove targets: {hint}; runtime lease safety is unchecked"
+            " and requires runtime binding lease preflight; run reconcile, then"
+            " cleanup each exact --worktree target"
         )
     target = require_managed_worktree(root, Path(args.worktree).resolve(), kind="any")
     record = next(
@@ -545,6 +563,7 @@ def command_cleanup(args: argparse.Namespace) -> dict[str, Any]:
             "ok": True,
             "operation": "cleanup-dry-run",
             "read_only": True,
+            "runtime_lease_safety": "unchecked",
             "worktree": classification,
         }
     if record is not None and target.exists():

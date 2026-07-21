@@ -7,7 +7,7 @@ from typing import Sequence
 
 from .primitives import OrchestrateError
 from .release import command_diff, command_doctor, command_pin_migrate, command_pin_set, command_pin_status, command_release, command_release_manifest, require_release_preflight
-from .findings import command_findings_record, command_findings_status
+from .findings import command_findings_record, command_findings_status, command_findings_validate
 from .feedback import command_feedback_record
 from .lanes import COLLECT_REVIEW_KINDS, command_collect, command_compose_base, command_compose_base_revalidate, command_lane_create, command_slice_milestone, command_slice_status
 from .review import command_review_advance, command_review_audit, command_review_checkout
@@ -203,6 +203,14 @@ def build_parser() -> argparse.ArgumentParser:
     findings_record.set_defaults(
         handler=command_findings_record, requires_release_preflight=True
     )
+    findings_validate = findings_commands.add_parser(
+        "validate", help="read-only: validate and normalize a review receipt"
+    )
+    add_root(findings_validate)
+    findings_validate.add_argument(
+        "--receipt", required=True, help="reviewer JSON receipt path (or - for stdin)"
+    )
+    findings_validate.set_defaults(handler=command_findings_validate)
     findings_status = findings_commands.add_parser("status")
     add_root(findings_status)
     findings_status.add_argument("--task-id", required=True)

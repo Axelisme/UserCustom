@@ -159,12 +159,22 @@ class FindingsScopeAndSchemaTests(unittest.TestCase):
 
     def _record(self, root: Path, findings: list[dict], verdict: str) -> None:
         receipt = root / "receipt.json"
+        canonical_findings = [
+            {
+                "path": "test.py",
+                "behavior": "test finding",
+                "evidence": ["test evidence"],
+                **finding,
+            }
+            for finding in findings
+        ]
         receipt.write_text(
             json.dumps(
                 {
                     "subject_sha": git(root, "rev-parse", "HEAD"),
                     "verdict": verdict,
-                    "findings": findings,
+                    "evidence": ["test receipt"],
+                    "findings": canonical_findings,
                 }
             ),
             encoding="utf-8",
@@ -225,7 +235,14 @@ class FindingsScopeAndSchemaTests(unittest.TestCase):
                     {
                         "subject_sha": git(root, "rev-parse", "HEAD"),
                         "verdict": "needs_fix",
-                        "findings": [{"path": "a.py"}],
+                        "evidence": ["test receipt"],
+                        "findings": [
+                            {
+                                "path": "a.py",
+                                "behavior": "test finding",
+                                "evidence": ["test evidence"],
+                            }
+                        ],
                     }
                 ),
                 encoding="utf-8",

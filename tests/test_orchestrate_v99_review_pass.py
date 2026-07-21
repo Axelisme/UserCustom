@@ -45,10 +45,25 @@ def record(
     root: Path, findings: list[dict], verdict: str, **extra: object
 ) -> subprocess.CompletedProcess[str]:
     subject = git(root, "rev-parse", "HEAD")
+    canonical_findings = [
+        {
+            "path": "test.py",
+            "behavior": "test finding",
+            "evidence": ["test evidence"],
+            **finding,
+        }
+        for finding in findings
+    ]
     receipt = root / "receipt.json"
     receipt.write_text(
         json.dumps(
-            {"subject_sha": subject, "verdict": verdict, "findings": findings, **extra}
+            {
+                "subject_sha": subject,
+                "verdict": verdict,
+                "evidence": ["test receipt"],
+                "findings": canonical_findings,
+                **extra,
+            }
         ),
         encoding="utf-8",
     )
@@ -69,7 +84,8 @@ class ReviewPassReceiptTests(unittest.TestCase):
             result = record(root, [], "pass", evidence=["suite: 55 passed"])
             self.assertEqual(result.returncode, 0, result.stderr)
             payload = json.loads(result.stdout)
-            self.assertEqual(payload["appended"], [f"review-pass:{subject}"])
+            self.assertEqual(len(payload["appended"]), 1)
+            self.assertTrue(payload["appended"][0].startswith(f"review-pass:{subject}:"))
 
             status = run_cli(root, "findings", "status", "--task-id", "demo")
             self.assertEqual(status.returncode, 0, status.stderr)
@@ -93,9 +109,11 @@ class ReviewPassReceiptTests(unittest.TestCase):
             second = record(root, [], "pass")
             self.assertEqual(first.returncode, 0, first.stderr)
             self.assertEqual(second.returncode, 0, second.stderr)
+            marker_id = json.loads(first.stdout)["appended"][0]
+            self.assertTrue(marker_id.startswith(f"review-pass:{subject}:"))
             self.assertEqual(
                 json.loads(second.stdout)["skipped_existing"],
-                [f"review-pass:{subject}"],
+                [marker_id],
             )
             status = json.loads(
                 run_cli(root, "findings", "status", "--task-id", "demo").stdout

@@ -32,7 +32,12 @@ FINDING_PROPAGATIONS = (
 FINDING_VERDICTS = ("pass", "needs_fix", "blocked", "needs_decision")
 
 
-FINDING_RECEIPT_REQUIRED = ("subject_sha", "verdict", "findings")
+FINDING_RECEIPT_REQUIRED = ("subject_sha", "verdict", "evidence", "findings")
+
+# These were never receipt vocabulary. Rejecting them rather than guessing an
+# interpretation keeps milestone envelopes and review receipts separate.
+FORBIDDEN_RECEIPT_KEYS = ("outcome", "review_findings", "P1", "P2")
+FORBIDDEN_FINDING_KEYS = ("P1", "P2")
 
 
 # `id` is mechanical and auto-derived when omitted. `severity` is optional: nothing
@@ -40,7 +45,7 @@ FINDING_RECEIPT_REQUIRED = ("subject_sha", "verdict", "findings")
 # consumer — it stays available as a human signal. `propagation` is never optional
 # and never inferred: it decides whether a finding gates collect, and a tool guessing
 # a gating decision would silently weaken the gate.
-FINDING_REQUIRED = ("propagation",)
+FINDING_REQUIRED = ("propagation", "behavior", "evidence", "path")
 
 
 # Every review records exactly one outcome row, whatever its verdict. v102 exempted
@@ -81,6 +86,19 @@ def derived_finding_id(subject: str, raw: dict[str, Any]) -> str:
     identity = json.dumps(fields, sort_keys=True)
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:8]
     return f"{subject[:12]}-{digest}"
+
+
+def canonical_json_identity(value: Any) -> bytes:
+    """Keep JSON type distinctions that Python equality conflates (true/1, 1/1.0)."""
+    return json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+
+
+def review_marker_id(subject: str, verdict: str, evidence: Any) -> str:
+    """Deduplicate an exact receipt replay without discarding a distinct review."""
+    digest = hashlib.sha256(canonical_json_identity(evidence)).hexdigest()[:12]
+    return f"review-{verdict}:{subject}:{digest}"
 
 
 def findings_ledger_path(root: Path, task_id: str) -> Path:
@@ -148,12 +166,34 @@ def closed_finding_ids(root: Path, reachable_from: str) -> dict[str, str]:
     return closed
 
 
-def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
-    root = Path(args.root).resolve()
-    task_id = require_identifier(task_id_from_ref(args.task_id), label="task-id")
-    payload, _ = read_json_object(args.receipt, label="finding receipt")
+def _nonempty_json(value: Any) -> bool:
+    """Require meaningful JSON without constraining evidence's JSON shape."""
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, dict)):
+        return bool(value)
+    return True
+
+
+def normalize_finding_receipt(root: Path, payload: dict[str, Any]) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
+    """Validate the canonical receipt and return canonical finding dictionaries.
+
+    Record and validate deliberately call this one parser so validation cannot bless a
+    receipt that recording would interpret differently.
+    """
+    if not isinstance(payload, dict):
+        raise OrchestrateError("finding receipt JSON must be an object")
     errors: list[str] = []
+    for key in FORBIDDEN_RECEIPT_KEYS:
+        if key in payload:
+            errors.append(f"noncanonical receipt field: {key}")
     require_json_fields(payload, FINDING_RECEIPT_REQUIRED, errors)
+    if "subject_sha" in payload and not isinstance(payload["subject_sha"], str):
+        errors.append("receipt subject_sha must be a string")
+    if "evidence" in payload and not _nonempty_json(payload["evidence"]):
+        errors.append("receipt evidence must be non-empty")
     validate_json_enum(payload, "verdict", FINDING_VERDICTS, errors)
     if errors:
         raise OrchestrateError("invalid finding receipt: " + "; ".join(errors))
@@ -161,82 +201,132 @@ def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
     findings = payload["findings"]
     if not isinstance(findings, list):
         raise OrchestrateError("finding receipt 'findings' must be a list")
-    verdict = payload["verdict"]
+    if not findings and payload["verdict"] == "needs_fix":
+        raise OrchestrateError("finding receipt 'findings' must be a non-empty list when verdict is 'needs_fix'")
+
     normalized: list[dict[str, Any]] = []
-    if not findings and verdict == "needs_fix":
-        # needs_fix is represented entirely by its findings; with none there is
-        # nothing to close, so it stays rejected.
-        raise OrchestrateError(
-            "finding receipt 'findings' must be a non-empty list when verdict is"
-            " 'needs_fix'"
-        )
-    if verdict in MARKER_VERDICTS:
-        # The outcome itself is recorded, carrying the receipt's own evidence, so a
-        # review has a durable home whatever it concluded and whether or not it
-        # produced findings.
-        normalized.append(
-            {
-                "id": f"review-{verdict}:{subject}",
-                "kind": f"review-{verdict}",
-                "subject_sha": subject,
-                "verdict": verdict,
-                "evidence": payload.get("evidence"),
-                "recorded_at": datetime.now(UTC).isoformat(),
-            }
-        )
+    finding_ids: set[str] = set()
     for raw in findings:
         if not isinstance(raw, dict):
             raise OrchestrateError("each finding must be an object")
+        canonical = dict(raw)
+        if "observable_behavior" in canonical:
+            alias = canonical.pop("observable_behavior")
+            if "behavior" in canonical and (
+                type(canonical["behavior"]) is not type(alias)
+                or canonical["behavior"] != alias
+            ):
+                raise OrchestrateError("invalid finding: behavior conflicts with observable_behavior")
+            canonical.setdefault("behavior", alias)
         ferrors: list[str] = []
-        require_json_fields(raw, FINDING_REQUIRED, ferrors)
-        validate_json_enum(raw, "severity", FINDING_SEVERITIES, ferrors)
-        validate_json_enum(raw, "propagation", FINDING_PROPAGATIONS, ferrors)
-        sweep_required = bool(raw.get("sweep_required", False))
-        if sweep_required and raw.get("propagation") != "gates-the-slice":
-            # A root-cause sweep must block collect until fixed surface-wide;
-            # allowing a follow-up/backlog propagation would let a partially
-            # swept pattern pass integration with adjacent instances still live.
-            ferrors.append(
-                "sweep_required finding must use propagation 'gates-the-slice'"
-            )
+        for key in FORBIDDEN_FINDING_KEYS:
+            if key in canonical:
+                ferrors.append(f"noncanonical finding field: {key}")
+        require_json_fields(canonical, FINDING_REQUIRED, ferrors)
+        for key in ("behavior", "path"):
+            if key in canonical and (
+                not isinstance(canonical[key], str) or not canonical[key].strip()
+            ):
+                ferrors.append(f"finding {key} must be a non-empty string")
+        if "evidence" in canonical and not _nonempty_json(canonical["evidence"]):
+            ferrors.append("finding evidence must be non-empty")
+        if "id" in canonical and not isinstance(canonical["id"], str):
+            ferrors.append("finding id must be a string")
+        validate_json_enum(canonical, "severity", FINDING_SEVERITIES, ferrors)
+        validate_json_enum(canonical, "propagation", FINDING_PROPAGATIONS, ferrors)
+        sweep_required = bool(canonical.get("sweep_required", False))
+        if sweep_required and canonical.get("propagation") != "gates-the-slice":
+            ferrors.append("sweep_required finding must use propagation 'gates-the-slice'")
         if ferrors:
             raise OrchestrateError("invalid finding: " + "; ".join(ferrors))
+        finding_id = (
+            require_identifier(canonical["id"], label="finding id")
+            if "id" in canonical
+            else derived_finding_id(subject, canonical)
+        )
+        if finding_id in finding_ids:
+            raise OrchestrateError(
+                "invalid finding receipt: duplicate finding id "
+                f"{finding_id!r}; provide distinct explicit ids"
+            )
+        finding_ids.add(finding_id)
+        canonical["id"] = finding_id
+        normalized.append(canonical)
+    return subject, payload, normalized
+
+
+def command_findings_validate(args: argparse.Namespace) -> dict[str, Any]:
+    root = Path(args.root).resolve()
+    payload, _ = read_json_object(args.receipt, label="finding receipt")
+    subject, canonical_receipt, findings = normalize_finding_receipt(root, payload)
+    return {
+        "ok": True,
+        "operation": "findings-validate",
+        "read_only": True,
+        "subject_sha": subject,
+        "verdict": canonical_receipt["verdict"],
+        "finding_count": len(findings),
+    }
+
+
+def command_findings_record(args: argparse.Namespace) -> dict[str, Any]:
+    root = Path(args.root).resolve()
+    task_id = require_identifier(task_id_from_ref(args.task_id), label="task-id")
+    payload, _ = read_json_object(args.receipt, label="finding receipt")
+    subject, payload, findings = normalize_finding_receipt(root, payload)
+    normalized: list[dict[str, Any]] = []
+    verdict = payload["verdict"]
+    ledger_records = read_findings_ledger(root, task_id)
+    replayed_marker_id: str | None = None
+    if verdict in MARKER_VERDICTS:
+        marker = {
+            "id": review_marker_id(subject, verdict, payload["evidence"]),
+            "kind": f"review-{verdict}",
+            "subject_sha": subject,
+            "verdict": verdict,
+            "evidence": payload["evidence"],
+            "recorded_at": datetime.now(UTC).isoformat(),
+        }
+        replayed_marker = next(
+            (
+                rec
+                for rec in ledger_records
+                if rec.get("kind") == marker["kind"]
+                and rec.get("subject_sha") == subject
+                and rec.get("verdict") == verdict
+                and canonical_json_identity(rec.get("evidence"))
+                == canonical_json_identity(payload["evidence"])
+            ),
+            None,
+        )
+        if replayed_marker is None:
+            normalized.append(marker)
+        else:
+            replayed_marker_id = replayed_marker["id"]
+    for raw in findings:
+        sweep_required = bool(raw.get("sweep_required", False))
         normalized.append(
             {
-                # Derived from the finding's own content, never its position: two
-                # distinct findings recorded against one subject in separate receipts
-                # would otherwise share an id, and the second — possibly the gating
-                # one — would be silently dropped as a duplicate. Identical content
-                # still dedups, which is what makes re-recording a receipt safe.
-                "id": require_identifier(
-                    raw["id"] if raw.get("id") else derived_finding_id(subject, raw),
-                    label="finding id",
-                ),
+                "id": raw["id"],
                 "severity": raw.get("severity"),
                 "propagation": raw["propagation"],
                 "owner": raw.get("owner", "original-writer"),
-                "path": raw.get("path"),
-                # The reviewer is asked to name the observable behavior and the
-                # evidence for it; both used to be dropped on the floor. They are
-                # free text and deliberately stay out of the identity hash — the
-                # same defect described in different words is one finding, not two.
-                "behavior": raw.get("behavior"),
-                "evidence": raw.get("evidence"),
+                "path": raw["path"],
+                "behavior": raw["behavior"],
+                "evidence": raw["evidence"],
                 "root_cause": raw.get("root_cause"),
                 "sweep_required": sweep_required,
-                "requires_refreshed_review": bool(
-                    raw.get("requires_refreshed_review", False)
-                ),
+                "requires_refreshed_review": bool(raw.get("requires_refreshed_review", False)),
                 "subject_sha": subject,
-                "verdict": payload["verdict"],
+                "verdict": verdict,
                 "opened_at": datetime.now(UTC).isoformat(),
             }
         )
-    existing = {rec["id"] for rec in read_findings_ledger(root, task_id)}
+    existing = {rec["id"] for rec in ledger_records}
     path = findings_ledger_path(root, task_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     appended: list[str] = []
-    skipped: list[str] = []
+    skipped: list[str] = [replayed_marker_id] if replayed_marker_id else []
     with path.open("a", encoding="utf-8") as handle:
         for rec in normalized:
             if rec["id"] in existing:

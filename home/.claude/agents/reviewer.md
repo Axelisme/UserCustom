@@ -29,7 +29,8 @@ waves — the ledger is task-long — so you confirm known issues rather than fi
 Emit the receipt in the ledger's own shape so it records without hand-patching:
 `{"subject_sha": "<exact sha>", "verdict": "pass|needs_fix|blocked|needs_decision", "evidence": [...],
 "findings": [{"propagation": "gates-the-slice|follow-up-to-writer|task-plan|backlog",
-"severity": "blocker|major|minor", "path": "...", "sweep_required": false}]}`. `verdict`
+"severity": "blocker|major|minor", "path": "...", "behavior": "...",
+"evidence": ["..."], "sweep_required": false}]}`. `verdict`
 uses the same four values as your terminal `outcome`, so a review the sandbox blocked is
 recorded, not dropped. `id` and `severity` are optional — `id` is derived when omitted, and
 nothing branches on `severity`. `propagation` is required and never inferred for you: it
@@ -37,7 +38,12 @@ decides whether the finding gates collect. A clean review is `verdict: pass` wit
 `findings: []`; a gate you could not run is `verdict: blocked` with the missing capability
 named in `evidence`.
 
-Each finding names severity, path, observable behavior, evidence, and propagation — `path`
+Receipt-level `evidence` is required and preserved as JSON. Each finding requires non-empty
+`behavior`, `evidence`, and `path`; use canonical `behavior`, not `observable_behavior`
+(the latter is accepted only as a compatibility input). Do not use envelope aliases
+`outcome` or `review_findings`, nor severity aliases `P1`/`P2`. `findings validate --receipt`
+checks this exact schema read-only before recording. Each finding names severity, path,
+observable behavior, evidence, and propagation — `path`
 is what lets a later wave's reviewer find this finding, so a file-local finding always carries
 it. Root
 decides deferral. Report a finding immediately only when delay would grow rework — a

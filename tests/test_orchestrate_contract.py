@@ -19,9 +19,9 @@ def normalized(path: Path) -> str:
 
 
 class OrchestrateContractTests(unittest.TestCase):
-    def test_release_108_keeps_pipeline_and_runtime_neutral_iron_rules_exact(self) -> None:
+    def test_release_112_keeps_pipeline_and_runtime_neutral_iron_rules_exact(self) -> None:
         text = (ORCHESTRATE / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("skill_version: 108", text)
+        self.assertIn("skill_version: 112", text)
         iron = section_bytes(text, "## Iron rules", "## Pipeline model")
         pipeline = section_bytes(text, "## Pipeline model", "## Control loop")
         # v108 makes the resident-context path runtime-neutral; the pipeline stays
@@ -45,7 +45,7 @@ class OrchestrateContractTests(unittest.TestCase):
             "Data",
             "Control",
             "Run-ahead is the default",
-            "consult per-command `--help`",
+            "per-command `--help`",
         ):
             self.assertIn(phrase, text)
         self.assertNotIn("--expected-lane-sha", text)

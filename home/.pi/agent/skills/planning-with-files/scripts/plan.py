@@ -39,6 +39,17 @@ GOAL_PATTERN = re.compile(r"^\*\*Goal:\*\*", re.MULTILINE)
 REQUIRED_HEADINGS = ("## Current State", "## Decisions", "## Phase board", "## Stores")
 BOARD_HEADING = "## Phase board"
 PHASE_FIELDS = ("Status", "Scope", "Decisions made", "Conclusion", "Commit", "Evidence")
+ANGLE_TOKEN_PATTERN = re.compile(r"<(?P<content>[^<>\n]+)>")
+# HTML tags are shipped content, unlike the skill's named/template prompt slots.
+HTML_TAG_NAMES = frozenset({
+    "a", "abbr", "article", "aside", "b", "blockquote", "body", "br", "button",
+    "code", "dd", "details", "div", "dl", "dt", "em", "figcaption", "figure",
+    "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "head", "header",
+    "html", "i", "img", "input", "label", "li", "link", "main", "meta", "nav",
+    "ol", "p", "pre", "script", "section", "small", "span", "strong", "style",
+    "summary", "table", "tbody", "td", "th", "thead", "title", "tr", "ul",
+})
+MIGRATION_PUNCH_LIST_MARKER = "<!-- migration-punch-list: pending -->"
 
 
 class PlanError(RuntimeError):
@@ -288,6 +299,30 @@ def field_is_unset(value: str) -> bool:
     return lowered in ("", "none", "pending") or lowered.startswith("<")
 
 
+def has_placeholder(value: str) -> bool:
+    """Recognize template slots while preserving shipped angle-bracket syntax.
+
+    A slot is an angle token except a Markdown autolink, a known HTML tag, or a
+    type argument attached to an identifier (for example ``Result<T>``).  This
+    is structural rather than tied to any translated template prompt.
+    """
+    for match in ANGLE_TOKEN_PATTERN.finditer(value):
+        content = match.group("content").strip()
+        if re.fullmatch(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s<>]+", content):
+            continue  # Markdown autolink
+        tag = re.match(r"/?([A-Za-z][A-Za-z0-9-]*)\b", content)
+        if tag and tag.group(1).lower() in HTML_TAG_NAMES:
+            continue
+        if match.start() and (value[match.start() - 1].isalnum() or value[match.start() - 1] == "_"):
+            continue  # generic notation such as Result<T>
+        return True
+    return False
+
+
+def clear_migration_punch_list(index: str) -> str:
+    return index.replace(MIGRATION_PUNCH_LIST_MARKER + "\n", "")
+
+
 # ---- commands ---------------------------------------------------------------
 
 
@@ -338,7 +373,9 @@ def command_phase_start(args: argparse.Namespace) -> dict[str, Any]:
     create_new(plan / record, render_phase(number, topic))
     atomic_write(
         plan / INDEX_FILE,
-        upsert_board_row(read_index(plan), number, "in_progress", record),
+        upsert_board_row(
+            clear_migration_punch_list(read_index(plan)), number, "in_progress", record
+        ),
     )
     return {
         "ok": True,
@@ -377,7 +414,7 @@ def command_phase_set(args: argparse.Namespace) -> dict[str, Any]:
     status = args.status or read_phase_field(text, "Status")
     atomic_write(
         plan / INDEX_FILE,
-        upsert_board_row(read_index(plan), number, status, record),
+        upsert_board_row(clear_migration_punch_list(read_index(plan)), number, status, record),
     )
     return {"ok": True, "operation": "phase-set", "phase": number, "status": status}
 
@@ -413,7 +450,55 @@ def command_log(args: argparse.Namespace) -> dict[str, Any]:
     return {"ok": True, "operation": "log", "kind": row["kind"]}
 
 
-def validate_plan(plan: Path) -> list[str]:
+def lifecycle_has_started(index: str) -> bool:
+    return any(
+        row["status"] in ("in_progress", "completed") for row in read_board(index)
+    )
+
+
+def unresolved_placeholder_issues(
+    plan: Path, index: str, *, allow_migration_recovery: bool = False
+) -> list[str]:
+    """Find live template slots after work begins, without matching translated prompt text."""
+    if not lifecycle_has_started(index):
+        return []
+    if allow_migration_recovery and MIGRATION_PUNCH_LIST_MARKER in index:
+        return []
+
+    issues: list[str] = []
+    lines = index.splitlines()
+    current_start, current_end = section_span(lines, "## Current State")
+    current = lines[current_start + 1 : current_end]
+    next_gate = next(
+        (line.partition(":")[2].strip() for line in current if "**Next gate:**" in line),
+        "",
+    )
+    if not next_gate or has_placeholder(next_gate):
+        issues.append("INDEX Current State has an unresolved Next gate")
+    if any(has_placeholder(line) for line in current if "**Next gate:**" not in line):
+        issues.append("INDEX Current State has an unresolved placeholder")
+
+    decisions_start, decisions_end = section_span(lines, "## Decisions")
+    decision_rows = [line for line in lines[decisions_start:decisions_end] if line.lstrip().startswith("|")]
+    for row in decision_rows[2:]:
+        cells = row_cells(row)
+        if len(cells) >= 4 and cells[1].lower() == "active" and any(has_placeholder(cell) for cell in cells):
+            issues.append(f"INDEX active decision '{cells[0]}' has an unresolved placeholder")
+
+    for _, _, path in existing_phase_files(plan):
+        text = path.read_text(encoding="utf-8")
+        if read_phase_field(text, "Status") not in ("in_progress", "completed"):
+            continue
+        for field in PHASE_FIELDS:
+            value = read_phase_field(text, field)
+            if not value:
+                issues.append(f"{path.name} has an empty required field '{field}'")
+            elif has_placeholder(value):
+                issues.append(f"{path.name} has an unresolved placeholder in '{field}'")
+    return issues
+
+
+def validate_plan(plan: Path, *, allow_migration_recovery: bool = False) -> list[str]:
     """Structural checks across INDEX and the stores; returns human-readable issues."""
     issues: list[str] = []
     index = read_index(plan)
@@ -424,14 +509,40 @@ def validate_plan(plan: Path) -> list[str]:
     for heading in REQUIRED_HEADINGS:
         if heading not in index:
             issues.append(f"INDEX is missing the '{heading}' section")
-    board_phases = {row["phase"] for row in read_board(index)} if BOARD_HEADING in index else set()
-    for num, _, path in existing_phase_files(plan):
+    if all(heading in index for heading in ("## Current State", "## Decisions", BOARD_HEADING)):
+        issues.extend(
+            unresolved_placeholder_issues(
+                plan, index, allow_migration_recovery=allow_migration_recovery
+            )
+        )
+    board_rows = read_board(index) if BOARD_HEADING in index else []
+    board_by_phase: dict[str, dict[str, str]] = {}
+    for row in board_rows:
+        phase = row["phase"]
+        if phase in board_by_phase:
+            issues.append(f"INDEX phase board has duplicate phase '{phase}'")
+        board_by_phase[phase] = row
+        if row["status"] not in PHASE_STATUSES:
+            issues.append(f"INDEX phase board has invalid status for phase '{phase}'")
+    phase_files = {f"{num:02d}": path for num, _, path in existing_phase_files(plan)}
+    for num, path in phase_files.items():
         text = path.read_text(encoding="utf-8")
+        record_status = read_phase_field(text, "Status")
         for field in PHASE_FIELDS:
             if not re.search(rf"^- \*\*{re.escape(field)}:\*\*", text, re.MULTILINE):
                 issues.append(f"{path.name} has no '{field}' field")
-        if f"{num:02d}" not in board_phases:
+        if record_status not in PHASE_STATUSES:
+            issues.append(f"{path.name} has invalid Status")
+        board = board_by_phase.get(num)
+        if board is None:
             issues.append(f"{path.name} is not listed on the INDEX phase board")
+        elif board["status"] != record_status:
+            issues.append(f"{path.name} Status disagrees with INDEX phase board")
+        elif board["record"] != f"{PHASES_DIR}/{path.name}":
+            issues.append(f"{path.name} record disagrees with INDEX phase board")
+    for phase in board_by_phase:
+        if phase not in phase_files:
+            issues.append(f"INDEX phase board phase '{phase}' has no phase record")
     progress = plan / PROGRESS_FILE
     if progress.is_file():
         for lineno, line in enumerate(progress.read_text(encoding="utf-8").splitlines(), 1):
@@ -529,6 +640,7 @@ def command_migrate(args: argparse.Namespace) -> dict[str, Any]:
         ]
     body += ["- **Next gate:** <填入下一個可機械驗收動作>"]
     index = replace_section_body(index, "## Current State", body)
+    index = index.replace("## Decisions", f"{MIGRATION_PUNCH_LIST_MARKER}\n\n## Decisions")
     punch_list.append("prune Current State to what is still live; set Next gate")
 
     # Decisions table carried across (old col4 'Supersedes/Authority' -> 'Authority').
@@ -654,16 +766,22 @@ def command_checkpoint(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     validate_task_id(args.task_id)
     plan = require_plan(root, args.task_id)
-    issues = validate_plan(plan)
+    index = read_index(plan)
+    migration_recovery = MIGRATION_PUNCH_LIST_MARKER in index
+    issues = validate_plan(plan, allow_migration_recovery=migration_recovery)
     if issues:
         raise PlanError("plan is not schema-valid: " + "; ".join(issues))
-    size = utf8_size(read_index(plan))
+    size = utf8_size(index)
     if size > INDEX_LIMIT_BYTES:
         raise PlanError(
             f"{INDEX_FILE} is {size} bytes over the {INDEX_LIMIT_BYTES} budget; prune"
             " Current State and superseded decisions — phase detail belongs in its"
             " phases/ record, not the entry"
         )
+    if migration_recovery:
+        index = clear_migration_punch_list(index)
+        atomic_write(plan / INDEX_FILE, index)
+        size = utf8_size(index)
     return {
         "ok": True,
         "operation": args.operation if hasattr(args, "operation") else "checkpoint",
@@ -703,6 +821,9 @@ def command_check(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     validate_task_id(args.task_id)
     plan = require_plan(root, args.task_id)
+    issues = validate_plan(plan)
+    if issues:
+        raise PlanError("plan is not complete: " + "; ".join(issues))
     open_phases = [row["phase"] for row in read_board(read_index(plan)) if row["status"] in OPEN_STATUSES]
     if open_phases:
         raise PlanError(f"phase board still has open phases: {', '.join(open_phases)}")

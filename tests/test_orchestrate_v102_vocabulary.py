@@ -45,12 +45,22 @@ def record(
     root: Path, findings: list[dict], verdict: str, **extra: object
 ) -> subprocess.CompletedProcess[str]:
     receipt = root / "receipt.json"
+    canonical_findings = [
+        {
+            "path": "test.py",
+            "behavior": "test finding",
+            "evidence": ["test evidence"],
+            **finding,
+        }
+        for finding in findings
+    ]
     receipt.write_text(
         json.dumps(
             {
                 "subject_sha": git(root, "rev-parse", "HEAD"),
                 "verdict": verdict,
-                "findings": findings,
+                "evidence": ["test receipt"],
+                "findings": canonical_findings,
                 **extra,
             }
         ),
@@ -93,9 +103,9 @@ class VerdictVocabularyTests(unittest.TestCase):
                 root, [], "blocked", evidence=["loopback socket EPERM in sandbox"]
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(
-                json.loads(result.stdout)["appended"], [f"review-blocked:{subject}"]
-            )
+            appended = json.loads(result.stdout)["appended"]
+            self.assertEqual(len(appended), 1)
+            self.assertTrue(appended[0].startswith(f"review-blocked:{subject}:"))
             st = status(root)
             # A blocked review is not a pass: it must not read as clean evidence.
             self.assertEqual(incomplete(st), [subject])

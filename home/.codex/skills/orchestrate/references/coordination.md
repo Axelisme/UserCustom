@@ -18,13 +18,9 @@ self-check and reviewer scope; authority-publication slices name
 contracts travel by named file. For speculative work, stop conditions also name the
 idempotent compensation to run in reverse if a later finding overturns its prerequisite.
 
-Before freezing, run the cross-cutting readiness checks a first implementation usually
-misses — cheaper here than a re-freeze after the writer stacks work on a half-frozen seam:
-do success and failure paths share one commit fence; is every public digest/fixture the
-contract exposes updated in the same freeze; does the failure path terminate at the real
-production owner, not a stub; is restart/recovery semantics backed by test evidence, not
-assumed. These are prompts, not a gate — a contract that cannot answer them is not ready to
-dispatch.
+Before freezing, check shared success/failure commit fences, public digests/fixtures,
+production ownership, and tested restart/recovery; a contract that cannot answer is not ready
+to dispatch.
 
 Double-buffer each lane per the SKILL pipeline model; contract-planner can keep the
 one-deep chain stocked as drafts, each re-confirmed against the predecessor's actual result
@@ -75,9 +71,13 @@ that checkout's HEAD, so a wrong target is caught on arrival rather than prevent
 extra root round-trip. `review advance` reuses that checkout for closure commits, and `review audit` flags mechanical oracle weakening. The
 terminal milestone carries `pass|needs_fix|blocked|needs_decision`, subject SHA, and the
 receipt's path — the findings themselves are written once, in the receipt, not restated in
-the envelope. Record it through `findings record`, which takes those same four outcomes and
-keeps each finding's observable behavior and evidence: a gate the environment could not run
-is recorded `blocked`, never silently dropped. `findings status` derives closure from `Closes-Finding`,
+the envelope. Read-only `findings validate --receipt` and recording share a parser. Receipts
+require non-empty JSON `evidence`. Findings require non-empty string `behavior`/`path`,
+non-empty JSON `evidence`, canonical `propagation`, optional severity `blocker|major|minor`.
+Compatibility-only `observable_behavior` normalizes to `behavior`; conflicting dual keys and
+receipt `outcome`/`review_findings` or severity `P1`/`P2` aliases reject. Recording preserves
+receipt evidence but not the behavior alias: a blocked gate is recorded `blocked`, never
+dropped. `findings status` derives closure from `Closes-Finding`,
 and `collect` blocks open `gates-the-slice` debt. A finding whose cause is a named pattern,
 not a lone instance, is recorded `sweep_required` — which forces `gates-the-slice`: fix
 every occurrence in the frozen scope in one commit, and re-review verifies enumeration

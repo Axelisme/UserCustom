@@ -74,6 +74,7 @@ class SpellingUnificationTests(unittest.TestCase):
                     {
                         "subject_sha": git(root, "rev-parse", "HEAD"),
                         "verdict": "pass",
+                        "evidence": ["test receipt"],
                         "findings": [],
                     }
                 ),

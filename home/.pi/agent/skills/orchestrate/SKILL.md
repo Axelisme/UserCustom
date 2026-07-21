@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 108
+skill_version: 112
 ---
 
 # Orchestrate
@@ -138,7 +138,9 @@ close as defects. What remains:
   target; `--wave-boundary` to sweep this task's leftover lanes at a boundary you judge
   safe), and `land status|finish` via
   `<repo-python> <skill-dir>/scripts/orchestrate.py --help`. They derive or validate Git
-  facts; consult per-command `--help`, never restate arguments.
+  facts only: `git_safe_to_remove` is Git/data safety, `safe_to_remove` is its equal
+  compatibility alias for this release, and runtime lease safety is unchecked. Consult
+  per-command `--help`, never restate arguments.
 - **Process feedback** — `feedback record` gives a dispatched subagent an append-only channel
   for reactions to orchestrate itself, separate from findings and gating nothing. Invite it
   at a boundary; read the file on demand — when the human asks or at close — and organize it

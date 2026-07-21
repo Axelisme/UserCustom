@@ -2,7 +2,7 @@
 name: planning-with-files
 description: 以 explicit task-id 管理 repo-local durable task narrative；只在跨回合、critical或資訊量確有需要時使用。
 user-invocable: true
-skill_version: 10
+skill_version: 11
 ---
 
 # Planning with Files
@@ -50,7 +50,7 @@ findings,review findings 不進此檔。
 | `phase-set <id> --phase NN [--status/--commit/--conclusion/--note]` | 改 phase 檔 + board;completed 需 Commit+Conclusion |
 | `log <id> --action <t> [--actor/--result/--next]` 或 `--verify --command --result [--sha]` | append 一列 progress.jsonl |
 | `status <id>` | read-only:INDEX 摘要 + store 計數 + `git`(HEAD/branch/tree/clean,live 推導) |
-| `checkpoint <id>`(＝`compact`) | 驗 schema + INDEX 超界即 Fast Fail |
+| `checkpoint <id>`(＝`compact`) | 驗 schema；phase 開始後拒絕 Current State、Next gate、active decision、active phase required fields 的未填 template slot；INDEX 超界即 Fast Fail |
 | `migrate <id>` | 舊格式 → 新格式(見下) |
 | `check <id>` / `archive <id>` | board 無 open phase 才過 / 搬到 archives |
 
@@ -69,6 +69,11 @@ Current State 整段覆寫、只留當下為真的;stale 假設在 boundary 清�
 
 - **只有 `INDEX.md` 有界。** stores 無界,因為永不整份載入——砍掉舊版逐檔壓縮的整套複雜度。
 - phase 明細本就住 `phases/`,不在 INDEX;INDEX 只長 board 一行/phase 與活 decisions。
+- `init` 後 template slot 可暫留；任一 phase 進入 `in_progress`/`completed` 後，`checkpoint`
+  與完成前 `check` 都拒絕 Current State、Next gate、active decision、active phase required fields
+  的未填 template slot（以 `<...>` slot 結構判斷，不依賴提示文字語言）。`status` 永遠只讀。
+- `migrate` 產生的 punch-list slot 只有一次立即 `checkpoint` recovery window；成功 checkpoint
+  會消耗 marker，之後（以及任何 `check`）一律適用同一規則，必須補齊。
 - `checkpoint` = 驗 schema + 檢 INDEX 預算;超界時 Fast Fail,提示先 prune Current State 與
   superseded decisions。stores(phase 檔、progress)只增不改。
 

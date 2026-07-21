@@ -48,10 +48,24 @@ class SweepFindingTests(unittest.TestCase):
         self, root: Path, findings: list[dict], verdict: str = "needs_fix"
     ) -> subprocess.CompletedProcess[str]:
         subject = git(root, "rev-parse", "HEAD")
+        canonical_findings = [
+            {
+                "path": "test.py",
+                "behavior": "test finding",
+                "evidence": ["test evidence"],
+                **finding,
+            }
+            for finding in findings
+        ]
         receipt = root / "receipt.json"
         receipt.write_text(
             json.dumps(
-                {"subject_sha": subject, "verdict": verdict, "findings": findings}
+                {
+                    "subject_sha": subject,
+                    "verdict": verdict,
+                    "evidence": ["test receipt"],
+                    "findings": canonical_findings,
+                }
             ),
             encoding="utf-8",
         )

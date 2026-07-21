@@ -37,8 +37,27 @@ def init_repo(root: Path) -> None:
 
 def record(root: Path, findings: list[dict]) -> subprocess.CompletedProcess[str]:
     subject = git(root, "rev-parse", "HEAD")
+    canonical_findings = [
+        {
+            "path": "test.py",
+            "behavior": "test finding",
+            "evidence": ["test evidence"],
+            **finding,
+        }
+        for finding in findings
+    ]
     receipt = root / "receipt.json"
-    receipt.write_text(json.dumps({"subject_sha": subject, "verdict": "needs_fix", "findings": findings}), encoding="utf-8")
+    receipt.write_text(
+        json.dumps(
+            {
+                "subject_sha": subject,
+                "verdict": "needs_fix",
+                "evidence": ["test receipt"],
+                "findings": canonical_findings,
+            }
+        ),
+        encoding="utf-8",
+    )
     return run_cli(root, "findings", "record", "--task-id", "demo", "--receipt", str(receipt))
 
 
@@ -58,7 +77,8 @@ class FindingsQueryTests(unittest.TestCase):
         # "Wave 1": a finding on auth.py.
         self.assertEqual(record(root, [{"propagation": "follow-up-to-writer", "path": "auth.py", "severity": "major", "behavior": "tenant scope dropped"}]).returncode, 0)
         (root / "c.txt").write_text("c\n", encoding="utf-8")
-        git(root, "add", "."); git(root, "commit", "-m", "wave2")
+        git(root, "add", ".")
+        git(root, "commit", "-m", "wave2")
         # "Wave 2": a finding on billing.py and a swept root-cause on util/log.py.
         self.assertEqual(record(root, [{"propagation": "backlog", "path": "billing.py", "severity": "minor"}]).returncode, 0)
         self.assertEqual(record(root, [{"propagation": "gates-the-slice", "path": "util/log.py", "severity": "blocker", "sweep_required": True, "root_cause": "unbounded retry"}]).returncode, 0)

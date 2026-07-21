@@ -56,6 +56,19 @@ up the temporary worktree and branch after the child finishes. It is useful for 
 non-pipelined experiments, not for orchestrate writer lanes that require durable
 `agent/<task>/<lane>` branches, seam-ready SHAs, exact-SHA review, and `collect`.
 
+## Cleanup lease check
+
+Before any `cleanup` operation, inspect the Pi fleet with `subagent({ action: "list" })` and
+exclude every active/paused child whose declared cwd lease is the target worktree or a
+worktree swept by the command. If an active/paused cwd lease cannot be excluded, do not clean
+up. Core `reconcile`, `wave status`, and cleanup output prove Git/data safety only; they do
+not inspect a Pi fleet. Runtime lease safety is unchecked (`runtime_lease_safety:
+"unchecked"`). In particular, `git_safe_to_remove` is the explicit Git-only projection;
+`safe_to_remove` remains an equal compatibility alias for this release.
+
+`steer` delivers guidance; it does not preempt active tools. For cancellation, use `interrupt`;
+do not treat steering as cancellation.
+
 ## Milestones and flow control
 
 The envelope schema, delivery rule, and liveness triggers live in

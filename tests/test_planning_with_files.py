@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -110,6 +111,16 @@ class LifecycleTests(unittest.TestCase):
             root = Path(tmp)
             run_plan(root, "init", "demo", "--goal", "g")
             run_plan(root, "phase-start", "demo", "--topic", "x")
+            index_path = plan_dir(root) / "INDEX.md"
+            index_path.write_text(
+                re.sub(r"<[^<>\n]+>", "filled", index_path.read_text(encoding="utf-8")),
+                encoding="utf-8",
+            )
+            phase_path = plan_dir(root) / "phases" / "01-x.md"
+            phase_path.write_text(
+                re.sub(r"<[^<>\n]+>", "filled", phase_path.read_text(encoding="utf-8")),
+                encoding="utf-8",
+            )
             blocked = run_plan(root, "check", "demo")
             self.assertEqual(blocked.returncode, 1)
             self.assertIn("open phases", blocked.stdout)
@@ -130,7 +141,7 @@ class LifecycleTests(unittest.TestCase):
 
 
 class CheckpointTests(unittest.TestCase):
-    def test_checkpoint_validates_schema(self) -> None:
+    def test_init_checkpoint_permits_template_slots_and_validates_schema(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             run_plan(root, "init", "demo", "--goal", "g")
@@ -143,12 +154,143 @@ class CheckpointTests(unittest.TestCase):
             self.assertEqual(broken.returncode, 1)
             self.assertIn("Decisions", broken.stdout)
 
+    def test_started_phase_rejects_untouched_template_slots_at_checkpoint_and_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            checkpoint = run_plan(root, "checkpoint", "demo")
+            self.assertEqual(checkpoint.returncode, 1)
+            self.assertIn("unresolved", checkpoint.stdout)
+            complete = run_plan(root, "check", "demo")
+            self.assertEqual(complete.returncode, 1)
+            self.assertIn("unresolved", complete.stdout)
+
+    def test_fully_populated_started_plan_passes_checkpoint_and_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            run_plan(
+                root, "phase-set", "demo", "--phase", "1", "--status", "completed",
+                "--commit", "abc1234", "--conclusion", "done",
+            )
+            index_path = plan_dir(root) / "INDEX.md"
+            index_path.write_text(
+                re.sub(r"<[^<>\n]+>", "filled", index_path.read_text(encoding="utf-8")),
+                encoding="utf-8",
+            )
+            phase_path = plan_dir(root) / "phases" / "01-x.md"
+            phase_path.write_text(
+                re.sub(r"<[^<>\n]+>", "filled", phase_path.read_text(encoding="utf-8")),
+                encoding="utf-8",
+            )
+            self.assertEqual(run_plan(root, "checkpoint", "demo").returncode, 0)
+            self.assertEqual(run_plan(root, "check", "demo").returncode, 0)
+
+    def test_rejects_board_record_disagreement_and_invalid_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            index_path = plan_dir(root) / "INDEX.md"
+            index_path.write_text(
+                index_path.read_text(encoding="utf-8").replace(
+                    "| 01 | in_progress |", "| 01 | pending |"
+                ),
+                encoding="utf-8",
+            )
+            disagreement = run_plan(root, "checkpoint", "demo")
+            self.assertEqual(disagreement.returncode, 1)
+            self.assertIn("disagrees", disagreement.stdout)
+
+            index_path.write_text(
+                index_path.read_text(encoding="utf-8").replace(
+                    "| 01 | pending |", "| 01 | <choose status> |"
+                ),
+                encoding="utf-8",
+            )
+            invalid = run_plan(root, "checkpoint", "demo")
+            self.assertEqual(invalid.returncode, 1)
+            self.assertIn("invalid status", invalid.stdout)
+
+            index_path.write_text(
+                index_path.read_text(encoding="utf-8").replace(
+                    "| 01 | <choose status> |", "| 01 | in_progress |"
+                ),
+                encoding="utf-8",
+            )
+            phase_path = plan_dir(root) / "phases" / "01-x.md"
+            phase_path.write_text(
+                phase_path.read_text(encoding="utf-8").replace(
+                    "- **Status:** in_progress", "- **Status:** <choose status>"
+                ),
+                encoding="utf-8",
+            )
+            record_invalid = run_plan(root, "checkpoint", "demo")
+            self.assertEqual(record_invalid.returncode, 1)
+            self.assertIn("invalid Status", record_invalid.stdout)
+
+    def test_rejects_empty_active_and_completed_required_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            for path in (plan_dir(root) / "INDEX.md", plan_dir(root) / "phases" / "01-x.md"):
+                path.write_text(re.sub(r"<[^<>\n]+>", "filled", path.read_text(encoding="utf-8")), encoding="utf-8")
+            phase_path = plan_dir(root) / "phases" / "01-x.md"
+            phase_path.write_text(
+                phase_path.read_text(encoding="utf-8").replace("- **Scope:** filled", "- **Scope:**"),
+                encoding="utf-8",
+            )
+            result = run_plan(root, "checkpoint", "demo")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("empty required field 'Scope'", result.stdout)
+            phase_path.write_text(
+                phase_path.read_text(encoding="utf-8").replace("- **Scope:**", "- **Scope:** filled"),
+                encoding="utf-8",
+            )
+            run_plan(
+                root, "phase-set", "demo", "--phase", "1", "--status", "completed",
+                "--commit", "abc1234", "--conclusion", "done",
+            )
+            phase_path.write_text(
+                phase_path.read_text(encoding="utf-8").replace("- **Evidence:** filled", "- **Evidence:**"),
+                encoding="utf-8",
+            )
+            completed = run_plan(root, "check", "demo")
+            self.assertEqual(completed.returncode, 1)
+            self.assertIn("empty required field 'Evidence'", completed.stdout)
+
+    def test_shipped_angle_bracket_content_is_not_a_placeholder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            index_path = plan_dir(root) / "INDEX.md"
+            phase_path = plan_dir(root) / "phases" / "01-x.md"
+            for path in (index_path, phase_path):
+                path.write_text(re.sub(r"<[^<>\n]+>", "filled", path.read_text(encoding="utf-8")), encoding="utf-8")
+            index_path.write_text(
+                index_path.read_text(encoding="utf-8").replace(
+                    "- filled\n- **Next gate:** filled",
+                    "- <https://example.com/spec>\n- <span>shipped</span>\n- Result<T>\n- **Next gate:** proceed",
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual(run_plan(root, "checkpoint", "demo").returncode, 0)
+
     def test_only_index_is_budgeted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             run_plan(root, "init", "demo", "--goal", "g")
             run_plan(root, "phase-start", "demo", "--topic", "x")
             # A huge phase record (a store) never trips the budget: it is never loaded whole.
+            index_path = plan_dir(root) / "INDEX.md"
+            index_path.write_text(
+                re.sub(r"<[^<>\n]+>", "filled", index_path.read_text(encoding="utf-8")),
+                encoding="utf-8",
+            )
             (plan_dir(root) / "phases" / "01-x.md").write_text(
                 "# Phase 01 — x\n\n- **Status:** in_progress\n- **Scope:** s\n"
                 "- **Decisions made:** none\n- **Conclusion:** pending\n- **Commit:** none\n"
@@ -221,7 +363,7 @@ class MigrationTests(unittest.TestCase):
             phase1 = (plan / "phases" / "01-schema.md").read_text(encoding="utf-8")
             self.assertIn("- **Commit:** abc1234def", phase1)
             # progress converted to jsonl.
-            rows = [json.loads(l) for l in (plan / "progress.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+            rows = [json.loads(line) for line in (plan / "progress.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
             self.assertEqual({r["kind"] for r in rows}, {"event", "verify"})
             # Nothing deleted: originals live under pre-migration.
             preserved = plan / "history" / "pre-migration"
@@ -230,12 +372,21 @@ class MigrationTests(unittest.TestCase):
             self.assertTrue((preserved / "domains").is_dir())
             self.assertFalse((plan / "task_plan.md").exists())
 
-    def test_migrated_plan_is_schema_valid(self) -> None:
+    def test_migration_recovery_is_one_checkpoint_and_check_never_exempts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            self._seed(root)
+            plan = self._seed(root)
             run_plan(root, "migrate", "legacy")
+            # A completed migrated plan must never pass the completion gate on its marker.
+            complete = run_plan(root, "check", "legacy")
+            self.assertEqual(complete.returncode, 1)
+            self.assertIn("unresolved", complete.stdout)
+            # One successful checkpoint is the explicit recovery window and consumes it.
             self.assertEqual(run_plan(root, "checkpoint", "legacy").returncode, 0)
+            self.assertNotIn("migration-punch-list", (plan / "INDEX.md").read_text(encoding="utf-8"))
+            repeated = run_plan(root, "checkpoint", "legacy")
+            self.assertEqual(repeated.returncode, 1)
+            self.assertIn("unresolved", repeated.stdout)
 
     def test_migrate_refuses_when_index_exists(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -284,13 +435,17 @@ class StatusGitTests(unittest.TestCase):
 class SkillContractTests(unittest.TestCase):
     def test_skill_declares_version_and_mental_model(self) -> None:
         text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("skill_version: 10", text)
+        self.assertIn("skill_version: 11", text)
         for phrase in ("refs vs object log", "只讀 `INDEX.md`", "指標不抄本", "migrate"):
             self.assertIn(phrase, text)
 
     def test_templates_are_the_new_set(self) -> None:
         names = {p.name for p in (SKILL / "templates").glob("*.md")}
         self.assertEqual(names, {"INDEX.md", "phase.md", "findings.md"})
+
+    def test_runtime_script_mirrors_are_identical(self) -> None:
+        pi_script = ROOT / "home" / ".pi" / "agent" / "skills" / "planning-with-files" / "scripts" / "plan.py"
+        self.assertEqual(SCRIPT.read_bytes(), pi_script.read_bytes())
 
 
 if __name__ == "__main__":

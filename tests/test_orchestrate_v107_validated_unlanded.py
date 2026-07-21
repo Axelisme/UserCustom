@@ -50,7 +50,14 @@ def commit(root: Path, name: str) -> str:
 def record_pass(root: Path, subject: str) -> None:
     receipt = root / "receipt.json"
     receipt.write_text(
-        json.dumps({"subject_sha": subject, "verdict": "pass", "findings": []}),
+        json.dumps(
+            {
+                "subject_sha": subject,
+                "verdict": "pass",
+                "evidence": ["test receipt"],
+                "findings": [],
+            }
+        ),
         encoding="utf-8",
     )
     result = run_cli(

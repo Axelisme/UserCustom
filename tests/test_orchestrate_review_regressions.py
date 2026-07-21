@@ -605,7 +605,10 @@ class ReviewRegressionTests(unittest.TestCase):
     def test_landing_guidance_uses_exact_target_cleanup(self) -> None:
         source = (SCRIPTS / "_orchestrate" / "landing.py").read_text(encoding="utf-8")
         self.assertNotIn("cleanup --absorbed", source)
-        self.assertIn("safe-to-remove exact --worktree", source)
+        self.assertIn("Git-safe-to-remove exact", source)
+        self.assertIn("runtime binding lease preflight", source)
+        self.assertIn("runtime lease", source)
+        self.assertIn("safety is unchecked", source)
 
 
 if __name__ == "__main__":

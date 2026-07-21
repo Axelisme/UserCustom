@@ -228,8 +228,9 @@ def command_land_status(args: argparse.Namespace) -> dict[str, Any]:
         )
     elif landed and lanes:
         next_step = (
-            "run reconcile, cleanup each safe-to-remove exact --worktree target,"
-            " then delete the task branch"
+            "run reconcile, require runtime binding lease preflight (runtime lease"
+            " safety is unchecked), then cleanup each Git-safe-to-remove exact"
+            " --worktree target, then delete the task branch"
         )
     elif landed:
         next_step = "delete the task branch (tree identity already holds)"
@@ -397,7 +398,9 @@ def command_land_finish(args: argparse.Namespace) -> dict[str, Any]:
             reason="checkout verification failed",
         )
     next_steps = [
-        "run reconcile, then cleanup each safe-to-remove exact --worktree target",
+        "run reconcile, require runtime binding lease preflight (runtime lease"
+        " safety is unchecked), then cleanup each Git-safe-to-remove exact"
+        " --worktree target",
         f"git branch -D {args.task_ref} (authorized by this tree identity proof)",
     ]
     if policy == "publish-authorized":

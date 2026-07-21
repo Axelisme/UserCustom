@@ -35,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     diff = commands.add_parser("diff", help="compare two bundled release manifests")
     diff.add_argument("old_version", type=int)
     diff.add_argument("new_version", type=int)
-    diff.add_argument("--runtime", choices=("codex", "claude"))
+    diff.add_argument("--runtime", choices=("codex", "claude", "pi"))
     diff.set_defaults(handler=command_diff)
 
     lane = commands.add_parser("lane", help="explicit lane lifecycle guards")

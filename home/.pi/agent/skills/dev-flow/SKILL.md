@@ -76,8 +76,3 @@ effort 級的關閉動作，orchestrate 只關自己的 task，不關這些：
 Ticket 邊界屬 planner 層可推導物，不是 frozen contract 的一部分：執行期發現某票超出
 single-context，直接拆票、更新 DAG 與 durable plan 後繼續——frozen 的是 contract 與
 acceptance，不是最初寫下的 ticket 外形。
-
-執行期也可新增 **enabling refactor / dependency-extraction task**：當現有 code seam 被證明
-尚未成熟、硬做原票會增加等待、衝突或返工時，先抽出一個只解除結構阻塞的前置工作。這不是
-spec 變更，也不重開 wayfinder；在 durable plan 只記 blocked ticket、discovered seam、unblocked
-dependents 與新的 DAG。若不能說明它省下哪個等待／衝突／返工成本，就不要新增這類票。

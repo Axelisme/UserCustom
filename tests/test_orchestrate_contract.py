@@ -19,16 +19,16 @@ def normalized(path: Path) -> str:
 
 
 class OrchestrateContractTests(unittest.TestCase):
-    def test_release_107_keeps_iron_rules_and_pipeline_byte_exact(self) -> None:
+    def test_release_108_keeps_pipeline_and_runtime_neutral_iron_rules_exact(self) -> None:
         text = (ORCHESTRATE / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("skill_version: 107", text)
+        self.assertIn("skill_version: 108", text)
         iron = section_bytes(text, "## Iron rules", "## Pipeline model")
         pipeline = section_bytes(text, "## Pipeline model", "## Control loop")
-        # v107 splits validated_unlanded out of the wave-status handoff, but the iron
-        # and pipeline sections stay byte-exact from v98.
+        # v108 makes the resident-context path runtime-neutral; the pipeline stays
+        # byte-exact from v98.
         self.assertEqual(
             hashlib.sha256(iron).hexdigest(),
-            "42c8f0c80e10d3f9b7b5f559714870ad064497a8b4bf581d8d243ff1136872be",
+            "e9eafde258cbef7c12cf0201c3a50b605ec361706753b6c29f0a0fe947d8eb15",
         )
         self.assertEqual(
             hashlib.sha256(pipeline).hexdigest(),
@@ -66,8 +66,7 @@ class OrchestrateContractTests(unittest.TestCase):
     def test_progressive_documents_remain_single_read(self) -> None:
         documents = [
             ORCHESTRATE / "SKILL.md",
-            ORCHESTRATE / "runtime-codex.md",
-            ORCHESTRATE / "runtime-claude.md",
+            *sorted(ORCHESTRATE.glob("runtime-*.md")),
             *sorted((ORCHESTRATE / "references").glob("*.md")),
         ]
         for path in documents:

@@ -45,6 +45,7 @@ class OrchestratePackageTests(unittest.TestCase):
         relative = {
             path.relative_to(SKILL).as_posix() for path in document_paths(SKILL)
         }
+        self.assertIn("runtime-pi.md", relative)
         self.assertIn("scripts/orchestrate.py", relative)
         self.assertIn("scripts/_orchestrate/__init__.py", relative)
         self.assertIn("scripts/_orchestrate/cli.py", relative)

@@ -5,6 +5,7 @@ import json
 import os
 import re
 import tempfile
+import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -27,10 +28,16 @@ def skill_version(skill_dir: Path) -> int:
 
 
 def source_home(skill_dir: Path) -> Path:
-    try:
-        return skill_dir.resolve().parents[2]
-    except IndexError as exc:
-        raise OrchestrateError(f"cannot locate home root from {skill_dir}") from exc
+    resolved = skill_dir.resolve()
+    for parent in resolved.parents:
+        relative = resolved.relative_to(parent)
+        if parent.name in {".codex", ".claude"} and relative.parts[:1] == (
+            "skills",
+        ):
+            return parent.parent
+        if parent.name == ".pi" and relative.parts[:2] == ("agent", "skills"):
+            return parent.parent
+    raise OrchestrateError(f"cannot locate home root from {skill_dir}")
 
 
 def markdown_sections(text: str) -> dict[str, str]:
@@ -82,12 +89,39 @@ def profile_standing_orders(text: str, suffix: str) -> str:
     return text
 
 
+def profile_contract(text: str, suffix: str) -> str:
+    """Return behavior/tooling contract while excluding runtime tuning knobs."""
+    ignored = {"model", "model_reasoning_effort", "thinking", "fallbackModels"}
+    lines = text.splitlines()
+    if suffix == ".toml":
+        try:
+            contract = tomllib.loads(text)
+        except tomllib.TOMLDecodeError as exc:
+            raise OrchestrateError(f"invalid TOML profile: {exc}") from exc
+        for key in ignored:
+            contract.pop(key, None)
+        return json.dumps(
+            contract, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+    if lines and lines[0].strip() == "---":
+        try:
+            end = lines.index("---", 1)
+        except ValueError:
+            return text
+        frontmatter: list[str] = []
+        skip_value = False
+        for line in lines[1:end]:
+            match = re.match(r"^([A-Za-z_][\w-]*):", line)
+            if match:
+                skip_value = match.group(1) in ignored
+            if not skip_value:
+                frontmatter.append(line)
+        return "\n".join(["---", *frontmatter, "---", *lines[end + 1 :]])
+    return text
+
+
 def document_paths(skill_dir: Path) -> list[Path]:
-    paths = [
-        skill_dir / "SKILL.md",
-        skill_dir / "runtime-codex.md",
-        skill_dir / "runtime-claude.md",
-    ]
+    paths = [skill_dir / "SKILL.md", *sorted(skill_dir.glob("runtime-*.md"))]
     paths.extend(sorted((skill_dir / "references").glob("*.md")))
     paths.extend(sorted((skill_dir / "scripts").rglob("*.py")))
     return [path for path in paths if path.is_file()]
@@ -98,6 +132,8 @@ def profile_paths(home: Path) -> list[Path]:
     return [
         *[home / ".codex" / "agents" / f"{name}.toml" for name in names],
         *[home / ".claude" / "agents" / f"{name}.md" for name in names],
+        home / ".pi" / "agent" / "APPEND_SYSTEM.md",
+        *[home / ".pi" / "agent" / "agents" / f"{name}.md" for name in names],
     ]
 
 
@@ -126,6 +162,9 @@ def build_manifest(skill_dir: Path, version: int) -> dict[str, Any]:
             "sha256": sha256_bytes(data),
             "standing_orders_sha256": normalized_sha256(
                 profile_standing_orders(text, path.suffix)
+            ),
+            "profile_contract_sha256": normalized_sha256(
+                profile_contract(text, path.suffix)
             ),
         }
         profiles[path.relative_to(home).as_posix()] = entry
@@ -243,7 +282,7 @@ def command_release(args: argparse.Namespace) -> dict[str, Any]:
         output.unlink(missing_ok=True)
         raise
     result["released_version"] = target
-    result["from_version"] = current
+    result["from_version"] = previous
     result["manifest"] = str(output)
     return result
 
@@ -257,16 +296,29 @@ def verify_release(skill_dir: Path) -> dict[str, Any]:
     for category in ("documents", "profiles"):
         expected_items = manifest[category]
         observed_items = observed[category]
-        # Profile identity is the standing orders, not the file: model/effort
-        # tuning outside developer_instructions must not fail a release check.
-        digest = "sha256" if category == "documents" else "standing_orders_sha256"
         for name in sorted(set(expected_items) | set(observed_items)):
             if name not in expected_items:
                 errors.append(f"unexpected {category[:-1]}: {name}")
             elif name not in observed_items:
                 errors.append(f"missing {category[:-1]}: {name}")
-            elif expected_items[name][digest] != observed_items[name][digest]:
-                errors.append(f"hash mismatch: {name}")
+            else:
+                expected = expected_items[name]
+                observed_entry = observed_items[name]
+                if category == "documents":
+                    matches = expected["sha256"] == observed_entry["sha256"]
+                elif "profile_contract_sha256" in expected:
+                    matches = (
+                        expected["profile_contract_sha256"]
+                        == observed_entry["profile_contract_sha256"]
+                    )
+                else:
+                    # Historical manifests predate transport-contract hashing.
+                    matches = (
+                        expected["standing_orders_sha256"]
+                        == observed_entry["standing_orders_sha256"]
+                    )
+                if not matches:
+                    errors.append(f"hash mismatch: {name}")
     for name, entry in observed["documents"].items():
         if name.endswith(".md") and entry["bytes"] > 16_384:
             errors.append(
@@ -409,6 +461,7 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
             "pinned_version": old_version,
         }
     delta: dict[str, Any] | None
+    migration_requirements: dict[str, Any] | None = None
     try:
         delta = compare_manifests(
             load_manifest(skill_dir, old_version),
@@ -416,6 +469,21 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
         )
     except OrchestrateError:
         delta = None
+        current = load_manifest(skill_dir, new_version)
+        migration_requirements = {
+            "reason": "source-manifest-unavailable",
+            "must_reread": sorted(
+                name
+                for name in current["documents"]
+                if name.endswith(".md")
+            ),
+            "must_rebootstrap_profiles": sorted(current["profiles"]),
+            "must_acknowledge_standing_orders": [
+                name
+                for name in sorted(current["profiles"])
+                if name.endswith("/APPEND_SYSTEM.md") or name.endswith("/AGENTS.md")
+            ],
+        }
     write_version_pin(root, new_version, result["orchestrate_compat"])
     return {
         "ok": True,
@@ -423,10 +491,12 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
         "from_version": old_version,
         "to_version": new_version,
         "delta": delta,
+        "migration_requirements": migration_requirements,
         "delta_note": (
             None
             if delta is not None
             else f"manifest for v{old_version} unavailable; reread all documents"
+            " and re-bootstrap profiles/standing orders"
         ),
     }
 
@@ -481,11 +551,21 @@ def compare_manifests(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any
                 "must_reread": reread,
             }
         )
-    changed_profiles = [
-        name
-        for name in sorted(set(old["profiles"]) | set(new["profiles"]))
-        if old["profiles"].get(name) != new["profiles"].get(name)
-    ]
+    changed_profiles = []
+    for name in sorted(set(old["profiles"]) | set(new["profiles"])):
+        before = old["profiles"].get(name)
+        after = new["profiles"].get(name)
+        if before is None or after is None:
+            changed_profiles.append(name)
+            continue
+        digest = (
+            "profile_contract_sha256"
+            if "profile_contract_sha256" in before
+            and "profile_contract_sha256" in after
+            else "standing_orders_sha256"
+        )
+        if before[digest] != after[digest]:
+            changed_profiles.append(name)
     return {
         "from": old["skill_version"],
         "to": new["skill_version"],
@@ -504,7 +584,11 @@ def command_diff(args: argparse.Namespace) -> dict[str, Any]:
     comparison = compare_manifests(old, new)
     if args.runtime is not None:
         runtime_document = f"runtime-{args.runtime}.md"
-        profile_prefix = ".codex/" if args.runtime == "codex" else ".claude/"
+        profile_prefix = {
+            "codex": ".codex/",
+            "claude": ".claude/",
+            "pi": ".pi/",
+        }[args.runtime]
         comparison["changed_documents"] = [
             document
             for document in comparison["changed_documents"]

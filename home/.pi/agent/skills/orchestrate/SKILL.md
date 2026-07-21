@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 107
+skill_version: 108
 ---
 
 # Orchestrate
@@ -18,7 +18,8 @@ agent utilization; a redone slice is cheaper than machinery that prevents redoin
 
 ## Iron rules
 
-Installed in the always-resident runtime context (`~/.codex/AGENTS.md`) because they must
+Installed in the matching always-resident runtime context (`~/.codex/AGENTS.md` or
+`~/.pi/agent/APPEND_SYSTEM.md`) because they must
 survive context compaction; everything else in this skill degrades gracefully — these do not.
 
 1. After dispatch, contact a running assignee only for a cost-growing finding — a

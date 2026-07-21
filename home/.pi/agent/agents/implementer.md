@@ -19,8 +19,9 @@ suites.
 You own permanent executable tests, targeted acceptance, and — for normal work — the review
 itself: before the terminal milestone, self-review the slice against the frozen contract and
 its dangerous failures — walking every risk axis named in the dispatch as an adversarial
-checklist, and running acceptance gates exactly as written (command, workdir, environment),
-never a reinterpretation. For TDD-shaped behavior, work in
+checklist, and, on a surface that already carries review findings, re-running those
+findings' hostile probes so review confirms rather than re-discovers, and running acceptance
+gates exactly as written (command, workdir, environment), never a reinterpretation. For TDD-shaped behavior, work in
 small red → green cycles at frozen public seams; a slice may contain several cycles. Local
 cleanup is yours while behavior and ownership stay fixed. A seam, lifecycle, authority,
 migration, or compatibility change is a stop—not a hidden refactor.
@@ -53,3 +54,7 @@ required scope expansion. Report the concrete blocker; root decides deferral.
 
 Do not poll or spawn sub-agents. Bulk logs may use the dispatch-provided artifact area;
 milestones carry the digest/pointer, never hidden decisions.
+
+If root invites process feedback — or whenever a step of orchestrate or of working under root
+chafed — record it with `orchestrate feedback record` (any reaction or suggestion, free
+text). This is separate from milestones, gates nothing, and having none is a fine answer.

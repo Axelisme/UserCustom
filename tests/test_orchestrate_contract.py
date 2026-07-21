@@ -19,16 +19,16 @@ def normalized(path: Path) -> str:
 
 
 class OrchestrateContractTests(unittest.TestCase):
-    def test_release_112_keeps_pipeline_and_runtime_neutral_iron_rules_exact(self) -> None:
+    def test_release_115_keeps_pipeline_and_runtime_neutral_iron_rules_exact(self) -> None:
         text = (ORCHESTRATE / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("skill_version: 112", text)
+        self.assertIn("skill_version: 115", text)
         iron = section_bytes(text, "## Iron rules", "## Pipeline model")
         pipeline = section_bytes(text, "## Pipeline model", "## Control loop")
         # v108 makes the resident-context path runtime-neutral; the pipeline stays
         # byte-exact from v98.
         self.assertEqual(
             hashlib.sha256(iron).hexdigest(),
-            "e9eafde258cbef7c12cf0201c3a50b605ec361706753b6c29f0a0fe947d8eb15",
+            "75522a70a5e328b30fe2f42a51589eec0a64e99f2b8b557d44e20dd4f1a023ab",
         )
         self.assertEqual(
             hashlib.sha256(pipeline).hexdigest(),

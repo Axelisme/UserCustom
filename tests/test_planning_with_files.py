@@ -459,6 +459,168 @@ class MigrationTests(unittest.TestCase):
             self.assertIn("Goal", result.stdout)
 
 
+class TracerContractTests(unittest.TestCase):
+    def test_status_worktree_projects_selected_checkout_and_rejects_invalid_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "root"
+            linked = Path(tmp) / "linked"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "t@t"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True)
+            (root / "seed").write_text("root", encoding="utf-8")
+            subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "root"], cwd=root, check=True)
+            subprocess.run(["git", "worktree", "add", "-q", "-b", "linked", str(linked)], cwd=root, check=True)
+            (linked / "seed").write_text("linked", encoding="utf-8")
+            subprocess.run(["git", "add", "seed"], cwd=linked, check=True)
+            subprocess.run(["git", "commit", "-qm", "linked"], cwd=linked, check=True)
+            run_plan(root, "init", "demo", "--goal", "g")
+            before = (root / ".agent_state" / "plans" / "demo" / "INDEX.md").read_bytes()
+            selected = payload(run_plan(root, "status", "demo", "--worktree", str(linked)))
+            self.assertEqual(selected["git"]["head"], subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=linked, text=True, capture_output=True, check=True
+            ).stdout.strip())
+            self.assertEqual(selected["git"]["branch"], "linked")
+            self.assertEqual(selected["git"]["projection_source"], str(linked.resolve()))
+            self.assertEqual((root / ".agent_state" / "plans" / "demo" / "INDEX.md").read_bytes(), before)
+            invalid = run_plan(root, "status", "demo", "--worktree", str(Path(tmp) / "missing"))
+            self.assertEqual(invalid.returncode, 1)
+            self.assertEqual((root / ".agent_state" / "plans" / "demo" / "INDEX.md").read_bytes(), before)
+
+    def test_status_rejects_unrelated_git_worktree_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "root"
+            unrelated = Path(tmp) / "unrelated"
+            root.mkdir()
+            unrelated.mkdir()
+            for repository in (root, unrelated):
+                subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+                subprocess.run(["git", "config", "user.email", "t@t"], cwd=repository, check=True)
+                subprocess.run(["git", "config", "user.name", "t"], cwd=repository, check=True)
+                (repository / "seed").write_text(repository.name, encoding="utf-8")
+                subprocess.run(["git", "add", "-A"], cwd=repository, check=True)
+                subprocess.run(["git", "commit", "-qm", repository.name], cwd=repository, check=True)
+            run_plan(root, "init", "demo", "--goal", "g")
+            index = plan_dir(root) / "INDEX.md"
+            before = index.read_bytes()
+            result = run_plan(root, "status", "demo", "--worktree", str(unrelated))
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("unrelated Git repository", result.stdout)
+            self.assertEqual(index.read_bytes(), before)
+
+    def test_status_worktree_reports_detached_branch_as_null(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "t@t"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True)
+            (root / "seed").write_text("x", encoding="utf-8")
+            subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "seed"], cwd=root, check=True)
+            linked = Path(tmp) / "linked"
+            subprocess.run(["git", "worktree", "add", "-q", str(linked)], cwd=root, check=True)
+            run_plan(root, "init", "demo", "--goal", "g")
+            subprocess.run(["git", "checkout", "-q", "--detach"], cwd=linked, check=True)
+            self.assertIsNone(payload(run_plan(root, "status", "demo", "--worktree", str(linked)))["git"]["branch"])
+
+    def test_inventory_is_sorted_read_only_and_reports_mixed_formats_states_and_conflicts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "new-open", "--goal", "g")
+            legacy = plan_dir(root, "legacy")
+            legacy.mkdir(parents=True)
+            (legacy / "task_plan.md").write_text("legacy", encoding="utf-8")
+            unknown = plan_dir(root, "unknown")
+            unknown.mkdir(parents=True)
+            (unknown / "notes.txt").write_text("unknown", encoding="utf-8")
+            empty = root / ".agent_state" / "archives" / "empty" / "plan"
+            empty.mkdir(parents=True)
+            archived = root / ".agent_state" / "archives" / "closed" / "plan"
+            archived.mkdir(parents=True)
+            (archived / "INDEX.md").write_text("# broken\n", encoding="utf-8")
+            conflict_archive = root / ".agent_state" / "archives" / "new-open" / "plan"
+            conflict_archive.mkdir(parents=True)
+            (conflict_archive / "INDEX.md").write_text("# archived\n", encoding="utf-8")
+            before = sorted(path.relative_to(root) for path in root.rglob("*"))
+            result = run_plan(root, "inventory")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            data = payload(result)
+            self.assertEqual([(p["task_id"], p["location"]) for p in data["plans"]], [
+                ("closed", "archive"), ("empty", "archive"), ("legacy", "active"),
+                ("new-open", "active"), ("new-open", "archive"), ("unknown", "active"),
+            ])
+            self.assertEqual(data["summary"]["conflicts"], 2)
+            self.assertEqual(data["summary"]["formats"]["legacy"], 1)
+            self.assertEqual(data["summary"]["formats"]["empty"], 1)
+            self.assertEqual(sorted(path.relative_to(root) for path in root.rglob("*")), before)
+
+    def test_inventory_fails_closed_on_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "target"
+            target.mkdir()
+            (target / "INDEX.md").write_text("# x\n", encoding="utf-8")
+            plan_dir(root, "linked").parent.mkdir(parents=True, exist_ok=True)
+            (plan_dir(root, "linked")).symlink_to(target, target_is_directory=True)
+            result = run_plan(root, "inventory")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("symlink", result.stdout)
+
+    def test_structured_verify_delta_and_invalid_combinations_do_not_append(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            good = run_plan(
+                root, "log", "demo", "--verify", "--command", "pytest",
+                "--subject-result", "pass", "--baseline-sha", "abc1234",
+                "--baseline-result", "failed", "--classification", "baseline-debt",
+            )
+            self.assertEqual(good.returncode, 0, good.stdout)
+            progress = plan_dir(root) / "progress.jsonl"
+            rows = [json.loads(line) for line in progress.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(rows[0]["subject_result"], "pass")
+            self.assertEqual(rows[0]["baseline_sha"], "abc1234")
+            self.assertEqual(rows[0]["classification"], "baseline-debt")
+            for classification in ("green", "environment-blocked"):
+                result = run_plan(
+                    root, "log", "demo", "--verify", "--command", "pytest",
+                    "--subject-result", classification, "--classification", classification,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout)
+            before = progress.read_bytes()
+            bad = run_plan(
+                root, "log", "demo", "--verify", "--command", "pytest",
+                "--subject-result", "pass", "--classification", "baseline-debt",
+            )
+            self.assertEqual(bad.returncode, 1)
+            self.assertEqual(progress.read_bytes(), before)
+            legacy = run_plan(root, "log", "demo", "--verify", "--command", "old", "--result", "ok", "--sha", "deadbeef")
+            self.assertEqual(legacy.returncode, 0)
+            row = json.loads(progress.read_text(encoding="utf-8").splitlines()[-1])
+            self.assertEqual(row["result"], "ok")
+            self.assertNotIn("subject_result", row)
+
+    def test_migration_and_checkpoint_hint_only_explicit_live_current_state_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plan = plan_dir(root, "legacy")
+            plan.mkdir(parents=True)
+            (plan / "task_plan.md").write_text(
+                "# legacy\n\n## Goal\n\nGoal.\n\n## Current State\n\n"
+                "- HEAD abc1234\n- branch: dev\n- tree = def5678\n"
+                "- **Next gate:** preserve HEAD fedcba9\n\n## Decisions\n\n"
+                "## Phase Status\n\n## Historical Phase Summary\n\n",
+                encoding="utf-8",
+            )
+            migrated = payload(run_plan(root, "migrate", "legacy"))
+            self.assertEqual(len(migrated["hints"]), 3)
+            self.assertFalse(any("fedcba9" in hint for hint in migrated["hints"]))
+            checkpoint = payload(run_plan(root, "checkpoint", "legacy"))
+            self.assertEqual(checkpoint["hints"], migrated["hints"])
+            self.assertIn("HEAD abc1234", (plan / "INDEX.md").read_text(encoding="utf-8"))
+
+
 class StatusGitTests(unittest.TestCase):
     def test_status_derives_git_snapshot_inside_a_repo(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -362,66 +362,118 @@ def _finding_touches(rec: dict[str, Any], query_paths: list[str]) -> bool:
     return False
 
 
+def _requested_finding_ids(raw_ids: list[str] | None) -> set[str] | None:
+    """Parse repeatable and comma-separated ids without changing ledger identity."""
+    if not raw_ids:
+        return None
+    requested: set[str] = set()
+    for value in raw_ids:
+        requested.update(part.strip() for part in value.split(",") if part.strip())
+    return requested
+
+
 def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     task_id = require_identifier(task_id_from_ref(args.task_id), label="task-id")
     reachable = args.task_ref or "HEAD"
     records = read_findings_ledger(root, task_id)
     closed = closed_finding_ids(root, reachable)
-    open_recs: list[dict[str, Any]] = []
-    closed_recs: list[dict[str, Any]] = []
+    all_open_recs: list[dict[str, Any]] = []
+    all_closed_recs: list[dict[str, Any]] = []
     for fid, rec in dedup_findings(records).items():
         entry = {**rec, "closed_by": closed.get(fid)}
-        (closed_recs if fid in closed else open_recs).append(entry)
-    gating_open = [r["id"] for r in open_recs if r["propagation"] == "gates-the-slice"]
+        (all_closed_recs if fid in closed else all_open_recs).append(entry)
+
+    # These sets are the authority projection. Never filter them before deriving
+    # collect/slice state: an ids/path projection cannot hide an applicable gate.
+    gating_open = [
+        rec["id"] for rec in all_open_recs if rec["propagation"] == "gates-the-slice"
+    ]
     review_outcomes = list(dedup_review_pass(records).values())
-    # Only what the caller cannot compute from the lists above is reported. Every
-    # extra projection is another view that can disagree with its source — which is
-    # exactly how a subject once appeared as both clean and incomplete at once.
-    # `slice_blocking` stays because it needs git ancestry, which the caller lacks:
-    # a gating finding on another lane does not block this slice, and the test
-    # mirrors what collect itself gates on so display can never contradict the gate.
     slice_blocking: list[str] | None = None
     slice_sha = getattr(args, "slice_sha", None)
     if slice_sha:
         subject = exact_commit(root, slice_sha, label="slice SHA")
         slice_blocking = [
             rec["id"]
-            for rec in open_recs
+            for rec in all_open_recs
             if rec["propagation"] == "gates-the-slice"
             and (
                 not rec.get("subject_sha")
                 or is_ancestor(root, rec["subject_sha"], subject)
             )
         ]
-    # Directed pull for a reviewer inheriting a surface across waves: the ledger is
-    # task-long, so a finding an earlier wave logged on a file is still here — the
-    # reviewer just needs to find it without reading the whole ledger. Its own diff's
-    # paths are the query key (bounded by diff size, relevant by construction), and
-    # `--sweep` finds the cross-cutting root-cause patterns a path query cannot. This
-    # is a projection over the same open/closed rows, never a second source: gating
-    # still reads the full set, so a filter can never weaken the gate.
+
+    requested_ids = _requested_finding_ids(getattr(args, "ids", None))
+    open_only = bool(getattr(args, "open_only", False))
+    summary = bool(getattr(args, "summary", False))
+    if requested_ids is None:
+        projected_open = list(all_open_recs)
+        projected_closed = [] if open_only else list(all_closed_recs)
+    else:
+        projected_open = [rec for rec in all_open_recs if rec["id"] in requested_ids]
+        projected_closed = (
+            []
+            if open_only
+            else [rec for rec in all_closed_recs if rec["id"] in requested_ids]
+        )
+
+    # Path/sweep matching is part of the requested projection too. In particular,
+    # open-only must not leak closed rows through the legacy `matched` side-channel.
     query_paths = getattr(args, "path", None)
     sweep_only = getattr(args, "sweep", False)
     matched: list[dict[str, Any]] | None = None
     if query_paths or sweep_only:
         matched = [
             rec
-            for rec in (*open_recs, *closed_recs)
+            for rec in (*projected_open, *projected_closed)
             if (not sweep_only or rec.get("sweep_required"))
             and (not query_paths or _finding_touches(rec, query_paths))
         ]
-    return {
+
+    projection_requested = summary or open_only or requested_ids is not None
+    if summary:
+        # Summary has scalar gate state/counts only. In particular, neither the
+        # thousands of gate ids nor review evidence can make it grow with the ledger.
+        payload: dict[str, Any] = {
+            "ok": True,
+            "operation": "findings-status",
+            "read_only": True,
+            "task_id": task_id,
+            "reachable_from": reachable,
+            "summary": True,
+            "counts": {
+                "open": len(projected_open),
+                "closed": len(projected_closed),
+                "gating_open": len(gating_open),
+                "slice_blocking": len(slice_blocking or []),
+                "review_outcomes": len(review_outcomes),
+                "matched": len(matched) if matched is not None else None,
+            },
+            "gating_open": bool(gating_open),
+            "collect_blocked": bool(gating_open),
+            "slice_blocking": bool(slice_blocking),
+        }
+        if matched is not None:
+            payload["matched_count"] = len(matched)
+        return payload
+
+    payload: dict[str, Any] = {
         "ok": True,
         "operation": "findings-status",
         "read_only": True,
         "task_id": task_id,
         "reachable_from": reachable,
-        "open": open_recs,
-        "closed": closed_recs,
+        "open": projected_open,
         "gating_open": gating_open,
         "collect_blocked": bool(gating_open),
         "slice_blocking": slice_blocking,
         "matched": matched,
-        "review_outcomes": review_outcomes,
     }
+    if not open_only:
+        payload["closed"] = projected_closed
+    # Full review history is intentionally v114-compatible only with no opt-in
+    # projection. All bounded/filtered forms omit those potentially large rows.
+    if not projection_requested:
+        payload["review_outcomes"] = review_outcomes
+    return payload

@@ -14,6 +14,73 @@ from .review import command_review_advance, command_review_audit, command_review
 from .worktrees import command_cleanup, command_reconcile, command_wave_status
 from .landing import command_land_finish, command_land_status
 
+
+def command_profile_recommend(args: argparse.Namespace) -> dict[str, object]:
+    """Return a shipped profile projection; never invoke a runtime or mutate state."""
+    models = {
+        "codex": {
+            "reviewer": ("wave-reviewer", "gpt-5.6-sol", "reasoning_effort"),
+            "implementer": ("wave-implementer", "gpt-5.6-luna", "reasoning_effort"),
+        },
+        "claude": {
+            "reviewer": ("wave-reviewer", "opus", None),
+            "implementer": ("wave-implementer", "sonnet", None),
+        },
+        "pi": {
+            "reviewer": ("wave-reviewer", "openai-codex/gpt-5.6-sol", "thinking"),
+            "implementer": ("wave-implementer", "openai-codex/gpt-5.6-luna", "thinking"),
+        },
+    }
+    runtime = str(args.runtime).strip().lower()
+    role = str(args.role).strip().lower()
+    risk = str(args.risk).strip().lower()
+    depth = str(args.depth).strip().lower()
+    if runtime not in models:
+        raise OrchestrateError(f"unsupported runtime: {runtime}")
+    if role not in models[runtime]:
+        raise OrchestrateError(f"unsupported role for {runtime}: {role}")
+    if risk not in {"mechanical", "normal", "critical"}:
+        raise OrchestrateError(f"unsupported risk: {risk}")
+    if depth not in {"low", "medium", "high"}:
+        raise OrchestrateError(f"unsupported depth: {depth}")
+    expected = "high" if risk == "critical" else "low"
+    if role == "reviewer" and (risk == "mechanical" or depth != expected):
+        raise OrchestrateError(
+            f"unsupported profile combination: runtime={runtime} role={role} "
+            f"risk={risk} depth={depth}"
+        )
+    # Mechanical work has a distinct shipped profile per runtime, with different
+    # depth knobs (Codex medium, Claude none, Pi low). Do not pretend the generic
+    # wave-implementer recommendation is executable for that risk class; fail closed
+    # until a caller supplies a runtime-specific mechanical contract.
+    if role == "implementer" and risk == "mechanical":
+        raise OrchestrateError(
+            f"unsupported profile combination: runtime={runtime} role={role} "
+            f"risk={risk} depth={depth}"
+        )
+    if role == "implementer" and depth != "high":
+        raise OrchestrateError(
+            f"unsupported profile combination: runtime={runtime} role={role} "
+            f"risk={risk} depth={depth}"
+        )
+    profile, model, thinking_field = models[runtime][role]
+    return {
+        "ok": True,
+        "operation": "profile-recommend",
+        "read_only": True,
+        "spawned": False,
+        "mutated": False,
+        "runtime": runtime,
+        "role": role,
+        "risk": risk,
+        "depth": depth,
+        "profile": profile,
+        "profile_name": profile,
+        "model": model,
+        "thinking": depth if thinking_field else None,
+        "thinking_field": thinking_field,
+    }
+
 def add_root(command: argparse.ArgumentParser) -> None:
     command.add_argument("--root", required=True)
 
@@ -234,7 +301,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="report `matched`: the sweep_required root-cause patterns, so a reviewer"
         " can check the diff has not reintroduced one",
     )
+    findings_status.add_argument(
+        "--summary",
+        action="store_true",
+        help="bounded scalar projection; omit ledger rows and review evidence",
+    )
+    findings_status.add_argument(
+        "--open-only",
+        action="store_true",
+        help="project only currently open finding rows",
+    )
+    findings_status.add_argument(
+        "--ids",
+        action="append",
+        metavar="ID[,ID... ]",
+        help="project exact finding ids (repeatable or comma-separated)",
+    )
     findings_status.set_defaults(handler=command_findings_status)
+
+    profile = commands.add_parser(
+        "profile", help="read-only executable profile projections"
+    )
+    profile_commands = profile.add_subparsers(dest="profile_command", required=True)
+    profile_recommend = profile_commands.add_parser(
+        "recommend", help="recommend a shipped profile without spawning or mutating"
+    )
+    profile_recommend.add_argument("--runtime", required=True)
+    profile_recommend.add_argument("--role", required=True)
+    profile_recommend.add_argument("--risk", "--risk-level", dest="risk", required=True)
+    profile_recommend.add_argument("--depth", required=True)
+    profile_recommend.set_defaults(handler=command_profile_recommend)
 
     feedback = commands.add_parser(
         "feedback",

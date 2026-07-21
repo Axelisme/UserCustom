@@ -166,7 +166,7 @@ class PiRuntimeParityTests(unittest.TestCase):
             "set `artifacts: false`",
             "dirty the evidence tree",
             "Do not `resume` that child",
-            "stop the runner before cleanup",
+            "stop it and observe terminal state before cleanup",
             "compaction summary is not a handoff contract",
         ):
             self.assertIn(phrase, text)

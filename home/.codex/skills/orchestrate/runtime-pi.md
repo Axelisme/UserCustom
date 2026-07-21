@@ -153,7 +153,8 @@ root binds harvest and review conclusions to exact Git SHAs, not to child summar
   that identity after `review advance`; inspect the descriptor first and re-check exact HEAD and
   cwd cleanliness afterward. Legacy descriptors without the explicit field use a fresh reviewer.
   If artifacts unexpectedly appear during a live run, stop it and observe terminal state before
-  cleanup; never delete a live runner's output directory.
+  cleanup; never delete a live runner's output directory. Do not `resume` that child after
+  an unsafe artifact placement; start a fresh reviewer instead.
 - Ordinary child subagents must not spawn subagents. If a delegated fanout child is ever
   used, its prompt and tool allowlist must explicitly grant and bound that responsibility.
 

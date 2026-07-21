@@ -50,6 +50,11 @@ HTML_TAG_NAMES = frozenset({
     "summary", "table", "tbody", "td", "th", "thead", "title", "tr", "ul",
 })
 MIGRATION_PUNCH_LIST_MARKER = "<!-- migration-punch-list: pending -->"
+VERIFY_CLASSIFICATIONS = ("green", "baseline-debt", "environment-blocked")
+LIVE_GIT_LABEL_PATTERN = re.compile(
+    r"(?:^|[\s*`_-])(HEAD|tree|branch)(?:(?:\s*[:=]\s*)|(?:\s+))([^\s,;]+)",
+    re.IGNORECASE,
+)
 
 
 class PlanError(RuntimeError):
@@ -180,6 +185,80 @@ def git_snapshot(root: Path) -> dict[str, Any] | None:
         "tree": tree,
         "clean": porcelain == "",
     }
+
+
+def git_repository_identity(path: Path) -> tuple[Path, Path] | None:
+    """Return the worktree root and shared common directory for a Git checkout."""
+    try:
+        top = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=path,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        common = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            cwd=path,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except (OSError, ValueError):
+        return None
+    if top.returncode != 0 or common.returncode != 0:
+        return None
+    git_root = Path(top.stdout.strip()).resolve()
+    common_path = Path(common.stdout.strip())
+    if not common_path.is_absolute():
+        common_path = git_root / common_path
+    return git_root, common_path.resolve()
+
+
+def resolve_worktree(root: Path, requested: str) -> Path:
+    """Resolve and validate a real Git worktree in root's repository."""
+    raw = Path(requested).expanduser()
+    path = Path(os.path.abspath(root / raw if not raw.is_absolute() else raw))
+    if not path.exists() or not path.is_dir():
+        raise PlanError(f"worktree is not an existing directory: {path}")
+    resolved = path.resolve()
+    if path != resolved:
+        raise PlanError(f"worktree path contains a symlink: {path}")
+    selected_identity = git_repository_identity(resolved)
+    if selected_identity is None:
+        raise PlanError(f"worktree is not a Git worktree: {resolved}")
+    git_root, selected_common = selected_identity
+    if git_root != resolved:
+        raise PlanError(f"worktree must be its Git worktree root: {resolved}")
+    root_identity = git_repository_identity(root)
+    if root_identity is None or root_identity[1] != selected_common:
+        raise PlanError(f"worktree belongs to an unrelated Git repository: {resolved}")
+    return resolved
+
+
+def live_git_hints(index: str) -> list[str]:
+    """Report only explicitly labeled live Git values in Current State.
+
+    Next-gate text and historical/evidence sections are intentionally excluded;
+    this is advisory output, never a rewrite or validation failure.
+    """
+    lines = index.splitlines()
+    try:
+        start, end = section_span(lines, "## Current State")
+    except PlanError:
+        return []
+    hints: list[str] = []
+    for line in lines[start + 1 : end]:
+        lowered = line.lower()
+        if "next gate" in lowered or "histor" in lowered:
+            continue
+        match = LIVE_GIT_LABEL_PATTERN.search(line)
+        if match:
+            label, value = match.groups()
+            hints.append(
+                f"Current State contains live {label} {value!r}; status derives it live"
+            )
+    return hints
 
 
 # ---- INDEX parsing ----------------------------------------------------------
@@ -323,6 +402,106 @@ def clear_migration_punch_list(index: str) -> str:
     return index.replace(MIGRATION_PUNCH_LIST_MARKER + "\n", "")
 
 
+# ---- inventory --------------------------------------------------------------
+
+
+def inventory_bytes(path: Path) -> int:
+    total = 0
+    for child in path.rglob("*"):
+        if child.is_symlink():
+            raise PlanError(f"planning tree contains symlink: {child}")
+        if child.is_file():
+            total += child.stat().st_size
+    return total
+
+
+def classify_inventory_path(path: Path) -> tuple[str, str]:
+    """Classify one plan directory without repairing or migrating it."""
+    index = path / INDEX_FILE
+    legacy = path / "task_plan.md"
+    if index.is_file():
+        fmt = "new"
+        try:
+            issues = validate_plan(path)
+        except (OSError, UnicodeError, PlanError):
+            issues = ["unreadable plan"]
+        if issues:
+            return fmt, "invalid"
+        board = read_board(read_index(path))
+        return fmt, "completed" if board and all(
+            row["status"] == "completed" for row in board
+        ) else "open"
+    if legacy.is_file():
+        return "legacy", "unknown"
+    try:
+        has_content = any(path.iterdir())
+    except OSError:
+        return "unknown", "invalid"
+    return ("unknown", "unknown") if has_content else ("empty", "unknown")
+
+
+def inventory_record(root: Path, task_id: str, location: str, path: Path) -> dict[str, Any]:
+    reject_symlink_tree(root, path)
+    fmt, state = classify_inventory_path(path)
+    return {
+        "task_id": task_id,
+        "location": location,
+        "format": fmt,
+        "state": state,
+        "bytes": inventory_bytes(path),
+        "conflict": False,
+    }
+
+
+def command_inventory(args: argparse.Namespace) -> dict[str, Any]:
+    root = Path(args.root).resolve()
+    plans_root = root / ".agent_state" / "plans"
+    archives_root = root / ".agent_state" / "archives"
+    for directory in (plans_root, archives_root):
+        if directory.exists():
+            reject_symlink_tree(root, directory)
+
+    records: list[dict[str, Any]] = []
+    active_ids: set[str] = set()
+    archive_ids: set[str] = set()
+    if plans_root.is_dir():
+        for path in sorted(plans_root.iterdir(), key=lambda item: item.name):
+            if path.is_dir() and not path.is_symlink():
+                active_ids.add(path.name)
+                records.append(inventory_record(root, path.name, "active", path))
+    if archives_root.is_dir():
+        for task_root in sorted(archives_root.iterdir(), key=lambda item: item.name):
+            if task_root.is_symlink():
+                raise PlanError(f"planning tree contains symlink: {task_root}")
+            if not task_root.is_dir():
+                continue
+            path = task_root / "plan"
+            if path.exists() or path.is_symlink():
+                archive_ids.add(task_root.name)
+                records.append(inventory_record(root, task_root.name, "archive", path))
+
+    conflicts = active_ids & archive_ids
+    for record in records:
+        record["conflict"] = record["task_id"] in conflicts
+    records.sort(key=lambda item: (item["task_id"], item["location"]))
+    formats = {name: 0 for name in ("new", "legacy", "unknown", "empty")}
+    states = {name: 0 for name in ("open", "completed", "invalid", "unknown")}
+    for record in records:
+        formats[record["format"]] += 1
+        states[record["state"]] += 1
+    summary = {
+        "total": len(records),
+        "conflicts": sum(1 for record in records if record["conflict"]),
+        "locations": {
+            "active": sum(1 for record in records if record["location"] == "active"),
+            "archive": sum(1 for record in records if record["location"] == "archive"),
+        },
+        "formats": formats,
+        "states": states,
+    }
+    return {"ok": True, "operation": "inventory", "plans": records, "summary": summary}
+
+
 # ---- commands ---------------------------------------------------------------
 
 
@@ -429,16 +608,46 @@ def command_log(args: argparse.Namespace) -> dict[str, Any]:
     validate_task_id(args.task_id)
     plan = require_plan(root, args.task_id)
     if args.verify:
-        if not args.command or not args.result:
-            raise PlanError("--verify requires --command and --result")
-        row: dict[str, Any] = {
-            "ts": now_ts(),
-            "kind": "verify",
-            "command": args.command,
-            "result": args.result,
-        }
-        if args.sha:
-            row["sha"] = args.sha
+        structured = any(
+            value is not None
+            for value in (
+                args.subject_result, args.baseline_sha, args.baseline_result, args.classification
+            )
+        )
+        if structured:
+            if args.result is not None or args.sha is not None:
+                raise PlanError("structured --verify cannot be combined with legacy --result/--sha")
+            if not args.command or not args.subject_result or not args.classification:
+                raise PlanError(
+                    "structured --verify requires --command, --subject-result, and --classification"
+                )
+            if args.classification not in VERIFY_CLASSIFICATIONS:
+                raise PlanError(f"--classification must be one of {VERIFY_CLASSIFICATIONS}")
+            if bool(args.baseline_sha) != bool(args.baseline_result):
+                raise PlanError("--baseline-sha and --baseline-result must be supplied together")
+            if args.classification == "baseline-debt" and not args.baseline_sha:
+                raise PlanError("baseline-debt requires --baseline-sha and --baseline-result")
+            row = {
+                "ts": now_ts(),
+                "kind": "verify",
+                "classification": args.classification,
+                "command": args.command,
+                "subject_result": args.subject_result,
+            }
+            if args.baseline_sha:
+                row["baseline_result"] = args.baseline_result
+                row["baseline_sha"] = args.baseline_sha
+        else:
+            if not args.command or not args.result:
+                raise PlanError("--verify requires --command and --result")
+            row = {
+                "ts": now_ts(),
+                "kind": "verify",
+                "command": args.command,
+                "result": args.result,
+            }
+            if args.sha:
+                row["sha"] = args.sha
     else:
         if not args.action:
             raise PlanError("an event log requires --action (or use --verify)")
@@ -756,6 +965,8 @@ def command_migrate(args: argparse.Namespace) -> dict[str, Any]:
             shutil.move(str(source), str(preserved / directory))
             punch_list.append(f"merge {directory}/ packets into Current State, then drop")
 
+    hints = live_git_hints(read_index(plan))
+    punch_list.extend(hints)
     return {
         "ok": True,
         "operation": "migrate",
@@ -764,6 +975,7 @@ def command_migrate(args: argparse.Namespace) -> dict[str, Any]:
         "progress_rows": progress_rows,
         "preserved_under": str(preserved.relative_to(plan)),
         "punch_list": punch_list,
+        "hints": hints,
     }
 
 
@@ -773,6 +985,7 @@ def command_checkpoint(args: argparse.Namespace) -> dict[str, Any]:
     plan = require_plan(root, args.task_id)
     index = read_index(plan)
     migration_recovery = MIGRATION_PUNCH_LIST_MARKER in index
+    hints = live_git_hints(index)
     issues = validate_plan(plan, allow_migration_recovery=migration_recovery)
     if issues:
         raise PlanError("plan is not schema-valid: " + "; ".join(issues))
@@ -793,6 +1006,7 @@ def command_checkpoint(args: argparse.Namespace) -> dict[str, Any]:
         "operation": args.operation if hasattr(args, "operation") else "checkpoint",
         "task_id": args.task_id,
         "index_bytes": size,
+        "hints": hints,
     }
 
 
@@ -808,13 +1022,19 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         if progress.is_file()
         else 0
     )
+    worktree = resolve_worktree(root, args.worktree) if args.worktree else None
+    snapshot_root = worktree or root
+    git = git_snapshot(snapshot_root)
+    if worktree is not None and git is not None:
+        git["worktree"] = str(worktree)
+        git["projection_source"] = str(worktree)
     return {
         "ok": True,
         "operation": "status",
         "task_id": args.task_id,
         "index_bytes": utf8_size(index),
         "phases": board,
-        "git": git_snapshot(root),
+        "git": git,
         "stores": {
             "phases": len(existing_phase_files(plan)),
             "progress_rows": progress_rows,
@@ -865,7 +1085,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     status = commands.add_parser("status")
     status.add_argument("task_id")
+    status.add_argument("--worktree")
     status.set_defaults(handler=command_status)
+
+    inventory = commands.add_parser("inventory")
+    inventory.set_defaults(handler=command_inventory)
 
     phase_start = commands.add_parser("phase-start")
     phase_start.add_argument("task_id")
@@ -891,6 +1115,10 @@ def build_parser() -> argparse.ArgumentParser:
     log.add_argument("--verify", action="store_true")
     log.add_argument("--command")
     log.add_argument("--sha")
+    log.add_argument("--subject-result")
+    log.add_argument("--baseline-sha")
+    log.add_argument("--baseline-result")
+    log.add_argument("--classification")
     log.set_defaults(handler=command_log)
 
     for name in ("checkpoint", "compact"):

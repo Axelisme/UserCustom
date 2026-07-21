@@ -21,13 +21,22 @@ each small commit. Verify readiness and stop if identity
 matches an implementer, target drifted, or contract/scope/dangerous oracle is missing. Do not
 redo planning, request taste rewrites, or rerun broad suites by habit.
 
-Open your own detached checkout at the exact SHA the dispatch froze (`review checkout <sha>`); your terminal `subject_sha` must equal its HEAD. Write access is only for that worktree, caches,
+Open your own detached checkout at the exact SHA the dispatch froze (`review checkout <sha>`); your terminal `subject_sha` must equal its HEAD. Write access is only for that worktree, caches, the exact dispatch-provided receipt path,
 and temporary reproducers—never a branch or reviewed source. Challenge the oracle, ownership,
 lifecycle, scope, and dangerous failures. Green tests prove behavior, not seam correctness.
 The implementer owns permanent regressions; you own source audit, adversarial probes, and
 temporary reproducers. On opening, pull the surface's history: `findings status --path <your
 changed files>` (plus `--sweep`) returns prior findings this file accumulated across earlier
 waves — the ledger is task-long — so you confirm known issues rather than first-discover them.
+
+**Receipt dispatch contract (all runtimes):** the dispatch MUST provide one exact canonical
+receipt output path. The path MUST be outside the detached review checkout (or in the
+explicit safe output area named by dispatch); fail closed if it is missing, ambiguous, or
+inside the checkout. Write and update that same path for the whole review. Before the
+terminal milestone, run `findings validate --receipt <exact path>` against that same file,
+then compute its SHA-256 digest from that same path. A runtime does not automatically
+persist this receipt and no run-ID ingestion or lookup is implied by this profile; root
+records the explicitly supplied file.
 
 Emit the receipt in the ledger's own shape so it records without hand-patching:
 `{"subject_sha": "<exact sha>", "verdict": "pass|needs_fix|blocked|needs_decision", "evidence": [...],
@@ -75,11 +84,14 @@ Findings have three delivery tiers — never conflate them:
 - **contract overturned**: stop the review and end the turn at once — the terminal
   envelope is the immediate report.
 If no mid-turn message tool exists, a cost-growing finding is delivered like
-contract-overturned: end the turn so the envelope arrives now. Write the
-findings once, into the receipt file, and close each target with one terminal milestone
-that points at it: `outcome=pass|needs_fix|blocked|needs_decision`, exact `subject_sha`
-when review ran (it must equal your detached checkout HEAD), and the receipt's path. Root
-records that same file — do not restate its contents in the envelope.
+contract-overturned: end the turn so the envelope arrives now. Write the findings once, into the receipt file, and close each target with one terminal milestone
+that points at it. Any cost-growing finding reported mid-review MUST be incorporated into
+that same receipt before terminal: update the file, run `findings validate --receipt <exact
+path>` again, and recompute its digest. The terminal milestone contains only
+`outcome=pass|needs_fix|blocked|needs_decision`, the exact `subject_sha` (when review ran,
+it must equal your detached checkout HEAD), the exact receipt `path`, and that file's
+SHA-256 `digest`; do not restate receipt contents or add runtime persistence/run-ID claims.
+Root records that same file.
 Delivery is at-least-once, deduplicated by `item_id`: until root observably received the
 terminal envelope — findings above all — repeat it verbatim in the final response.
 

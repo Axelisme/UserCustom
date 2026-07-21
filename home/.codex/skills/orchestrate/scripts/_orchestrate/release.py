@@ -127,8 +127,25 @@ def document_paths(skill_dir: Path) -> list[Path]:
     return [path for path in paths if path.is_file()]
 
 
+PROFILE_NAMES = (
+    "contract-planner",
+    "impl-detail-planner",
+    "integration-reviewer",
+    "mcp-skill-tester",
+    "mechanical-implementer",
+    "plan-item-implementer",
+    "python-bug-investigator",
+    "python-module-reviewer",
+    "repo-investigator",
+    "wave-implementer",
+    "wave-reviewer",
+    "web-researcher",
+)
+
+
 def profile_paths(home: Path) -> list[Path]:
-    names = ("contract-planner", "implementer", "reviewer")
+    # Bind every shipped user profile so doctor detects authority/model drift.
+    names = PROFILE_NAMES
     return [
         *[home / ".codex" / "agents" / f"{name}.toml" for name in names],
         *[home / ".claude" / "agents" / f"{name}.md" for name in names],

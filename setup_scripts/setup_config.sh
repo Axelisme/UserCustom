@@ -12,8 +12,8 @@ backup_cp() {
     dst=$dst_dir/$(basename $src)
 
     # if dst exists and not a link, backup it
-    if [ -e $dst ]; then
-      if [ ! -L $dst ]; then
+    if [ -e "$dst" ] || [ -L "$dst" ]; then
+      if [ ! -L "$dst" ]; then
         # same inode as src (still hard-linked) -> nothing to refresh
         if [ $dst -ef $src ]; then
           echo "skip $dst"
@@ -58,6 +58,28 @@ backup_cp_one() {
   ln $src $dst
 }
 
+remove_obsolete_orchestrate_profiles() {
+  # Remove only the exact pre-wave identities when their replacements are shipped.
+  if [ -e "$UserCustom/home/.pi/agent/agents/wave-implementer.md" ]; then
+    rm -f "$HOME/.pi/agent/agents/implementer.md"
+  fi
+  if [ -e "$UserCustom/home/.pi/agent/agents/wave-reviewer.md" ]; then
+    rm -f "$HOME/.pi/agent/agents/reviewer.md"
+  fi
+  if [ -e "$UserCustom/home/.codex/agents/wave-implementer.toml" ]; then
+    rm -f "$HOME/.codex/agents/implementer.toml"
+  fi
+  if [ -e "$UserCustom/home/.codex/agents/wave-reviewer.toml" ]; then
+    rm -f "$HOME/.codex/agents/reviewer.toml"
+  fi
+  if [ -e "$UserCustom/home/.claude/agents/wave-implementer.md" ]; then
+    rm -f "$HOME/.claude/agents/implementer.md"
+  fi
+  if [ -e "$UserCustom/home/.claude/agents/wave-reviewer.md" ]; then
+    rm -f "$HOME/.claude/agents/reviewer.md"
+  fi
+}
+
 backup_cp $UserCustom/home/.config $HOME/.config
 backup_cp_one $UserCustom/home/.codex/AGENTS.md $HOME/.codex/AGENTS.md
 backup_cp $UserCustom/home/.codex/skills $HOME/.codex/skills
@@ -69,3 +91,24 @@ backup_cp $UserCustom/home/.pi/agent/agents $HOME/.pi/agent/agents
 backup_cp $UserCustom/home/.claude/skills $HOME/.claude/skills
 backup_cp $UserCustom/home/.claude/agents $HOME/.claude/agents
 backup_cp $UserCustom/home/.local/include $HOME/.local/include
+
+validate_orchestrate_profile_destinations() {
+  local path
+  for path in \
+    "$HOME/.pi/agent/agents/wave-implementer.md" \
+    "$HOME/.pi/agent/agents/wave-reviewer.md" \
+    "$HOME/.codex/agents/wave-implementer.toml" \
+    "$HOME/.codex/agents/wave-reviewer.toml" \
+    "$HOME/.claude/agents/wave-implementer.md" \
+    "$HOME/.claude/agents/wave-reviewer.md"; do
+    if [ ! -f "$path" ]; then
+      echo "error: unusable wave profile destination (expected regular file): $path" >&2
+      return 1
+    fi
+  done
+}
+
+# Retire the old identities only after every source tree has installed successfully and
+# every replacement destination resolves to a usable regular profile file.
+validate_orchestrate_profile_destinations
+remove_obsolete_orchestrate_profiles

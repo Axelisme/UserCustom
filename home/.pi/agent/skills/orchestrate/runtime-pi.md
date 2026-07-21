@@ -22,8 +22,12 @@ iron rules are installed through `~/.pi/agent/APPEND_SYSTEM.md`.
 
 Pi builtin role agents inherit the parent model unless overridden in agent files,
 `settings.subagents.agentOverrides`, or the run. Custom user agents with the same name shadow
-builtins. A long direct contract travels as a plain file whose absolute path the dispatch
-names.
+builtins. For orchestrate roles use the Sol family at `low` through `high` or the Luna family
+at `medium` through `xhigh`; do not route them to Terra. `wave-reviewer` defaults to Sol
+`low`; launch critical checkpoint and authority-publication reviews with an explicit Sol
+`high` override, and keep long implementation work on Luna. Model depth never changes
+review depth or grants authority.
+A long direct contract travels as a plain file whose absolute path the dispatch names.
 
 Every dispatch carries an explicit handoff baseline rather than asking a fresh child to infer
 ownership from its initial `git status`: frozen base or subject SHA, exact `cwd` and write
@@ -33,6 +37,27 @@ exists; do not create one only to satisfy this transport rule. A child treats li
 concurrent artifacts as expected and reports only unlisted scope collisions. After
 compaction, root re-reads the skill and any live durable plan, then refreshes this baseline
 before the next dispatch; the compaction summary is not a handoff contract.
+
+## Profile routing and launch modes
+
+Use orchestrate-specific user profiles for frozen pipeline work (`wave-implementer`,
+`wave-reviewer`, and `integration-reviewer`); use Pi builtins for generic delegation that
+has no frozen orchestrate seam. A child that can independently reach the next decision or
+milestone boundary defaults to `async: true`. Wave implementation and review, integration
+review, wave-ahead planning, and reconnaissance therefore default to fresh async launches
+(the same identity may continue through `steer` or `resume` when its lease allows it).
+
+Root-serial Git and authority actions — collect, integrate, release, and landing — are root's
+control flow and are never dispatched as children. Use foreground only for a short query that
+immediately blocks the root's next decision; root mediation for a longer question works via
+supervisor asks and replies rather than a child taking root authority.
+
+Foreground detach is a supervisor-wait transport state: the child is neither paused nor
+complete, and the root may not treat it as a result until a completion wakeup or status says
+so. It is unrelated to a Git detached HEAD, which is a checkout state. Preserve the
+exact-SHA reviewer rule: launch a fresh reviewer with `artifacts: false` in a clean detached
+checkout (or place artifacts outside it), and do not resume that reviewer when resume could
+recreate cwd-local artifacts; start a fresh exact-SHA reviewer instead.
 
 ## Activation and leases
 
@@ -56,9 +81,37 @@ up the temporary worktree and branch after the child finishes. It is useful for 
 non-pipelined experiments, not for orchestrate writer lanes that require durable
 `agent/<task>/<lane>` branches, seam-ready SHAs, exact-SHA review, and `collect`.
 
+## Runtime budgets
+
+Pi exposes independent limits that must not be collapsed into one "budget": the session
+spawn budget limits new launches; `turnBudget` limits assistant turns; `toolBudget` limits
+child tool calls; `timeoutMs` / `maxRuntimeMs` is a wall-clock outer cap. Inspect the terminal
+status to classify a failure: `turnBudget.outcome == "exceeded"`,
+`toolBudget.outcome == "hard-blocked"`, or `timedOut == true`. Spawn-budget exhaustion never
+explains a child that was already running.
+
+Long runs are normal in orchestrate. Do not set `turnBudget` or a hard `toolBudget` on a
+mutation-capable implementer, finding-fix continuation, reviewer that may write temporary
+reproducers, or a wave identity expected to continue across several milestones. Counts of
+turns and tools are not safe delivery boundaries; in particular, `toolBudget.block: "*"`
+can strand a writer before commit, validation, or its terminal envelope. Omit those count
+budgets rather than choosing an arbitrarily large number. Explicitly bounded read-only
+reconnaissance may still use them when partial output is an acceptable stop.
+
+A wall-clock cap is process safety only. When one is required, leave enough margin beyond the
+observable milestone lease; expiry fires liveness inspection and same-identity recovery, not
+a verdict that the work failed, the writer is stale, or its worktree is safe to replace. Keep
+the parent session spawn budget unlimited (`maxSubagentSpawnsPerSession` unset or `0`) for an
+open-ended wave pipeline, and bound simultaneous cost with `globalConcurrencyLimit`, ready
+work, one writer per lane, and the review depth ladder. If a managed environment enforces a
+spawn cap, exhaustion is a control-plane blocker: never skip review or finding closure, or
+change identity merely to fit the cap. Compaction does not reset it; a new parent session
+does, and an in-session grant requires current user confirmation.
+
 ## Cleanup lease check
 
-Before any `cleanup` operation, inspect the Pi fleet with `subagent({ action: "list" })` and
+Before any `cleanup` operation, inspect the Pi fleet with
+`subagent({ action: "status", view: "fleet" })` and
 exclude every active/paused child whose declared cwd lease is the target worktree or a
 worktree swept by the command. If an active/paused cwd lease cannot be excluded, do not clean
 up. Core `reconcile`, `wave status`, and cleanup output prove Git/data safety only; they do
@@ -68,6 +121,14 @@ not inspect a Pi fleet. Runtime lease safety is unchecked (`runtime_lease_safety
 
 `steer` delivers guidance; it does not preempt active tools. For cancellation, use `interrupt`;
 do not treat steering as cancellation.
+
+## Cumulative review scheduling
+
+Review is not mandatory per slice. When a same-surface `wave-reviewer` is idle, dispatch the
+currently eligible cumulative frontier immediately; when it is busy, accumulate that
+frontier for the next follow-up rather than spawning a second same-surface identity. Keep
+the review depth ladder unchanged, and reserve `integration-reviewer` for the wave-boundary
+contract-parity and emergent-risk review on the integrated tree.
 
 ## Milestones and flow control
 

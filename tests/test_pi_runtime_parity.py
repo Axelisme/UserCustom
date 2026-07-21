@@ -37,29 +37,21 @@ class PiRuntimeParityTests(unittest.TestCase):
     def test_manifest_inventory_covers_every_runtime_and_profile(self) -> None:
         for skill in (CODEX_SKILL, PI_SKILL):
             with self.subTest(skill=skill):
-                manifest = self.release.build_manifest(skill, 108)
+                manifest = self.release.build_manifest(skill, 113)
                 self.assertTrue(
                     {"runtime-codex.md", "runtime-claude.md", "runtime-pi.md"}
                     <= set(manifest["documents"])
                 )
-                self.assertEqual(
-                    set(manifest["profiles"]),
-                    {
-                        ".codex/agents/contract-planner.toml",
-                        ".codex/agents/implementer.toml",
-                        ".codex/agents/reviewer.toml",
-                        ".claude/agents/contract-planner.md",
-                        ".claude/agents/implementer.md",
-                        ".claude/agents/reviewer.md",
-                        ".pi/agent/APPEND_SYSTEM.md",
-                        ".pi/agent/agents/contract-planner.md",
-                        ".pi/agent/agents/implementer.md",
-                        ".pi/agent/agents/reviewer.md",
-                    },
-                )
+                expected = {
+                    path.relative_to(HOME).as_posix()
+                    for path in self.release.profile_paths(HOME)
+                    if path.is_file()
+                }
+                self.assertEqual(set(manifest["profiles"]), expected)
+                self.assertGreaterEqual(len(manifest["profiles"]), 35)
 
     def test_profile_contracts_match_across_runtimes(self) -> None:
-        names = ("contract-planner", "implementer", "reviewer")
+        names = ("contract-planner", "wave-implementer", "wave-reviewer")
         for name in names:
             codex = (HOME / ".codex" / "agents" / f"{name}.toml").read_text(
                 encoding="utf-8"
@@ -80,7 +72,7 @@ class PiRuntimeParityTests(unittest.TestCase):
                 self.assertEqual(len(bodies), 1)
 
     def test_pi_profiles_keep_runtime_frontmatter_contract(self) -> None:
-        for name in ("contract-planner", "implementer", "reviewer"):
+        for name in ("contract-planner", "wave-implementer", "wave-reviewer"):
             text = (
                 HOME / ".pi" / "agent" / "agents" / f"{name}.md"
             ).read_text(encoding="utf-8")
@@ -101,6 +93,66 @@ class PiRuntimeParityTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertEqual(codex, pi)
+
+    def test_shipped_iron_rule_matches_pi_source_numbered_rules(self) -> None:
+        skill = (PI_SKILL / "SKILL.md").read_text(encoding="utf-8")
+        source = (HOME / ".pi" / "agent" / "APPEND_SYSTEM.md").read_text(encoding="utf-8")
+        skill_rules = skill[skill.index("\n1.") : skill.index("\n## Pipeline model")]
+        source_rules = source[source.index("\n1.") :]
+        self.assertEqual(" ".join(skill_rules.split()), " ".join(source_rules.split()))
+
+    def test_wave_roster_models_and_legacy_names(self) -> None:
+        self.assertFalse((HOME / ".pi" / "agent" / "agents" / "implementer.md").exists())
+        self.assertFalse((HOME / ".pi" / "agent" / "agents" / "reviewer.md").exists())
+        wave_reviewer = (HOME / ".pi" / "agent" / "agents" / "wave-reviewer.md").read_text(encoding="utf-8")
+        self.assertIn('name: "wave-reviewer"', wave_reviewer)
+        self.assertIn('model: "openai-codex/gpt-5.6-sol"', wave_reviewer)
+        self.assertIn('thinking: "low"', wave_reviewer)
+        integration = (HOME / ".pi" / "agent" / "agents" / "integration-reviewer.md").read_text(encoding="utf-8")
+        self.assertIn('model: "openai-codex/gpt-5.6-sol"', integration)
+        self.assertIn('thinking: "high"', integration)
+
+    def test_python_specialists_use_dispatch_facts_not_repo_constants(self) -> None:
+        targets = (
+            HOME / ".pi" / "agent" / "agents" / "impl-detail-planner.md",
+            HOME / ".pi" / "agent" / "agents" / "plan-item-implementer.md",
+            HOME / ".pi" / "agent" / "agents" / "python-bug-investigator.md",
+            HOME / ".codex" / "agents" / "impl-detail-planner.toml",
+            HOME / ".codex" / "agents" / "plan-item-implementer.toml",
+            HOME / ".codex" / "agents" / "python-bug-investigator.toml",
+            HOME / ".codex" / "agents" / "python-module-reviewer.toml",
+            HOME / ".claude" / "agents" / "impl-detail-planner.md",
+            HOME / ".claude" / "agents" / "plan-item-implementer.md",
+            HOME / ".claude" / "agents" / "python-bug-investigator.md",
+            HOME / ".claude" / "agents" / "python-module-reviewer.md",
+        )
+        forbidden = ("ZCU", "QICK", "zcu_tools", "lib/zcu_tools", "tests/gui", ".venv/bin/python", "/home/axel/.codex/agent-memory")
+        for path in targets:
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(profile=path):
+                self.assertIn("Dispatch-provided facts", text)
+                for term in forbidden:
+                    self.assertNotIn(term, text)
+
+    def test_pi_routing_and_cleanup_contract(self) -> None:
+        text = " ".join((PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split())
+        for phrase in (
+            "orchestrate-specific user profiles",
+            "builtins for generic delegation",
+            "wave-ahead planning",
+            "reconnaissance therefore default to fresh async launches",
+            "collect, integrate, release, and landing",
+            "never dispatched as children",
+            "Foreground detach is a supervisor-wait transport state",
+            "unrelated to a Git detached HEAD",
+            'subagent({ action: "status", view: "fleet" })',
+            "eligible cumulative frontier immediately",
+            "not mandatory per slice",
+            "second same-surface identity",
+        ):
+            self.assertIn(phrase, text)
+        cleanup = text[text.index("## Cleanup lease check") : text.index("## Cumulative review scheduling")]
+        self.assertNotIn('subagent({ action: "list" })', cleanup)
 
     def test_pi_dispatch_binding_carries_explicit_ownership_baseline(self) -> None:
         text = " ".join(
@@ -140,12 +192,24 @@ class PiRuntimeParityTests(unittest.TestCase):
         append = root / "home" / ".pi" / "agent" / "APPEND_SYSTEM.md"
         append.parent.mkdir(parents=True, exist_ok=True)
         append.write_text("# Standing orders\n", encoding="utf-8")
-        agent = root / "home" / ".pi" / "agent" / "agents" / "implementer.md"
-        agent.parent.mkdir(parents=True)
+        for name in self.release.PROFILE_NAMES:
+            codex = root / "home" / ".codex" / "agents" / f"{name}.toml"
+            claude = root / "home" / ".claude" / "agents" / f"{name}.md"
+            pi = root / "home" / ".pi" / "agent" / "agents" / f"{name}.md"
+            codex.parent.mkdir(parents=True, exist_ok=True)
+            claude.parent.mkdir(parents=True, exist_ok=True)
+            pi.parent.mkdir(parents=True, exist_ok=True)
+            codex.write_text(
+                f'name = "{name}"\ndeveloper_instructions = \'\'\'orders\'\'\'\n',
+                encoding="utf-8",
+            )
+            claude.write_text(f"---\nname: {name}\n---\n# {name}\n", encoding="utf-8")
+            pi.write_text(f"---\nname: \\\"{name}\\\"\n---\n# {name}\n", encoding="utf-8")
+        agent = root / "home" / ".pi" / "agent" / "agents" / "wave-implementer.md"
         agent.write_text(
-            "---\nname: implementer\nmodel: tuned-model\nthinking: high\n"
+            "---\nname: wave-implementer\nmodel: tuned-model\nthinking: high\n"
             "fallbackModels:\n  - fallback-a\n  - fallback-b\n"
-            "tools: read, write\nsystemPromptMode: replace\n---\n# Implementer\n",
+            "tools: read, write\nsystemPromptMode: replace\n---\n# Wave Implementer\n",
             encoding="utf-8",
         )
         manifest = self.release.build_manifest(skill, version)
@@ -186,7 +250,7 @@ class PiRuntimeParityTests(unittest.TestCase):
 
     def test_toml_contract_parsing_ignores_tuning_without_hiding_transport(self) -> None:
         original = (
-            'name = "implementer"\n'
+            'name = "wave-implementer"\n'
             'fallbackModels = [\n  "model[variant", # comment with ]\n]\n'
             'tools = "read"\n'
             "developer_instructions = '''orders'''\n"
@@ -206,18 +270,33 @@ class PiRuntimeParityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             skill = self.make_pi_release_fixture(root)
-            agent = root / "home" / ".pi" / "agent" / "agents" / "implementer.md"
+            agent = root / "home" / ".pi" / "agent" / "agents" / "wave-implementer.md"
             original = agent.read_text(encoding="utf-8")
 
             agent.write_text(original.replace("tools: read, write", "tools: read"), encoding="utf-8")
             result = self.release.verify_release(skill)
             self.assertFalse(result["ok"])
-            self.assertIn("hash mismatch: .pi/agent/agents/implementer.md", result["errors"])
+            self.assertIn("hash mismatch: .pi/agent/agents/wave-implementer.md", result["errors"])
 
             tuned = original.replace("model: tuned-model", "model: another-model")
             tuned = tuned.replace("  - fallback-a\n  - fallback-b", "  - fallback-c")
             agent.write_text(tuned, encoding="utf-8")
             self.assertTrue(self.release.verify_release(skill)["ok"])
+
+    def test_doctor_detects_every_shipped_profile_tamper(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            skill = self.make_pi_release_fixture(root)
+            for name, relative in (
+                ("integration-reviewer", Path(".pi/agent/agents/integration-reviewer.md")),
+                ("python-bug-investigator", Path(".pi/agent/agents/python-bug-investigator.md")),
+            ):
+                path = root / "home" / relative
+                path.write_text(path.read_text(encoding="utf-8") + "tampered\n", encoding="utf-8")
+                result = self.release.verify_release(skill)
+                self.assertFalse(result["ok"], name)
+                self.assertIn(f"hash mismatch: {relative.as_posix()}", result["errors"])
+                path.write_text(path.read_text(encoding="utf-8").removesuffix("tampered\n"), encoding="utf-8")
 
     def test_missing_unshipped_pi_manifests_fall_back_to_full_reread(self) -> None:
         for old_version in range(99, 107):
@@ -253,7 +332,7 @@ class PiRuntimeParityTests(unittest.TestCase):
                 )
                 self.assertIn("SKILL.md", requirements["must_reread"])
                 self.assertIn(
-                    ".pi/agent/agents/implementer.md",
+                    ".pi/agent/agents/wave-implementer.md",
                     requirements["must_rebootstrap_profiles"],
                 )
                 self.assertEqual(

@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 112
+skill_version: 113
 ---
 
 # Orchestrate
@@ -29,8 +29,8 @@ survive context compaction; everything else in this skill degrades gracefully â€
 2. Review and integration bind to an exact commit SHA inspected from a clean detached
    checkout â€” never a live writer tree, and never a compaction summary's claim of green.
 3. Landing on a persistence branch requires current user authority.
-4. After a context compaction, re-read this SKILL and the durable plan before the next
-   dispatch; the summary is hypothesis, not authority.
+4. After a context compaction, re-read the orchestrate SKILL.md and the durable task plan
+   before the next dispatch; the summary is hypothesis, not authority.
 
 ## Pipeline model
 
@@ -122,7 +122,11 @@ A slice cut so thin that coordinating it exceeds doing it is a cut defect, not d
 
 Default review posture is **cumulative**: one review closes a coherent surface; per-slice
 review needs a root-named risk. Prefer one writer for a coherent vertical slice; split at
-ownership or dependency seams, not per mechanical edit.
+ownership or dependency seams, not per mechanical edit. The scheduler dispatches an eligible
+cumulative frontier immediately when its same-surface `wave-reviewer` is idle; while that
+reviewer is busy, it accumulates the frontier for the next follow-up instead of spawning a
+second identity. This does not make review mandatory per slice: preserve the depth ladder,
+and keep `integration-reviewer` as the wave-boundary review of the integrated tree.
 
 ## Machinery
 

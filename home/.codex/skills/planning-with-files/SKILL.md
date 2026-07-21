@@ -15,7 +15,7 @@ session 與 plan 用中文,程式碼/變數/技術名詞用英文。
 借 git 的形狀:
 
 - **`INDEX.md` = refs** — 小、可變、只存**當前狀態與指標**。**唯一必讀、唯一有界(16 KiB)**。
-- **stores = object log** — 完整、append、可定址、按用途分類、**永不整份載入**,按需定向查找。
+- **stores = object log** — 完整、可定址、按用途分類、按其 mutation policy 更新；phase records 在完成前可變，completed 後 sealed and immutable，progress 仍 append-only；**永不整份載入**,按需定向查找。
 
 一句話 read protocol:**compaction／handoff 後只讀 `INDEX.md`;其餘定向查找。**
 
@@ -29,7 +29,7 @@ session 與 plan 用中文,程式碼/變數/技術名詞用英文。
 | 檔 | 角色 | 有界 |
 |---|---|---|
 | `INDEX.md` | Goal、Current State+Next gate、活 decisions、phase board、store 索引 | **是** |
-| `phases/NN-<slug>.md` | 一 phase 一檔;定向查找 by phase;完成即 seal | 否 |
+| `phases/NN-<slug>.md` | 一 phase 一檔;in_progress 前可變;completed 後 sealed and immutable | 否 |
 | `progress.jsonl` | append-only 時間軸/驗證軌跡;讀尾巴或區段 | 否 |
 | `findings.md` | investigation findings(事實/風險/設計筆記) | 否 |
 | `../../artifacts/<task-id>/` | 證據大塊(plan 目錄外,task 收尾即刪) | — |
@@ -75,7 +75,7 @@ Current State 整段覆寫、只留當下為真的;stale 假設在 boundary 清�
 - `migrate` 產生的 punch-list slot 只有一次立即 `checkpoint` recovery window；成功 checkpoint
   會消耗 marker，之後（以及任何 `check`）一律適用同一規則，必須補齊。
 - `checkpoint` = 驗 schema + 檢 INDEX 預算;超界時 Fast Fail,提示先 prune Current State 與
-  superseded decisions。stores(phase 檔、progress)只增不改。
+  superseded decisions。phase records 在完成前可變；completed 後 sealed and immutable；progress append-only。
 
 ## Migration(舊 plan → 新格式)
 

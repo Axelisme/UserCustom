@@ -391,6 +391,11 @@ def command_phase_set(args: argparse.Namespace) -> dict[str, Any]:
     plan = require_plan(root, args.task_id)
     path = find_phase_file(plan, args.phase)
     text = path.read_text(encoding="utf-8")
+    current_status = read_phase_field(text, "Status")
+    if current_status == "completed":
+        raise PlanError(
+            f"phase {int(args.phase):02d} is sealed after completion; phase-set cannot mutate it"
+        )
     if args.status and args.status not in PHASE_STATUSES:
         raise PlanError(f"status must be one of {PHASE_STATUSES}")
     if args.commit:
@@ -773,10 +778,11 @@ def command_checkpoint(args: argparse.Namespace) -> dict[str, Any]:
         raise PlanError("plan is not schema-valid: " + "; ".join(issues))
     size = utf8_size(index)
     if size > INDEX_LIMIT_BYTES:
+        overage = size - INDEX_LIMIT_BYTES
         raise PlanError(
-            f"{INDEX_FILE} is {size} bytes over the {INDEX_LIMIT_BYTES} budget; prune"
-            " Current State and superseded decisions — phase detail belongs in its"
-            " phases/ record, not the entry"
+            f"{INDEX_FILE} is {overage} bytes over the {INDEX_LIMIT_BYTES} budget"
+            f" (actual size {size} bytes); prune Current State and superseded decisions —"
+            " phase detail belongs in its phases/ record, not the entry"
         )
     if migration_recovery:
         index = clear_migration_punch_list(index)

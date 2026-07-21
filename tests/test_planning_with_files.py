@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / "home" / ".codex" / "skills" / "planning-with-files"
 SCRIPT = SKILL / "scripts" / "plan.py"
+PI_SCRIPT = ROOT / "home" / ".pi" / "agent" / "skills" / "planning-with-files" / "scripts" / "plan.py"
 
 
 def run_plan(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
@@ -40,6 +41,14 @@ class LifecycleTests(unittest.TestCase):
             index = (plan_dir(root) / "INDEX.md").read_text(encoding="utf-8")
             self.assertIn("**Goal:** 重構記憶系統", index)
             self.assertTrue((plan_dir(root) / "phases").is_dir())
+
+    def test_skill_describes_mutable_phase_records_and_append_only_progress(self) -> None:
+        text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("phase records 在完成前可變", text)
+        self.assertIn("completed 後 sealed and immutable", text)
+        self.assertIn("progress append-only", text)
+        self.assertNotIn("stores(phase 檔、progress)只增不改", text)
+        self.assertEqual(SCRIPT.read_bytes(), PI_SCRIPT.read_bytes())
 
     def test_init_refuses_second_time(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -89,6 +98,46 @@ class LifecycleTests(unittest.TestCase):
             self.assertIn("- **Commit:** abc1234", record)
             index = (plan_dir(root) / "INDEX.md").read_text(encoding="utf-8")
             self.assertIn("| 01 | completed | phases/01-x.md |", index)
+
+    def test_completed_phase_is_sealed_against_every_phase_set_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            complete = run_plan(
+                root,
+                "phase-set",
+                "demo",
+                "--phase",
+                "1",
+                "--status",
+                "completed",
+                "--commit",
+                "abc1234",
+                "--conclusion",
+                "done",
+            )
+            self.assertEqual(complete.returncode, 0, complete.stdout)
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            index = plan_dir(root) / "INDEX.md"
+            phase_bytes = phase.read_bytes()
+            index_bytes = index.read_bytes()
+            mutations = (
+                ("--note", "late note"),
+                ("--status", "pending"),
+                ("--status", "in_progress"),
+                ("--status", "blocked"),
+                ("--status", "completed"),
+                ("--commit", "late-sha"),
+                ("--conclusion", "late conclusion"),
+            )
+            for mutation in mutations:
+                with self.subTest(mutation=mutation):
+                    result = run_plan(root, "phase-set", "demo", "--phase", "1", *mutation)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn("sealed after completion", result.stdout)
+                    self.assertEqual(phase.read_bytes(), phase_bytes)
+                    self.assertEqual(index.read_bytes(), index_bytes)
 
     def test_log_appends_events_and_verifications(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -304,6 +353,8 @@ class CheckpointTests(unittest.TestCase):
             over = run_plan(root, "checkpoint", "demo")
             self.assertEqual(over.returncode, 1)
             self.assertIn("budget", over.stdout)
+            actual_size = len(index_path.read_bytes())
+            self.assertIn(f"{actual_size - 16_384} bytes over", over.stdout)
 
 
 class MigrationTests(unittest.TestCase):

@@ -1,7 +1,7 @@
 ---
 name: "implementer"
 description: "Own end-to-end implementation of one assigned scope within a frozen contract, using targeted validation and concise evidence."
-model: "openai-codex/gpt-5.6-terra"
+model: "openai-codex/gpt-5.6-luna"
 thinking: "high"
 tools: "read, write, edit, bash"
 systemPromptMode: replace

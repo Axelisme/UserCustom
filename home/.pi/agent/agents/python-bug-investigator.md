@@ -2,7 +2,7 @@
 name: "python-bug-investigator"
 description: "Diagnose root causes of Python bugs, test failures, flaky behavior, and unexpected runtime symptoms. Reads source, verifies hypotheses, and reports findings before any fix."
 model: "openai-codex/gpt-5.6-sol"
-thinking: "high"
+thinking: "low"
 tools: "read, write, edit, bash"
 systemPromptMode: replace
 inheritProjectContext: true

@@ -1,7 +1,7 @@
 ---
 name: "mcp-skill-tester"
 description: "Run a bounded read-only MCP or skill smoke test and return structured usability evidence to the root agent."
-model: "openai-codex/gpt-5.6-terra"
+model: "openai-codex/gpt-5.6-luna"
 thinking: "medium"
 tools: "read, bash, mcp"
 systemPromptMode: replace

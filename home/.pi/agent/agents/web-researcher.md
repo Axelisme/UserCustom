@@ -1,8 +1,8 @@
 ---
 name: "web-researcher"
 description: "Research official documentation and primary external sources with citations; no design or implementation."
-model: "openai-codex/gpt-5.6-sol"
-thinking: "low"
+model: "openai-codex/gpt-5.6-luna"
+thinking: "medium"
 tools: "read, bash, web_search, web_fetch"
 systemPromptMode: replace
 inheritProjectContext: true

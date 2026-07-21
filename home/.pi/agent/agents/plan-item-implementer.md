@@ -1,8 +1,8 @@
 ---
 name: "plan-item-implementer"
 description: "Implement an already approved plan item by item in Python without making new architecture decisions. Stops and reports ambiguity instead of guessing."
-model: "openai-codex/gpt-5.6-terra"
-thinking: "medium"
+model: "openai-codex/gpt-5.6-sol"
+thinking: "low"
 tools: "read, write, edit, bash"
 systemPromptMode: replace
 inheritProjectContext: true

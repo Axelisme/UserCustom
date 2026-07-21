@@ -1,7 +1,7 @@
 ---
 name: "repo-investigator"
 description: "Build a read-only, source-grounded map of local code, call sites, tests, and constraints without making contract decisions."
-model: "openai-codex/gpt-5.6-terra"
+model: "openai-codex/gpt-5.6-luna"
 thinking: "medium"
 tools: "read, bash"
 systemPromptMode: replace

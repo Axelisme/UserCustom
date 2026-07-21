@@ -55,9 +55,12 @@ supervisor asks and replies rather than a child taking root authority.
 Foreground detach is a supervisor-wait transport state: the child is neither paused nor
 complete, and the root may not treat it as a result until a completion wakeup or status says
 so. It is unrelated to a Git detached HEAD, which is a checkout state. Preserve the
-exact-SHA reviewer rule: launch a fresh reviewer with `artifacts: false` in a clean detached
-checkout (or place artifacts outside it), and do not resume that reviewer when resume could
-recreate cwd-local artifacts; start a fresh exact-SHA reviewer instead.
+exact-SHA reviewer rule: launch the initial reviewer fresh with `artifacts: false` in a clean
+detached checkout (or place artifacts outside it). For finding closure, advance that checkout
+to the root-named SHA and resume the same identity only when its persisted recovery descriptor
+explicitly records `artifactConfig.enabled: false`; re-prove HEAD and cleanliness before using
+the verdict. A legacy or unreadable descriptor, a missing artifact policy, or cwd/subject drift
+cannot prove placement safety: fail closed and start a fresh exact-SHA reviewer instead.
 
 ## Activation and leases
 
@@ -145,11 +148,12 @@ root binds harvest and review conclusions to exact Git SHAs, not to child summar
   inherited session state is the subject of review. On the fresh launch, set `artifacts: false`
   for a child whose `cwd` is the clean detached review worktree, or place its artifact/session
   directory outside that worktree; Pi's default `.pi-subagents/` output would otherwise dirty
-  the evidence tree. Do not `resume` that child when checkout cleanliness depends on
-  `artifacts: false`: current Pi resume may recreate cwd-local artifacts instead of preserving
-  the launch setting. Start a fresh exact-SHA reviewer instead. If artifacts unexpectedly
-  appear during a live run, stop the runner before cleanup; deleting its output directory
-  mid-run can make terminal result publication fail.
+  the evidence tree. Current-descriptor completed and paused resume preserve an explicit
+  `artifacts: false` placement contract and terminal publication, so finding closure may resume
+  that identity after `review advance`; inspect the descriptor first and re-check exact HEAD and
+  cwd cleanliness afterward. Legacy descriptors without the explicit field use a fresh reviewer.
+  If artifacts unexpectedly appear during a live run, stop it and observe terminal state before
+  cleanup; never delete a live runner's output directory.
 - Ordinary child subagents must not spawn subagents. If a delegated fanout child is ever
   used, its prompt and tool allowlist must explicitly grant and bound that responsibility.
 

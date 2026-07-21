@@ -6,19 +6,31 @@ before the first dispatch; the iron rules in `../SKILL.md` stay authoritative.
 ## Roles and dispatch
 
 Root alone freezes work, grants authority, decides deferral, and integrates. A dispatch
-names: bounded objective, workdir/scope, exact base, acceptance, stop conditions, and a
-checkpoint budget in observable units (commits, items — never wall-clock). Acceptance
-gates are **verbatim commands** — exact command line, workdir, environment — never a
-described intent like "affected pyright" for the assignee to interpret. Named risk axes
-double as the writer's adversarial self-check list before terminal; the reviewer still
-verifies the same axes independently. For slices touching ownership schedulers,
-projections, event streams, receipts, or callbacks, name
-[publication-review](publication-review.md) as a risk axis. Boilerplate lives in the
-profile; root writes only the contract, risk axes, acceptance, and non-goals. Long
-contracts go in a plain file whose path the dispatch names.
+names the bounded objective, scope/workdir, exact base, the task-id (the ledger key an
+assignee needs to self-query `findings status` for a surface's prior findings), acceptance,
+non-goals, and stop
+conditions; add a checkpoint budget in observable units (commits/items, never wall-clock)
+only when the work spans several boundaries — on a single-boundary slice the terminal
+milestone is the budget, and stating one is ceremony;
+acceptance gates are verbatim command + workdir + environment. Named risks are both writer
+self-check and reviewer scope; authority-publication slices name
+[publication-review](publication-review.md). Boilerplate stays in the profile; long
+contracts travel by named file. For speculative work, stop conditions also name the
+idempotent compensation to run in reverse if a later finding overturns its prerequisite.
+
+Before freezing, run the cross-cutting readiness checks a first implementation usually
+misses — cheaper here than a re-freeze after the writer stacks work on a half-frozen seam:
+do success and failure paths share one commit fence; is every public digest/fixture the
+contract exposes updated in the same freeze; does the failure path terminate at the real
+production owner, not a stub; is restart/recovery semantics backed by test evidence, not
+assumed. These are prompts, not a gate — a contract that cannot answer them is not ready to
+dispatch.
 
 Double-buffer each lane per the SKILL pipeline model; contract-planner can keep the
-one-deep chain stocked, refreshed at each harvest.
+one-deep chain stocked as drafts, each re-confirmed against the predecessor's actual result
+at harvest before it dispatches. Successive items on one authority surface stay in that
+surface's single lane and writer; collect them once cumulatively after the surface's review
+passes, never a fresh lane/worktree per item.
 
 Keep the same identity for the same domain; finding fixes return to the original writer,
 finding closure to the original reviewer. Spawn a new identity for independent review, a
@@ -29,23 +41,24 @@ Agents never spawn coordination sub-agents or decide landing/deferral.
 
 ## Milestones and liveness
 
-A milestone is one semantic envelope per observable boundary (for a writer: each commit)
-plus one terminal envelope per item — `item_id`, `outcome`, `evidence`, plus `subject_sha`
-for anything validated/reviewed and finding ids for `needs_fix`. Delivery is at-least-once,
-deduplicated by `item_id`; a sender repeats an unacknowledged terminal envelope in its
-final response. A runtime completion event means only that the turn ended. Envelope
-Git facts (`subject_sha`, parents, tree, clean state, trailers) are generated with
-`slice milestone --item <id>`, never hand-transcribed — retyped SHAs have bound reviews
-to the wrong commit. A schema-complete milestone that was received stands as evidence
-even if the sender's final transport later errors — a runtime completion error never
-retroactively voids it; conversely, with no terminal milestone, no verdict may be
-inferred from any other signal.
+At each observable boundary, emit one semantic envelope; delivery is at-least-once,
+deduplicated by `item_id`, and an unacknowledged terminal envelope repeats in the final
+response. Read its Git facts from `slice milestone --item <id>`. A received schema-valid
+terminal envelope remains evidence if transport later fails; without one, runtime
+completion proves only that the turn ended.
 
-Liveness recovery has three triggers: the runtime reports the identity errored; the runtime
-declares its lease lost; or the declared checkpoint budget passes with no milestone.
-Everything else is healthy — silence is model reasoning, a wait timeout is normal. On a
-trigger: read runtime metadata, send one ping, then interrupt and resume the same identity
-with a recovery delta; replace only when continuity is unavailable.
+The expected milestone is the **heartbeat**. Pair it with the runtime binding's wait bound
+and classify absence before acting:
+
+- **never-started** — no start or first boundary arrived; repair or reissue only after
+  runtime or lease evidence says the dispatch was not claimed.
+- **died-mid-work** — start was observed, then runtime error, lease loss, or the paired
+  heartbeat bound fired; resume the same identity from its last SHA, replacing it only
+  when continuity is unavailable.
+- **in-budget** — the latest boundary remains within its declared checkpoint budget; wait.
+
+Only the first two fire liveness. Inspect runtime metadata once; never poll, send progress
+pings, or treat a wait timeout alone as failure.
 
 ## Review
 
@@ -55,38 +68,51 @@ critical boundary → the barrier below. Two consecutive reviews yielding only m
 **on the same risk surface** drop that surface's next default depth one level — a new
 domain or risk axis starts at its own default; any major finding restores it.
 
-A reviewer inspects source first, then runs thin probes from a **detached checkout at the
-exact target SHA** (`review checkout`; a live-writer tree voids the evidence). For a
-finding-closure chain, `review advance --from <reviewed> --to <fix>` moves the same
-detached workspace to the new subject with the same proofs, instead of piling up one
-worktree per round. Challenge
-the oracle, ownership, lifecycle, and dangerous failures — green tests prove behavior, not
-that the seam is correct. The verdict is `pass` or `needs_fix`, delivered in the terminal
-milestone with subject SHA, findings (severity, path, observed behavior, evidence), and a
-proposed routing: gates-the-slice, follow-up-to-writer, task-plan concern, or backlog.
-Root decides deferral. Findings route in three tiers: a **confirmed major** is sent
-mid-review the moment it is confirmed — root routes it to the original writer at once
-while the reviewer keeps scanning independent surfaces; **ordinary findings** accumulate
-into the one terminal milestone; a **contract-overturning** finding stops the review and
-holds every axis that depends on the broken invariant. Root delivers accumulated ordinary
-findings to the assignee at that assignee's next declared milestone (commit or item
-envelope) — replying at a declared boundary is harvest, not an unsolicited
-running-assignee contact. A **public-contract correction** means the frozen seam itself
-changed — interface, acceptance, write scope, or base; anything that leaves the frozen
-contract intact is a finding or advice and waits for a milestone boundary. Waiting for a terminal exact SHA
-before reviewing is necessary (a moving tree voids evidence); waiting for a review
-verdict before stacking the successor, or for the whole review to end before fixing a
-confirmed major, is waste — review is a shadow station, and only a critical checkpoint
-puts it on the line. Re-review is
-finding-focused; one full review closes a named-risk surface.
+A reviewer reads source, then probes the named oracle, ownership, lifecycle, and dangerous
+failure axes from its own `review checkout` at the exact SHA the dispatch froze — root
+names the SHA, the reviewer opens the checkout, and the terminal `subject_sha` must equal
+that checkout's HEAD, so a wrong target is caught on arrival rather than prevented by an
+extra root round-trip. `review advance` reuses that checkout for closure commits, and `review audit` flags mechanical oracle weakening. The
+terminal milestone carries `pass|needs_fix|blocked|needs_decision`, subject SHA, and the
+receipt's path — the findings themselves are written once, in the receipt, not restated in
+the envelope. Record it through `findings record`, which takes those same four outcomes and
+keeps each finding's observable behavior and evidence: a gate the environment could not run
+is recorded `blocked`, never silently dropped. `findings status` derives closure from `Closes-Finding`,
+and `collect` blocks open `gates-the-slice` debt. A finding whose cause is a named pattern,
+not a lone instance, is recorded `sweep_required` — which forces `gates-the-slice`: fix
+every occurrence in the frozen scope in one commit, and re-review verifies enumeration
+completeness, not just the reported site. The ledger is task-long, so a finding an earlier
+wave logged on a file outlives that wave: on opening a surface, a reviewer or a writer's
+self-review pulls the prior findings on it — keyed on its own diff's paths
+(`findings status --path <file>`, plus `--sweep` for the cross-cutting root-cause patterns
+a path query cannot reach) — so review confirms rather than first-discovers. That query is
+what makes the ledger consultable across identities and waves rather than write-and-forget;
+for it to reach, a file-local finding must carry its `path`. Root decides routing.
 
-**Critical checkpoint** (both features named at freeze — a dangerous state a follow-up
-commit cannot cheaply undo, **and** named dependent work about to stack on it): freeze the
-core as its own small slice; a different-identity reviewer tries to disprove it with a
-hostile reproducer including negative paths and dangerous intermediates; the barrier holds
-only the dependent work while the writer runs ahead elsewhere; after pass, release. Use a
-refreshed full review only when a fix changes an authority boundary, threat model,
-persistence behavior, or enough of the slice that prior evidence no longer applies.
+Deliver a finding mid-flight only when delay would grow the rework — the writer is still
+propagating a root-cause (`sweep_required`) pattern, or a running successor is stacking on
+the flawed invariant; a finding local and static to the reviewed diff batches into the
+terminal receipt for the assignee's next milestone. Severity alone is not the trigger — the
+question is whether not knowing now costs more later. And delivering mid-flight still never
+by itself preempts the successor: flush its stacked work through the predeclared
+reverse-order compensations only when the finding overturns an invariant the successor
+relied on, and record that call — a finding local to the reviewed slice lands as a follow-up
+while the successor runs on. A
+public-contract correction changes interface, acceptance, scope, or base; anything else
+waits as finding or advice. Review needs a terminal exact SHA, but successors and
+confirmed-major fixes do not wait for its verdict or end. Re-review is finding-focused;
+refresh fully only when a fix invalidates prior authority, threat, persistence, or other
+reviewed boundary evidence.
+
+Presume **critical-depth independent review** when a slice changes at least two of: request
+identity, authority ownership, receipt/reconciliation taxonomy, resource lifecycle,
+durable recovery witness, process/credential boundary. A downgrade needs one freeze-time
+reason. This sets review depth, not a barrier.
+
+A **critical checkpoint** blocks dependent run-ahead only when a dangerous state cannot be
+cheaply undone by a follow-up **and** named dependent work is about to stack. Freeze that
+core as a small slice; a different identity tries to disprove it with hostile negative and
+intermediate paths. Hold only its descendants; release after pass.
 
 Evidence ownership is non-duplicative: writer owns permanent tests and functional
 acceptance; reviewer owns audit, adversarial probes, and temporary reproducers;
@@ -94,7 +120,11 @@ integration owns ancestry/tree checks and the final repo/risk-required gate on t
 candidate. A missing behavior returns to the writer for a failing regression before the
 fix. An abort, crash, or timeout is not a pass and never becomes one by retrying until
 green — record it, replace it with the smallest split evidence that still covers the
-surface, and keep unexplained risk blocking.
+surface, and keep unexplained risk blocking. Distinguish a product failure from a gate the
+sandbox could not run — a required capability the environment withheld (loopback socket,
+real adapter, network) makes the gate `blocked`/inconclusive, not `needs_fix`; name the
+missing capability and rerun in an authorized environment rather than reading the
+environment's refusal as a defect.
 
 ## Git topology
 
@@ -111,92 +141,98 @@ surface, and keep unexplained risk blocking.
   root merges serially in the integration checkout. The `orchestrate` aliases (`lane
   create`, `review checkout`, `collect`, `cleanup`, `slice status`) wrap the same
   operations with exact-input checks and idempotent rerun reports.
-- Declare each writer's file scope in a sentence; same-file or same-interface work is
-  serial (a scope conflict is a structural hazard — recut per the SKILL pipeline model).
-  The sole overlap exception is a root-declared **append-only shared** file (registration
-  lists, import blocks, changelogs — no semantic coupling between entries); writers touch
-  it concurrently and the textual merge is trusted.
-- While two lanes run, a zero-cost `git merge-tree <merge-base> <laneA> <laneB>` dry run
-  surfaces textual collisions before either terminals — an early warning to correct a
-  contract, never a license to overlap. A clean result proves nothing semantic: interface
-  conflicts live across files where Git cannot see them, which is why write scopes are
-  declared in prose, not derived from paths.
-- Shared foundation lands on integration first; dependent lanes start from that SHA.
-  **Cross-identity work bases only on a seam-ready SHA** (the writer's declared-stable
-  commit, `Seam-Ready: true` trailer, or the slice's terminal validated SHA) — never an
-  announced SHA that later work already stacks on; findings land as follow-up commits.
-- A successor needing **two seam-ready but unvalidated lanes** starts from a
-  `compose-base` composite: a merge of the named lane SHAs on `spec/<task>/<name>`,
-  marked `Speculative-Base: true` with one `Depends-Lane` per input. It is a base for
-  run-ahead only — `collect` refuses any lane whose history carries a composite whose
-  dependencies are not yet on the task branch, so speculation never leaks into
-  validated integration. A textual conflict while composing is a structural hazard
-  surfacing early: recut or serialize, never hand-resolve the composite.
-- Commit trailers carry attribution across run-ahead: every slice commit names
-  `Item: <id>`; a finding fix adds `Closes-Finding: <id>`, even when it lands on a
-  successor's branch. Re-review binds to the commits carrying `Closes-Finding`, not the
-  whole branch, so a successor's terminal SHA may include predecessor corrections without
-  blurring whose closure they are.
+- All scratch stays **repo-local**: `review checkout`, `lane create`, and the managed
+  aliases place worktrees under `.agent_state/worktrees/` and reject any path outside it, so
+  no gate depends on the mount, permissions, or cleanup policy of the system `/tmp`. Reach
+  for the alias rather than a raw `git worktree add /tmp/...`; a hand-placed out-of-repo
+  checkout forfeits that guarantee and the tool's exact-input and cleanup checks.
+- Writers are **single-threaded per artifact**; declared scopes remain the semantic guard.
+  A root-declared append-only shared file is the sole overlap exception.
+- `slice status` derives path overlaps. If one is a shared prerequisite, recut it as a
+  predecessor: record a `gates-the-slice` finding against the superseded subject (the
+  ledger is the deny-list), freeze the prerequisite from the last valid base, and use
+  `compose-base` when a successor also needs other still-valid seam-ready lanes. Otherwise
+  serialize. `revalidate` reports whether final follow-ups require recomposition; `collect`
+  rejects unlanded dependencies, open gating debt, or a conflicting final merge.
+- Commits carry `Item: <id>`; fixes carry `Closes-Finding: <id>`. `findings status`,
+  `collect`, `reconcile`, and `cleanup` derive closure and absorption; never copy them into
+  task_plan.
 - Never create or repair environments in worktrees; point the main checkout's toolchain at
-  worktree sources (e.g. `UV_PROJECT_ENVIRONMENT=<main>/.venv uv run --no-sync …`, or
-  `PYTHONPATH=<worktree>/<pkg> <main>/.venv/bin/python -m pytest …`).
-- Resolve conflicts by recovering each side's intent; conflict resolution never invents
-  behavior. If resolving the conflict requires source changes beyond choosing one side's
-  already-frozen intent, move it to a named integration adaptation branch/lane with an
-  owner, recorded inputs, conflict files, and gates; root does not make risky ad hoc edits
-  inside the serial merge. Before deleting a collected lane, prove absorption
-  (`git merge-base --is-ancestor <lane> <task>` or `git diff --quiet <lane> <task>`).
+  worktree sources. Resolve conflicts by recovering each side's intent; never invent
+  behavior during resolution.
 
 ## Landing
 
-Landing is one squash commit under the authority of the task's landing declaration,
-serialized by the built-in lock `land finish` takes itself. Keep expensive work off-lock:
-rebase `task/<task>` onto the persistence tip, run the final gate there, then
-`land finish --task-sha <exact>` (plus `--confirmed` under land-with-confirmation)
-re-reads the tip under the lock, squash-merges, and proves
-`git diff --quiet task/<task> <landed-commit>` — content identity, not ancestry, is the
-deletion authority. If the tip moved since the gate, rebase and rerun the gate; never
-adapt the candidate inside the locked section. `land status` reports the finish chain
-read-only and names the first missing step.
+Landing is one declaration-authorized squash commit. Keep expensive work off-lock: rebase
+onto the persistence tip and run the final gate, then use `land status|finish` with the
+exact task SHA (`--confirmed` when required). The tool re-reads under its lock and proves
+tree identity; target drift means rebase and rerun, never adapt inside the lock.
 
 ## Wave close
 
-Reconcile Git and the durable plan; collapse each closed decision into a one-line pointer;
-task_plan carries active items only. Reconcile `git worktree list` against the plan's
-lanes and review debt, sorting every worktree into: active writer, holding open review
-debt, validated/closed (delete now, one batch), or orphan with no durable evidence —
-an orphan is an adoption defect, counted, then deleted. Record three discipline counters, each expected zero —
-unprompted contacts to a running assignee, per-slice reviews without a named risk, repeat
-dispatches for one slice — and name any nonzero count in the wave record rather than
-defending it. Then answer four steering questions against the wave's evidence: **shape
-fit** (overhead vs work; hidden independence), **cut quality** (any slice over one
-context, stalled, or re-dispatched → recut), **parallelism** (bounded by ownership or by
-habit), **adoption** (were created artifacts used). Each answer is "keep" or a one-line
-next-freeze adjustment in task_plan; adjustments act forward only.
+The wave boundary is where inter-slice risk first becomes reviewable: dispatch the
+integration review — contract parity, lifecycle ordering, cross-module regression on the
+integrated tree — to an integration-reviewer here, not a re-run of slice diffs, and let it
+run under root's serial freeze of the next wave and this retrospective (its cost hides under
+root-serial time). `wave status` rolls the slice states, finding ledger, and worktree reconciliation into one
+read-only report with a restart handoff summary — read it to steer, but it never dispatches,
+lands, or writes the plan for you. Its `--summary` reports `wave_boundary_removable`: this
+task's lane worktrees. When it is non-empty and you judge the boundary safe, `cleanup
+--wave-boundary` clears them — abandoned, dirty, or absorbed alike, since a half-finished
+lane is the target, not work to protect — scoped to `agent/<task>/*`, never the integration
+checkout. It skips detached review worktrees, which carry no task identity; remove those by
+exact-target `cleanup --worktree`. When the count is zero, skip the step. The summary also
+carries `validated_unlanded`: SHAs that passed review but are not yet on the task branch —
+the resumable state after a restart or a collect blocked by a tool-permission failure (a
+cherry-pick escalation limit, a read-only integration checkout). Collect these without a
+second review; the pass marker is a durable ledger row, so the interruption costs no rework.
+
+Invite process feedback here: ask the subagents this wave dispatched for any reaction to
+orchestrate or to working under you, recorded via `feedback record` — append-only, gating
+nothing, deduped by no machine (a word's difference defeats a hash). The human may ask only
+after several waves, so the file, not your memory, carries it; read it on demand — when
+asked and at close — and merge by judgment then. Read task_plan and the ledgers the same
+way: when a decision needs them, not wholesale.
+
+Re-baseline task_plan to active intent, decisions, unresolved anomalies, and next gates;
+closed items become pointers and Git-derived state disappears. The finding ledger is not part
+of that compaction: it is append-only, and its closed rows are the correct steady state, since
+closure is derived by pairing a raw row with its `Closes-Finding` commit — rewriting it would
+only fork a lossy second copy. Narrative compaction of the plan itself follows
+planning-with-files.
+
+Write one retrospective every wave — waves are few, so the cost of writing beats the cost of
+root skipping it — appended to the task's durable memory, judging **root and the subagents**
+through three lenses:
+
+- **efficiency** — critical-path idleness, riskless per-slice reviews, repeat dispatches,
+  poor cuts (a stall read as a plan defect, not machinery to add).
+- **process-following** — unprompted running-assignee contacts, review bound to an exact SHA,
+  run-ahead held only for a named reason.
+- **tool-utilization** — unused artifacts (a defect at close), aliases used over hand-run git,
+  adoption of the derived reads.
+
+Each nonzero or adjustment becomes one forward-only next-freeze note; deviations worth acting
+on promote to the next Next gate.
 
 ## Handoff
 
-Stop dispatching; use remaining context to drain. Stop at a slice boundary or commit the
-nearest coherent state; never hand off mid-landing or with reviewer findings trapped in
-agent context — writers commit and report, reviewers flush every finding with severity and
-evidence. Update task_plan Current State with branch topology, live worktrees, review
-debt, run-ahead positions, and anomalies — it is the single handoff carrier; any other
-handoff file holds only a pointer to it. Remove reviewer temp worktrees; list kept lane
-worktrees. The next session reconciles that narrative against `git worktree list`,
-branches, and exact SHAs before dispatching anything.
+Stop dispatching and drain to a slice boundary; writers commit and milestone, reviewers
+flush findings. Run `reconcile` and `slice status`; task_plan stores only unresolved
+intent, decisions, anomalies, next gates, receipt pointers, and exact SHAs — not copied
+topology. Remove only tool-declared safe worktrees. The next session repeats the same
+derived reads before dispatch. A handoff document — say from the `handoff` skill — is a
+one-shot snapshot, not durable state: it lives in OS-temp, references artifacts rather than
+copying them, and is consumed on read. The receiving root rebuilds live state from `wave
+status --summary` and task_plan; it never promotes that snapshot into a maintained third
+copy in the workspace, which would only drift from Git and the plan and demand endless
+re-syncing.
 
 ## Skill upgrades
 
-Pin the task at start with `orchestrate pin set`; every command that creates or mutates
-lane/spec/review/integration/persistence state fails fast if the installed skill moves
-mid-task, while read-only and maintenance commands stay unguarded so a stale pin never
-blocks closing down. Adopt a new version at a safe boundary with `orchestrate pin migrate`,
-which repins and reports the changed documents so root re-reads exactly those; removed
-documents are listed separately (`acknowledge_removed`) — acknowledge they are gone, do
-not hunt for them. Sub-agents never load orchestrate; root sends only the effective delta.
-Releases are cut only with the one-shot `orchestrate release` (version bump + manifest +
-doctor succeed or roll back together); rerunning it after an abort finishes or confirms the
-release (`recovered: already-released`). Because the installed skill is a live overlay, cut
-the release inside a task worktree and land it by merge — the worktree is the staging area,
-the merge the atomic switch — so the installed path never shows a half-written release,
-then `doctor` the installed path once after the merge.
+Pin at task start with `pin set`; state-entering commands fail if the installed release
+moves, while read-only maintenance stays available. At a safe boundary `pin migrate`
+repins and reports exactly what root must re-read or acknowledge removed. Cut releases only
+with the one-shot `release` transaction. Because the installed skill is a live overlay,
+release in a task worktree, land by merge as the atomic switch, then `doctor` the installed
+path.

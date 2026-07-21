@@ -1,28 +1,30 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 98
+skill_version: 107
 ---
 
 # Orchestrate
 
 This skill exists for two things: **parallel lanes and the pipeline that keeps them
-full**; everything else is supporting infrastructure. Run a control loop that retires the
-most consequential uncertainty with the largest move you can still prove safe. Git is the
-only topology truth carrier; the planning-with-files task plan is the only durable
-narrative; everything else is root judgment, not protocol. Optimize **critical-path lead
-time**, not agent utilization; a redone slice is cheaper than machinery that prevents
-redoing it.
+full**; everything else is supporting infrastructure. You **own the control flow** — the
+loop, its stops, its dispatch and its integration are yours, not a framework's and not the
+assignees'. Run it to retire the most consequential uncertainty with the largest move you
+can still prove safe. **Git is the durable log**: commits, SHAs, and trailers are the
+state of record — current state, what was reviewed, whether a lane is absorbed are each a
+*derived read* of git, never a hand-kept copy that drifts. The task plan carries only what
+git cannot derive: intent, decisions, judgment. Optimize **critical-path lead time**, not
+agent utilization; a redone slice is cheaper than machinery that prevents redoing it.
 
 ## Iron rules
 
-Installed in the always-resident runtime context (`~/.codex/AGENTS.md` for Codex,
-`~/.pi/agent/APPEND_SYSTEM.md` for Pi) because they must survive context compaction;
-everything else in this skill degrades gracefully — these do not.
+Installed in the always-resident runtime context (`~/.codex/AGENTS.md`) because they must
+survive context compaction; everything else in this skill degrades gracefully — these do not.
 
-1. After dispatch, contact a running assignee only for a public-contract correction, a
-   confirmed major finding, a user override/stop, or a fired liveness trigger — never for
-   progress or status, and never on a fixed polling interval.
+1. After dispatch, contact a running assignee only for a cost-growing finding — a
+   public-contract correction, contract overturn, root-cause propagation, or successor
+   stacking on a broken invariant — a user override/stop, or a fired liveness trigger;
+   never for progress or status, and never on a fixed polling interval.
 2. Review and integration bind to an exact commit SHA inspected from a clean detached
    checkout — never a live writer tree, and never a compaction summary's claim of green.
 3. Landing on a persistence branch requires current user authority.
@@ -37,7 +39,12 @@ SHA; validated = every named review debt closed; retired = integrated with the f
 green. "The successor can run" reads seam-ready and never implies "the predecessor can
 integrate", which reads validated. The stations are **freeze → implement → integrate**, with independent
 review as a **shadow station** beside the line — most slices never enter it (depth
-ladder), and it blocks the line only at a critical checkpoint. Freeze and integrate are
+ladder), and it blocks the line only at a critical checkpoint. Review's unit is the **diff**
+at a seam-ready SHA, advancing against the validated base — never a re-scan of settled
+surface. Two altitudes ride two risk classes: *intra-slice* correctness reviews in the
+shadow during the wave; *inter-slice/emergent* risk (contract parity, lifecycle ordering,
+cross-module regression) is visible only once integrated, so it sits at the **wave boundary**
+by data dependency, not policy, batched into root's next-wave freeze. Freeze and integrate are
 root-serial; implement and review fan out. Root is therefore the throughput ceiling:
 batch harvests, keep the serial stations short, keep the parallel stations fed.
 
@@ -56,11 +63,10 @@ Two axes of parallelism:
 
 A stall is legitimate only as one of three hazards:
 
-- **Structural** — two slices need the same file/interface: first try an enabling
-  refactor / dependency extraction so the scopes become disjoint, else serialize — and
-  read it as a poor cut; fix the plan, not the machinery. Admit the enabling task only
-  when it removes a concrete wait, conflict, or rework cost. Sole overlap exception: a
-  root-declared append-only shared file, where the textual merge is trusted.
+- **Structural** — two slices need the same file/interface: first try splitting the seam
+  so the scopes become disjoint (prefactor), else serialize — and read it as a poor cut;
+  fix the plan, not the machinery. Sole overlap exception: a root-declared append-only
+  shared file, where the textual merge is trusted.
 - **Data** — a successor needs a predecessor's seam: forward on the **seam-ready SHA**; a
   review verdict is never the wait condition.
 - **Control** — a finding overturns the contract: flush only the work stacked on the
@@ -74,8 +80,10 @@ test: if a follow-up commit can absorb a wrong bet, run; only where it cannot, b
 
 **Ready critical-path work left undispatched is a root scheduling defect** — an idle slot
 alone is not; filling it with low-value speculative work costs more than the idleness.
-Keep each lane double-buffered — one slice running, its successor already frozen —
-refreshed at each harvest. Depth one only: deeper stock goes stale and rots into ritual.
+Keep each lane double-buffered — one slice running, its successor already *drafted*, not
+frozen: the draft is a proposal re-confirmed against the running slice's actual result at
+harvest before it dispatches, since that result can overturn it. Depth one only: deeper
+stock goes stale and rots into ritual.
 
 ## Control loop — root's serial duty cycle
 
@@ -104,6 +112,13 @@ Not a taxonomy — judgment guides, in the spirit of "simple = 1 agent, complex 
   freeze — a scary-sounding domain alone never qualifies). Carve that core into its own
   small slice, review it before the fan-out, keep the shell normal.
 
+Root's cost scales with **round-trips, not fields per dispatch**: a contract is written
+once and cheaply, while every harvest re-enters context that was exported at dispatch. So
+the lever is fewer exchanges, not shorter ones — return same-domain work to the writer that
+already holds the context (a reuse costs no export at all), batch harvests instead of
+reacting per slice, and when freeze plus harvest would cost more than the work, keep it.
+A slice cut so thin that coordinating it exceeds doing it is a cut defect, not diligence.
+
 Default review posture is **cumulative**: one review closes a coherent surface; per-slice
 review needs a root-named risk. Prefer one writer for a coherent vertical slice; split at
 ownership or dependency seams, not per mechanical edit.
@@ -113,27 +128,29 @@ ownership or dependency seams, not per mechanical edit.
 Everything optional; create nothing without a live need, and count unused artifacts at
 close as defects. What remains:
 
-- **Worktree/lane commands** — `lane create`, `review checkout`, `review advance`,
-  `compose-base`, `collect`, `cleanup`, `slice status`, `slice milestone`,
-  `land status|finish` via `<repo-python> <skill-dir>/scripts/orchestrate.py --help`.
-  Idempotent guards over plain git: a rerun after an aborted turn reports what already
-  happened (`recovered: …`). `slice milestone` generates envelope Git facts so SHAs are
-  never hand-typed; `compose-base` builds a marked speculative base for a successor that
-  depends on two unvalidated lanes; `review advance` moves one detached review workspace
-  to the next subject SHA instead of accreting worktrees.
-- **Integration adaptation branch** — conflict resolution that changes source intent is
-  implementation work, not merge bookkeeping. Create a named adaptation branch/lane with
-  an owner closest to the shared seam, record the two inputs, conflict files, and required
-  gates, then integrate it like any other slice. Use it only when it prevents root from
-  doing risky ad hoc edits during serial integration.
+- **Git guards** — `lane create`, `review checkout|advance|audit`, `compose-base`,
+  `revalidate`, `findings record|status` (`--path`/`--sweep` pulls a surface's prior findings
+  across waves), `slice status|milestone`, `collect`, `reconcile`,
+  `wave status` (read-only rollup + restart handoff, surfacing `validated_unlanded` — the
+  reviewed-but-not-yet-collected SHAs to resume without a second review), `cleanup`
+  (`--worktree` for one exact
+  target; `--wave-boundary` to sweep this task's leftover lanes at a boundary you judge
+  safe), and `land status|finish` via
+  `<repo-python> <skill-dir>/scripts/orchestrate.py --help`. They derive or validate Git
+  facts; consult per-command `--help`, never restate arguments.
+- **Process feedback** — `feedback record` gives a dispatched subagent an append-only channel
+  for reactions to orchestrate itself, separate from findings and gating nothing. Invite it
+  at a boundary; read the file on demand — when the human asks or at close — and organize it
+  by judgment, never folding it into standing context. Details in
+  [coordination](references/coordination.md).
 - **Version pin** — `pin set` at task start guards the state-entering commands; `pin
   migrate` adopts a release at a safe boundary and names the documents to re-read; cut
   releases only with the one-shot `release`, never a hand-edited `skill_version`. The
   lifecycle and the worktree-staged release flow live in
   [coordination](references/coordination.md).
 - **Task plan** — planning-with-files at `.agent_state/plans/<task-id>/` for cross-session
-  or information-heavy work. It carries state (decisions, open findings, review debt,
-  lane positions), never procedure.
+  or information-heavy work. It carries only intent, decisions, anomalies, and next gates,
+  with Git state as SHA pointers; never procedure or finding status.
 - **Landing declaration** — a tiny hand-written JSON naming the user's landing policy
   (`validate-only | land-with-confirmation | commit-authorized | publish-authorized`); it
   carries landing authority so the close never stalls at "validated but unlanded".
@@ -141,9 +158,9 @@ close as defects. What remains:
 Read [coordination](references/coordination.md) before the first dispatch, review, or
 landing of a task; the matching runtime binding ([runtime-codex.md](runtime-codex.md),
 [runtime-claude.md](runtime-claude.md), or [runtime-pi.md](runtime-pi.md)) before the first
-agent action; [publication-review](references/publication-review.md) only when a slice
-touches authority publication (schedulers, projections, event streams, receipts,
-callbacks).
+agent action;
+[publication-review](references/publication-review.md) only when a slice touches authority
+publication (schedulers, projections, event streams, receipts, callbacks).
 
 ## Definition of done
 

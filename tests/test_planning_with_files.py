@@ -257,10 +257,34 @@ class MigrationTests(unittest.TestCase):
             self.assertIn("Goal", result.stdout)
 
 
+class StatusGitTests(unittest.TestCase):
+    def test_status_derives_git_snapshot_inside_a_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "t@t"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True)
+            (root / "seed").write_text("x", encoding="utf-8")
+            subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "seed"], cwd=root, check=True)
+            run_plan(root, "init", "demo", "--goal", "g")
+            snap = payload(run_plan(root, "status", "demo"))["git"]
+            self.assertRegex(snap["head"], r"^[0-9a-f]{7,64}$")
+            self.assertRegex(snap["tree"], r"^[0-9a-f]{7,64}$")
+            self.assertFalse(snap["clean"])  # the plan dir is untracked
+            self.assertIsInstance(snap["branch"], str)
+
+    def test_status_git_is_none_outside_a_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            self.assertIsNone(payload(run_plan(root, "status", "demo"))["git"])
+
+
 class SkillContractTests(unittest.TestCase):
-    def test_skill_declares_v9_and_mental_model(self) -> None:
+    def test_skill_declares_version_and_mental_model(self) -> None:
         text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("skill_version: 9", text)
+        self.assertIn("skill_version: 10", text)
         for phrase in ("refs vs object log", "只讀 `INDEX.md`", "指標不抄本", "migrate"):
             self.assertIn(phrase, text)
 

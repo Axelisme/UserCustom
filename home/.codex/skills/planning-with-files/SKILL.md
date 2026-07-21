@@ -2,7 +2,7 @@
 name: planning-with-files
 description: 以 explicit task-id 管理 repo-local durable task narrative；只在跨回合、critical或資訊量確有需要時使用。
 user-invocable: true
-skill_version: 9
+skill_version: 10
 ---
 
 # Planning with Files
@@ -49,7 +49,7 @@ findings,review findings 不進此檔。
 | `phase-start <id> --topic <t> [--slug <s>]` | 開 phase 檔 + board 列(in_progress) |
 | `phase-set <id> --phase NN [--status/--commit/--conclusion/--note]` | 改 phase 檔 + board;completed 需 Commit+Conclusion |
 | `log <id> --action <t> [--actor/--result/--next]` 或 `--verify --command --result [--sha]` | append 一列 progress.jsonl |
-| `status <id>` | read-only:INDEX 摘要 + store 計數 |
+| `status <id>` | read-only:INDEX 摘要 + store 計數 + `git`(HEAD/branch/tree/clean,live 推導) |
 | `checkpoint <id>`(＝`compact`) | 驗 schema + INDEX 超界即 Fast Fail |
 | `migrate <id>` | 舊格式 → 新格式(見下) |
 | `check <id>` / `archive <id>` | board 無 open phase 才過 / 搬到 archives |
@@ -63,6 +63,7 @@ findings,review findings 不進此檔。
 
 decision 被取代:在 Decisions ledger 把舊項標 `superseded` 指向 replacement,不新增相反文字。
 Current State 整段覆寫、只留當下為真的;stale 假設在 boundary 清除。
+**當前 SHA/tree/branch 不手抄進 INDEX** —— 由 `status` 從 git live 推導(重複來源必漂)。
 
 ## Compaction:只壓入口
 

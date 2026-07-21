@@ -15,6 +15,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -139,6 +140,35 @@ def today() -> str:
 
 def now_ts() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def git_snapshot(root: Path) -> dict[str, Any] | None:
+    """Derive HEAD/branch/tree/clean straight from git, or None outside a work tree.
+
+    The point is to never hand-copy a current SHA into INDEX: read it live here.
+    """
+
+    def git(*args: str) -> str | None:
+        try:
+            done = subprocess.run(
+                ["git", *args], cwd=root, text=True, capture_output=True, check=False
+            )
+        except (OSError, ValueError):
+            return None
+        return done.stdout.strip() if done.returncode == 0 else None
+
+    head = git("rev-parse", "HEAD")
+    if head is None:
+        return None  # git absent, or root is not inside a work tree
+    branch = git("rev-parse", "--abbrev-ref", "HEAD")
+    tree = git("rev-parse", "HEAD^{tree}")
+    porcelain = git("status", "--porcelain")
+    return {
+        "head": head,
+        "branch": None if branch == "HEAD" else branch,
+        "tree": tree,
+        "clean": porcelain == "",
+    }
 
 
 # ---- INDEX parsing ----------------------------------------------------------
@@ -445,13 +475,13 @@ def _old_active_notes(text: str) -> dict[str, dict[str, str]]:
     """Parse `### Phase N — topic` blocks under `## Active Notes`."""
     body = _old_section_body(text, "## Active Notes")
     notes: dict[str, dict[str, str]] = {}
-    current: str | None = None
+    current: str = ""
     for line in body.splitlines():
         heading = re.match(r"^### Phase\s+([0-9]+)\s*[—-]\s*(.*)$", line)
         if heading:
             current = heading.group(1) or ""
             notes[current] = {"topic": (heading.group(2) or "").strip(), "detail": ""}
-        elif current is not None:
+        elif current:
             notes[current]["detail"] += line + "\n"
     return notes
 
@@ -660,6 +690,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         "task_id": args.task_id,
         "index_bytes": utf8_size(index),
         "phases": board,
+        "git": git_snapshot(root),
         "stores": {
             "phases": len(existing_phase_files(plan)),
             "progress_rows": progress_rows,

@@ -181,7 +181,11 @@ task's lane worktrees. When it is non-empty and you judge the boundary safe, `cl
 --wave-boundary` clears them — abandoned, dirty, or absorbed alike, since a half-finished
 lane is the target, not work to protect — scoped to `agent/<task>/*`, never the integration
 checkout. It skips detached review worktrees, which carry no task identity; remove those by
-exact-target `cleanup --worktree`. When the count is zero, skip the step.
+exact-target `cleanup --worktree`. When the count is zero, skip the step. The summary also
+carries `validated_unlanded`: SHAs that passed review but are not yet on the task branch —
+the resumable state after a restart or a collect blocked by a tool-permission failure (a
+cherry-pick escalation limit, a read-only integration checkout). Collect these without a
+second review; the pass marker is a durable ledger row, so the interruption costs no rework.
 
 Invite process feedback here: ask the subagents this wave dispatched for any reaction to
 orchestrate or to working under you, recorded via `feedback record` — append-only, gating

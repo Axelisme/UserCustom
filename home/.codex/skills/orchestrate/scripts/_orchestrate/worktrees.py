@@ -262,6 +262,7 @@ def command_wave_status(args: argparse.Namespace) -> dict[str, Any]:
     if not task_ref.startswith("task/") or task_ref.count("/") != 1:
         raise OrchestrateError(f"task ref must use task/<task>: {task_ref!r}")
     task_id = task_id_from_ref(task_ref)
+    root = Path(args.root).resolve()
     slice_report = command_slice_status(
         argparse.Namespace(root=args.root, task_ref=task_ref)
     )
@@ -269,6 +270,11 @@ def command_wave_status(args: argparse.Namespace) -> dict[str, Any]:
         argparse.Namespace(root=args.root, task_id=task_id, task_ref=task_ref)
     )
     reconcile_report = command_reconcile(argparse.Namespace(root=args.root))
+    reviewed_pass = [
+        marker["subject_sha"]
+        for marker in findings_report["review_outcomes"]
+        if marker.get("verdict") == "pass"
+    ]
     handoff = {
         "task_ref": task_ref,
         "task_sha": slice_report["task_sha"],
@@ -283,10 +289,17 @@ def command_wave_status(args: argparse.Namespace) -> dict[str, Any]:
         # Derived here rather than carried as its own ledger key: a review that
         # ended blocked is not clean, and one place deciding that cannot drift
         # from another.
-        "reviewed_clean": sorted(
-            marker["subject_sha"]
-            for marker in findings_report["review_outcomes"]
-            if marker.get("verdict") == "pass"
+        "reviewed_clean": sorted(reviewed_pass),
+        # The subset of reviewed_clean not yet on the task branch: a subject that
+        # passed review but whose SHA is not an ancestor of the task head. This is
+        # the resumable "validated, unlanded" state — after a restart or a landing
+        # blocked by a tool-permission failure (a cherry-pick escalation limit, a
+        # read-only integration checkout), root collects these SHAs without paying
+        # for a second review, because the pass marker is a durable ledger row that
+        # outlives the interruption. It is a pure derived read of the same markers,
+        # never a stored flag, so it cannot drift from reviewed_clean.
+        "validated_unlanded": sorted(
+            sha for sha in reviewed_pass if not is_ancestor(root, sha, slice_report["task_sha"])
         ),
         "safe_to_remove": reconcile_report["safe_to_remove"],
         # What `cleanup --wave-boundary` would clear right now: this task's lane

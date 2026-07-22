@@ -122,6 +122,43 @@ class PiRuntimeParityTests(unittest.TestCase):
         self.assertNotIn('"toolBudget"', preset_section)
         self.assertNotIn('"worktree": true', preset_section)
 
+    def test_pi_runtime_documents_yield_goal_policy(self) -> None:
+        text = (PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8")
+        normalized = " ".join(text.split())
+        for phrase in (
+            "## Pi goal yield policy",
+            "active interactive `pi-goal` session",
+            "`yield_goal({ reason })`",
+            "no blocking tool remains in progress",
+            "no synchronous autonomous root work can make progress",
+            "next prerequisite requires a future agent turn",
+            "async child or provider completion",
+            "future ordinary user reply",
+            "another external result",
+            "Do not yield while autonomous work remains",
+            "blocking `ask_user_question`",
+            "yield_goal` is terminal",
+            "sole final tool action",
+            "subagent_wait` for explicit run-to-completion or headless cases",
+            "Never claim that Enter wakes `subagent_wait`",
+            "Pi-specific",
+            "does not change generic runtime defaults or `pi-subagents` tool semantics",
+        ):
+            self.assertIn(phrase, normalized)
+
+    def test_pi_goal_local_package_declaration_is_unique_and_resolves_to_checkout(self) -> None:
+        settings_path = HOME / ".pi" / "agent" / "settings.json"
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        packages = settings.get("packages")
+        self.assertIsInstance(packages, list)
+        local_entry = "../../Documents/VSCode/Typescript/pi-goal"
+        self.assertEqual(packages.count(local_entry), 1)
+        self.assertFalse(any(package == "npm:pi-goal" for package in packages))
+        resolved = (Path("/home/axel/.pi/agent") / local_entry).resolve()
+        self.assertEqual(
+            resolved, Path("/home/axel/Documents/VSCode/Typescript/pi-goal")
+        )
+
     def test_always_resident_iron_rules_match(self) -> None:
         codex = (HOME / ".codex" / "AGENTS.md").read_text(encoding="utf-8")
         pi = (HOME / ".pi" / "agent" / "APPEND_SYSTEM.md").read_text(

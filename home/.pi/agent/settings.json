@@ -6,6 +6,7 @@
   "packages": [
     "npm:@juicesharp/rpiv-ask-user-question",
     "/home/axel/Documents/VSCode/Typescript/pi-subagents",
+    "../../Documents/VSCode/Typescript/pi-goal",
     "npm:pi-mcp-adapter",
     "npm:pi-native-search"
   ],

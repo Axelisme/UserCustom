@@ -209,6 +209,23 @@ not inspect a Pi fleet. Runtime lease safety is unchecked (`runtime_lease_safety
 `steer` delivers guidance; it does not preempt active tools. For cancellation, use `interrupt`;
 do not treat steering as cancellation.
 
+## Pi goal yield policy
+
+In an active interactive `pi-goal` session, root may call `yield_goal({ reason })` only when
+all three conditions hold: no blocking tool remains in progress, no synchronous autonomous
+root work can make progress, and the next prerequisite requires a future agent turn. This
+includes an async child or provider completion, a future ordinary user reply, or another
+external result. Do not yield while autonomous work remains.
+
+A blocking `ask_user_question` is an in-run wait for an answer, so do not yield while it is
+waiting. `yield_goal` is terminal: provide a concise visible reason and make it the sole
+final tool action; do not emit another wait or speculative work afterward. Retain
+`subagent_wait` for explicit run-to-completion or headless cases. Never claim that Enter
+wakes `subagent_wait`.
+
+Yield is Pi-specific and does not change generic runtime defaults or `pi-subagents` tool
+semantics.
+
 ## Cumulative review scheduling
 
 Review is not mandatory per slice. When a same-surface `wave-reviewer` is idle, dispatch the

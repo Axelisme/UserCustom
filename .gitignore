@@ -1,2 +1,5 @@
 .luarc.json
 .agent_state
+.codegraph
+.pi-subagents
+

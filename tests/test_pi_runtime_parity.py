@@ -87,6 +87,41 @@ class PiRuntimeParityTests(unittest.TestCase):
                 ):
                     self.assertIn(key, text)
 
+    def test_pi_orchestrate_profiles_encode_stable_launch_defaults(self) -> None:
+        for name in ("wave-implementer", "wave-reviewer", "integration-reviewer"):
+            text = (
+                HOME / ".pi" / "agent" / "agents" / f"{name}.md"
+            ).read_text(encoding="utf-8")
+            with self.subTest(profile=name):
+                self.assertIn("defaultContext: fresh", text)
+                self.assertIn("async: true", text)
+                self.assertIn('acceptance: {"level":"none"', text)
+                self.assertIn("Orchestrate owns authoritative acceptance", text)
+
+    def test_pi_runtime_documents_profile_backed_launch_presets(self) -> None:
+        text = (PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8")
+        normalized = " ".join(text.split())
+        for phrase in (
+            "## Recommended launch presets",
+            "recipes, not a `preset` tool field",
+            "`lane-writer`",
+            "`exact-sha-review`",
+            "`read-only-evidence`",
+            "Do not apply these presets to generic Pi delegation",
+            "do not point runtime `output` at the canonical receipt path",
+            "same-identity continuation is not a fresh launch preset",
+            "cwd, frozen base or subject SHA, write or review scope",
+        ):
+            self.assertIn(phrase, normalized)
+        preset_section = text[
+            text.index("## Recommended launch presets") :
+            text.index("## Activation and leases")
+        ]
+        self.assertGreaterEqual(preset_section.count('"artifacts": false'), 3)
+        self.assertNotIn('"turnBudget"', preset_section)
+        self.assertNotIn('"toolBudget"', preset_section)
+        self.assertNotIn('"worktree": true', preset_section)
+
     def test_always_resident_iron_rules_match(self) -> None:
         codex = (HOME / ".codex" / "AGENTS.md").read_text(encoding="utf-8")
         pi = (HOME / ".pi" / "agent" / "APPEND_SYSTEM.md").read_text(
@@ -170,6 +205,12 @@ class PiRuntimeParityTests(unittest.TestCase):
             "compaction summary is not a handoff contract",
         ):
             self.assertIn(phrase, text)
+
+    def test_pi_runtime_binding_matches_across_skill_overlays(self) -> None:
+        self.assertEqual(
+            (CODEX_SKILL / "runtime-pi.md").read_bytes(),
+            (PI_SKILL / "runtime-pi.md").read_bytes(),
+        )
 
     def test_shared_skill_contracts_do_not_drift(self) -> None:
         for relative in (

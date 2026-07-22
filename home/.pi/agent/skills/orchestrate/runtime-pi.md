@@ -62,6 +62,90 @@ explicitly records `artifactConfig.enabled: false`; re-prove HEAD and cleanlines
 the verdict. A legacy or unreadable descriptor, a missing artifact policy, or cwd/subject drift
 cannot prove placement safety: fail closed and start a fresh exact-SHA reviewer instead.
 
+## Recommended launch presets
+
+These are orchestrate launch recipes, not a `preset` tool field. The Pi
+`wave-implementer`, `wave-reviewer`, and `integration-reviewer` profiles carry the stable
+`defaultContext: fresh`, `async: true`, and orchestrate-owned acceptance defaults. The
+recipes below show the remaining placement and delivery choices that must be visible at the
+call site. Do not apply these presets to generic Pi delegation: generic agents retain their
+runtime-inferred acceptance and launch behavior.
+
+Orchestrate disables the generic Pi acceptance report for its dedicated profiles because
+Git SHAs, frozen gates, terminal envelopes, canonical receipts, the findings ledger, and
+root integration are the authoritative acceptance surface. This does not weaken process exit,
+completion guards, exact-SHA review, or required gates. Every dispatch still names cwd,
+frozen base or subject SHA, write or review scope, pre-existing dirt, required evidence, and
+stop conditions; no preset may grant Git or landing authority.
+
+### `lane-writer`
+
+Use for a `wave-implementer` in a durable orchestrate lane. The profile already supplies the
+fresh async launch and external acceptance contract; the call supplies the lane lease and
+keeps runtime artifacts out of the Git-evidenced worktree:
+
+```json
+{
+  "agent": "wave-implementer",
+  "cwd": "/absolute/orchestrate/lane",
+  "task": "<frozen contract and handoff baseline>",
+  "artifacts": false,
+  "progress": true
+}
+```
+
+Do not add `turnBudget`, a hard `toolBudget`, Pi `worktree: true`, or an arbitrary wall-clock
+completion deadline. A required `timeoutMs` remains an outer process-safety cap sized beyond
+the observable milestone lease, never a delivery budget.
+
+### `exact-sha-review`
+
+Use for an initial `wave-reviewer` or `integration-reviewer` launch in the root-created clean
+detached checkout:
+
+```json
+{
+  "agent": "wave-reviewer",
+  "cwd": "/absolute/clean/detached-review-checkout",
+  "task": "<exact subject/base, risks, and external receipt path>",
+  "artifacts": false
+}
+```
+
+The task names one canonical receipt path outside the checkout. The reviewer writes and
+validates that file directly; do not point runtime `output` at the canonical receipt path,
+because runtime final-output persistence is a different transport. Critical depth changes
+the explicit model/thinking override, not this placement contract. A same-identity
+continuation is not a fresh launch preset: after `review advance`, inspect the recovery
+descriptor, re-prove exact HEAD and cleanliness, and use `resume` without replacing its
+persisted `artifacts: false`, deadline, cwd, or acceptance policy.
+
+### `read-only-evidence`
+
+Use for orchestrate reconnaissance or external research whose artifact root will inspect
+before making a decision. The output path must be outside every writer/reviewer checkout:
+
+```json
+{
+  "agent": "<read-only agent>",
+  "cwd": "/absolute/read-only/source",
+  "task": "<bounded evidence question and citation contract>",
+  "async": true,
+  "context": "fresh",
+  "artifacts": false,
+  "output": "/absolute/external/evidence.md",
+  "outputMode": "file-only",
+  "acceptance": {
+    "level": "none",
+    "reason": "Root will inspect the cited evidence artifact before using it."
+  }
+}
+```
+
+This preset makes the named evidence file authoritative and requires root to read it; a
+successful runtime result alone is not acceptance. For a generic non-orchestrate read-only
+query, omit this acceptance override and let Pi's normal `auto` inference apply.
+
 ## Activation and leases
 
 Treat Pi children as a small state machine with run states `queued`, `running`, `complete`,

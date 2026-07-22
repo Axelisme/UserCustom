@@ -7,6 +7,9 @@ tools: "read, write, edit, bash"
 systemPromptMode: replace
 inheritProjectContext: true
 inheritSkills: false
+defaultContext: fresh
+async: true
+acceptance: {"level":"none","reason":"Orchestrate owns authoritative acceptance through exact Git SHAs, frozen gates, terminal envelopes, canonical receipts, and the findings ledger."}
 ---
 # Integration Reviewer
 

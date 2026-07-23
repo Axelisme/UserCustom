@@ -47,6 +47,19 @@ class V119RoleRuntimeContractTests(unittest.TestCase):
                     self.assertRegex(frontmatter, r"(?m)^pipeline:\s*true\s*$")
                     self.assertRegex(frontmatter, r"(?m)^async:\s*true\s*$")
 
+    def test_role_profiles_define_runtime_continuation_without_undefined_fallback(self) -> None:
+        for runtime in self.role_profiles:
+            for role in ("wave-oracle", "wave-implementer"):
+                with self.subTest(runtime=runtime, role=role):
+                    normalized = " ".join(self.read_profile(runtime, role).split())
+                    self.assertRegex(
+                        normalized,
+                        r"(?i)Pi (?:frontmatter|metadata).{0,100}pipeline eligibility"
+                        r".{0,140}Codex.{0,60}Claude.{0,140}native role continuation",
+                    )
+                    self.assertNotIn("ordinary fallback", normalized.lower())
+                    self.assertNotIn("pipeline_capable", normalized)
+
     def test_revised_implementer_preserves_contract_surface_and_may_overlap_production(self) -> None:
         required = (
             "contract tests",
@@ -88,6 +101,22 @@ class V119RoleRuntimeContractTests(unittest.TestCase):
 
     def test_pi_binds_roles_to_lazy_generic_pipelines_and_root_depth(self) -> None:
         text = " ".join((PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split())
+        self.assertIn(
+            "Root creates and attaches the wave-oracle pipeline from the real C0 task.",
+            text,
+        )
+        self.assertIn(
+            "Root creates and attaches the wave-implementer pipeline lazily from the first "
+            "real Implementation task after the first Contract merge.",
+            text,
+        )
+        self.assertIn(
+            "After emitting the terminal `slice-ready` handoff, the role immediately ends "
+            "its turn and makes no further worktree changes.",
+            text,
+        )
+        self.assertNotIn("Create the / the Implementation pipeline", text)
+        self.assertNotIn("followed by immediately end this turn", text)
         self.assertRegex(text, r"(?i)oracle.{0,180}(generic )?pipeline")
         self.assertRegex(text, r"(?i)implementation.{0,240}(lazy|first real task)")
         self.assertRegex(text, r"(?i)root.{0,180}(dependenc|queue).{0,180}(depth|placement)")
@@ -104,6 +133,25 @@ class V119RoleRuntimeContractTests(unittest.TestCase):
         self.assertRegex(text, r"(?i)v1.{0,180}v2|v2.{0,180}v1")
         self.assertRegex(text, r"(?i)(no|without|never).{0,80}(simulated|durable).{0,80}queue")
         self.assertRegex(text, r"(?i)plan.{0,180}git|git.{0,180}plan")
+        self.assertRegex(
+            text,
+            r"(?i)degraded.{0,220}terminal (?:output|response).{0,180}exact (?:commit )?SHA",
+        )
+        self.assertNotRegex(text, r"(?i)commit trailers?\s*\([^)]*\bSHA\b")
+
+    def test_worktree_identity_helper_name_reveals_its_responsibility(self) -> None:
+        sources = (
+            CODEX_SKILL / "scripts" / "_orchestrate" / "v119_core.py",
+            PI_SKILL / "scripts" / "_orchestrate" / "v119_core.py",
+        )
+        for source_path in sources:
+            with self.subTest(source=source_path):
+                tree = ast.parse(source_path.read_text(encoding="utf-8"))
+                function_names = {
+                    node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+                }
+                self.assertIn("_worktree_identity", function_names)
+                self.assertNotIn("_ids", function_names)
 
     def test_plan_and_git_are_recovery_authority_not_runtime_state(self) -> None:
         for path in (SKILL / "runtime-codex.md", PI_SKILL / "runtime-pi.md"):

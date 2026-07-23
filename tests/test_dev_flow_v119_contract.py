@@ -52,6 +52,12 @@ class DevFlowV119ContractTests(unittest.TestCase):
         self.assertRegex(document, r"needs_fix.{0,240}same Wave")
         self.assertRegex(document, r"Spec.{0,240}Oracle.{0,240}Implementation")
         self.assertRegex(document, r"quality.{0,240}Implementation")
+        self.assertRegex(
+            document,
+            r"(?:After a fix|correction).{0,260}regenerate.{0,120}Git profile"
+            r".{0,260}simplify.{0,160}canonical tests.{0,200}clean-detached"
+            r".{0,80}code-review",
+        )
 
         # Handoff is deliberately a small exact-SHA tuple, not a second ledger.
         for term in (

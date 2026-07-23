@@ -54,35 +54,59 @@ class SetupConfigMigrationTests(unittest.TestCase):
             self.assertFalse((home / ".codex/agents/wave-reviewer.toml").exists())
             self.assertTrue((home / ".pi/agent/agents/custom-profile.md").is_file())
 
-    def test_invalid_v119_profile_destination_fails_without_retiring_legacy(self) -> None:
+    def test_stale_or_divergent_orchestrate_destinations_are_relinked_before_legacy_retirement(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             source, home = self.seed_fixture(base)
-            invalid = home / ".pi/agent/agents/wave-oracle.md"
-            foreign = base / "foreign"
-            foreign.mkdir()
-            invalid.parent.mkdir(parents=True, exist_ok=True)
-            invalid.symlink_to(foreign, target_is_directory=True)
-            legacy = home / ".pi/agent/agents/wave-reviewer.md"
-            legacy.write_text("legacy\n", encoding="utf-8")
-            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn(str(invalid), result.stderr)
-            self.assertTrue(legacy.is_file())
 
-    def test_user_managed_regular_profile_symlink_is_preserved(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            base = Path(temporary)
-            source, home = self.seed_fixture(base)
-            managed = base / "managed-oracle.md"
-            managed.write_text("user-managed\n", encoding="utf-8")
-            target = home / ".pi/agent/agents/wave-oracle.md"
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.symlink_to(managed)
+            foreign_skill = base / "foreign-orchestrate"
+            foreign_skill.mkdir()
+            (foreign_skill / "SKILL.md").write_text("stale skill\n", encoding="utf-8")
+            skill_destination = home / ".codex/skills/orchestrate"
+            skill_destination.parent.mkdir(parents=True, exist_ok=True)
+            skill_destination.symlink_to(foreign_skill, target_is_directory=True)
+
+            foreign_profile = base / "foreign-wave-oracle.md"
+            foreign_profile.write_text("stale profile\n", encoding="utf-8")
+            symlink_destination = home / ".pi/agent/agents/wave-oracle.md"
+            symlink_destination.parent.mkdir(parents=True, exist_ok=True)
+            symlink_destination.symlink_to(foreign_profile)
+
+            divergent_destination = home / ".codex/agents/wave-implementer.toml"
+            divergent_destination.parent.mkdir(parents=True, exist_ok=True)
+            divergent_destination.write_text("divergent bytes\n", encoding="utf-8")
+
+            legacy_profiles = (
+                home / ".pi/agent/agents/wave-reviewer.md",
+                home / ".codex/agents/wave-reviewer.toml",
+                home / ".claude/agents/wave-reviewer.md",
+            )
+            for legacy in legacy_profiles:
+                legacy.parent.mkdir(parents=True, exist_ok=True)
+                legacy.write_text("legacy\n", encoding="utf-8")
+
             result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertTrue(target.is_symlink())
-            self.assertEqual(target.read_text(encoding="utf-8"), "user-managed\n")
+
+            source_skill = source / "home/.codex/skills/orchestrate"
+            self.assertTrue(skill_destination.is_symlink())
+            self.assertEqual(skill_destination.resolve(), source_skill.resolve())
+            self.assertEqual(
+                (skill_destination / "SKILL.md").read_bytes(),
+                (source_skill / "SKILL.md").read_bytes(),
+            )
+
+            for relative in (
+                ".pi/agent/agents/wave-oracle.md",
+                ".codex/agents/wave-implementer.toml",
+            ):
+                destination = home / relative
+                source_profile = source / "home" / relative
+                self.assertTrue(destination.is_file())
+                self.assertTrue(os.path.samefile(destination, source_profile))
+                self.assertEqual(destination.read_bytes(), source_profile.read_bytes())
+
+            self.assertTrue(all(not legacy.exists() for legacy in legacy_profiles))
 
 
 if __name__ == "__main__":

@@ -20,26 +20,30 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
     wave_id = "profile-correction-wave"
     slice_id = "profile-correction-slice"
 
-    def git(self, cwd: Path, *args: str) -> str:
+    def git(
+        self, cwd: Path, *args: str, env: dict[str, str] | None = None
+    ) -> str:
         result = subprocess.run(
             ["git", *args],
             cwd=cwd,
             text=True,
             capture_output=True,
             check=False,
-            env=os.environ.copy(),
+            env={**os.environ, **(env or {})},
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         return result.stdout.strip()
 
-    def cli(self, root: Path, *args: str) -> dict[str, object]:
+    def cli(
+        self, root: Path, *args: str, env: dict[str, str] | None = None
+    ) -> dict[str, object]:
         result = subprocess.run(
             [sys.executable, str(SCRIPT), *args],
             cwd=root,
             text=True,
             capture_output=True,
             check=False,
-            env=os.environ.copy(),
+            env={**os.environ, **(env or {})},
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, "", result.stderr)
@@ -52,7 +56,13 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
         return payload
 
     def commit_file(
-        self, worktree: Path, relative_path: str, content: str, subject: str, role: str
+        self,
+        worktree: Path,
+        relative_path: str,
+        content: str,
+        subject: str,
+        role: str,
+        date: str,
     ) -> str:
         target = worktree / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -64,7 +74,14 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
             f"Slice: {self.slice_id}\n"
             f"Role: {role}"
         )
-        self.git(worktree, "commit", "-q", "-m", message)
+        self.git(
+            worktree,
+            "commit",
+            "-q",
+            "-m",
+            message,
+            env={"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date},
+        )
         return self.git(worktree, "rev-parse", "HEAD")
 
     def test_final_implementation_belongs_to_latest_preceding_contract_merge(self) -> None:
@@ -75,7 +92,17 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
             self.git(repo, "config", "user.email", "profile-contract@example.test")
             (repo / "README").write_text("base\n", encoding="utf-8")
             self.git(repo, "add", "README")
-            self.git(repo, "commit", "-q", "-m", "base")
+            self.git(
+                repo,
+                "commit",
+                "-q",
+                "-m",
+                "base",
+                env={
+                    "GIT_AUTHOR_DATE": "2025-01-01T00:00:00+0000",
+                    "GIT_COMMITTER_DATE": "2025-01-01T00:00:00+0000",
+                },
+            )
             base = self.git(repo, "rev-parse", "HEAD")
 
             implementation = self.cli(
@@ -117,6 +144,7 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
                 "attempt 1\n",
                 "Oracle Contract attempt 1",
                 "oracle",
+                "2025-01-01T00:01:00+0000",
             )
             merge_1_payload = self.cli(
                 repo,
@@ -130,6 +158,10 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
                 self.wave_id,
                 "--contract-sha",
                 oracle_1,
+                env={
+                    "GIT_AUTHOR_DATE": "2025-01-01T00:02:00+0000",
+                    "GIT_COMMITTER_DATE": "2025-01-01T00:02:00+0000",
+                },
             )
             merge_1 = str(merge_1_payload["merge_sha"])
 
@@ -139,6 +171,7 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
                 "attempt 2\n",
                 "Oracle Contract correction attempt 2",
                 "oracle",
+                "2025-01-01T00:03:00+0000",
             )
             merge_2_payload = self.cli(
                 repo,
@@ -152,6 +185,10 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
                 self.wave_id,
                 "--contract-sha",
                 oracle_2,
+                env={
+                    "GIT_AUTHOR_DATE": "2025-01-01T00:04:00+0000",
+                    "GIT_COMMITTER_DATE": "2025-01-01T00:04:00+0000",
+                },
             )
             merge_2 = str(merge_2_payload["merge_sha"])
 
@@ -161,6 +198,7 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
                 "ready after correction\n",
                 "Implementation ready after Contract correction",
                 "implementation",
+                "2025-01-01T00:05:00+0000",
             )
 
             report = self.cli(
@@ -190,12 +228,14 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
                         "oracle_sha": oracle_1,
                         "contract_merge_sha": merge_1,
                         "implementation_sha": None,
+                        "oracle_interval_seconds": None,
                     },
                     {
                         "attempt": 2,
                         "oracle_sha": oracle_2,
                         "contract_merge_sha": merge_2,
                         "implementation_sha": implementation_sha,
+                        "oracle_interval_seconds": 120,
                     },
                 ],
             )

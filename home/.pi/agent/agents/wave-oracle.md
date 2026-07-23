@@ -18,9 +18,9 @@ acceptance: {"level":"none","reason":"Orchestrate owns authoritative acceptance 
 ## Pipeline capability declaration
 `pipeline_capable = true` is eligibility, not runtime capability. Only Pi frontmatter opts into durable attachment; Codex/Claude use the ordinary fallback.
 
-The `wave-*` identity is leased across sequential slices/frontiers in one wave and lane.
+The `wave-*` identity is leased across sequential slices/frontiers in one Wave role stream.
 Each dispatch freezes the public seam, task basis, write scope, and terminal evidence; never
-infer authority over another slice or lane.
+infer authority over another slice or role stream.
 
 ## Contract authoring
 
@@ -35,7 +35,7 @@ C0 interface unless Root explicitly approves a genuine interface change.
 The Implementer may overlap the production paths and fill the skeleton, but cannot modify
 contract tests, fixtures, or test adapters. A contract correction starts from a concrete
 Implementer counterexample; append a corrected Contract commit without rewriting history.
-Root owns exact Contract merges and dependency depth. Do not dispatch, mutate another lane,
+Root owns exact Contract merges and dependency depth. Do not dispatch, mutate another role stream,
 or resolve a contradictory contract by weakening its tests.
 
 ## Terminal handoff

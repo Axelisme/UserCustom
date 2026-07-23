@@ -1,98 +1,38 @@
 # Orchestrate — Codex runtime binding
 
-Session-injected collaboration tool definitions are authoritative.
+Codex uses the native tools exposed by the current session. This document maps the v119
+roles without emulating runtime state.
 
 ## Dual-role native agents and terminal handoff
 
-Codex runs two persistent native role agents for each Wave: `wave-oracle` authors the
-public interface, contract tests, fixtures, and red Contract; `wave-implementer` fills the
-shared production paths after Root merges the exact Contract SHA. Native messaging,
-native follow-up, and native continuation are used when available in both v1 and v2
-sessions. A terminal `slice-ready` message carries the Slice identifier and exact commit
-SHA, then the role ends this turn immediately; no later mutation is implied. In degraded
-v1 transport, commit trailers (`Slice`, `SHA`, and `Seam-Ready`) preserve the same handoff.
+Run two persistent native role agents per Wave: `wave-oracle` authors the public Interface,
+contract tests, fixtures, and intended red Contract; `wave-implementer` fills shared
+production paths after Root merges the exact Contract SHA. Native messaging, follow-up, and
+continuation are used when available in v1 and v2. A terminal `slice-ready` message carries
+Slice and exact 40-character SHA and immediately end the role's turn. In degraded v1,
+commit trailers (`Slice`, `SHA`, `Seam-Ready`) are the handoff.
 
-Codex does not emulate a simulated or durable queue. Root owns dependency depth and queue
-placement. After restart or compaction, Git and the task plan recover the pending position
-from history and refs rather than runtime state.
+Codex has no simulated queue. Root owns dependency depth and placement. After restart or
+compaction, recover pending position from the task plan and Git refs/history.
 
-## Pipeline capability and named fallback
+## Native generations
 
-Codex remains runtime-neutral: this binding does not implement or emulate a durable `pipeline`
-queue. `wave-implementer` and `wave-reviewer` retain an explicit pipeline-capable profile
-contract only as cross-runtime eligibility wording; they have no machine opt-in and claim no
-Codex runtime capability. Codex roots use the ordinary async path. Root records a concrete
-non-attach reason (`pipeline capability unavailable in Codex runtime`) and uses the named ordinary
-one-deep fallback: dispatch one ready item, harvest its completion, then dispatch the next.
-This is the only one-deep policy; it is an explicit no-durable-runtime fallback, not a global
-review-lag cap. `integration-reviewer` remains a fresh one-shot role.
+In v1, `spawn_agent` loads the named profile and `send_input` is notification; use
+`resume_agent` for same-identity continuation. In v2, `spawn_agent` is generic and native
+`send_message`/`followup_task` provide messaging and continuation. `wait_agent` is the event
+wait in either generation. Identify the observed tool generation at session start and do not
+invent a missing capability.
 
-The fallback preserves root ownership of scope, queue placement, cross-lane blocked work,
-ordinary finding accumulation, and cost-growing invariant holds. Runtime neutrality means
-Codex must not claim pipeline persistence, milestone scheduling, reviewer frontier semantics,
-or Git/review/finding interpretation. Codex ships **two
-sub-agent generations** and either may be injected; identify the generation at session start
-from the injected tool names, note the resolved capability matrix once in root context, and
-use it consistently (re-derive it from the injected tool names after a context compaction —
-the matrix lives nowhere durable):
+## Profile bootstrap and safety
 
-- **v1** (`multi_agent_v1__*`: `spawn_agent` with `agent_type`, `send_input`,
-  `resume_agent`, `close_agent`, `wait_agent`; no `list_agents`): spawn **loads the named
-  agent profile** — `~/.codex/config.toml` registration plus the profile toml's
-  model/effort/instructions take effect.
-- **v2** (`spawn_agent`, `send_message`, `followup_task`, `interrupt_agent`, `wait_agent`,
-  `list_agents`): spawn does **not** select named profiles/models/sandboxes.
+At first use, verify the role profile instructions are active. Every dispatch names exact
+cwd, frozen base or subject SHA, write scope, pre-existing dirt, required evidence, and stop
+conditions. Workers do not create child workers or claim repository authority. Root proves
+clean Git state before consuming a handoff.
 
-## Profile bootstrap and dispatch
+## Acceptance
 
-When the generation loads profiles (v1), verify on the identity's first milestone that the
-standing orders are in effect. When it does not (v2), instruct the identity on its first
-turn to read `~/.codex/agents/<role>.toml` `developer_instructions` and confirm the file in
-its inventory; if inaccessible, paste that block verbatim — do not summarize it from memory.
-Alongside the worker's discrete-unit cadence, root measures its own wall-clock bound while
-waiting. A long direct contract travels as a plain file whose absolute path the dispatch
-names, with the immediate action inline.
-
-## Milestones
-
-The envelope schema, delivery rule, and liveness triggers live in
-[coordination](references/coordination.md).
-
-- **v2 transport**: workers hold a mid-turn message tool — send each progress and terminal
-  envelope through it at the boundary, and a confirmed major finding immediately. If a send
-  fails, end the turn with the envelope in the final response.
-- **v1 transport**: workers cannot message root mid-turn. **A writer's commit is its
-  progress milestone** — envelope semantics travel as commit trailers (`Item: <id>`,
-  `Seam-Ready: true`). Root harvests position by event-driven read-only reads of lane
-  branches when a decision needs it; this touches no identity and is not polling. A
-  non-writing role that confirms a retract-class finding ends the turn immediately — the
-  terminal envelope is the only way to deliver the stop root must issue.
-
-## Tool binding
-
-| capability | v1 binding | v2 binding |
-|---|---|---|
-| spawn | `spawn_agent` (+`agent_type`, loads profile) | `spawn_agent` (generic identity) |
-| milestone / pure notification | `send_input` (does not wake idle agents) | `send_message` (does not wake idle agents) |
-| same-identity follow-up / wake | `resume_agent` | `followup_task` |
-| interrupt / stop | `close_agent` (terminal — respawn continues via dispatch delta) | `interrupt_agent` (identity survives) |
-| event wait | `wait_agent` | `wait_agent` |
-| liveness/status | — (degraded) | `list_agents` |
-
-Call collaboration tools directly, never through shell execution. Spawn independent agents
-before waiting. Repeated event-driven waits after timeouts are valid; shell sleep loops,
-tight Git/status probes, and phase inference from `running` are not.
-
-Degraded modes when a capability is missing: no status/list tool (v1) — rely on completion
-events plus the declared cadence; no true interrupt (v1's `close_agent` is terminal) —
-dispatch smaller bounded turns, deliver corrections at the next item boundary, and accept
-that urgent invalidation costs the identity (the worktree remains evidence); no mid-turn
-transport — the final-response envelope is the milestone of record. Note the degraded mode
-next to the resolved matrix instead of improvising per event.
-
-## Runtime limits
-
-Use observed tools for concurrency, nesting, parking, retirement, and role-switch
-capability. Config files are not proof. A role switch reloads the new profile and cannot
-satisfy different-identity review for work that identity implemented. If a required
-capability is unavailable, return `needs_decision` rather than inventing an adapter.
+Dev-flow runs simplify, canonical tests, and one clean-detached exact-SHA code-review. A
+behavior correction returns to Oracle then Implementation in the same Wave; a quality
+correction returns to Implementation. Repository integration requires current user authority
+and is outside the workflow CLI.

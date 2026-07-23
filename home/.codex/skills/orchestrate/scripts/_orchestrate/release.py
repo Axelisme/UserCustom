@@ -130,7 +130,6 @@ def document_paths(skill_dir: Path) -> list[Path]:
 PROFILE_NAMES = (
     "contract-planner",
     "impl-detail-planner",
-    "integration-reviewer",
     "mcp-skill-tester",
     "mechanical-implementer",
     "plan-item-implementer",
@@ -138,7 +137,7 @@ PROFILE_NAMES = (
     "python-module-reviewer",
     "repo-investigator",
     "wave-implementer",
-    "wave-reviewer",
+    "wave-oracle",
     "web-researcher",
 )
 

@@ -59,24 +59,15 @@ backup_cp_one() {
 }
 
 remove_obsolete_orchestrate_profiles() {
-  # Remove only the exact pre-wave identities when their replacements are shipped.
-  if [ -e "$UserCustom/home/.pi/agent/agents/wave-implementer.md" ]; then
-    rm -f "$HOME/.pi/agent/agents/implementer.md"
+  # Retire only exact legacy role identities after every v119 role is installed.
+  if [ -e "$UserCustom/home/.pi/agent/agents/wave-oracle.md" ]; then
+    rm -f "$HOME/.pi/agent/agents/wave-reviewer.md" "$HOME/.pi/agent/agents/integration-reviewer.md"
   fi
-  if [ -e "$UserCustom/home/.pi/agent/agents/wave-reviewer.md" ]; then
-    rm -f "$HOME/.pi/agent/agents/reviewer.md"
+  if [ -e "$UserCustom/home/.codex/agents/wave-oracle.toml" ]; then
+    rm -f "$HOME/.codex/agents/wave-reviewer.toml" "$HOME/.codex/agents/integration-reviewer.toml"
   fi
-  if [ -e "$UserCustom/home/.codex/agents/wave-implementer.toml" ]; then
-    rm -f "$HOME/.codex/agents/implementer.toml"
-  fi
-  if [ -e "$UserCustom/home/.codex/agents/wave-reviewer.toml" ]; then
-    rm -f "$HOME/.codex/agents/reviewer.toml"
-  fi
-  if [ -e "$UserCustom/home/.claude/agents/wave-implementer.md" ]; then
-    rm -f "$HOME/.claude/agents/implementer.md"
-  fi
-  if [ -e "$UserCustom/home/.claude/agents/wave-reviewer.md" ]; then
-    rm -f "$HOME/.claude/agents/reviewer.md"
+  if [ -e "$UserCustom/home/.claude/agents/wave-oracle.md" ]; then
+    rm -f "$HOME/.claude/agents/wave-reviewer.md" "$HOME/.claude/agents/integration-reviewer.md"
   fi
 }
 
@@ -95,12 +86,12 @@ backup_cp $UserCustom/home/.local/include $HOME/.local/include
 validate_orchestrate_profile_destinations() {
   local path
   for path in \
+    "$HOME/.pi/agent/agents/wave-oracle.md" \
     "$HOME/.pi/agent/agents/wave-implementer.md" \
-    "$HOME/.pi/agent/agents/wave-reviewer.md" \
+    "$HOME/.codex/agents/wave-oracle.toml" \
     "$HOME/.codex/agents/wave-implementer.toml" \
-    "$HOME/.codex/agents/wave-reviewer.toml" \
-    "$HOME/.claude/agents/wave-implementer.md" \
-    "$HOME/.claude/agents/wave-reviewer.md"; do
+    "$HOME/.claude/agents/wave-oracle.md" \
+    "$HOME/.claude/agents/wave-implementer.md"; do
     if [ ! -f "$path" ]; then
       echo "error: unusable wave profile destination (expected regular file): $path" >&2
       return 1

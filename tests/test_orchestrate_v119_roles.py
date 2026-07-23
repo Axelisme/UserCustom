@@ -1,0 +1,151 @@
+from __future__ import annotations
+
+import ast
+import re
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+HOME = ROOT / "home"
+SKILL = HOME / ".codex" / "skills" / "orchestrate"
+PI_SKILL = HOME / ".pi" / "agent" / "skills" / "orchestrate"
+CODEX_SKILL = SKILL
+
+
+class V119RoleRuntimeContractTests(unittest.TestCase):
+    """Oracle-owned package contracts for the dual-role runtime seam.
+
+    These assertions deliberately consume shipped profiles and runtime documents rather
+    than importing runtime helpers.  Implementer-local production choices cannot weaken
+    this acceptance surface; the expected red state is a missing role/runtime contract.
+    """
+
+    role_profiles = {
+        "codex": HOME / ".codex" / "agents",
+        "claude": HOME / ".claude" / "agents",
+        "pi": HOME / ".pi" / "agent" / "agents",
+    }
+
+    def read_profile(self, runtime: str, role: str) -> str:
+        suffix = {"codex": ".toml", "claude": ".md", "pi": ".md"}[runtime]
+        path = self.role_profiles[runtime] / f"{role}{suffix}"
+        self.assertTrue(path.is_file(), f"missing shipped {runtime} profile: {path}")
+        return path.read_text(encoding="utf-8")
+
+    def test_wave_oracle_is_shipped_and_pi_pipeline_capable(self) -> None:
+        for runtime in self.role_profiles:
+            with self.subTest(runtime=runtime):
+                text = self.read_profile(runtime, "wave-oracle")
+                self.assertIn("wave-oracle", text)
+                self.assertRegex(
+                    text,
+                    r"(?is)public interface.*contract tests|contract tests.*public interface",
+                )
+                self.assertIn("fixtures", text.lower())
+                if runtime == "pi":
+                    frontmatter = text.split("---", 2)[1]
+                    self.assertRegex(frontmatter, r"(?m)^pipeline:\s*true\s*$")
+                    self.assertRegex(frontmatter, r"(?m)^async:\s*true\s*$")
+
+    def test_revised_implementer_preserves_contract_surface_and_may_overlap_production(self) -> None:
+        required = (
+            "contract tests",
+            "fixtures",
+            "test adapters",
+            "immutable",
+            "production paths",
+            "overlap",
+        )
+        for runtime in self.role_profiles:
+            with self.subTest(runtime=runtime):
+                text = self.read_profile(runtime, "wave-implementer").lower()
+                for phrase in required:
+                    self.assertIn(phrase, text)
+                self.assertRegex(text, r"cannot|must not|do not")
+
+    def test_slice_ready_is_terminal_and_carries_slice_and_exact_sha(self) -> None:
+        surfaces = {
+            "oracle-codex": self.read_profile("codex", "wave-oracle"),
+            "oracle-claude": self.read_profile("claude", "wave-oracle"),
+            "oracle-pi": self.read_profile("pi", "wave-oracle"),
+            "implementer-codex": self.read_profile("codex", "wave-implementer"),
+            "implementer-claude": self.read_profile("claude", "wave-implementer"),
+            "implementer-pi": self.read_profile("pi", "wave-implementer"),
+            "codex-binding": (SKILL / "runtime-codex.md").read_text(encoding="utf-8"),
+            "pi-binding": (PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8"),
+        }
+        for name, text in surfaces.items():
+            with self.subTest(surface=name):
+                normalized = " ".join(text.lower().split())
+                self.assertIn("slice-ready", normalized)
+                self.assertRegex(normalized, r"slice-ready.{0,180}slice")
+                self.assertRegex(normalized, r"slice-ready.{0,240}(sha|commit)")
+                self.assertRegex(normalized, r"terminal.{0,160}(turn|handoff|signal|response)")
+                self.assertRegex(
+                    normalized,
+                    r"(?:immediate(ly)? (?:end|complete|completion)|ends? (?:this )?turn immediate)",
+                )
+
+    def test_pi_binds_roles_to_lazy_generic_pipelines_and_root_depth(self) -> None:
+        text = " ".join((PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split())
+        self.assertRegex(text, r"(?i)oracle.{0,180}(generic )?pipeline")
+        self.assertRegex(text, r"(?i)implementation.{0,240}(lazy|first real task)")
+        self.assertRegex(text, r"(?i)root.{0,180}(dependenc|queue).{0,180}(depth|placement)")
+        self.assertRegex(text, r"(?i)C0.{0,180}(oracle|pipeline)")
+        self.assertRegex(text, r"(?i)generic pipeline lifecycle|pipeline lifecycle")
+        self.assertRegex(text, r"(?i)pi-subagents.{0,180}(lifecycle|pipeline)")
+
+    def test_codex_uses_two_persistent_native_role_agents_without_queue_emulation(self) -> None:
+        text = " ".join((SKILL / "runtime-codex.md").read_text(encoding="utf-8").split())
+        self.assertIn("wave-oracle", text)
+        self.assertIn("wave-implementer", text)
+        self.assertRegex(text, r"(?i)two persistent native (role )?agents")
+        self.assertRegex(text, r"(?i)native (messag|follow.?up|continuation)")
+        self.assertRegex(text, r"(?i)v1.{0,180}v2|v2.{0,180}v1")
+        self.assertRegex(text, r"(?i)(no|without|never).{0,80}(simulated|durable).{0,80}queue")
+        self.assertRegex(text, r"(?i)plan.{0,180}git|git.{0,180}plan")
+
+    def test_plan_and_git_are_recovery_authority_not_runtime_state(self) -> None:
+        for path in (SKILL / "runtime-codex.md", PI_SKILL / "runtime-pi.md"):
+            with self.subTest(path=path):
+                text = " ".join(path.read_text(encoding="utf-8").split())
+                self.assertRegex(text, r"(?i)(restart|compaction|recovery).{0,220}(plan|git)")
+                self.assertRegex(text, r"(?i)(plan|git).{0,220}(recover|pending|position|continuation)")
+                self.assertNotRegex(text, r"(?i)(write|persist|maintain).{0,80}(queue|runtime state) file")
+
+    def test_orchestrate_core_has_no_runtime_binding_or_pipeline_authority(self) -> None:
+        source = (SKILL / "scripts" / "_orchestrate" / "v119_core.py").read_text(
+            encoding="utf-8"
+        )
+        tree = ast.parse(source)
+        imported = {
+            alias.name.split(".", 1)[0]
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        }
+        imported |= {
+            alias.name.split(".", 1)[0]
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+            for alias in node.names
+        }
+        self.assertNotIn("pipeline", imported)
+        self.assertNotIn("runtime", imported)
+        self.assertNotRegex(source, r"(?i)pi-subagents|codex|claude|pipeline")
+        self.assertNotRegex(source, r"(?i)queue.{0,80}(write|persist|file)")
+
+    def test_pi_runtime_links_lifecycle_authority_instead_of_copying_it(self) -> None:
+        text = (PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8")
+        links = re.findall(r"\[[^]]*(?:pipeline|lifecycle)[^]]*\]\(([^)]+)\)", text, re.I)
+        self.assertTrue(
+            any("pi-subagents" in target or "pipeline" in target for target in links),
+            "Pi binding must link generic pi-subagents pipeline lifecycle authority",
+        )
+        self.assertNotIn("## Activation and leases", text)
+        self.assertNotIn("## Runtime budgets", text)
+        self.assertNotIn("## Milestones and flow control", text)
+
+
+if __name__ == "__main__":
+    unittest.main()

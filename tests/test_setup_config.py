@@ -11,158 +11,78 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SetupConfigMigrationTests(unittest.TestCase):
-    def wave_profile_relatives(self) -> tuple[str, ...]:
+    def profile_relatives(self) -> tuple[str, ...]:
         return (
-            ".pi/agent/agents/wave-implementer.md",
-            ".pi/agent/agents/wave-reviewer.md",
-            ".codex/agents/wave-implementer.toml",
-            ".codex/agents/wave-reviewer.toml",
-            ".claude/agents/wave-implementer.md",
-            ".claude/agents/wave-reviewer.md",
+            ".pi/agent/agents/wave-oracle.md", ".pi/agent/agents/wave-implementer.md",
+            ".codex/agents/wave-oracle.toml", ".codex/agents/wave-implementer.toml",
+            ".claude/agents/wave-oracle.md", ".claude/agents/wave-implementer.md",
         )
 
-    def wave_paths(self, home: Path) -> tuple[Path, ...]:
-        return tuple(home / relative for relative in self.wave_profile_relatives())
-
-    def seed_fixture(self, base: Path) -> tuple[Path, Path, tuple[str, ...], Path]:
-        source = base / "source"
-        home = base / "target-home"
+    def seed_fixture(self, base: Path) -> tuple[Path, Path]:
+        source, home = base / "source", base / "target-home"
         script = source / "setup_scripts" / "setup_config.sh"
         script.parent.mkdir(parents=True)
         shutil.copy2(ROOT / "setup_scripts" / "setup_config.sh", script)
-
-        def write(relative: str, text: str = "source\n") -> None:
-            path = source / relative
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, encoding="utf-8")
-
-        for relative in (
-            "home/.config/source.conf",
-            "home/.codex/AGENTS.md",
-            "home/.codex/skills/orchestrate/SKILL.md",
-            "home/.pi/agent/settings.json",
-            "home/.pi/agent/APPEND_SYSTEM.md",
-            "home/.pi/agent/skills/orchestrate/SKILL.md",
-            "home/.claude/skills/orchestrate/SKILL.md",
-            "home/.local/include/source.h",
-        ):
-            write(relative)
-        for relative in (
-            "home/.pi/agent/agents/wave-implementer.md",
-            "home/.pi/agent/agents/wave-reviewer.md",
-            "home/.codex/agents/wave-implementer.toml",
-            "home/.codex/agents/wave-reviewer.toml",
-            "home/.claude/agents/wave-implementer.md",
-            "home/.claude/agents/wave-reviewer.md",
-        ):
-            write(relative, "wave replacement\n")
-
-        old = (
-            "target-home/.pi/agent/agents/implementer.md",
-            "target-home/.pi/agent/agents/reviewer.md",
-            "target-home/.codex/agents/implementer.toml",
-            "target-home/.codex/agents/reviewer.toml",
-            "target-home/.claude/agents/implementer.md",
-            "target-home/.claude/agents/reviewer.md",
-        )
-        for relative in old:
-            path = base / relative
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text("obsolete\n", encoding="utf-8")
-        custom = home / ".pi" / "agent" / "agents" / "custom-profile.md"
+        for relative in ("home/.config/source.conf", "home/.codex/AGENTS.md", "home/.pi/agent/APPEND_SYSTEM.md", "home/.codex/skills/orchestrate/SKILL.md", "home/.pi/agent/skills/orchestrate/SKILL.md", "home/.pi/agent/settings.json", "home/.claude/skills/orchestrate/SKILL.md", "home/.local/include/source.h"):
+            target = source / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("source\n", encoding="utf-8")
+        for relative in self.profile_relatives():
+            target = source / "home" / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("v119 profile\n", encoding="utf-8")
+        custom = home / ".pi/agent/agents/custom-profile.md"
         custom.parent.mkdir(parents=True, exist_ok=True)
         custom.write_text("user profile\n", encoding="utf-8")
-        return source, home, old, custom
+        return source, home
 
     def run_setup(self, script: Path, home: Path) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            ["bash", str(script)],
-            env={**os.environ, "HOME": str(home)},
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        return subprocess.run(["bash", str(script)], env={**os.environ, "HOME": str(home)}, capture_output=True, text=True, check=False)
 
-    def test_upgrade_removes_only_exact_legacy_orchestrate_profiles(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            source, home, old, custom = self.seed_fixture(Path(temporary))
-            result = self.run_setup(source / "setup_scripts" / "setup_config.sh", home)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            for relative in old:
-                self.assertFalse((Path(temporary) / relative).exists(), relative)
-            for relative in (
-                "target-home/.pi/agent/agents/wave-implementer.md",
-                "target-home/.pi/agent/agents/wave-reviewer.md",
-                "target-home/.codex/agents/wave-implementer.toml",
-                "target-home/.codex/agents/wave-reviewer.toml",
-                "target-home/.claude/agents/wave-implementer.md",
-                "target-home/.claude/agents/wave-reviewer.md",
-            ):
-                self.assertTrue((Path(temporary) / relative).is_file(), relative)
-            self.assertTrue(custom.is_file())
-            self.assertEqual(custom.read_text(encoding="utf-8"), "user profile\n")
-
-    def test_each_invalid_wave_directory_symlink_fails_independently(self) -> None:
-        for invalid_relative in self.wave_profile_relatives():
-            with self.subTest(invalid_relative=invalid_relative):
-                with tempfile.TemporaryDirectory() as temporary:
-                    base = Path(temporary)
-                    source, home, old, custom = self.seed_fixture(base)
-                    wave_paths = self.wave_paths(home)
-                    invalid_path = home / invalid_relative
-                    foreign_directory = base / "foreign-profile-directory"
-                    foreign_directory.mkdir()
-                    invalid_path.parent.mkdir(parents=True, exist_ok=True)
-                    invalid_path.symlink_to(foreign_directory, target_is_directory=True)
-                    result = self.run_setup(
-                        source / "setup_scripts" / "setup_config.sh", home
-                    )
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertIn("unusable wave profile destination", result.stderr)
-                    self.assertIn(str(invalid_path), result.stderr)
-                    for relative in old:
-                        self.assertTrue((base / relative).is_file(), relative)
-                    self.assertTrue(custom.is_file())
-                    self.assertEqual(custom.read_text(encoding="utf-8"), "user profile\n")
-                    for path in wave_paths:
-                        if path == invalid_path:
-                            self.assertTrue(path.is_symlink())
-                        else:
-                            self.assertTrue(path.is_file(), path)
-
-    def test_user_managed_regular_profile_symlink_is_usable_and_preserved(self) -> None:
+    def test_upgrade_installs_v119_roles_and_retires_legacy_roles(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
-            source, home, old, _ = self.seed_fixture(base)
-            managed = base / "user-managed-wave-implementer.md"
-            managed.write_text("user-managed\n", encoding="utf-8")
-            managed_path = self.wave_paths(home)[0]
-            managed_path.parent.mkdir(parents=True, exist_ok=True)
-            managed_path.symlink_to(managed)
-            result = self.run_setup(source / "setup_scripts" / "setup_config.sh", home)
+            source, home = self.seed_fixture(base)
+            for relative in (".pi/agent/agents/wave-reviewer.md", ".codex/agents/wave-reviewer.toml", ".claude/agents/wave-reviewer.md", ".pi/agent/agents/integration-reviewer.md"):
+                old = home / relative
+                old.parent.mkdir(parents=True, exist_ok=True)
+                old.write_text("legacy\n", encoding="utf-8")
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertTrue(managed_path.is_symlink())
-            self.assertEqual(managed_path.read_text(encoding="utf-8"), "user-managed\n")
-            for relative in old:
-                self.assertFalse((base / relative).exists(), relative)
-            self.assertTrue(all(path.is_file() for path in self.wave_paths(home)))
+            self.assertTrue(all((home / relative).is_file() for relative in self.profile_relatives()))
+            self.assertFalse((home / ".pi/agent/agents/wave-reviewer.md").exists())
+            self.assertFalse((home / ".codex/agents/wave-reviewer.toml").exists())
+            self.assertTrue((home / ".pi/agent/agents/custom-profile.md").is_file())
 
-    def test_failed_upgrade_retains_all_legacy_profiles_until_retirement(self) -> None:
+    def test_invalid_v119_profile_destination_fails_without_retiring_legacy(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            source, home, old, custom = self.seed_fixture(Path(temporary))
-            # Fail after Codex/Pi installation starts but before Claude installation and
-            # before the retirement transaction at the end of setup_config.sh.
-            blocked_skills = home / ".claude" / "skills"
-            blocked_skills.parent.mkdir(parents=True, exist_ok=True)
-            blocked_skills.write_text("blocking destination\n", encoding="utf-8")
-            result = self.run_setup(source / "setup_scripts" / "setup_config.sh", home)
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            invalid = home / ".pi/agent/agents/wave-oracle.md"
+            foreign = base / "foreign"
+            foreign.mkdir()
+            invalid.parent.mkdir(parents=True, exist_ok=True)
+            invalid.symlink_to(foreign, target_is_directory=True)
+            legacy = home / ".pi/agent/agents/wave-reviewer.md"
+            legacy.write_text("legacy\n", encoding="utf-8")
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
             self.assertNotEqual(result.returncode, 0)
-            for relative in old:
-                self.assertTrue((Path(temporary) / relative).is_file(), relative)
-            self.assertTrue(
-                (home / ".pi" / "agent" / "agents" / "wave-implementer.md").is_file()
-            )
-            self.assertTrue(custom.is_file())
+            self.assertIn(str(invalid), result.stderr)
+            self.assertTrue(legacy.is_file())
+
+    def test_user_managed_regular_profile_symlink_is_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            managed = base / "managed-oracle.md"
+            managed.write_text("user-managed\n", encoding="utf-8")
+            target = home / ".pi/agent/agents/wave-oracle.md"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.symlink_to(managed)
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(target.is_symlink())
+            self.assertEqual(target.read_text(encoding="utf-8"), "user-managed\n")
 
 
 if __name__ == "__main__":

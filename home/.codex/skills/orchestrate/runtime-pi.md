@@ -1,16 +1,19 @@
 # Orchestrate — Pi runtime binding
 
 Pi's native `subagent` tool and the generic [pi-subagents pipeline lifecycle](https://github.com/badlogic/pi-subagents#pipeline-lifecycle)
-are authoritative for attach, restore, resume, and close. This binding only maps the v119
-roles and keeps Git/task contracts at Root.
+are authoritative for attach, restore, resume, and close. This binding maps v119 role
+streams and keeps Git/task contracts at Root.
 
 ## Dual-role generic pipelines and terminal handoff
 
-Map `wave-oracle` to a generic pipeline beginning with its real C0 task. Create the
-the Implementation pipeline is lazy: create `wave-implementer` from its first real task after the first Contract merge.
-A terminal `slice-ready` handoff carries Slice and exact SHA; it is followed by immediately end this turn. Root controls dependency depth and queue placement. After restart or
-compaction, the task plan and Git refs/history recover position, not a queue or runtime
-state file.
+Root creates and attaches the wave-oracle pipeline from the real C0 task. Root creates and
+attaches the wave-implementer pipeline lazily from the first real Implementation task after
+the first Contract merge. The Implementation pipeline is lazy and starts from its first real task. Root controls dependency depth and queue placement.
+
+After emitting the terminal `slice-ready` handoff, the role immediately ends its turn and
+makes no further worktree changes. The handoff carries Slice and the full exact SHA. After
+restart or compaction, the task plan and Git refs/history recover position, not a queue or
+runtime state file.
 
 ## Profile routing
 

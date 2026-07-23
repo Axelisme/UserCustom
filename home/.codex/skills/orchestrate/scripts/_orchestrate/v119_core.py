@@ -11,7 +11,7 @@ from .git_ops import exact_commit, managed_worktree_root, run_git, worktree_reco
 from .primitives import OrchestrateError, require_identifier
 
 
-def _ids(args: argparse.Namespace, *, role: str | None = None) -> tuple[str, str, str, Path, str]:
+def _worktree_identity(args: argparse.Namespace, *, role: str | None = None) -> tuple[str, str, str, Path, str]:
     task = require_identifier(str(args.task_id), label="task id")
     wave = require_identifier(str(args.wave_id), label="wave id")
     selected_role = str(role if role is not None else args.role)
@@ -60,7 +60,7 @@ def _status(root: Path, path: Path, branch: str) -> dict[str, Any]:
 
 
 def command_worktree_create(args: argparse.Namespace) -> dict[str, Any]:
-    _, _, role, path, branch = _ids(args)
+    _, _, role, path, branch = _worktree_identity(args)
     root = Path(args.root).resolve()
     try:
         base = exact_commit(root, str(args.base), label="base")
@@ -75,12 +75,12 @@ def command_worktree_create(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_worktree_status(args: argparse.Namespace) -> dict[str, Any]:
-    _, _, _, path, branch = _ids(args)
+    _, _, _, path, branch = _worktree_identity(args)
     return _status(Path(args.root).resolve(), path, branch)
 
 
 def command_worktree_remove(args: argparse.Namespace) -> dict[str, Any]:
-    _, _, role, path, branch = _ids(args)
+    _, _, role, path, branch = _worktree_identity(args)
     root = Path(args.root).resolve()
     state = _status(root, path, branch)
     if not state["exists"]:
@@ -107,7 +107,13 @@ def _commit_body(root: Path, sha: str) -> str:
 def command_contract_merge(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     contract = exact_commit(root, str(args.contract_sha), label="contract SHA")
-    _, _, _, path, branch = _ids(args, role="implementation")
+    _, _, _, _, oracle_branch = _worktree_identity(args, role="oracle")
+    oracle_ref = f"refs/heads/{oracle_branch}"
+    if run_git(root, "show-ref", "--verify", "--quiet", oracle_ref, check=False).returncode != 0:
+        raise OrchestrateError(f"Contract SHA is not reachable from Oracle ref: {oracle_branch}")
+    if run_git(root, "merge-base", "--is-ancestor", contract, oracle_ref, check=False).returncode != 0:
+        raise OrchestrateError(f"Contract SHA is not reachable from Oracle ref: {oracle_branch}")
+    _, _, _, path, branch = _worktree_identity(args, role="implementation")
     state = _status(root, path, branch)
     if not state["exists"]:
         raise OrchestrateError(f"managed implementation worktree does not exist: {path}")
@@ -120,25 +126,6 @@ def command_contract_merge(args: argparse.Namespace) -> dict[str, Any]:
         raise OrchestrateError("contract SHA must carry matching Wave, non-empty Slice, and Role: oracle trailers")
     merged = run_git(path, "merge", "--no-ff", "--no-commit", contract, check=False)
     if merged.returncode:
-        unmerged = run_git(path, "ls-files", "-u", "-z").stdout
-        stages: dict[str, set[int]] = {}
-        stage_modes: dict[str, str] = {}
-        for record in unmerged.split("\0"):
-            header, separator, filename = record.partition("\t")
-            if not separator:
-                continue
-            parts = header.split()
-            if len(parts) == 3:
-                mode, _, stage_text = parts
-                stage = int(stage_text)
-                stages.setdefault(filename, set()).add(stage)
-                if stage == 2:
-                    stage_modes[filename] = mode
-        add_add = [name for name, present in stages.items() if present == {2, 3}]
-        if add_add:
-            empty = run_git(path, "hash-object", "-w", "--stdin", input_text="").stdout.strip()
-            index_lines = "".join(f"{stage_modes[name]} {empty} 1\t{name}\n" for name in add_add)
-            run_git(path, "update-index", "--index-info", input_text=index_lines)
         detail = merged.stderr.strip() or merged.stdout.strip() or "contract merge conflict"
         raise OrchestrateError(f"git contract merge failed: {detail}")
     message = f"Merge Contract {contract}\n\nWave: {wave}\nSlice: {slice_id}\nRole: merge"
@@ -192,6 +179,21 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
     for before, after in zip(infos, infos[1:]):
         if after["timestamp"] < before["timestamp"]:
             warnings.append(f"non-monotonic committer timestamps: {before['sha']} ({before['timestamp']}) after {after['sha']} ({after['timestamp']})")
+    oracle_intervals: dict[str, int | None] = {}
+    previous_oracle_timestamp: int | None = None
+    previous_oracle_sha: str | None = None
+    for info in infos:
+        if info["role"] != "oracle":
+            continue
+        if previous_oracle_timestamp is None:
+            oracle_intervals[info["sha"]] = None
+        elif info["timestamp"] < previous_oracle_timestamp:
+            oracle_intervals[info["sha"]] = None
+            warnings.append(f"non-monotonic Oracle-ready timestamps: {previous_oracle_sha} ({previous_oracle_timestamp}) before {info['sha']} ({info['timestamp']})")
+        else:
+            oracle_intervals[info["sha"]] = info["timestamp"] - previous_oracle_timestamp
+        previous_oracle_timestamp = info["timestamp"]
+        previous_oracle_sha = info["sha"]
     slices: dict[str, dict[str, Any]] = {}
     for position, info in enumerate(infos):
         entry = slices.setdefault(info["slice"], {"attempts": [], "oracle_interval_seconds": None, "handoff_interval_seconds": None, "implementation_interval_seconds": None, "contract_numstat": {"files": 0, "insertions": 0, "deletions": 0}, "implementation_numstat": {"files": 0, "insertions": 0, "deletions": 0}})
@@ -211,7 +213,9 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         merges = [info for _, info in merge_records]
         implementations = [info for _, info in implementation_records]
         oracle_stats = [item for oracle in oracles for item in stats_by_sha.get(oracle["sha"], [])]
-        entry["contract_numstat"] = {"files": len(oracle_stats), "insertions": sum(item[1] for item in oracle_stats), "deletions": 0}
+        entry["contract_numstat"] = {"files": len(oracle_stats), "insertions": sum(item[1] for item in oracle_stats), "deletions": sum(item[2] for item in oracle_stats)}
+        if oracles:
+            entry["oracle_interval_seconds"] = oracle_intervals.get(oracles[-1]["sha"])
         if oracles and merges:
             interval = merges[0]["timestamp"] - oracles[0]["timestamp"]
             entry["handoff_interval_seconds"] = interval if interval >= 0 else None
@@ -235,7 +239,7 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
                 merge_cursor += 1
             if merge_records and merge_records[merge_cursor][0] < implementation_position:
                 implementation_by_merge[merge_cursor] = implementation
-        entry["attempts"] = [{"attempt": index + 1, "oracle_sha": oracle["sha"], "contract_merge_sha": merges[index]["sha"] if index < len(merges) else None, "implementation_sha": implementation_by_merge[index]["sha"] if index in implementation_by_merge else None} for index, oracle in enumerate(oracles)]
+        entry["attempts"] = [{"attempt": index + 1, "oracle_sha": oracle["sha"], "oracle_interval_seconds": oracle_intervals.get(oracle["sha"]), "contract_merge_sha": merges[index]["sha"] if index < len(merges) else None, "implementation_sha": implementation_by_merge[index]["sha"] if index in implementation_by_merge else None} for index, oracle in enumerate(oracles)]
         if entry.get("checkpoints"):
             entry["checkpoints"] = [checkpoint["sha"] for checkpoint in entry["checkpoints"]]
     wave_commits = [info for info in infos if info["role"] in {"oracle", "merge", "implementation", "checkpoint"}]
@@ -248,4 +252,4 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         wave_impl_stats["deletions"] += current["deletions"]
     first_oracle = next((item for item in wave_commits if item["role"] == "oracle"), None)
     final_impl = next((item for item in reversed(wave_commits) if item["role"] == "implementation"), None)
-    return {"ok": True, "operation": "profile-report", "task_id": task, "wave_id": wave, "base": base, "warnings": sorted(set(warnings)), "slices": slices, "wave": {"elapsed_seconds": final_impl["timestamp"] - first_oracle["timestamp"] if first_oracle and final_impl and final_impl["timestamp"] >= first_oracle["timestamp"] else None, "contract_numstat": {"files": len(wave_contract_stats), "insertions": sum(item[1] for item in wave_contract_stats), "deletions": 0}, "implementation_numstat": wave_impl_stats}}
+    return {"ok": True, "operation": "profile-report", "task_id": task, "wave_id": wave, "base": base, "warnings": sorted(set(warnings)), "slices": slices, "wave": {"elapsed_seconds": final_impl["timestamp"] - first_oracle["timestamp"] if first_oracle and final_impl and final_impl["timestamp"] >= first_oracle["timestamp"] else None, "contract_numstat": {"files": len(wave_contract_stats), "insertions": sum(item[1] for item in wave_contract_stats), "deletions": sum(item[2] for item in wave_contract_stats)}, "implementation_numstat": wave_impl_stats}}

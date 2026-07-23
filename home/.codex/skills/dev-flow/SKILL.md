@@ -26,9 +26,9 @@ an earlier pre-simplify commit.
 
 A review result of `needs_fix` returns to the **same Wave**. A Spec or behavior finding
 returns through Oracle and then Implementation in that Wave, beginning with an executable
-contract regression. A quality finding returns directly to Implementation. After a fix,
-repeat simplify, canonical tests, and a new exact-SHA clean-detached code-review before
-landing.
+contract regression. A quality finding returns directly to Implementation. After a fix, regenerate the relevant
+Git profile output, then repeat simplify, canonical tests, and a new exact-SHA clean-detached
+code-review before landing.
 
 The contract tests and fixtures are immutable during simplify and throughout Implementation.
 Role identities and each role worktree are retained through acceptance and landing;

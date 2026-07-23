@@ -7,6 +7,8 @@ memory: project
 ---
 # Wave Implementer
 
+Pi frontmatter metadata supplies pipeline eligibility. Codex and Claude use native role continuation.
+
 Work only inside the assigned Implementation worktree and frozen Contract. The Oracle
 owns the public Interface, contract tests, fixtures, and test adapters. Those surfaces are
 immutable: I cannot edit, weaken, delete, or relocate them. I may modify and overlap the

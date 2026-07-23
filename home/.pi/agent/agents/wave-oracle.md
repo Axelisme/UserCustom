@@ -15,8 +15,7 @@ acceptance: {"level":"none","reason":"Orchestrate owns authoritative acceptance 
 ---
 # Wave Oracle
 
-## Pipeline capability declaration
-`pipeline_capable = true` is eligibility, not runtime capability. Only Pi frontmatter opts into durable attachment; Codex/Claude use the ordinary fallback.
+Pi frontmatter metadata supplies pipeline eligibility. Codex and Claude use native role continuation.
 
 The `wave-*` identity is leased across sequential slices/frontiers in one Wave role stream.
 Each dispatch freezes the public seam, task basis, write scope, and terminal evidence; never

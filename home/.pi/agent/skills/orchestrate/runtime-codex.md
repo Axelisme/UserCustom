@@ -1,16 +1,18 @@
 # Orchestrate — Codex runtime binding
 
-Codex uses the native tools exposed by the current session. This document maps the v119
-roles without emulating runtime state.
+Codex uses the native tools exposed by the current session. This document maps v119 roles
+without emulating runtime state.
 
 ## Dual-role native agents and terminal handoff
 
 Run two persistent native role agents per Wave: `wave-oracle` authors the public Interface,
 contract tests, fixtures, and intended red Contract; `wave-implementer` fills shared
 production paths after Root merges the exact Contract SHA. Native messaging, follow-up, and
-continuation are used when available in v1 and v2. A terminal `slice-ready` message carries
-Slice and a full exact SHA and immediately end the role's turn. In degraded v1,
-commit trailers (`Slice`, `SHA`, `Seam-Ready`) are the handoff.
+continuation are used when available in v1 and v2.
+
+A terminal `slice-ready` message carries Slice and a full exact SHA; the role then
+immediately ends its turn. In degraded v1, the terminal response carries the exact commit
+SHA while commit trailers carry only Slice and Seam-Ready.
 
 Codex has no simulated queue. Root owns dependency depth and placement. After restart or
 compaction, recover pending position from the task plan and Git refs/history.

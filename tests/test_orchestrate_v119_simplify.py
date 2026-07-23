@@ -48,23 +48,14 @@ class V119SimplifyRegressionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
 
-    def test_profile_recommend_projects_all_shipped_roles_and_models(self) -> None:
-        expected = {
-            ("codex", "oracle"): ("wave-oracle", "gpt-5.6-sol"),
-            ("codex", "implementation"): ("wave-implementer", "gpt-5.6-luna"),
-            ("claude", "oracle"): ("wave-oracle", "sonnet"),
-            ("claude", "implementation"): ("wave-implementer", "sonnet"),
-            ("pi", "oracle"): ("wave-oracle", "openai-codex/gpt-5.6-sol"),
-            ("pi", "implementation"): ("wave-implementer", "openai-codex/gpt-5.6-luna"),
-        }
+    def test_profile_exposes_only_read_only_report(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.git(root, "init", "-q", "-b", "main")
-            for (runtime, role), (profile, model) in expected.items():
-                depth = "high" if role == "oracle" else "medium"
-                result = self.cli(root, "profile", "recommend", "--runtime", runtime, "--role", role, "--risk", "critical", "--depth", "high")
-                data = self.payload(result)
-                self.assertEqual((data["profile"], data["model"]), (profile, model))
+            result = self.cli(root, "profile", "--help")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("report", result.stdout)
+            self.assertNotIn("recommend", result.stdout)
 
     def test_profile_report_is_scoped_to_task_role_refs(self) -> None:
         temporary, root, base = self.init()

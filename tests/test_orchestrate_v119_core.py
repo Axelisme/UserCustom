@@ -127,13 +127,13 @@ class V119CoreContractTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def test_help_exposes_new_core_without_removing_v118_administration(self) -> None:
+    def test_help_exposes_only_v119_workflow_and_administration(self) -> None:
         result = self.cli(self.root, "--help")
         self.assertEqual(result.returncode, 0, result.stderr)
-        for command in ("worktree", "contract", "profile", "release", "doctor", "pin"):
+        for command in ("worktree", "contract", "profile", "release", "doctor", "diff", "pin"):
             self.assertIn(command, result.stdout)
-        for command in ("lane", "compose-base", "collect", "findings", "land"):
-            self.assertIn(command, result.stdout)
+        for command in ("lane", "compose-base", "collect", "findings", "land", "review"):
+            self.assertNotIn(command, result.stdout)
 
     def test_create_status_remove_each_role_is_live_and_deterministic(self) -> None:
         oracle = self.create_worktree(self.root, "oracle")

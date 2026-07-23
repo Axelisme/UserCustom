@@ -501,6 +501,22 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
                 if name.endswith("/APPEND_SYSTEM.md") or name.endswith("/AGENTS.md")
             ],
         }
+
+    # v119 is a breaking workflow rewrite.  Keep the pin operation and its
+    # response shape, but never translate v118 workflow state into the new
+    # model: callers must preserve evidence and restart from an explicit base
+    # as a new Wave.  This requirement is additive to a manifest delta and is
+    # also emitted when an old manifest is unavailable.
+    if old_version < 119 <= new_version:
+        migration_requirements = {
+            "reason": "v118-to-v119-manual-restart",
+            "stop_legacy_dispatch": True,
+            "preserve_legacy_evidence": True,
+            "select_exact_base": True,
+            "create_new_wave": True,
+            "continue_as_v119_wave": True,
+            "automatic_conversion": False,
+        }
     write_version_pin(root, new_version, result["orchestrate_compat"])
     return {
         "ok": True,

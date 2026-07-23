@@ -38,6 +38,22 @@ concurrent artifacts as expected and reports only unlisted scope collisions. Aft
 compaction, root re-reads the skill and any live durable plan, then refreshes this baseline
 before the next dispatch; the compaction summary is not a handoff contract.
 
+## Dual-role generic pipelines and terminal handoff
+
+Pi maps `wave-oracle` to a generic pipeline beginning with its real C0 task. The
+Implementation pipeline is lazy: Root creates and attaches the `wave-implementer` only from
+the first real Implementation task after the first Contract merge, never from a no-op
+declaration. A
+terminal `slice-ready` handoff carries the Slice identifier and exact commit SHA, then the
+role ends this turn immediately. Root controls dependency depth and queue placement; the
+runtime does not infer either policy.
+
+Pi's [generic pipeline lifecycle authority](https://github.com/badlogic/pi-subagents#pipeline-lifecycle)
+defines generic pipeline lifecycle, attach, restore, resume, and close semantics. This
+binding maps the C0 Oracle launch and lazy first-real-task Implementation launch to that
+authority without copying it. After restart or compaction, the task plan and Git refs/history recover the pending
+position, not a queue or runtime-state file.
+
 ## Pipeline adoption
 
 Pi recommends pipeline attachment for wave roles: root ordinary-launches then attaches by

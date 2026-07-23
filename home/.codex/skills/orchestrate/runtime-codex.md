@@ -2,6 +2,20 @@
 
 Session-injected collaboration tool definitions are authoritative.
 
+## Dual-role native agents and terminal handoff
+
+Codex runs two persistent native role agents for each Wave: `wave-oracle` authors the
+public interface, contract tests, fixtures, and red Contract; `wave-implementer` fills the
+shared production paths after Root merges the exact Contract SHA. Native messaging,
+native follow-up, and native continuation are used when available in both v1 and v2
+sessions. A terminal `slice-ready` message carries the Slice identifier and exact commit
+SHA, then the role ends this turn immediately; no later mutation is implied. In degraded
+v1 transport, commit trailers (`Slice`, `SHA`, and `Seam-Ready`) preserve the same handoff.
+
+Codex does not emulate a simulated or durable queue. Root owns dependency depth and queue
+placement. After restart or compaction, Git and the task plan recover the pending position
+from history and refs rather than runtime state.
+
 ## Pipeline capability and named fallback
 
 Codex remains runtime-neutral: this binding does not implement or emulate a durable `pipeline`

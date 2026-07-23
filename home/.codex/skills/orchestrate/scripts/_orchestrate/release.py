@@ -376,21 +376,6 @@ def read_version_pin(root: Path) -> dict[str, Any] | None:
     return payload
 
 
-def check_version_pin(root: Path, current_version: int) -> dict[str, Any] | None:
-    """Fail fast when the installed skill moved past the task's pinned release."""
-    pin = read_version_pin(root)
-    if pin is None:
-        return None
-    pinned = pin["skill_version"]
-    if pinned != current_version:
-        raise OrchestrateError(
-            f"task is pinned to orchestrate v{pinned} but the installed skill is"
-            f" v{current_version}: adopt the release at a safe boundary with"
-            " `orchestrate pin migrate --root <repo>`, then rerun"
-        )
-    return {"pinned_version": pinned}
-
-
 def write_version_pin(root: Path, version: int, compat: Any) -> Path:
     path = version_pin_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -531,21 +516,6 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
             " and re-bootstrap profiles/standing orders"
         ),
     }
-
-
-def require_release_preflight(
-    skill_dir: Path, root: str | None = None
-) -> dict[str, Any]:
-    result = require_verified_release(skill_dir)
-    payload = {
-        "skill_version": result["skill_version"],
-        "orchestrate_compat": result["orchestrate_compat"],
-    }
-    if root is not None:
-        pin_info = check_version_pin(Path(root).resolve(), result["skill_version"])
-        if pin_info is not None:
-            payload.update(pin_info)
-    return payload
 
 
 def compare_manifests(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:

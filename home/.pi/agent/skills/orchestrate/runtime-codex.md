@@ -9,7 +9,7 @@ Run two persistent native role agents per Wave: `wave-oracle` authors the public
 contract tests, fixtures, and intended red Contract; `wave-implementer` fills shared
 production paths after Root merges the exact Contract SHA. Native messaging, follow-up, and
 continuation are used when available in v1 and v2. A terminal `slice-ready` message carries
-Slice and exact 40-character SHA and immediately end the role's turn. In degraded v1,
+Slice and a full exact SHA and immediately end the role's turn. In degraded v1,
 commit trailers (`Slice`, `SHA`, `Seam-Ready`) are the handoff.
 
 Codex has no simulated queue. Root owns dependency depth and placement. After restart or

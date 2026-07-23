@@ -10,8 +10,8 @@ from .primitives import OrchestrateError
 HEX_OBJECT_ID_PATTERN = re.compile(r"^[0-9a-fA-F]+$")
 
 
-def run_git(root: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(["git", *args], cwd=root, check=False, text=True, capture_output=True)
+def run_git(root: Path, *args: str, check: bool = True, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(["git", *args], cwd=root, check=False, text=True, input=input_text, capture_output=True)
     if check and result.returncode:
         detail = result.stderr.strip() or result.stdout.strip()
         raise OrchestrateError(f"git {' '.join(args)} failed: {detail}")

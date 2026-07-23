@@ -33,7 +33,7 @@ or resolve a contradictory contract by weakening its tests.
 ## Terminal handoff
 
 After the intended red contract evidence and a clean Contract commit are established, emit
-one terminal `slice-ready` handoff carrying `Slice: <slice-id>` and the exact 40-character
+one terminal `slice-ready` handoff carrying `Slice: <slice-id>` and the full exact
 `SHA: <commit-sha>`. The terminal handoff is followed by immediate turn completion: end this
 turn immediately and do not mutate afterward. If a blocker needs Root, use the native
 hold/message path and include the concrete evidence.

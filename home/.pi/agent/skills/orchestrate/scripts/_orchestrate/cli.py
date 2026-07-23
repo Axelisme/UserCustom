@@ -14,7 +14,6 @@ from .release import (
     command_pin_set,
     command_pin_status,
     command_release,
-    require_release_preflight,
 )
 from .v119_core import (
     command_contract_merge,
@@ -30,15 +29,15 @@ def command_profile_recommend(args: argparse.Namespace) -> dict[str, object]:
     models = {
         "codex": {
             "oracle": ("wave-oracle", "gpt-5.6-sol", "reasoning_effort"),
-            "implementer": ("wave-implementer", "gpt-5.6-luna", "reasoning_effort"),
+            "implementation": ("wave-implementer", "gpt-5.6-luna", "reasoning_effort"),
         },
         "claude": {
-            "oracle": ("wave-oracle", "opus", None),
-            "implementer": ("wave-implementer", "sonnet", None),
+            "oracle": ("wave-oracle", "sonnet", None),
+            "implementation": ("wave-implementer", "sonnet", None),
         },
         "pi": {
             "oracle": ("wave-oracle", "openai-codex/gpt-5.6-sol", "thinking"),
-            "implementer": ("wave-implementer", "openai-codex/gpt-5.6-luna", "thinking"),
+            "implementation": ("wave-implementer", "openai-codex/gpt-5.6-luna", "thinking"),
         },
     }
     runtime = str(args.runtime).strip().lower()
@@ -136,10 +135,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        preflight = require_release_preflight(Path(args.skill_dir)) if getattr(args, "requires_release_preflight", False) else None
         payload = args.handler(args)
-        if preflight is not None:
-            payload["release_preflight"] = preflight
     except (OSError, UnicodeError, OrchestrateError) as exc:
         print(json.dumps({"ok": False, "error": {"type": "orchestrate", "message": str(exc)}}, ensure_ascii=False, sort_keys=True), file=sys.stderr)
         return 2

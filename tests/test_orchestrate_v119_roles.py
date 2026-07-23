@@ -142,9 +142,23 @@ class V119RoleRuntimeContractTests(unittest.TestCase):
             any("pi-subagents" in target or "pipeline" in target for target in links),
             "Pi binding must link generic pi-subagents pipeline lifecycle authority",
         )
-        self.assertNotIn("## Activation and leases", text)
-        self.assertNotIn("## Runtime budgets", text)
-        self.assertNotIn("## Milestones and flow control", text)
+        normalized = " ".join(text.split())
+        self.assertRegex(
+            normalized,
+            r"(?i)(?:lifecycle|attach|restore|resume|close).{0,220}(?:pi-subagents|generic pipeline)",
+        )
+        self.assertRegex(
+            normalized,
+            r"(?i)(?:pi-subagents|generic pipeline).{0,220}(?:lifecycle|attach|restore|resume|close)",
+        )
+        # These headings are part of the immutable parity seam; lifecycle authority
+        # must be established by linkage/content, never by deleting shared sections.
+        for heading in (
+            "## Activation and leases",
+            "## Runtime budgets",
+            "## Milestones and flow control",
+        ):
+            self.assertIn(heading, text)
 
 
 if __name__ == "__main__":

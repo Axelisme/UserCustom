@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Sequence
 
@@ -18,6 +19,13 @@ from .review import (
 )
 from .worktrees import command_cleanup, command_reconcile, command_wave_status
 from .landing import command_land_finish, command_land_status
+from .v119_core import (
+    command_contract_merge,
+    command_profile_report,
+    command_worktree_create,
+    command_worktree_remove,
+    command_worktree_status,
+)
 
 
 def command_profile_recommend(args: argparse.Namespace) -> dict[str, object]:
@@ -98,6 +106,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="orchestrate skill directory (defaults to this script's parent skill)",
     )
     commands = parser.add_subparsers(dest="command", required=True)
+
+    worktree = commands.add_parser(
+        "worktree", help="v119 per-role Git worktree lifecycle"
+    )
+    worktree_commands = worktree.add_subparsers(dest="worktree_command", required=True)
+    for operation, handler in (
+        ("create", command_worktree_create),
+        ("status", command_worktree_status),
+        ("remove", command_worktree_remove),
+    ):
+        worktree_operation = worktree_commands.add_parser(operation)
+        add_root(worktree_operation)
+        worktree_operation.add_argument("--task-id", required=True)
+        worktree_operation.add_argument("--wave-id", required=True)
+        worktree_operation.add_argument("--role", choices=("oracle", "implementation"), required=True)
+        if operation == "create":
+            worktree_operation.add_argument("--base", required=True)
+        worktree_operation.set_defaults(handler=handler)
+
+    contract = commands.add_parser(
+        "contract", help="v119 exact Contract handoff"
+    )
+    contract_commands = contract.add_subparsers(dest="contract_command", required=True)
+    merge = contract_commands.add_parser("merge")
+    add_root(merge)
+    merge.add_argument("--task-id", required=True)
+    merge.add_argument("--wave-id", required=True)
+    merge.add_argument("--contract-sha", required=True)
+    merge.set_defaults(handler=command_contract_merge)
 
     doctor = commands.add_parser(
         "doctor", help="verify manifest, compat, hashes, and read budgets"
@@ -356,6 +393,14 @@ def build_parser() -> argparse.ArgumentParser:
     profile_recommend.add_argument("--risk", "--risk-level", dest="risk", required=True)
     profile_recommend.add_argument("--depth", required=True)
     profile_recommend.set_defaults(handler=command_profile_recommend)
+    profile_report = profile_commands.add_parser(
+        "report", help="v119 read-only Git profile report"
+    )
+    add_root(profile_report)
+    profile_report.add_argument("--task-id", required=True)
+    profile_report.add_argument("--wave-id", required=True)
+    profile_report.add_argument("--base", required=True)
+    profile_report.set_defaults(handler=command_profile_report)
 
     feedback = commands.add_parser(
         "feedback",
@@ -484,6 +529,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         if release_preflight is not None:
             payload["release_preflight"] = release_preflight
     except (OSError, UnicodeError, OrchestrateError) as exc:
-        parser.exit(2, f"orchestrate error: {exc}\n")
+        # Validly parsed commands always fail through the same machine-readable
+        # representation; argparse remains responsible only for malformed usage.
+        print(
+            json.dumps(
+                {"ok": False, "error": {"type": "orchestrate", "message": str(exc)}},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+        return 2
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
     return 0 if payload.get("ok", False) else 1

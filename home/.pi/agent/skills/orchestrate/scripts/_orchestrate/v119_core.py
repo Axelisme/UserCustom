@@ -193,20 +193,23 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         if after["timestamp"] < before["timestamp"]:
             warnings.append(f"non-monotonic committer timestamps: {before['sha']} ({before['timestamp']}) after {after['sha']} ({after['timestamp']})")
     slices: dict[str, dict[str, Any]] = {}
-    for info in infos:
+    for position, info in enumerate(infos):
         entry = slices.setdefault(info["slice"], {"attempts": [], "oracle_interval_seconds": None, "handoff_interval_seconds": None, "implementation_interval_seconds": None, "contract_numstat": {"files": 0, "insertions": 0, "deletions": 0}, "implementation_numstat": {"files": 0, "insertions": 0, "deletions": 0}})
         if info["role"] == "oracle":
-            entry.setdefault("_oracles", []).append(info)
+            entry.setdefault("_oracles", []).append((position, info))
         elif info["role"] == "merge":
-            entry.setdefault("_merges", []).append(info)
+            entry.setdefault("_merges", []).append((position, info))
         elif info["role"] == "implementation":
-            entry.setdefault("_implementations", []).append(info)
+            entry.setdefault("_implementations", []).append((position, info))
         else:
             entry.setdefault("checkpoints", []).append(info)
     for entry in slices.values():
-        oracles = entry.pop("_oracles", [])
-        merges = entry.pop("_merges", [])
-        implementations = entry.pop("_implementations", [])
+        oracle_records = entry.pop("_oracles", [])
+        merge_records = entry.pop("_merges", [])
+        implementation_records = entry.pop("_implementations", [])
+        oracles = [info for _, info in oracle_records]
+        merges = [info for _, info in merge_records]
+        implementations = [info for _, info in implementation_records]
         oracle_stats = [item for oracle in oracles for item in stats_by_sha.get(oracle["sha"], [])]
         entry["contract_numstat"] = {"files": len(oracle_stats), "insertions": sum(item[1] for item in oracle_stats), "deletions": 0}
         if oracles and merges:
@@ -218,7 +221,16 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         implementation_stats = [item for impl in implementations for item in stats_by_sha.get(impl["sha"], [])]
         if implementations:
             entry["implementation_numstat"] = {"files": len({item[0] for item in implementation_stats}), "insertions": sum(item[1] for item in implementation_stats), "deletions": sum(item[2] for item in implementation_stats)}
-        entry["attempts"] = [{"attempt": index + 1, "oracle_sha": oracle["sha"], "contract_merge_sha": merges[index]["sha"] if index < len(merges) else None, "implementation_sha": implementations[index]["sha"] if index < len(implementations) else None} for index, oracle in enumerate(oracles)]
+        # An implementation belongs to the latest Contract merge that precedes
+        # it in the topology.  A correction therefore leaves earlier attempts
+        # without an implementation rather than assigning the final commit to
+        # the first attempt by list position.
+        implementation_by_merge: dict[int, dict[str, Any]] = {}
+        for implementation_position, implementation in implementation_records:
+            preceding = [index for index, (merge_position, _) in enumerate(merge_records) if merge_position < implementation_position]
+            if preceding:
+                implementation_by_merge[preceding[-1]] = implementation
+        entry["attempts"] = [{"attempt": index + 1, "oracle_sha": oracle["sha"], "contract_merge_sha": merges[index]["sha"] if index < len(merges) else None, "implementation_sha": implementation_by_merge[index]["sha"] if index in implementation_by_merge else None} for index, oracle in enumerate(oracles)]
         if entry.get("checkpoints"):
             entry["checkpoints"] = [checkpoint["sha"] for checkpoint in entry["checkpoints"]]
     wave_commits = [info for info in infos if info["role"] in {"oracle", "merge", "implementation", "checkpoint"}]

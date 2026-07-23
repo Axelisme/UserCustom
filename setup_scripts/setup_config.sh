@@ -62,19 +62,21 @@ backup_cp_one() {
 # shipped destinations are different: a stale link or regular copy must be
 # replaced by the current UserCustom source, with the old destination retained
 # as a backup before replacement.
+orchestrate_destination_is_current() {
+  local src=$1
+  local dst=$2
+  [ -e "$dst" ] && [ "$dst" -ef "$src" ]
+}
+
 replace_orchestrate_destination() {
   local src=$1
   local dst=$2
   [ -e "$src" ] || return 0
+  if { [ -e "$dst" ] || [ -L "$dst" ]; } && orchestrate_destination_is_current "$src" "$dst"; then
+    return 0
+  fi
   mkdir -p "$(dirname "$dst")"
   if [ -e "$dst" ] || [ -L "$dst" ]; then
-    if [ -d "$src" ]; then
-      if [ "$(readlink -f "$dst")" = "$(readlink -f "$src")" ]; then
-        return 0
-      fi
-    elif [ "$dst" -ef "$src" ]; then
-      return 0
-    fi
     echo "backup $dst"
     mv -b -- "$dst" "$dst.bak"
   fi
@@ -83,12 +85,7 @@ replace_orchestrate_destination() {
   else
     ln "$src" "$dst"
   fi
-
-  if [ -d "$src" ]; then
-    [ "$(readlink -f "$dst")" = "$(readlink -f "$src")" ]
-  else
-    [ "$dst" -ef "$src" ] && cmp -s "$dst" "$src"
-  fi
+  orchestrate_destination_is_current "$src" "$dst"
 }
 
 replace_current_orchestrate_destinations() {

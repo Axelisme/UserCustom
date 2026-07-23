@@ -15,11 +15,6 @@ from .release import (
     command_pin_status,
     command_release,
 )
-class JsonArgumentParser(argparse.ArgumentParser):
-    def error(self, message: str) -> None:
-        raise OrchestrateError(message)
-
-
 from .v119_core import (
     command_contract_merge,
     command_profile_report,
@@ -27,6 +22,11 @@ from .v119_core import (
     command_worktree_remove,
     command_worktree_status,
 )
+
+
+class JsonArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise OrchestrateError(message)
 
 
 def add_root(command: argparse.ArgumentParser) -> None:

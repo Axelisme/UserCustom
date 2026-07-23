@@ -106,14 +106,12 @@ def _commit_body(root: Path, sha: str) -> str:
 
 def command_contract_merge(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
+    task, wave_id, _, path, branch = _worktree_identity(args, role="implementation")
     contract = exact_commit(root, str(args.contract_sha), label="contract SHA")
-    _, _, _, _, oracle_branch = _worktree_identity(args, role="oracle")
+    oracle_branch = f"wave/{task}/{wave_id}/oracle"
     oracle_ref = f"refs/heads/{oracle_branch}"
-    if run_git(root, "show-ref", "--verify", "--quiet", oracle_ref, check=False).returncode != 0:
-        raise OrchestrateError(f"Contract SHA is not reachable from Oracle ref: {oracle_branch}")
     if run_git(root, "merge-base", "--is-ancestor", contract, oracle_ref, check=False).returncode != 0:
         raise OrchestrateError(f"Contract SHA is not reachable from Oracle ref: {oracle_branch}")
-    _, _, _, path, branch = _worktree_identity(args, role="implementation")
     state = _status(root, path, branch)
     if not state["exists"]:
         raise OrchestrateError(f"managed implementation worktree does not exist: {path}")

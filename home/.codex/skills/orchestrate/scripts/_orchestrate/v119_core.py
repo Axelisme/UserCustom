@@ -226,10 +226,15 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         # without an implementation rather than assigning the final commit to
         # the first attempt by list position.
         implementation_by_merge: dict[int, dict[str, Any]] = {}
+        merge_cursor = 0
         for implementation_position, implementation in implementation_records:
-            preceding = [index for index, (merge_position, _) in enumerate(merge_records) if merge_position < implementation_position]
-            if preceding:
-                implementation_by_merge[preceding[-1]] = implementation
+            while (
+                merge_cursor + 1 < len(merge_records)
+                and merge_records[merge_cursor + 1][0] < implementation_position
+            ):
+                merge_cursor += 1
+            if merge_records and merge_records[merge_cursor][0] < implementation_position:
+                implementation_by_merge[merge_cursor] = implementation
         entry["attempts"] = [{"attempt": index + 1, "oracle_sha": oracle["sha"], "contract_merge_sha": merges[index]["sha"] if index < len(merges) else None, "implementation_sha": implementation_by_merge[index]["sha"] if index in implementation_by_merge else None} for index, oracle in enumerate(oracles)]
         if entry.get("checkpoints"):
             entry["checkpoints"] = [checkpoint["sha"] for checkpoint in entry["checkpoints"]]

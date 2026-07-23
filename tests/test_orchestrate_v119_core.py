@@ -135,6 +135,20 @@ class V119CoreContractTests(unittest.TestCase):
         for command in ("lane", "compose-base", "collect", "findings", "land", "review"):
             self.assertNotIn(command, result.stdout)
 
+    def test_profile_surface_exposes_only_read_only_report(self) -> None:
+        help_result = self.cli(self.root, "profile", "--help")
+        self.assertEqual(help_result.returncode, 0, help_result.stderr)
+        self.assertIn("report", help_result.stdout)
+        self.assertNotIn("recommend", help_result.stdout)
+
+        removed = self.cli(
+            self.root,
+            "profile", "recommend", "--runtime", "codex", "--role", "implementer",
+            "--risk", "normal", "--depth", "high",
+        )
+        error = self.error_payload(removed)
+        self.assertIn("error", error)
+
     def test_create_status_remove_each_role_is_live_and_deterministic(self) -> None:
         oracle = self.create_worktree(self.root, "oracle")
         implementation = self.create_worktree(self.root, "implementation")
@@ -221,6 +235,27 @@ class V119CoreContractTests(unittest.TestCase):
         merge_head = Path(self.git(implementation_path, "rev-parse", "--git-path", "MERGE_HEAD"))
         self.assertFalse(merge_head.exists())
 
+    def test_contract_merge_rejects_validly_labelled_commit_outside_oracle_ref(self) -> None:
+        implementation = self.create_worktree(self.root, "implementation")
+        self.create_worktree(self.root, "oracle")
+        implementation_path = Path(str(implementation["worktree"]))
+        unrelated = self.commit_file(
+            self.root,
+            "unrelated/contract.py",
+            "VALID_TRAILERS_ARE_NOT_PROVENANCE = True\n",
+            "unrelated commit\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n",
+        )
+
+        result = self.cli(
+            self.root, "contract", "merge", "--root", str(self.root), "--task-id",
+            self.task_id, "--wave-id", self.wave_id, "--contract-sha", unrelated,
+        )
+        error = self.error_payload(result)
+        self.assertRegex(str(error["error"]).lower(), r"oracle|reachable|provenance|branch")
+        self.assertEqual(self.git(implementation_path, "rev-parse", "HEAD"), self.base)
+        self.assertFalse((implementation_path / "unrelated/contract.py").exists())
+        self.assertFalse(Path(self.git(implementation_path, "rev-parse", "--git-path", "MERGE_HEAD")).exists())
+
     def test_exact_no_ff_contract_merge_preserves_ancestry_and_merge_trailers(self) -> None:
         self.create_worktree(self.root, "implementation")
         oracle_path = Path(str(self.create_worktree(self.root, "oracle")["worktree"]))
@@ -261,7 +296,46 @@ class V119CoreContractTests(unittest.TestCase):
         self.error_payload(result)
         merge_head = Path(self.git(implementation_path, "rev-parse", "--git-path", "MERGE_HEAD"))
         self.assertTrue(merge_head.exists())
+        self.assertIn("AA shared/conflict.txt", self.git(implementation_path, "status", "--porcelain"))
+        stages = {
+            int(line.split()[2])
+            for line in self.git(
+                implementation_path, "ls-files", "--unmerged", "--", "shared/conflict.txt"
+            ).splitlines()
+        }
+        self.assertEqual(stages, {2, 3}, "native add/add has no manufactured base stage")
+
+    def test_modify_modify_conflict_preserves_native_base_ours_and_theirs_stages(self) -> None:
+        self.base = self.commit_file(
+            self.root, "shared/conflict.txt", "common base\n", "common conflict base"
+        )
+        implementation = self.create_worktree(self.root, "implementation")
+        oracle = self.create_worktree(self.root, "oracle")
+        implementation_path = Path(str(implementation["worktree"]))
+        oracle_path = Path(str(oracle["worktree"]))
+        self.commit_file(
+            implementation_path, "shared/conflict.txt", "implementation\n", "implementation edit"
+        )
+        contract = self.commit_file(
+            oracle_path,
+            "shared/conflict.txt",
+            "oracle\n",
+            "contract edit\nWave: wave-a\nSlice: modify-conflict\nRole: oracle\n",
+        )
+
+        result = self.cli(
+            self.root, "contract", "merge", "--root", str(self.root), "--task-id",
+            self.task_id, "--wave-id", self.wave_id, "--contract-sha", contract,
+        )
+        self.error_payload(result)
         self.assertIn("UU shared/conflict.txt", self.git(implementation_path, "status", "--porcelain"))
+        stages = {
+            int(line.split()[2])
+            for line in self.git(
+                implementation_path, "ls-files", "--unmerged", "--", "shared/conflict.txt"
+            ).splitlines()
+        }
+        self.assertEqual(stages, {1, 2, 3})
 
     def test_profile_report_classifies_repeated_attempts_intervals_numstat_and_warnings(self) -> None:
         implementation = self.create_worktree(self.root, "implementation")
@@ -300,15 +374,101 @@ class V119CoreContractTests(unittest.TestCase):
         self.assertTrue(any("non-monotonic" in warning for warning in report["warnings"]))
         slice_report = report["slices"]["core-git-tracer"]
         self.assertEqual(len(slice_report["attempts"]), 2)
-        self.assertIsNone(slice_report["oracle_interval_seconds"])
+        self.assertTrue(
+            all("oracle_interval_seconds" in attempt for attempt in slice_report["attempts"])
+        )
+        self.assertEqual(
+            [attempt.get("oracle_interval_seconds") for attempt in slice_report["attempts"]],
+            [None, 90],
+        )
+        self.assertEqual(slice_report["oracle_interval_seconds"], 90)
         self.assertGreaterEqual(slice_report["handoff_interval_seconds"], 0)
         self.assertGreaterEqual(slice_report["implementation_interval_seconds"], 0)
-        self.assertEqual(slice_report["contract_numstat"], {"files": 2, "insertions": 2, "deletions": 0})
+        self.assertEqual(slice_report["contract_numstat"], {"files": 2, "insertions": 2, "deletions": 1})
         self.assertEqual(slice_report["implementation_numstat"], {"files": 1, "insertions": 2, "deletions": 1})
         self.assertEqual(report["wave"]["contract_numstat"], slice_report["contract_numstat"])
         self.assertEqual(report["wave"]["implementation_numstat"], slice_report["implementation_numstat"])
         self.assertNotIn("active_time", json.dumps(report))
         self.assertNotIn("queue_time", json.dumps(report))
+
+    def test_profile_oracle_interval_uses_previous_ready_across_slices(self) -> None:
+        implementation = self.create_worktree(self.root, "implementation")
+        oracle = self.create_worktree(self.root, "oracle")
+        oracle_path = Path(str(oracle["worktree"]))
+        first = self.commit_file(
+            oracle_path,
+            "contracts/first.txt",
+            "first\n",
+            "first ready\nWave: wave-a\nSlice: first\nRole: oracle\n",
+            "2025-01-01T00:01:00+0000",
+        )
+        self.payload(self.cli(
+            self.root, "contract", "merge", "--root", str(self.root), "--task-id", self.task_id,
+            "--wave-id", self.wave_id, "--contract-sha", first,
+            env={"GIT_AUTHOR_DATE": "2025-01-01T00:02:00+0000", "GIT_COMMITTER_DATE": "2025-01-01T00:02:00+0000"},
+        ))
+        second = self.commit_file(
+            oracle_path,
+            "contracts/second.txt",
+            "second\n",
+            "second ready\nWave: wave-a\nSlice: second\nRole: oracle\n",
+            "2025-01-01T00:03:00+0000",
+        )
+        self.payload(self.cli(
+            self.root, "contract", "merge", "--root", str(self.root), "--task-id", self.task_id,
+            "--wave-id", self.wave_id, "--contract-sha", second,
+            env={"GIT_AUTHOR_DATE": "2025-01-01T00:04:00+0000", "GIT_COMMITTER_DATE": "2025-01-01T00:04:00+0000"},
+        ))
+        report = self.payload(self.cli(
+            self.root, "profile", "report", "--root", str(self.root), "--task-id", self.task_id,
+            "--wave-id", self.wave_id, "--base", self.base,
+        ))
+        first_report = report["slices"]["first"]
+        second_report = report["slices"]["second"]
+        self.assertIsNone(first_report["oracle_interval_seconds"])
+        self.assertIn("oracle_interval_seconds", first_report["attempts"][0])
+        self.assertIsNone(first_report["attempts"][0].get("oracle_interval_seconds"))
+        self.assertEqual(second_report["oracle_interval_seconds"], 120)
+        self.assertIn("oracle_interval_seconds", second_report["attempts"][0])
+        self.assertEqual(second_report["attempts"][0].get("oracle_interval_seconds"), 120)
+
+    def test_profile_non_monotonic_oracle_ready_interval_warns_and_is_null(self) -> None:
+        self.create_worktree(self.root, "implementation")
+        oracle_path = Path(str(self.create_worktree(self.root, "oracle")["worktree"]))
+        first = self.commit_file(
+            oracle_path, "contracts/api.txt", "one\n",
+            "first\nWave: wave-a\nSlice: correction\nRole: oracle\n",
+            "2025-01-01T00:03:00+0000",
+        )
+        self.payload(self.cli(
+            self.root, "contract", "merge", "--root", str(self.root), "--task-id", self.task_id,
+            "--wave-id", self.wave_id, "--contract-sha", first,
+            env={"GIT_AUTHOR_DATE": "2025-01-01T00:04:00+0000", "GIT_COMMITTER_DATE": "2025-01-01T00:04:00+0000"},
+        ))
+        second = self.commit_file(
+            oracle_path, "contracts/api.txt", "two\n",
+            "correction\nWave: wave-a\nSlice: correction\nRole: oracle\n",
+            "2025-01-01T00:02:00+0000",
+        )
+        self.payload(self.cli(
+            self.root, "contract", "merge", "--root", str(self.root), "--task-id", self.task_id,
+            "--wave-id", self.wave_id, "--contract-sha", second,
+            env={"GIT_AUTHOR_DATE": "2025-01-01T00:05:00+0000", "GIT_COMMITTER_DATE": "2025-01-01T00:05:00+0000"},
+        ))
+        report = self.payload(self.cli(
+            self.root, "profile", "report", "--root", str(self.root), "--task-id", self.task_id,
+            "--wave-id", self.wave_id, "--base", self.base,
+        ))
+        correction = report["slices"]["correction"]
+        self.assertIsNone(correction["oracle_interval_seconds"])
+        self.assertTrue(
+            all("oracle_interval_seconds" in attempt for attempt in correction["attempts"])
+        )
+        self.assertEqual(
+            [attempt.get("oracle_interval_seconds") for attempt in correction["attempts"]],
+            [None, None],
+        )
+        self.assertTrue(any("non-monotonic" in warning for warning in report["warnings"]))
 
     def test_profile_accepts_shared_production_paths_and_status_projects_dirty_tree(self) -> None:
         oracle = self.create_worktree(self.root, "oracle")
@@ -331,6 +491,22 @@ class V119CoreContractTests(unittest.TestCase):
         self.assertEqual(status["tree"], "dirty")
         self.assertFalse(status["clean"])
         self.assertEqual(status["changed_paths"], ["dirty.txt"])
+
+    def test_malformed_and_missing_cli_arguments_emit_one_json_error_without_usage(self) -> None:
+        malformed_commands = (
+            (),
+            ("worktree", "create"),
+            (
+                "worktree", "status", "--root", str(self.root), "--task-id", self.task_id,
+                "--wave-id", self.wave_id, "--role", "reviewer",
+            ),
+        )
+        for command in malformed_commands:
+            with self.subTest(command=command):
+                result = self.cli(self.root, *command)
+                payload = self.error_payload(result)
+                self.assertIn("error", payload)
+                self.assertNotIn("usage:", (result.stdout + result.stderr).lower())
 
     def test_missing_status_and_invalid_base_are_json_errors_without_writes(self) -> None:
         status = self.payload(self.cli(

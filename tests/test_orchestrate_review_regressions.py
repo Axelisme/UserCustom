@@ -446,7 +446,7 @@ class ReviewRegressionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             base = init_repo(root)
-            args = argparse.Namespace(root=str(root), sha=base, label="base", worktree=None)
+            args = argparse.Namespace(root=str(root), sha=base, task_id="demo", job_id="base", worktree=None)
             created = review.command_review_checkout(args)
             path = Path(created["path"])
             (path / "untracked.txt").write_text("dirty\n", encoding="utf-8")
@@ -579,28 +579,6 @@ class ReviewRegressionTests(unittest.TestCase):
             recovered = lanes.command_compose_base(args)
             self.assertEqual(recovered["recovered"], "already-composed")
             self.assertEqual(recovered["composite_sha"], first["composite_sha"])
-
-    def test_review_advance_rejects_unrelated_history(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            first = init_repo(root)
-            created = review.command_review_checkout(
-                argparse.Namespace(root=str(root), sha=first, label="chain", worktree=None)
-            )
-            git(root, "checkout", "--orphan", "unrelated")
-            git(root, "rm", "-rf", ".")
-            (root / "other.txt").write_text("other\n", encoding="utf-8")
-            git(root, "add", "other.txt")
-            git(root, "commit", "-m", "unrelated")
-            unrelated = git(root, "rev-parse", "HEAD")
-            args = argparse.Namespace(
-                root=str(root),
-                worktree=created["path"],
-                from_sha=first,
-                to_sha=unrelated,
-            )
-            with self.assertRaisesRegex(OrchestrateError, "must descend"):
-                review.command_review_advance(args)
 
     def test_landing_guidance_uses_exact_target_cleanup(self) -> None:
         source = (SCRIPTS / "_orchestrate" / "landing.py").read_text(encoding="utf-8")

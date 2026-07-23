@@ -38,6 +38,17 @@ concurrent artifacts as expected and reports only unlisted scope collisions. Aft
 compaction, root re-reads the skill and any live durable plan, then refreshes this baseline
 before the next dispatch; the compaction summary is not a handoff contract.
 
+## Pipeline adoption
+
+Pi recommends pipeline attachment for wave roles: root ordinary-launches then attaches by
+`runId`, even for one ready item. First verify the loaded runtime advertises `pipeline`, then
+queue the eligible ready set. Root retains policy authority over
+scope, dependencies, findings, queue placement, hold/release, and acceptance; runtime treats
+tasks as opaque. Keep one writer pipeline per lane and one latest cumulative reviewer
+frontier; ordinary findings continue, while only review-authority failure holds successors.
+`integration-reviewer` stays fresh and one-shot. If capability or source lifecycle is
+unavailable, name any fallback reason and use the ordinary one-deep fallback.
+
 ## Profile routing and launch modes
 
 Use orchestrate-specific user profiles for frozen pipeline work (`wave-implementer`,
@@ -53,14 +64,13 @@ immediately blocks the root's next decision; root mediation for a longer questio
 supervisor asks and replies rather than a child taking root authority.
 
 Foreground detach is a supervisor-wait transport state: the child is neither paused nor
-complete, and the root may not treat it as a result until a completion wakeup or status says
-so. It is unrelated to a Git detached HEAD, which is a checkout state. Preserve the
-exact-SHA reviewer rule: launch the initial reviewer fresh with `artifacts: false` in a clean
-detached checkout (or place artifacts outside it). For finding closure, advance that checkout
-to the root-named SHA and resume the same identity only when its persisted recovery descriptor
-explicitly records `artifactConfig.enabled: false`; re-prove HEAD and cleanliness before using
-the verdict. A legacy or unreadable descriptor, a missing artifact policy, or cwd/subject drift
-cannot prove placement safety: fail closed and start a fresh exact-SHA reviewer instead.
+complete, and root cannot treat it as a result until a completion wake or status says so. It
+is unrelated to a Git detached HEAD. Root creates and proves each clean detached exact-SHA
+review job; the initial reviewer is fresh with `artifacts: false` and an external receipt.
+Every frontier or finding closure gets a new immutable job/worktree. Continue the same
+reviewer through its pipeline when available; otherwise start a fresh reviewer because an
+ordinary resume cannot retarget the persisted cwd. Unreadable placement evidence or
+cwd/subject drift fails closed.
 
 ## Recommended launch presets
 
@@ -115,10 +125,9 @@ detached checkout:
 The task names one canonical receipt path outside the checkout. The reviewer writes and
 validates that file directly; do not point runtime `output` at the canonical receipt path,
 because runtime final-output persistence is a different transport. Critical depth changes
-the explicit model/thinking override, not this placement contract. A same-identity
-continuation is not a fresh launch preset: after `review advance`, inspect the recovery
-descriptor, re-prove exact HEAD and cleanliness, and use `resume` without replacing its
-persisted `artifacts: false`, deadline, cwd, or acceptance policy.
+the explicit model/thinking override, not this placement contract. A same-identity continuation is not a fresh launch preset: enqueue the root-created immutable
+review job on the reviewer pipeline. Without that capability, use a fresh reviewer; never
+retarget an ordinary resume's persisted cwd.
 
 ### `read-only-evidence`
 
@@ -245,17 +254,13 @@ root binds harvest and review conclusions to exact Git SHAs, not to child summar
 - In an interactive Pi session, normally return control after starting async work and let Pi
   wake the session; use `subagent_wait` only for run-to-completion requests where this turn
   must include the result.
-- Use fresh-context read-only reviewers for independent review. Use forked context only when
-  inherited session state is the subject of review. On the fresh launch, set `artifacts: false`
-  for a child whose `cwd` is the clean detached review worktree, or place its artifact/session
-  directory outside that worktree; Pi's default `.pi-subagents/` output would otherwise dirty
-  the evidence tree. Current-descriptor completed and paused resume preserve an explicit
-  `artifacts: false` placement contract and terminal publication, so finding closure may resume
-  that identity after `review advance`; inspect the descriptor first and re-check exact HEAD and
-  cwd cleanliness afterward. Legacy descriptors without the explicit field use a fresh reviewer.
-  If artifacts unexpectedly appear during a live run, stop it and observe terminal state before
-  cleanup; never delete a live runner's output directory. Do not `resume` that child after
-  an unsafe artifact placement; start a fresh reviewer instead.
+- Use fresh-context read-only reviewers for independent review. Use fork only when inherited
+  session state is the subject. For every clean detached review cwd, set `artifacts: false` or
+  place artifacts outside it; defaults can dirty the evidence tree. Root creates a new
+  immutable checkout per frontier; a reviewer
+  pipeline may carry the new cwd, while ordinary fallback uses a fresh reviewer. Re-prove HEAD
+  and cleanliness before using the verdict. If artifacts appear during a live run, stop it
+  and observe terminal state before cleanup; never delete a live runner's output directory. Do not `resume` that child after unsafe placement.
 - Ordinary child subagents must not spawn subagents. If a delegated fanout child is ever
   used, its prompt and tool allowlist must explicitly grant and bound that responsibility.
 

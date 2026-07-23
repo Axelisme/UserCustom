@@ -149,6 +149,85 @@ def dedup_review_pass(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]
     return seen
 
 
+def review_cursor_and_frontier(
+    root: Path, task_id: str, reachable_from: str = "HEAD"
+) -> dict[str, Any]:
+    """Derive receipt progress independently from integration validation.
+
+    The cursor is evidence progress: only pass and ordinary needs_fix receipts are
+    eligible. The validated frontier is stricter: a candidate must be reachable and
+    have no still-open required finding whose subject is an ancestor of that candidate.
+    Neither value is read from pipeline state or a task plan.
+    """
+    records = read_findings_ledger(root, task_id)
+    markers = list(dedup_review_pass(records).values())
+    eligible = [
+        marker for marker in markers
+        if marker.get("verdict") in {"pass", "needs_fix"}
+        and isinstance(marker.get("subject_sha"), str)
+    ]
+    reachable_eligible = [
+        marker for marker in eligible
+        if is_ancestor(root, str(marker["subject_sha"]), reachable_from)
+    ]
+
+    def ancestry_latest(candidates: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, bool]:
+        if not candidates:
+            return None, False
+        maximal = []
+        for candidate in candidates:
+            subject = str(candidate["subject_sha"])
+            if any(
+                subject != str(other["subject_sha"])
+                and is_ancestor(root, subject, str(other["subject_sha"]))
+                for other in candidates
+            ):
+                continue
+            maximal.append(candidate)
+        subjects = {str(candidate["subject_sha"]) for candidate in maximal}
+        if len(subjects) != 1:
+            return None, True
+        return next(candidate for candidate in reversed(candidates)
+                    if str(candidate["subject_sha"]) in subjects), False
+
+    cursor, cursor_ambiguous = ancestry_latest(reachable_eligible)
+    closed = closed_finding_ids(root, reachable_from)
+    open_required: list[dict[str, Any]] = []
+    for fid, record in dedup_findings(records).items():
+        if record.get("propagation") != "gates-the-slice" or fid in closed:
+            continue
+        open_required.append(record)
+
+    frontier_candidates: list[dict[str, Any]] = []
+    for marker in reachable_eligible:
+        subject = str(marker["subject_sha"])
+        blocked = False
+        for finding in open_required:
+            finding_subject = finding.get("subject_sha")
+            # Missing ancestry is ambiguous and must not grant integration authority.
+            if not isinstance(finding_subject, str) or not is_ancestor(root, finding_subject, subject):
+                if not isinstance(finding_subject, str):
+                    blocked = True
+                continue
+            blocked = True
+            break
+        if not blocked:
+            frontier_candidates.append(marker)
+    frontier, frontier_ambiguous = ancestry_latest(frontier_candidates)
+
+    return {
+        "review_cursor": cursor.get("subject_sha") if cursor else None,
+        "review_cursor_verdict": cursor.get("verdict") if cursor else None,
+        "review_cursor_receipt_id": cursor.get("id") if cursor else None,
+        "review_cursor_ambiguous": cursor_ambiguous,
+        "validated_frontier": frontier.get("subject_sha") if frontier else None,
+        "validated_frontier_verdict": frontier.get("verdict") if frontier else None,
+        "validated_frontier_receipt_id": frontier.get("id") if frontier else None,
+        "validated_frontier_blocked": bool(reachable_eligible) and (frontier is None or frontier_ambiguous),
+        "validated_frontier_ambiguous": frontier_ambiguous,
+    }
+
+
 def closed_finding_ids(root: Path, reachable_from: str) -> dict[str, str]:
     """Finding id -> closing SHA, derived from ``Closes-Finding`` trailers reachable
     from a ref. Closure is a derived read of git, never a stored status flag, so the
@@ -390,6 +469,7 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
         rec["id"] for rec in all_open_recs if rec["propagation"] == "gates-the-slice"
     ]
     review_outcomes = list(dedup_review_pass(records).values())
+    frontier = review_cursor_and_frontier(root, task_id, reachable)
     slice_blocking: list[str] | None = None
     slice_sha = getattr(args, "slice_sha", None)
     if slice_sha:
@@ -451,8 +531,9 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
                 "matched": len(matched) if matched is not None else None,
             },
             "gating_open": bool(gating_open),
-            "collect_blocked": bool(gating_open),
+            "collect_blocked": bool(gating_open) or frontier["validated_frontier"] is None or frontier["validated_frontier_ambiguous"],
             "slice_blocking": bool(slice_blocking),
+            **frontier,
         }
         if matched is not None:
             payload["matched_count"] = len(matched)
@@ -466,9 +547,10 @@ def command_findings_status(args: argparse.Namespace) -> dict[str, Any]:
         "reachable_from": reachable,
         "open": projected_open,
         "gating_open": gating_open,
-        "collect_blocked": bool(gating_open),
+        "collect_blocked": bool(gating_open) or frontier["validated_frontier"] is None or frontier["validated_frontier_ambiguous"],
         "slice_blocking": slice_blocking,
         "matched": matched,
+        **frontier,
     }
     if not open_only:
         payload["closed"] = projected_closed

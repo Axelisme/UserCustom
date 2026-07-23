@@ -9,11 +9,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts" / "orchestrate.py"
+from tests._orchestrate_test_support import cli_command
 
 
 def run_cli(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(SCRIPT), *arguments, "--root", str(root)],
+        cli_command(SCRIPT, [*arguments, "--root", str(root)]),
         check=False,
         text=True,
         capture_output=True,
@@ -23,7 +24,7 @@ def run_cli(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
 def run_collect(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     """collect names its checkout --integration-worktree, not --root."""
     return subprocess.run(
-        [sys.executable, str(SCRIPT), "collect", "--integration-worktree", str(root), *arguments],
+        cli_command(SCRIPT, ["collect", "--integration-worktree", str(root), *arguments]),
         check=False,
         text=True,
         capture_output=True,
@@ -54,6 +55,13 @@ def init_repo(root: Path) -> str:
 class CollectItemBindingTests(unittest.TestCase):
     """v100 #3: a reused lane ref is git-valid but collects the wrong work."""
 
+    def _review_authority(self, root: Path, subject: str) -> None:
+        ledger = root / ".agent_state" / "orchestrate" / "findings" / "demo.jsonl"
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledger.write_text(json.dumps({"id": "review-pass", "kind": "review-pass",
+                                      "subject_sha": subject, "verdict": "pass",
+                                      "evidence": ["fixture"]}) + "\n", encoding="utf-8")
+
     def _lane_with_item(self, root: Path, item: str) -> str:
         git(root, "checkout", "-q", "-b", "agent/demo/a", "task/demo")
         (root / f"{item}.txt").write_text(item, encoding="utf-8")
@@ -68,6 +76,7 @@ class CollectItemBindingTests(unittest.TestCase):
             root = Path(temporary)
             init_repo(root)
             head = self._lane_with_item(root, "SH-01B")
+            self._review_authority(root, head)
             result = run_collect(
                 root,
                 "--lane-ref",
@@ -89,6 +98,7 @@ class CollectItemBindingTests(unittest.TestCase):
             root = Path(temporary)
             init_repo(root)
             head = self._lane_with_item(root, "SH-01B")
+            self._review_authority(root, head)
             result = run_collect(
                 root,
                 "--lane-ref",
@@ -110,6 +120,7 @@ class CollectItemBindingTests(unittest.TestCase):
             root = Path(temporary)
             init_repo(root)
             head = self._lane_with_item(root, "SH-01B")
+            self._review_authority(root, head)
             result = run_collect(
                 root,
                 "--lane-ref",

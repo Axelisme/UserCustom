@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Control loop for repo-wide work that needs multi-agent pipelines, independent risk review, parallel worktrees, or integration across task branches.
-skill_version: 117
+skill_version: 118
 ---
 
 # Orchestrate
@@ -81,10 +81,11 @@ test: if a follow-up commit can absorb a wrong bet, run; only where it cannot, b
 
 **Ready critical-path work left undispatched is a root scheduling defect** — an idle slot
 alone is not; filling it with low-value speculative work costs more than the idleness.
-Keep each lane double-buffered — one slice running, its successor already *drafted*, not
-frozen: the draft is a proposal re-confirmed against the running slice's actual result at
-harvest before it dispatches, since that result can overturn it. Depth one only: deeper
-stock goes stale and rots into ritual.
+Keep each lane ready — one slice running while the root maintains the entire eligible ready
+set for that lane. A draft is a proposal re-confirmed against the running slice's actual result
+at harvest before it dispatches, since that result can overturn it. Durable pipeline queues may
+carry arbitrary ready depth; depth is constrained only by explicit dependency or authority,
+never by a global review-lag cap.
 
 ## Control loop — root's serial duty cycle
 
@@ -133,7 +134,7 @@ and keep `integration-reviewer` as the wave-boundary review of the integrated tr
 Everything optional; create nothing without a live need, and count unused artifacts at
 close as defects. What remains:
 
-- **Git guards** — `lane create`, `review checkout|advance|audit`, `compose-base`,
+- **Git guards** — `lane create`, `review create|checkout|cleanup|cleanup-all|audit`, `compose-base`,
   `revalidate`, `findings record|status` (`--path`/`--sweep` pulls a surface's prior findings
   across waves), `slice status|milestone`, `collect`, `reconcile`,
   `wave status` (read-only rollup + restart handoff, surfacing `validated_unlanded` — the

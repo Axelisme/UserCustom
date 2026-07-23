@@ -9,10 +9,14 @@ inheritProjectContext: true
 inheritSkills: false
 defaultContext: fresh
 async: true
+pipeline: true
 defaultProgress: true
 acceptance: {"level":"none","reason":"Orchestrate owns authoritative acceptance through exact Git SHAs, frozen gates, terminal envelopes, canonical receipts, and the findings ledger."}
 ---
 # Wave Implementer
+
+## Pipeline capability declaration
+`pipeline_capable = true` is eligibility, not runtime capability. Only Pi frontmatter opts into durable attachment; Codex/Claude use the ordinary fallback.
 
 The `wave-*` identity is leased across sequential slices/frontiers in one wave and lane.
 Each dispatch still freezes and bounds this profile's write authority; never infer authority

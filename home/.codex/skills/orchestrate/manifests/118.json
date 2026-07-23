@@ -1,0 +1,456 @@
+{
+  "documents": {
+    "SKILL.md": {
+      "bytes": 12011,
+      "sections": {
+        "Control loop \u2014 root's serial duty cycle": "46c739ac6250b809af6c801d805070718d7bd58c65f340772911d3b5e77acf47",
+        "Definition of done": "09f3ab44d89a6be623882227c99e22d19bbde2ffa52a3dd4a9386d9cae57da7e",
+        "Iron rules": "c933e3cad16c2067d4341eaf38b6a0e0d79d51f853b92cd134d0e428f292da50",
+        "Machinery": "08b02b9bbb9a56c081b901ad33d1c0435ad2ead2b4641147c5e590a8c665a2de",
+        "Orchestrate": "39373f76b1feb04301a839a9692195de1b28aef41208e92ce3f8a9b99c895903",
+        "Pipeline model": "cbd13beca162b6243a127ce23a47772f459d34361f9f821bc5b3ef877324ea89",
+        "Shaping heuristics": "f60eb2d2a9049bc5af0168ccc4162003310ca1795a3319acaff1c1f4fc349d46"
+      },
+      "sha256": "97eb2bf8b26f2a4a38cbaf0314a1353760015f96f93437cf78d0225520563f07"
+    },
+    "references/coordination.md": {
+      "bytes": 16148,
+      "sections": {
+        "Coordination": "f18a1d469493b2ad5b14d3e8294712470e60559f7fc8b914f22154090a1de3ab",
+        "Git topology": "1ea39751b4de0fb45abc12fe3ebba20b162fa91e51d6fae1ff5cce7f4965740b",
+        "Handoff": "8349b0750a3d68c70b074911bf9943b459a74db6e6b801c08dbb0832f8d23da3",
+        "Landing": "e434fb3052cb07316f60bf33cdc98b7486046e81eecda989e9faff6883c26cd9",
+        "Milestones and liveness": "aeca40ae15801611bfbb2dfa554224f8263205f80cea318a16085e841c6f2750",
+        "Review": "09b13c3224dfe77a89dd5f1a3ec0326694836f44c2a77aa3a04c70162279f05c",
+        "Roles and dispatch": "501f81fc8224ec40cc2195a1255786b0a93d7da1a5fdb0e1f77bbcf713ec6ce5",
+        "Skill upgrades": "dfb3283c6d236a2235b4d581345fb5e40daf432773bda086c266ea0917e2a2ae",
+        "Wave attachment policy": "9f4379be5febdab24b29fbb78d59849b129e078afb620953f0cef4eb6b8d318e",
+        "Wave close": "70719deee2f6ee20215ec4e17ad3bb47ebcc26a4847748573ceb286504b96ad5"
+      },
+      "sha256": "6d3844be125d01a3538e805cb28e0ae98693fbad04cc98b586cb3eb920d45e0f"
+    },
+    "references/publication-review.md": {
+      "bytes": 3836,
+      "sections": {
+        "Immutable review lifecycle": "22863524b8296ac8ff993eac0dd49a8c2a042d728ae7cb6c7dae48e430a3b040",
+        "Post-commit failure taxonomy": "10159832e2b917238336d19cce9bf6bd49dbebbb463f5a08350ccb7d94c0705b",
+        "Publication review": "5acd2992bb268b1f4c8f2795c5a7932293d08d9173eba6968b9ece164092d3c9",
+        "The authority transaction": "ef134ba4cfd3e2831a60fe58c039f20c93052f763b41588725b702a679ed5900"
+      },
+      "sha256": "e3f4b8a6e8883f6ac8d51d0dbf3936134dafcf0d657fbcc042d1739013321ab4"
+    },
+    "runtime-claude.md": {
+      "bytes": 2440,
+      "sections": {
+        "Capability boundaries": "e58a3c3613156c253ae9761a2a30cb2329a1d74fcc3eb6bf0643d17c62255307",
+        "Milestones and flow control": "a1ff9018c875ca9ec72637d3a11e66c6cc557414987f8a753f21714206a671a3",
+        "Orchestrate \u2014 Claude Code runtime binding": "d5a629648b5f1cb809a50ed0c657b2b72b2d8c25f0f8774450284bfd8b7e9f9b",
+        "Tool and profile binding": "6253e5ac21e024f8622ea031ab348fe22f24de2353b9077fecc91efdf31faf35"
+      },
+      "sha256": "b97d081dd54b3a0108d0b8719bd44f5a05488e59f04ef30150051ed8f204791f"
+    },
+    "runtime-codex.md": {
+      "bytes": 5197,
+      "sections": {
+        "Milestones": "6f8b615de25976b0ec8660699f9e6d8d577fc017ac452f1d8a4c06c77edc2f3e",
+        "Orchestrate \u2014 Codex runtime binding": "c56b896f300ee6b001f8c580ea61608b675749bdbe9c06e5fe2171d8be3611c2",
+        "Pipeline capability and named fallback": "9d7218554815d79bbc02002f10657203045dceb34c4abafcb4fa4a7cb8aebae1",
+        "Profile bootstrap and dispatch": "194f2b71f046f060811d1a104b35ec398b14891a2325fa534aa9033824d700a8",
+        "Runtime limits": "6bbabc9cee767a8e5c1820184eb6ebe5541b55e8544df8aa3ea56efe69efc3f0",
+        "Tool binding": "47a37c6c358a1af4339f4bbffa7d68c4fc523e3ebb3604e8c13ae554653a7afa"
+      },
+      "sha256": "2041d65f63032819e7f69e3ad99c1c5997cf649c800b15c5b607ca81c83c8ec2"
+    },
+    "runtime-pi.md": {
+      "bytes": 16307,
+      "sections": {
+        "Activation and leases": "3472293dd45b7d3e34f03a56e4ab28abd6183c5dfc5126188bd4a5171e95997d",
+        "Capability boundaries": "e6c64f813edbc126d61199e68e1727fc718bf9adb6ef00bef32d4ba33312f45c",
+        "Cleanup lease check": "7bf2b048ea33c80b568379e2c81150e22ef9eca448655a29a2aada3f4a15d01f",
+        "Cumulative review scheduling": "07beabac96f8b23d69501f9a4c7a4190c5ab361bb4230bb24bfcbfdd5d152f1c",
+        "Milestones and flow control": "7bc2db8b341154d805bc1e90dc3cead66df7c0d45bbdfd6f97a679d96f9daf5f",
+        "Orchestrate \u2014 Pi runtime binding": "8f9646483993934c61935ac3ce773f92c998a27cad39a49db1a2c06e24306a4d",
+        "Pi goal yield policy": "2571f4b029fddfb31a78719b6448edd20d871820b2e79bf6d96f8ebc1eae8bb6",
+        "Pipeline adoption": "2516d03e796c7a8aa34404baa810ac45a22c95310b725f491d26b62ebad13808",
+        "Profile routing and launch modes": "f96c5a79f5747a5929516effa9abbae4c178097f62de51ca4bb20a90b35885bc",
+        "Recommended launch presets": "f3f25827a7a1771946fbe5940fac887ee0d51775eea3b1aabe54c3fc5679eaae",
+        "Runtime budgets": "b2d9b1b75e51f88182db8afbd1ce4c2f83a3f993bb15bfa7945823ce0a9ba8b9",
+        "Tool and profile binding": "fea8ee824b1a25f7197aa674ba8b713e5b4411d8ec3aabf1dd80c13928aa2fb6",
+        "`exact-sha-review`": "b57004d4290626b4066a8e5413059b1df2977f9f276d5e9d011c4422678b8232",
+        "`lane-writer`": "35e0008d9a405bd8e3d6456c497e24d7dc3d0fbeefb5cc3c39dcb754c1a7b292",
+        "`read-only-evidence`": "778e3bf71d9853dca8fffa1758c644499cbe52749f7217149ad75eef333059cc"
+      },
+      "sha256": "521874e29ea76ee7ad7e3bdb85fdb83efc622d7c6801f2e170327dfd2ae0ef8b"
+    },
+    "scripts/_orchestrate/__init__.py": {
+      "bytes": 55,
+      "sections": {
+        "__file__": "a5fddb2f6b6e3eddc1307c9af0770a246c594b21ef3f45c513bba3ca535ac2c2"
+      },
+      "sha256": "a5fddb2f6b6e3eddc1307c9af0770a246c594b21ef3f45c513bba3ca535ac2c2"
+    },
+    "scripts/_orchestrate/cli.py": {
+      "bytes": 20193,
+      "sections": {
+        "__file__": "1dde7f713c298330881e8d6996c9ecac3b1ee4cd79ffb6bc02dd2c60d9ef67f9"
+      },
+      "sha256": "1dde7f713c298330881e8d6996c9ecac3b1ee4cd79ffb6bc02dd2c60d9ef67f9"
+    },
+    "scripts/_orchestrate/feedback.py": {
+      "bytes": 2652,
+      "sections": {
+        "__file__": "2ce3017c5c02b57d783ee459fb611e882f2ece5faab3c236832b75d87999cb2d"
+      },
+      "sha256": "2ce3017c5c02b57d783ee459fb611e882f2ece5faab3c236832b75d87999cb2d"
+    },
+    "scripts/_orchestrate/findings.py": {
+      "bytes": 24154,
+      "sections": {
+        "__file__": "2a21cecd060215abd57b1a5b6f122565d726ce281c478e43c4df42a98b7fa8c1"
+      },
+      "sha256": "2a21cecd060215abd57b1a5b6f122565d726ce281c478e43c4df42a98b7fa8c1"
+    },
+    "scripts/_orchestrate/git_ops.py": {
+      "bytes": 7790,
+      "sections": {
+        "__file__": "acd6470f1918d5495ffb1b619286dc5c445ce30b43cc5907e193a3d1d3a73e6c"
+      },
+      "sha256": "acd6470f1918d5495ffb1b619286dc5c445ce30b43cc5907e193a3d1d3a73e6c"
+    },
+    "scripts/_orchestrate/landing.py": {
+      "bytes": 15748,
+      "sections": {
+        "__file__": "a1ee9e469994bf6629c4670899613af7338cc72b0dc88aa1490301bd727d6d3e"
+      },
+      "sha256": "a1ee9e469994bf6629c4670899613af7338cc72b0dc88aa1490301bd727d6d3e"
+    },
+    "scripts/_orchestrate/lanes.py": {
+      "bytes": 26153,
+      "sections": {
+        "__file__": "14bd02acc20262d2798bc13fc6d82fdcda286901a93eb00ef26480233803c674"
+      },
+      "sha256": "14bd02acc20262d2798bc13fc6d82fdcda286901a93eb00ef26480233803c674"
+    },
+    "scripts/_orchestrate/primitives.py": {
+      "bytes": 1592,
+      "sections": {
+        "__file__": "ea33877e01619e0f941abbdd360708f290f58a7aa7bd328c9c67a3cde812718a"
+      },
+      "sha256": "ea33877e01619e0f941abbdd360708f290f58a7aa7bd328c9c67a3cde812718a"
+    },
+    "scripts/_orchestrate/release.py": {
+      "bytes": 23030,
+      "sections": {
+        "__file__": "7dbee57457ca755212dd6dd816cfb422a23246242106f20eea1154f32ab5dcd8"
+      },
+      "sha256": "7dbee57457ca755212dd6dd816cfb422a23246242106f20eea1154f32ab5dcd8"
+    },
+    "scripts/_orchestrate/review.py": {
+      "bytes": 27574,
+      "sections": {
+        "__file__": "0107cde0463564be70a8e538b53a88a70ff83a90bcccdf1876f37f6b9024a593"
+      },
+      "sha256": "0107cde0463564be70a8e538b53a88a70ff83a90bcccdf1876f37f6b9024a593"
+    },
+    "scripts/_orchestrate/worktrees.py": {
+      "bytes": 28447,
+      "sections": {
+        "__file__": "a4121d18856118efd4922686c3cf552268a918fe5f21b388ea986805ee3c3d3c"
+      },
+      "sha256": "a4121d18856118efd4922686c3cf552268a918fe5f21b388ea986805ee3c3d3c"
+    },
+    "scripts/orchestrate.py": {
+      "bytes": 227,
+      "sections": {
+        "__file__": "ed42e8798b1cd3078cb3bd7716c5ebc483709d9f793a554e3424f9b9ceee3c07"
+      },
+      "sha256": "ed42e8798b1cd3078cb3bd7716c5ebc483709d9f793a554e3424f9b9ceee3c07"
+    }
+  },
+  "orchestrate_compat": 118,
+  "profiles": {
+    ".claude/agents/contract-planner.md": {
+      "bytes": 1828,
+      "profile_contract_sha256": "47ceb4a76f970a15fe16626f486c077d61ed7b65417f1681a2f00c7e8e855466",
+      "sha256": "8aa76d77ede3652ea2d076579a85d2235ec81d07e375c6be50bc891a008d0d54",
+      "standing_orders_sha256": "c7f7d2966934e2225e55d192714c5eda129be582b0fa1524c5f9ba2475bb4413"
+    },
+    ".claude/agents/impl-detail-planner.md": {
+      "bytes": 5191,
+      "profile_contract_sha256": "27b5a0af46b1ac24a2cced6b3dfda4e6d6f57160ebfdb9bcb124d67e097e520b",
+      "sha256": "1ae244ee84a8904c6b9df71d382bb966de0d63760a40ff4fb911eb6b7f758427",
+      "standing_orders_sha256": "c7c4edc0c0eda10888afa39532cbd399a382b0906c0b6c9cd7e2cdec2bc43fe6"
+    },
+    ".claude/agents/integration-reviewer.md": {
+      "bytes": 2448,
+      "profile_contract_sha256": "ac5dabd5e2ea6c406f1632fec3c45df0ed1a509749dce1f7e770e16596751ff8",
+      "sha256": "f953b4a5e1e28d19b9fb88749dd97cb9224215453127b6d96ea0b65c38ea38b7",
+      "standing_orders_sha256": "d306478bf2829ccf15bb1e98403968393108c5351c28463cfa5868e444eaf4ce"
+    },
+    ".claude/agents/mcp-skill-tester.md": {
+      "bytes": 1300,
+      "profile_contract_sha256": "e97cabe37a791c728bea4ccd9ac40e54ae01759b098685794338ec43ca1d1398",
+      "sha256": "c4940a500e26da8da2b95487081b17838ca3c49964b53f1188d07bfddbf334d3",
+      "standing_orders_sha256": "b567b85979e163519a88eab4a95b105524a843c2ae24f011a310bf691a9b9fbb"
+    },
+    ".claude/agents/mechanical-implementer.md": {
+      "bytes": 1341,
+      "profile_contract_sha256": "0f076a4ec747c6fb60af71bfdd664a6204ac9d7f88aef051c470a8c1cdfbe19d",
+      "sha256": "96d174d4149470e29ca09eeda56ad71adef1eb6946b6915b165df74998ffc00d",
+      "standing_orders_sha256": "299098d3ccdbdd911cf8c2e732c721d6937fedc9ede8a75fd9ba18520ffc490a"
+    },
+    ".claude/agents/plan-item-implementer.md": {
+      "bytes": 5061,
+      "profile_contract_sha256": "774e54951ebf514226da60bd22ac324b93176b37dc2be40f838611351eeda122",
+      "sha256": "0596df343e34684e59c58eaeecac8e74bfd0f50c7ea5f54d5c6527abf1c29fdd",
+      "standing_orders_sha256": "917521b040ccd7e6f996add2043bc049ee7dd459e6e17d5673c938669042101b"
+    },
+    ".claude/agents/python-bug-investigator.md": {
+      "bytes": 5835,
+      "profile_contract_sha256": "084056ac6e88e283ca42fa1ba77057b2bc53da84c407f6f214fe4325e3458c71",
+      "sha256": "1c24dc32b6ed18e02ff9451528eccd360e49292907383b8696191b1633c97e11",
+      "standing_orders_sha256": "582591f5d980b588582494055aee0fac36796f3def83403563efa39eb18017b9"
+    },
+    ".claude/agents/python-module-reviewer.md": {
+      "bytes": 5075,
+      "profile_contract_sha256": "bfd2ab1d24b8879305b176625be60ed10bdc046125f866ce9ea53abc8ded0f45",
+      "sha256": "2645993590651ac12df16d748db64e1dcd9bc135017b0bab52c932aae96fe4a0",
+      "standing_orders_sha256": "0a11bdb5e96a38a48319d2aef1350005649bd4a913894b9ca64d347a37e59cca"
+    },
+    ".claude/agents/repo-investigator.md": {
+      "bytes": 1661,
+      "profile_contract_sha256": "32b530c3c2f86698eb691d9a5d423446d90338200da60ada83bd09ef067ab5ab",
+      "sha256": "64dd44dc54ac629012775cd3a98a29ee228857f7579734a035ca1a81970e782c",
+      "standing_orders_sha256": "0c7b74083a5807f1b9922b54e68c427280349ef7dbe50bea92e2f0120ee5e8fd"
+    },
+    ".claude/agents/wave-implementer.md": {
+      "bytes": 3992,
+      "profile_contract_sha256": "ba18bb2db38aa2f0b4cb67e801a06edc401c988925c931a347c21a0ab8e8f8cc",
+      "sha256": "5e6c64d4f030c64ca4583c32c873a6cdf09db5a54fafc8c59e7536784e30495d",
+      "standing_orders_sha256": "c5dcce99dcafc94187f38f6ecb8b3d34246f22ead7cb484fc57c64720e9a7328"
+    },
+    ".claude/agents/wave-reviewer.md": {
+      "bytes": 7740,
+      "profile_contract_sha256": "4be8d805ca34aedb2f4e53b7f2d305fa64f71af913ad246cf76266fabe2ce2ed",
+      "sha256": "821df2cf54f5951d5eb9626ee94b582f9520b27895b66c0e5e94669fee6166ab",
+      "standing_orders_sha256": "52826c83d52a8f69e051fb4b2d4ea51a8c056a6cdf19f5b105f55d87da01a777"
+    },
+    ".claude/agents/web-researcher.md": {
+      "bytes": 967,
+      "profile_contract_sha256": "da9f0715e92d9b06079e6144629e76568580890b3857e2b74f1e141e9a91627a",
+      "sha256": "1bdfdbf74f859df91dd18569fea3f043fd3c5ad3a85ab37e0373560b3e177207",
+      "standing_orders_sha256": "0dd55625527ac00c73476e673dfeda257bb0404955cffc76cc9532c801745c99"
+    },
+    ".codex/agents/contract-planner.toml": {
+      "bytes": 1900,
+      "profile_contract_sha256": "307ea815d152607d1541e3c3387932338d9b3237623ffa01f9a99d5d25a238c8",
+      "sha256": "a78ef71f694c66a26b3caceeb4dcf4423d887039e1955ca213543f5af85b44c8",
+      "standing_orders_sha256": "c7f7d2966934e2225e55d192714c5eda129be582b0fa1524c5f9ba2475bb4413"
+    },
+    ".codex/agents/impl-detail-planner.toml": {
+      "bytes": 5252,
+      "profile_contract_sha256": "b07b1a4e3009f6503f8f540e9df460e2f4b68b41e2b201fae6a40ca9995943c4",
+      "sha256": "eddbd7e874eb971f2bce6f8f1f47394dc55eda4c7bf155360dca3aef9244592d",
+      "standing_orders_sha256": "c7c4edc0c0eda10888afa39532cbd399a382b0906c0b6c9cd7e2cdec2bc43fe6"
+    },
+    ".codex/agents/integration-reviewer.toml": {
+      "bytes": 2687,
+      "profile_contract_sha256": "8e892ad8e86000f46d6bc4472dd81446275ce08a9c79d146fcf77cbb551ad7e1",
+      "sha256": "9b9fda2f6beee1b31054ee826a0cbb16a6e601ba921a59d5ee79f6a68b74fd57",
+      "standing_orders_sha256": "1fb77c71dc63bd1761d7fe093907a59368a16c35e4e91cac142452165c3192da"
+    },
+    ".codex/agents/mcp-skill-tester.toml": {
+      "bytes": 1388,
+      "profile_contract_sha256": "11c8295e4b6f64385041658dc9e57d0d3fa44578e5a81b6440de643e3c4fc08e",
+      "sha256": "06fff84acf68d7c9cd367811a96674848568c9395489ff3ec07c1975f43783b9",
+      "standing_orders_sha256": "b567b85979e163519a88eab4a95b105524a843c2ae24f011a310bf691a9b9fbb"
+    },
+    ".codex/agents/mechanical-implementer.toml": {
+      "bytes": 1419,
+      "profile_contract_sha256": "d2be67111bb9d002a65d57964366ee1e4975683ab8fea740f2963def1c889926",
+      "sha256": "e5aa08d8f14555d431b9b2024c78939c391427fc5386440e45a2082ec0ecb446",
+      "standing_orders_sha256": "299098d3ccdbdd911cf8c2e732c721d6937fedc9ede8a75fd9ba18520ffc490a"
+    },
+    ".codex/agents/plan-item-implementer.toml": {
+      "bytes": 5122,
+      "profile_contract_sha256": "9033d4f2b352036a4157763f650cefba7a805d65b11320130572787fa70019ab",
+      "sha256": "18a19ff370c0dda1a71c0a261534f4dc2391cbf285f0a1399dbf4fb0636b3c27",
+      "standing_orders_sha256": "917521b040ccd7e6f996add2043bc049ee7dd459e6e17d5673c938669042101b"
+    },
+    ".codex/agents/python-bug-investigator.toml": {
+      "bytes": 5896,
+      "profile_contract_sha256": "011cf8a256172d7389069b7792dae8150bb6188099b8dafd4a23ea0988811234",
+      "sha256": "971545a4b5ba3ceac3571fb9fb23235a7cf5f126eefd89b44029ad8d44ad0f3f",
+      "standing_orders_sha256": "582591f5d980b588582494055aee0fac36796f3def83403563efa39eb18017b9"
+    },
+    ".codex/agents/python-module-reviewer.toml": {
+      "bytes": 5134,
+      "profile_contract_sha256": "9f1bea01baee43315580a9c20f06f7276156ba66be47e446a4d4687a489b2b68",
+      "sha256": "1168b50277a4c2d27d6f563149a9a96835a8b6a1e81a2872580c31648ff05fa3",
+      "standing_orders_sha256": "0a11bdb5e96a38a48319d2aef1350005649bd4a913894b9ca64d347a37e59cca"
+    },
+    ".codex/agents/repo-investigator.toml": {
+      "bytes": 1734,
+      "profile_contract_sha256": "f7d9815c3757eefe2e895ec597cb08fbbc82513e5dffd53ae11405579bc82509",
+      "sha256": "c351b82c94fcd92f451bebb38abaf1ac27c02493495a795f2a2642cc9015f8aa",
+      "standing_orders_sha256": "0c7b74083a5807f1b9922b54e68c427280349ef7dbe50bea92e2f0120ee5e8fd"
+    },
+    ".codex/agents/wave-implementer.toml": {
+      "bytes": 4068,
+      "profile_contract_sha256": "dc408068deaa35e145917234bde6c77cd950d5456e7964ae6e43867cc260c1c3",
+      "sha256": "ab8be09cd719baf661134d9065fdb0589b1cb0b19bfe598f87613263310ae5ab",
+      "standing_orders_sha256": "c5dcce99dcafc94187f38f6ecb8b3d34246f22ead7cb484fc57c64720e9a7328"
+    },
+    ".codex/agents/wave-reviewer.toml": {
+      "bytes": 7815,
+      "profile_contract_sha256": "5fb4a1fc1dc41627929db187a154a0bce7bbce846846a7aeca1415a4d77163a0",
+      "sha256": "84927f0b2e96590bdf02c50ab5053f11df4bd13eaca471c6c41c7b477f261ca2",
+      "standing_orders_sha256": "52826c83d52a8f69e051fb4b2d4ea51a8c056a6cdf19f5b105f55d87da01a777"
+    },
+    ".codex/agents/web-researcher.toml": {
+      "bytes": 1036,
+      "profile_contract_sha256": "5645110255f4684d1905b06f252d93bd5288302d03a54c7ced4800f1d5412cb7",
+      "sha256": "09370ba1baef11e0b7700ecd091e875717005a8b2bdde5e5fe5485a06205dfce",
+      "standing_orders_sha256": "0dd55625527ac00c73476e673dfeda257bb0404955cffc76cc9532c801745c99"
+    },
+    ".pi/agent/APPEND_SYSTEM.md": {
+      "bytes": 1017,
+      "profile_contract_sha256": "ebefbedf4749eb9d2bac543f070082140f25afbd9457c9972a841ef36fea7a66",
+      "sha256": "eba2b73676017700381ce04d061520fda141b99348414b938270851aec2d9753",
+      "standing_orders_sha256": "ebefbedf4749eb9d2bac543f070082140f25afbd9457c9972a841ef36fea7a66"
+    },
+    ".pi/agent/agents/contract-planner.md": {
+      "bytes": 1937,
+      "profile_contract_sha256": "fd0fdb13ca083a18337b33e565dfe9639fc4f5d0a9f4da9065a6272016bb140b",
+      "sha256": "a2c96a8fdc86ccf8d978a1a1fbd1849baa272a2db82919722174deeff7bc8fc8",
+      "standing_orders_sha256": "c7f7d2966934e2225e55d192714c5eda129be582b0fa1524c5f9ba2475bb4413"
+    },
+    ".pi/agent/agents/impl-detail-planner.md": {
+      "bytes": 5373,
+      "profile_contract_sha256": "bdffb4e53801b3a2e77ddbe7e17f25b6e7f926399162897061d725f51371c4eb",
+      "sha256": "0f0b4518641d7e20dac749e922d5c266e8ea906f7d849ab455a77d987d74522e",
+      "standing_orders_sha256": "c7c4edc0c0eda10888afa39532cbd399a382b0906c0b6c9cd7e2cdec2bc43fe6"
+    },
+    ".pi/agent/agents/integration-reviewer.md": {
+      "bytes": 2947,
+      "profile_contract_sha256": "1a857b10d2af60e293f7ec5a5807beefd893db5ba5eabbc31e2eae2bd0f153cd",
+      "sha256": "cc14ec344e1fa96152f31ffe843220d456dac065b127d44a54d55436d8f2b209",
+      "standing_orders_sha256": "76ab44988d1d1dd85602203eedefdae89d20ebf5d1b48885a0d8e52b3d9207fb"
+    },
+    ".pi/agent/agents/mcp-skill-tester.md": {
+      "bytes": 1457,
+      "profile_contract_sha256": "703e23dcc2459e16636c540e7c624fa5be2d247b928a1f167ff4a25690829888",
+      "sha256": "a2bdd33090075fb603c9fdc38f592c570825b32b0bc4ec7c9cbfe0a9e8fdc296",
+      "standing_orders_sha256": "9193e0adc6688d5be04d698a26cad4673cc31d0c16b6c1074a69d7b2c5ad1211"
+    },
+    ".pi/agent/agents/mechanical-implementer.md": {
+      "bytes": 1458,
+      "profile_contract_sha256": "fec93bd0e922573adf8fbffccc5972537fff789d6013d15f914cfa857e682e06",
+      "sha256": "68bb79edda97727c11563c6800d91580d0ea914119489db1b1c58b02d4883652",
+      "standing_orders_sha256": "504d27c96aeef0497ce2e853866e54e48cd46d41fb58ac9918b0dcf98bc93ed0"
+    },
+    ".pi/agent/agents/plan-item-implementer.md": {
+      "bytes": 5251,
+      "profile_contract_sha256": "a9ff6a297c4de3fdd121fabec53ef6debc8d5bfd438fbd9bfcfdf7c3c21ab3f1",
+      "sha256": "363b94981e8b076e3f3a31137a1bb53952c502a31432b8e3f14db7fe459e0746",
+      "standing_orders_sha256": "917521b040ccd7e6f996add2043bc049ee7dd459e6e17d5673c938669042101b"
+    },
+    ".pi/agent/agents/python-bug-investigator.md": {
+      "bytes": 6026,
+      "profile_contract_sha256": "cca19d8039ed82b9272ce790bc121655412fdc94b0fe64fcdf6ca8f15d287f88",
+      "sha256": "f71e37c936a40151a73e18481ede4ae1dd00dbc1d86eb7fe5692b5397f310e2b",
+      "standing_orders_sha256": "582591f5d980b588582494055aee0fac36796f3def83403563efa39eb18017b9"
+    },
+    ".pi/agent/agents/repo-investigator.md": {
+      "bytes": 1771,
+      "profile_contract_sha256": "af74b2cedb6acdb5dea908c17e3d5395818c124f9f1d3de83fc97f932168f48c",
+      "sha256": "2ace6907752111a89d8b8eeb2904e9e7c82566d35696bfd427eebc672b4221af",
+      "standing_orders_sha256": "474893db2d008e6c5034be08348f488968260a857b783352efa5f6206e0dd9da"
+    },
+    ".pi/agent/agents/wave-implementer.md": {
+      "bytes": 4368,
+      "profile_contract_sha256": "6d264c71d79dc2398bc929afdccefec8ccbd8d3d3280da21487080c13d98343d",
+      "sha256": "dffccc73495fafdb8d7b7b2999d8b7c1d2aa3d425a953fd9ea8f00a4012ac687",
+      "standing_orders_sha256": "c5dcce99dcafc94187f38f6ecb8b3d34246f22ead7cb484fc57c64720e9a7328"
+    },
+    ".pi/agent/agents/wave-reviewer.md": {
+      "bytes": 8093,
+      "profile_contract_sha256": "5dbb6cec2209fc0bd61b22b976be3026cb3d6895847a7732c8e73f54124a6b5a",
+      "sha256": "59516b42c7f8c22329153554f732b5654dbbe5eab5e2f68414141b759f574cbf",
+      "standing_orders_sha256": "52826c83d52a8f69e051fb4b2d4ea51a8c056a6cdf19f5b105f55d87da01a777"
+    },
+    ".pi/agent/agents/web-researcher.md": {
+      "bytes": 1125,
+      "profile_contract_sha256": "1f55a53344f46948b5a417aa9d2367e21d6ab85cb96236648b153fe6f8f67ffb",
+      "sha256": "4f0d9bb49eadc0da6cd094ffa56d239037abcbb1eec2f676beb512d41f9097dc",
+      "standing_orders_sha256": "b464d4b4861377930cd3f5cc512b08ec815f7c45ec046216b9e0da2475a9da95"
+    }
+  },
+  "release_delta": {
+    "acknowledge_removed": [],
+    "changed_profiles": [
+      ".claude/agents/contract-planner.md",
+      ".claude/agents/integration-reviewer.md",
+      ".claude/agents/wave-implementer.md",
+      ".claude/agents/wave-reviewer.md",
+      ".codex/agents/contract-planner.toml",
+      ".codex/agents/integration-reviewer.toml",
+      ".codex/agents/wave-implementer.toml",
+      ".codex/agents/wave-reviewer.toml",
+      ".pi/agent/agents/contract-planner.md",
+      ".pi/agent/agents/integration-reviewer.md",
+      ".pi/agent/agents/wave-implementer.md",
+      ".pi/agent/agents/wave-reviewer.md"
+    ],
+    "changed_sections": {
+      "SKILL.md": [
+        "Machinery",
+        "Pipeline model"
+      ],
+      "references/coordination.md": [
+        "Review",
+        "Roles and dispatch",
+        "Wave attachment policy",
+        "Wave close"
+      ],
+      "references/publication-review.md": [
+        "Immutable review lifecycle"
+      ],
+      "runtime-codex.md": [
+        "Orchestrate \u2014 Codex runtime binding",
+        "Pipeline capability and named fallback"
+      ],
+      "runtime-pi.md": [
+        "Milestones and flow control",
+        "Pipeline adoption",
+        "Profile routing and launch modes",
+        "`exact-sha-review`"
+      ],
+      "scripts/_orchestrate/cli.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/findings.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/lanes.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/review.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/worktrees.py": [
+        "__file__"
+      ]
+    },
+    "from_version": 117,
+    "must_reread": [
+      "SKILL.md",
+      "references/coordination.md",
+      "references/publication-review.md",
+      "runtime-codex.md",
+      "runtime-pi.md"
+    ]
+  },
+  "schema_version": 1,
+  "skill_version": 118
+}

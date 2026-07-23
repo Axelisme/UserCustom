@@ -9,11 +9,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts" / "orchestrate.py"
+from tests._orchestrate_test_support import cli_command
 
 
 def run_cli(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(SCRIPT), *arguments, "--root", str(root)],
+        cli_command(SCRIPT, [*arguments, "--root", str(root)]),
         check=False,
         text=True,
         capture_output=True,
@@ -179,7 +180,8 @@ class WaveStatusTests(unittest.TestCase):
             self.assertEqual(handoff["gating_open"], ["F1"])
             self.assertEqual(handoff["open_findings"], ["F1"])
             self.assertTrue(handoff["collect_blocked"])
-            self.assertTrue(handoff["reviewed_clean"])
+            self.assertFalse(handoff["reviewed_clean"])
+            self.assertIsNotNone(handoff["review_cursor"])
             # Purely read-only: the task tip did not move.
             self.assertEqual(git(root, "rev-parse", "task/demo"), before)
 

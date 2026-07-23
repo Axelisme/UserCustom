@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 from importlib import import_module
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+from tests._orchestrate_test_support import verified_skill_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / "home" / ".codex" / "skills" / "orchestrate"
@@ -15,7 +18,10 @@ ENTRYPOINT = SCRIPTS / "orchestrate.py"
 sys.path.insert(0, str(SCRIPTS))
 
 command_collect = import_module("_orchestrate.lanes").command_collect
-document_paths = import_module("_orchestrate.release").document_paths
+release = import_module("_orchestrate.release")
+document_paths = release.document_paths
+profile_paths = release.profile_paths
+source_home = release.source_home
 
 
 def git(root: Path, *arguments: str) -> str:
@@ -53,6 +59,21 @@ class OrchestratePackageTests(unittest.TestCase):
         self.assertNotIn("README.md", relative)
         self.assertFalse(any("__pycache__" in path for path in relative))
 
+    def test_verified_cli_fixture_binds_every_shipped_profile(self) -> None:
+        fixture = Path(verified_skill_dir(str(SKILL)))
+        manifest = json.loads(
+            (fixture / "manifests" / "118.json").read_text(encoding="utf-8")
+        )
+        source_root = source_home(SKILL)
+        expected = {
+            path.relative_to(source_root).as_posix()
+            for path in profile_paths(source_root)
+            if path.is_file()
+        }
+        self.assertEqual(len(expected), 36)
+        self.assertEqual(set(manifest["profiles"]), expected)
+        self.assertTrue(all(entry["sha256"] for entry in manifest["profiles"].values()))
+
     def test_collect_parser_derives_task_and_keeps_authority_explicit(self) -> None:
         result = subprocess.run(
             [sys.executable, str(ENTRYPOINT), "collect", "--help"],
@@ -88,6 +109,11 @@ class OrchestratePackageTests(unittest.TestCase):
             git(lane, "add", "a.txt")
             git(lane, "commit", "-m", "lane")
             authorized = git(root, "rev-parse", "agent/demo/a")
+            ledger = root / ".agent_state" / "orchestrate" / "findings" / "demo.jsonl"
+            ledger.parent.mkdir(parents=True, exist_ok=True)
+            ledger.write_text(json.dumps({"id": "review-pass:demo", "kind": "review-pass",
+                                          "subject_sha": authorized, "verdict": "pass",
+                                          "evidence": ["package-test"]}) + "\n", encoding="utf-8")
             args = argparse.Namespace(
                 root=str(root),
                 lane_ref="agent/demo/a",

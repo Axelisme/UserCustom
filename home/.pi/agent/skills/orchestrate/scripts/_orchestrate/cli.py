@@ -10,7 +10,12 @@ from .release import command_diff, command_doctor, command_pin_migrate, command_
 from .findings import command_findings_record, command_findings_status, command_findings_validate
 from .feedback import command_feedback_record
 from .lanes import COLLECT_REVIEW_KINDS, command_collect, command_compose_base, command_compose_base_revalidate, command_lane_create, command_slice_milestone, command_slice_status
-from .review import command_review_advance, command_review_audit, command_review_checkout
+from .review import (
+    command_review_audit,
+    command_review_checkout,
+    command_review_cleanup,
+    command_review_cleanup_all,
+)
 from .worktrees import command_cleanup, command_reconcile, command_wave_status
 from .landing import command_land_finish, command_land_status
 
@@ -135,21 +140,41 @@ def build_parser() -> argparse.ArgumentParser:
 
     review = commands.add_parser("review", help="detached exact-SHA review worktrees")
     review_commands = review.add_subparsers(dest="review_command", required=True)
-    checkout = review_commands.add_parser("checkout")
-    add_root(checkout)
-    checkout.add_argument("sha")
-    checkout.add_argument("--label")
-    checkout.add_argument("--worktree")
-    checkout.set_defaults(
-        handler=command_review_checkout, requires_release_preflight=True
+    for command_name in ("create", "checkout"):
+        create = review_commands.add_parser(
+            command_name,
+            help="create one immutable clean detached worktree for one review job",
+        )
+        add_root(create)
+        create.add_argument("sha")
+        create.add_argument("--task-id", required=True)
+        create.add_argument("--job-id", required=True)
+        create.add_argument("--worktree")
+        create.set_defaults(
+            handler=command_review_checkout, requires_release_preflight=True
+        )
+    cleanup_review = review_commands.add_parser(
+        "cleanup", help="harvest an external receipt, then remove one exact review job"
     )
-    advance = review_commands.add_parser("advance")
-    add_root(advance)
-    advance.add_argument("--worktree", required=True)
-    advance.add_argument("--from", dest="from_sha", required=True)
-    advance.add_argument("--to", dest="to_sha", required=True)
-    advance.set_defaults(
-        handler=command_review_advance, requires_release_preflight=True
+    add_root(cleanup_review)
+    cleanup_review.add_argument("--task-id", required=True)
+    cleanup_review.add_argument("--job-id", required=True)
+    cleanup_review.add_argument("--receipt", required=True)
+    cleanup_review.add_argument("--pipeline-facts", required=True)
+    cleanup_review.add_argument("--owner-session", required=True)
+    cleanup_review.set_defaults(
+        handler=command_review_cleanup, requires_release_preflight=True
+    )
+    cleanup_all = review_commands.add_parser(
+        "cleanup-all",
+        help="remove this task's unreferenced review jobs using public pipeline facts",
+    )
+    add_root(cleanup_all)
+    cleanup_all.add_argument("--task-id", required=True)
+    cleanup_all.add_argument("--pipeline-facts", required=True)
+    cleanup_all.add_argument("--owner-session", required=True)
+    cleanup_all.set_defaults(
+        handler=command_review_cleanup_all, requires_release_preflight=True
     )
     audit = review_commands.add_parser(
         "audit", help="read-only AST signals for changed test files"

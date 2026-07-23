@@ -41,3 +41,19 @@ After a truth-changing attempt, expose exactly four outcomes: **not committed** 
 retry), **committed and published** (done), **committed but publication incomplete**
 (repair), or **durability uncertain** (reconcile, never blind retry). Each names a witness,
 cleanup owner, and caller-visible closed outcome; missing any is a major finding.
+
+## Immutable review lifecycle
+
+A review job binds task/job identity, exact subject, and one clean detached worktree. It is
+never advanced or retargeted: every frontier or finding closure creates a new job. Root
+harvests and validates the external receipt before exact cleanup; task-scoped cleanup-all
+accepts explicit public active/current/pending pipeline facts and fails closed on ambiguity
+or live references. Runtime never owns Git cleanup. The receipt-backed review cursor may
+move on pass or ordinary `needs_fix`; blocked, needs-decision, missing, or invalid evidence
+cannot move it. The validated frontier is separate and requires closed required findings
+and Git ancestry, so cursor progress never authorizes integration. Cleanup facts use public
+schema v1: source `pi-subagents.pipeline.status`, canonical `repo_root`, exact
+`owner_session`, timezone-aware `observed_at`, monotonic integer `snapshot_revision`, and complete `pipelines` rows
+(`name`, `state`, `active`, nullable `current`, list `pending`); cleanup-all also requires
+an external receipt path for every candidate. Null current and empty pending are valid;
+missing fields, stale facts, owner mismatch, or incomparable histories fail closed.

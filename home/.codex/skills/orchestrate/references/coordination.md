@@ -6,13 +6,11 @@ before the first dispatch; the iron rules in `../SKILL.md` stay authoritative.
 ## Roles and dispatch
 
 Root alone freezes work, grants authority, decides deferral, and integrates. A dispatch
-names the bounded objective, scope/workdir, exact base, the task-id (the ledger key an
-assignee needs to self-query `findings status` for a surface's prior findings), acceptance,
-non-goals, and stop
-conditions; add a checkpoint budget in observable units (commits/items, never wall-clock)
-only when the work spans several boundaries — on a single-boundary slice the terminal
-milestone is the budget, and stating one is ceremony;
-acceptance gates are verbatim command + workdir + environment. Named risks are both writer
+names the bounded objective, scope/workdir, exact base, the task-id (the ledger key for
+surface findings), acceptance, non-goals, and stop conditions. Add a checkpoint budget in
+observable units (commits/items, never wall-clock) only across several boundaries; on a
+single-boundary slice the terminal milestone is the budget. Acceptance gates are verbatim
+command + workdir + environment. Named risks are both writer
 self-check and reviewer scope; authority-publication slices name
 [publication-review](publication-review.md). Boilerplate stays in the profile; long
 contracts travel by named file. For speculative work, stop conditions also name the
@@ -22,11 +20,11 @@ Before freezing, check shared success/failure commit fences, public digests/fixt
 production ownership, and tested restart/recovery; a contract that cannot answer is not ready
 to dispatch.
 
-Double-buffer each lane per the SKILL pipeline model; contract-planner can keep the
-one-deep chain stocked as drafts, each re-confirmed against the predecessor's actual result
-at harvest before it dispatches. Successive items on one authority surface stay in that
-surface's single lane and writer; collect them once cumulatively after the surface's review
-passes, never a fresh lane/worktree per item.
+Keep each lane's eligible ready set stocked per the SKILL pipeline model; contract-planner
+may prepare drafts, each re-confirmed against the predecessor's actual result at harvest
+before it dispatches. Successive items on one authority surface stay in that surface's single
+lane and writer; collect them once cumulatively after the surface's review passes, never a
+fresh lane/worktree per item.
 
 Keep the same identity for the same domain; finding fixes return to the original writer,
 finding closure to the original reviewer. Spawn a new identity for independent review, a
@@ -34,6 +32,12 @@ changed domain, or genuine parallel scope. An identity can never independently r
 it implemented. Writers own every internal design decision inside the frozen seam and
 report notable ones in their milestone. Reviewers are read-only toward the reviewed tree.
 Agents never spawn coordination sub-agents or decide landing/deferral.
+
+## Wave attachment policy
+
+Pi wave roles default to attach; one item still attaches; non-attach names a reason.
+Root owns ready queues, cross-lane blocking, findings, and cost-growing holds. Reviewers keep
+one latest frontier; integration review stays one-shot.
 
 ## Milestones and liveness
 
@@ -64,14 +68,13 @@ critical boundary → the barrier below. Two consecutive reviews yielding only m
 **on the same risk surface** drop that surface's next default depth one level — a new
 domain or risk axis starts at its own default; any major finding restores it.
 
-A reviewer reads source, then probes the named oracle, ownership, lifecycle, and dangerous
-failure axes from its own `review checkout` at the exact SHA the dispatch froze — root
-names the SHA, the reviewer opens the checkout, and the terminal `subject_sha` must equal
-that checkout's HEAD, so a wrong target is caught on arrival rather than prevented by an
-extra root round-trip. `review advance` reuses that checkout for closure commits, and `review audit` flags mechanical oracle weakening. The
-terminal milestone carries `pass|needs_fix|blocked|needs_decision`, subject SHA, and the
-receipt's path — the findings themselves are written once, in the receipt, not restated in
-the envelope. Read-only `findings validate --receipt` and recording share a parser. Receipts
+Root uses `review create` for a fresh immutable checkout at every frontier or finding
+closure, proves its exact SHA and cleanliness, then dispatches the reviewer there. The
+reviewer re-proves HEAD and probes the named oracle, ownership, lifecycle, and dangerous
+failure axes; `review audit` flags mechanical oracle weakening. The terminal milestone
+carries `pass|needs_fix|blocked|needs_decision`, subject SHA, and receipt path. Findings are
+written once in the receipt, not restated in the envelope. Read-only `findings validate
+--receipt` and recording share a parser. Receipts
 require non-empty JSON `evidence`. Findings require non-empty string `behavior`/`path`,
 non-empty JSON `evidence`, canonical `propagation`, optional severity `blocker|major|minor`.
 Compatibility-only `observable_behavior` normalizes to `behavior`; conflicting dual keys and
@@ -180,8 +183,9 @@ lands, or writes the plan for you. Its `--summary` reports `wave_boundary_remova
 task's lane worktrees. When it is non-empty and you judge the boundary safe, `cleanup
 --wave-boundary` clears them — abandoned, dirty, or absorbed alike, since a half-finished
 lane is the target, not work to protect — scoped to `agent/<task>/*`, never the integration
-checkout. It skips detached review worktrees, which carry no task identity; remove those by
-exact-target `cleanup --worktree`. When the count is zero, skip the step. The summary also
+checkout. Review jobs are task-scoped separately: after external receipt harvest run exact
+`review cleanup`, then use `review cleanup-all` at wave close for unreferenced leftovers.
+When the lane count is zero, skip its cleanup. The summary also
 carries `validated_unlanded`: SHAs that passed review but are not yet on the task branch —
 the resumable state after a restart or a collect blocked by a tool-permission failure (a
 cherry-pick escalation limit, a read-only integration checkout). Collect these without a

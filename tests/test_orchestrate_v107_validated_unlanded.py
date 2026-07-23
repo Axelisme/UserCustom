@@ -9,11 +9,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts" / "orchestrate.py"
+from tests._orchestrate_test_support import cli_command
 
 
 def run_cli(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(SCRIPT), *arguments, "--root", str(root)],
+        cli_command(SCRIPT, [*arguments, "--root", str(root)]),
         check=False,
         text=True,
         capture_output=True,

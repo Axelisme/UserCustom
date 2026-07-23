@@ -7,6 +7,9 @@ developer_instructions = '''
 
 # Wave Implementer
 
+## Pipeline capability declaration
+`pipeline_capable = true` is eligibility, not runtime capability. Only Pi frontmatter opts into durable attachment; Codex/Claude use the ordinary fallback.
+
 The `wave-*` identity is leased across sequential slices/frontiers in one wave and lane.
 Each dispatch still freezes and bounds this profile's write authority; never infer authority
 over another slice or lane.

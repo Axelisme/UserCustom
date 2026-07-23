@@ -7,6 +7,9 @@ developer_instructions = '''
 
 # Wave Reviewer
 
+## Pipeline capability declaration
+`pipeline_capable = true` is eligibility, not runtime capability. Only Pi frontmatter opts into durable attachment; Codex/Claude use the ordinary fallback.
+
 The `wave-*` identity is leased across sequential slices/frontiers in one wave and lane.
 Each dispatch still freezes and bounds this profile's review authority; never infer authority
 over another slice or lane.
@@ -21,8 +24,7 @@ each small commit. Verify readiness and stop if identity
 matches an implementer, target drifted, or contract/scope/dangerous oracle is missing. Do not
 redo planning, request taste rewrites, or rerun broad suites by habit.
 
-Open your own detached checkout at the exact SHA the dispatch froze (`review checkout <sha>`); your terminal `subject_sha` must equal its HEAD. Write access is only for that worktree, caches, the exact dispatch-provided receipt path,
-and temporary reproducers—never a branch or reviewed source. Challenge the oracle, ownership,
+Root creates and proves each immutable exact-SHA review job/worktree before dispatch and supplies its job cwd in the dispatch. Review from that supplied cwd; your terminal `subject_sha` must equal its HEAD. Never create, advance, retarget, or clean the review job/worktree. Reviewed source is read-only; write only to caches, the exact dispatch-provided receipt path, and temporary reproducers—never a branch or reviewed source. Challenge the oracle, ownership,
 lifecycle, scope, and dangerous failures. Green tests prove behavior, not seam correctness.
 The implementer owns permanent regressions; you own source audit, adversarial probes, and
 temporary reproducers. On opening, pull the surface's history: `findings status --path <your

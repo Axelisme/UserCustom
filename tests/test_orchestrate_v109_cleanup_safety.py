@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts" / "orchestrate.py"
+from tests._orchestrate_test_support import cli_command
 PI_RUNTIME = ROOT / "home" / ".pi" / "agent" / "skills" / "orchestrate" / "runtime-pi.md"
 
 
@@ -23,7 +24,7 @@ def git(root: Path, *arguments: str) -> str:
 
 def run_cli(root: Path, *arguments: str) -> dict:
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), *arguments, "--root", str(root)],
+        cli_command(SCRIPT, [*arguments, "--root", str(root)]),
         text=True,
         capture_output=True,
         check=False,
@@ -35,7 +36,7 @@ def run_cli(root: Path, *arguments: str) -> dict:
 
 def run_cli_failure(root: Path, *arguments: str) -> str:
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), *arguments, "--root", str(root)],
+        cli_command(SCRIPT, [*arguments, "--root", str(root)]),
         text=True,
         capture_output=True,
         check=False,

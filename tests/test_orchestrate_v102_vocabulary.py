@@ -9,11 +9,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts" / "orchestrate.py"
+from tests._orchestrate_test_support import cli_command
 
 
 def run_cli(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(SCRIPT), *arguments, "--root", str(root)],
+        cli_command(SCRIPT, [*arguments, "--root", str(root)]),
         check=False,
         text=True,
         capture_output=True,
@@ -110,7 +111,7 @@ class VerdictVocabularyTests(unittest.TestCase):
             # A blocked review is not a pass: it must not read as clean evidence.
             self.assertEqual(incomplete(st), [subject])
             self.assertEqual(clean(st), [])
-            self.assertFalse(st["collect_blocked"])
+            self.assertTrue(st["collect_blocked"])
             marker = st["review_outcomes"][0]
             self.assertEqual(marker["verdict"], "blocked")
             self.assertEqual(marker["evidence"], ["loopback socket EPERM in sandbox"])
@@ -306,4 +307,5 @@ class ReviewerOutputIsKeptTests(unittest.TestCase):
             record(root, [{"propagation": "backlog", "path": "a.py"}], "needs_fix")
             st = status(root)
             self.assertEqual(st["gating_open"], [])
+            self.assertFalse(st["validated_frontier_blocked"])
             self.assertFalse(st["collect_blocked"])

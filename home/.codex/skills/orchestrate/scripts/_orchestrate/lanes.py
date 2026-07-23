@@ -9,7 +9,7 @@ from typing import Any
 
 from .primitives import OrchestrateError, require_identifier
 from .git_ops import absorption_probe, changed_paths_since_fork, exact_commit, is_ancestor, lane_absorption, managed_worktree_root, merge_tree_probe, require_managed_worktree, require_task_lane_refs, run_git, worktree_evidence, worktree_records
-from .findings import CLOSES_FINDING_PATTERN, closed_finding_ids, dedup_findings, read_findings_ledger, task_id_from_ref
+from .findings import CLOSES_FINDING_PATTERN, closed_finding_ids, dedup_findings, read_findings_ledger, review_cursor_and_frontier, task_id_from_ref
 
 COLLECT_REVIEW_KINDS = (
     "different-identity",
@@ -437,6 +437,18 @@ def command_slice_milestone(args: argparse.Namespace) -> dict[str, Any]:
     return payload
 
 
+def _require_validated_frontier(root: Path, task_id: str, authorized: str) -> dict[str, Any]:
+    projection = review_cursor_and_frontier(root, task_id, reachable_from=authorized)
+    if projection.get("review_cursor_ambiguous") or projection.get("validated_frontier_ambiguous"):
+        raise OrchestrateError("review authority is ambiguous across incomparable Git histories")
+    if projection.get("validated_frontier") != authorized:
+        reason = "missing or invalid receipt authority"
+        if projection.get("validated_frontier_blocked"):
+            reason = "validated frontier is blocked by required review debt or ancestry"
+        raise OrchestrateError(f"collect requires validated review frontier {authorized}: {reason}")
+    return projection
+
+
 def command_collect(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
     root = Path(args.root).resolve()
@@ -457,6 +469,8 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
     review_kind = args.review_kind
     authorized = exact_commit(root, args.authorized_sha, label="authorized SHA")
     authorization = {"authorization_source": "declared"}
+    task_id = task_id_from_ref(task_ref)
+    frontier_authority = _require_validated_frontier(root, task_id, authorized)
     task_head = run_git(root, "rev-parse", "HEAD").stdout.strip()
     if is_ancestor(root, authorized, task_head):
         # Recovery precedes lane-ref resolution, so cleanup may already have deleted it.
@@ -469,6 +483,7 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
             "authorized_sha": authorized,
             "declared_review_kind": review_kind,
             "verdict_inferred": False,
+            "validated_frontier": frontier_authority["validated_frontier"],
             **authorization,
             "task_sha": task_head,
             "observed_at": datetime.now(UTC).isoformat(),
@@ -557,6 +572,7 @@ def command_collect(args: argparse.Namespace) -> dict[str, Any]:
         "authorized_sha": authorized,
         "declared_review_kind": review_kind,
         "verdict_inferred": False,
+        "validated_frontier": frontier_authority["validated_frontier"],
         "item_id": lane_item,
         "item_trailer_present": lane_item is not None,
         **authorization,

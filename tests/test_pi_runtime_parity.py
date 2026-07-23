@@ -70,6 +70,23 @@ class PiRuntimeParityTests(unittest.TestCase):
                     for text, suffix in ((codex, ".toml"), (claude, ".md"), (pi, ".md"))
                 }
                 self.assertEqual(len(bodies), 1)
+                for text in (codex, claude, pi):
+                    if name == "wave-reviewer":
+                        self.assertIn("Root creates and proves each immutable exact-SHA review job/worktree before dispatch", text)
+                        self.assertIn("supplies its job cwd in the dispatch", text)
+                        self.assertIn("Never create, advance, retarget, or clean", text)
+                        self.assertNotIn("Open your own detached checkout", text)
+                        self.assertNotIn("review checkout <sha>", text)
+                    if name == "contract-planner":
+                        self.assertIn("every dependency- and authority-valid ready slice", text)
+                        self.assertIn("arbitrary ready depth", text)
+                        self.assertIn("root owns runtime queue placement", text)
+                        self.assertIn("priority, and timing", text)
+                        self.assertIn("may release any dependency- and authority-valid ready depth", text)
+                        self.assertIn("there is no global one-deep queue", text)
+                        self.assertIn("never mutates runtime queue", text)
+                        for stale in ("next ready slice", "never deeper", "stock goes stale", "releases waves one at a time"):
+                            self.assertNotIn(stale, text)
 
     def test_pi_profiles_keep_runtime_frontmatter_contract(self) -> None:
         for name in ("contract-planner", "wave-implementer", "wave-reviewer"):

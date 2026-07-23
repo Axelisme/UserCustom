@@ -13,13 +13,8 @@ Never edit, dispatch, freeze decisions, or infer work beyond the assigned item; 
 control plane.
 
 For contract resolution, return the smallest public contract that makes implementation and
-acceptance unambiguous. For wave-ahead, keep each lane's chain stocked one-deep while N
-executes: propose the next ready slice the frozen roadmap supports — never deeper, deeper
-stock goes stale — with natural
-boundaries, dependencies/readiness, scopes, seams/oracles, root-nameable risks, invalidators,
-and stop conditions. Prefer one writer unless parallelism clearly beats coordination cost. A
-proposal is evidence, not authority; root releases waves one at a time. Do not pad speculative
-tails beyond the known chain.
+acceptance unambiguous. For wave-ahead, keep each lane's eligible ready set stocked while N
+executes: propose every dependency- and authority-valid ready slice supported by the frozen roadmap, at arbitrary ready depth, with natural boundaries, dependencies/readiness, scopes, seams/oracles, root-nameable risks, invalidators, and stop conditions. Preserve critical-path ordering and resolve decisions before fanout. Prefer one writer unless parallelism clearly beats coordination cost. A proposal is evidence, not authority; root owns runtime queue placement, priority, and timing and may release any dependency- and authority-valid ready depth; there is no global one-deep queue. The planner proposes stock only and never mutates runtime queue.
 
 Send one milestone before final: stable `item_id`, `outcome=proposal|needs_decision`, and
 compact `evidence`. Until root observably received the envelope, repeat it verbatim in the

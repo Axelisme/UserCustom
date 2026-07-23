@@ -14,6 +14,7 @@ from .findings import (
     command_findings_status,
     dedup_findings,
     read_findings_ledger,
+    review_cursor_and_frontier,
     task_id_from_ref,
 )
 from .lanes import command_slice_status, speculative_dependency_records
@@ -276,13 +277,51 @@ def command_wave_status(args: argparse.Namespace) -> dict[str, Any]:
         argparse.Namespace(root=args.root, task_id=task_id, task_ref=task_ref)
     )
     reconcile_report = command_reconcile(argparse.Namespace(root=args.root))
-    reviewed_pass = sorted(
-        {
-            marker["subject_sha"]
-            for marker in findings_report["review_outcomes"]
-            if marker.get("verdict") == "pass"
-        }
+    lane_authority: list[dict[str, Any]] = []
+    for lane in slice_report["lanes"]:
+        head = lane.get("head")
+        if not head:
+            continue
+        lane_authority.append({
+            "lane_ref": lane["lane_ref"], "head": head,
+            **review_cursor_and_frontier(root, task_id, reachable_from=head),
+        })
+    if not lane_authority:
+        # A one-lane/no-lane fixture can hold an unlanded reviewed subject at the
+        # current checkout while task/<task> remains at its prior landed tip.
+        for target in (slice_report["task_sha"], "HEAD"):
+            lane_authority.append({
+                "lane_ref": task_ref, "head": target,
+                **review_cursor_and_frontier(root, task_id, reachable_from=target),
+            })
+    # `reviewed_clean` is a validated, debt-free projection, not cursor progress:
+    # a needs_fix marker may advance the cursor while the frontier remains blocked.
+    reviewed_pass = sorted({
+        str(authority["validated_frontier"])
+        for authority in lane_authority
+        if authority.get("validated_frontier")
+        and not authority.get("validated_frontier_blocked")
+        and not authority.get("validated_frontier_ambiguous")
+    })
+    reviewed_clean = list(reviewed_pass)
+    # A missing/blocked frontier blocks its own lane. Incomparable valid sibling
+    # frontiers do not: each remains independently collectable and the aggregate
+    # scalar is simply null.
+    lane_blocked = any(
+        authority.get("validated_frontier_blocked")
+        or authority.get("validated_frontier") is None
+        for authority in lane_authority
     )
+    validated_frontier: str | None = None
+    frontier_ambiguous = False
+    for candidate in reviewed_pass:
+        if validated_frontier is None:
+            validated_frontier = candidate
+        elif is_ancestor(root, validated_frontier, candidate):
+            validated_frontier = candidate
+        elif not is_ancestor(root, candidate, validated_frontier):
+            validated_frontier = None
+            break
     handoff = {
         "task_ref": task_ref,
         "task_sha": slice_report["task_sha"],
@@ -293,19 +332,23 @@ def command_wave_status(args: argparse.Namespace) -> dict[str, Any]:
         "write_set_overlaps": slice_report["write_set_overlaps"],
         "open_findings": [rec["id"] for rec in findings_report["open"]],
         "gating_open": findings_report["gating_open"],
-        "collect_blocked": findings_report["collect_blocked"],
-        # Derived here rather than carried as its own ledger key: a review that
-        # ended blocked is not clean, and one place deciding that cannot drift
-        # from another.
-        "reviewed_clean": reviewed_pass,
+        "collect_blocked": bool(findings_report["gating_open"]) or lane_blocked or frontier_ambiguous,
+        "lane_review_authority": lane_authority,
+        # Derived from the receipt-backed validated frontier; cursor progress or
+        # an ordinary finding never grants integration cleanliness.
+        "reviewed_clean": reviewed_clean,
+        "review_cursor": findings_report.get("review_cursor"),
+        "validated_frontier": validated_frontier,
+        "validated_frontier_ambiguous": frontier_ambiguous,
+        "validated_frontier_blocked": lane_blocked,
         # The subset of reviewed_clean not yet on the task branch: a subject that
         # passed review but whose SHA is not an ancestor of the task head. This is
         # the resumable "validated, unlanded" state — after a restart or a landing
         # blocked by a tool-permission failure (a cherry-pick escalation limit, a
         # read-only integration checkout), root collects these SHAs without paying
         # for a second review, because the pass marker is a durable ledger row that
-        # outlives the interruption. It is a pure derived read of the same markers,
-        # never a stored flag, so it cannot drift from reviewed_clean.
+        # outlives the interruption. It is a pure derived read of the validated
+        # frontier, never a stored flag, so it cannot drift from reviewed_clean.
         "validated_unlanded": sorted(
             sha for sha in reviewed_pass if not is_ancestor(root, sha, slice_report["task_sha"])
         ),
@@ -344,10 +387,18 @@ def command_wave_status(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def cleanup_single_worktree(
+def _cleanup_single_worktree_locked(
     args: argparse.Namespace, root: Path, started: float
 ) -> dict[str, Any]:
     target = require_managed_worktree(root, Path(args.worktree).resolve(), kind="any")
+    from .review import open_review_job_for_worktree
+    owner = open_review_job_for_worktree(root, target)
+    if owner is not None:
+        raise OrchestrateError(
+            "legacy cleanup refused: worktree is owned by open immutable "
+            f"review job {owner.get('task_id')}/{owner.get('job_id')}; "
+            "use review cleanup with receipt and public facts"
+        )
     record = next(
         (
             record
@@ -373,6 +424,11 @@ def cleanup_single_worktree(
             result["recovered"] = "pruned-stale-metadata"
         elif "detached" in record:
             result["kind"] = "review"
+            if not args.subject_sha:
+                raise OrchestrateError(
+                    "targeted review cleanup requires --subject-sha because Git cannot"
+                    " prove reviewer liveness"
+                )
             if run_git(target, "status", "--porcelain").stdout.strip():
                 raise OrchestrateError("review worktree is dirty")
             head = run_git(target, "rev-parse", "HEAD").stdout.strip()
@@ -387,6 +443,12 @@ def cleanup_single_worktree(
             result["head"] = head
             run_git(root, "worktree", "remove", str(target))
         else:
+            classification = classify_worktree(root, record)
+            if not classification.get("cleanup_eligible"):
+                raise OrchestrateError(
+                    "classifier rejected lane cleanup: "
+                    + str(classification.get("reason", "unknown state"))
+                )
             result["kind"] = "lane"
             branch = str(record.get("branch", "")).removeprefix("refs/heads/")
             match = re.fullmatch(r"agent/([^/]+)/[^/]+", branch)
@@ -419,7 +481,15 @@ def cleanup_single_worktree(
     }
 
 
-def cleanup_wave_boundary(
+def cleanup_single_worktree(
+    args: argparse.Namespace, root: Path, started: float
+) -> dict[str, Any]:
+    from .review import _review_lifecycle_lock
+    with _review_lifecycle_lock(root):
+        return _cleanup_single_worktree_locked(args, root, started)
+
+
+def _cleanup_wave_boundary_locked(
     args: argparse.Namespace, root: Path, started: float
 ) -> dict[str, Any]:
     """Remove this task's leftover lane worktrees at a wave boundary root has judged
@@ -440,12 +510,40 @@ def cleanup_wave_boundary(
         )
     task_id = require_identifier(head.split("/", 1)[1], label="task id")
     lane_prefix = f"agent/{task_id}/"
-    if not args.dry_run:
-        worktree_metadata_writability_preflight(root)
     managed = managed_worktree_root(root).resolve()
     root_path = root.resolve()
+    records = worktree_records(root)
+    from .review import open_review_job_for_worktree
+    # Inspect durable ownership before any generic metadata preflight or lane
+    # classification. This check and the eventual removal share the lifecycle lock.
+    for record in records:
+        raw = record.get("worktree")
+        if not isinstance(raw, str):
+            continue
+        path = Path(raw)
+        try:
+            relative = path.resolve().relative_to(managed)
+        except ValueError:
+            continue
+        if len(relative.parts) != 1 or path.resolve() == root_path:
+            continue
+        # Only a current-task lane is a wave-boundary removal candidate. Detached
+        # reviews and lanes from other tasks are intentionally skipped, even when
+        # their open review jobs are durable and owned by another task.
+        branch = str(record.get("branch", "")).removeprefix("refs/heads/")
+        if "detached" in record or not branch.startswith(lane_prefix):
+            continue
+        owner = open_review_job_for_worktree(root, path)
+        if owner is not None:
+            raise OrchestrateError(
+                "legacy cleanup refused: worktree is owned by open immutable "
+                f"review job {owner.get('task_id')}/{owner.get('job_id')}; "
+                "use review cleanup with receipt and public facts"
+            )
+    if not args.dry_run:
+        worktree_metadata_writability_preflight(root)
     entries: list[dict[str, Any]] = []
-    for record in worktree_records(root):
+    for record in records:
         raw = record.get("worktree")
         if not isinstance(raw, str):
             continue
@@ -509,6 +607,14 @@ def cleanup_wave_boundary(
     }
 
 
+def cleanup_wave_boundary(
+    args: argparse.Namespace, root: Path, started: float
+) -> dict[str, Any]:
+    from .review import _review_lifecycle_lock
+    with _review_lifecycle_lock(root):
+        return _cleanup_wave_boundary_locked(args, root, started)
+
+
 def command_cleanup(args: argparse.Namespace) -> dict[str, Any]:
     """Require an exact target and classifier approval before cleanup mutates state."""
     root = Path(args.root).resolve()
@@ -540,44 +646,39 @@ def command_cleanup(args: argparse.Namespace) -> dict[str, Any]:
             " cleanup each exact --worktree target"
         )
     target = require_managed_worktree(root, Path(args.worktree).resolve(), kind="any")
-    record = next(
-        (
-            candidate
-            for candidate in worktree_records(root)
-            if candidate.get("worktree") == str(target)
-        ),
-        None,
-    )
     if args.dry_run:
-        classification = (
-            classify_worktree(root, record)
-            if record is not None
-            else {
-                "path": str(target),
-                "class": "unknown",
-                "cleanup_eligible": False,
-                "reason": "worktree is not registered",
+        from .review import _review_lifecycle_lock, open_review_job_for_worktree
+        with _review_lifecycle_lock(root):
+            owner = open_review_job_for_worktree(root, target)
+            if owner is not None:
+                raise OrchestrateError(
+                    "legacy cleanup refused: worktree is owned by open immutable "
+                    f"review job {owner.get('task_id')}/{owner.get('job_id')}; "
+                    "use review cleanup with receipt and public facts"
+                )
+            record = next(
+                (
+                    candidate
+                    for candidate in worktree_records(root)
+                    if candidate.get("worktree") == str(target)
+                ),
+                None,
+            )
+            classification = (
+                classify_worktree(root, record)
+                if record is not None
+                else {
+                    "path": str(target),
+                    "class": "unknown",
+                    "cleanup_eligible": False,
+                    "reason": "worktree is not registered",
+                }
+            )
+            return {
+                "ok": True,
+                "operation": "cleanup-dry-run",
+                "read_only": True,
+                "runtime_lease_safety": "unchecked",
+                "worktree": classification,
             }
-        )
-        return {
-            "ok": True,
-            "operation": "cleanup-dry-run",
-            "read_only": True,
-            "runtime_lease_safety": "unchecked",
-            "worktree": classification,
-        }
-    if record is not None and target.exists():
-        if "detached" in record:
-            if not args.subject_sha:
-                raise OrchestrateError(
-                    "targeted review cleanup requires --subject-sha because Git cannot"
-                    " prove reviewer liveness"
-                )
-        else:
-            classification = classify_worktree(root, record)
-            if not classification.get("cleanup_eligible"):
-                raise OrchestrateError(
-                    "classifier rejected lane cleanup: "
-                    + str(classification.get("reason", "unknown state"))
-                )
     return cleanup_single_worktree(args, root, time.monotonic())

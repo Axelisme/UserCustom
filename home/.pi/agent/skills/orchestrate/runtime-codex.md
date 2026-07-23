@@ -1,6 +1,22 @@
 # Orchestrate — Codex runtime binding
 
-Session-injected collaboration tool definitions are authoritative. Codex ships **two
+Session-injected collaboration tool definitions are authoritative.
+
+## Pipeline capability and named fallback
+
+Codex remains runtime-neutral: this binding does not implement or emulate a durable `pipeline`
+queue. `wave-implementer` and `wave-reviewer` retain an explicit pipeline-capable profile
+contract only as cross-runtime eligibility wording; they have no machine opt-in and claim no
+Codex runtime capability. Codex roots use the ordinary async path. Root records a concrete
+non-attach reason (`pipeline capability unavailable in Codex runtime`) and uses the named ordinary
+one-deep fallback: dispatch one ready item, harvest its completion, then dispatch the next.
+This is the only one-deep policy; it is an explicit no-durable-runtime fallback, not a global
+review-lag cap. `integration-reviewer` remains a fresh one-shot role.
+
+The fallback preserves root ownership of scope, queue placement, cross-lane blocked work,
+ordinary finding accumulation, and cost-growing invariant holds. Runtime neutrality means
+Codex must not claim pipeline persistence, milestone scheduling, reviewer frontier semantics,
+or Git/review/finding interpretation. Codex ships **two
 sub-agent generations** and either may be injected; identify the generation at session start
 from the injected tool names, note the resolved capability matrix once in root context, and
 use it consistently (re-derive it from the injected tool names after a context compaction —

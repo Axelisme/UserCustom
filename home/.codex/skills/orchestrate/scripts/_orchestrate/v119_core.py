@@ -111,17 +111,70 @@ def command_worktree_remove(args: argparse.Namespace) -> dict[str, Any]:
     return {"ok": True, "operation": "worktree-remove", "task_id": args.task_id, "wave_id": args.wave_id, "role": role, "worktree": str(path), "branch": branch, "removed": True}
 
 
-def _trailers(body: str) -> dict[str, str]:
+_WORKFLOW_TRAILER_KEYS = frozenset({"Wave", "Slice", "Role"})
+
+
+def _trailers(text: str) -> dict[str, str]:
+    """Parse Git's already-interpreted final trailer block.
+
+    The ``trailers:only`` pretty-format is authoritative here: unlike a raw
+    commit body walk, it excludes ordinary body colon-lines and only returns
+    the final block Git recognizes as trailers.  Keep duplicate detection
+    explicit because silently letting the last value win makes workflow
+    identity ambiguous.
+    """
     values: dict[str, str] = {}
-    for line in body.splitlines():
+    for line in text.splitlines():
         key, separator, value = line.partition(":")
-        if separator and key in {"Wave", "Slice", "Role"}:
-            values[key] = value.strip()
+        if not separator or key not in _WORKFLOW_TRAILER_KEYS:
+            continue
+        if key in values:
+            raise OrchestrateError(f"duplicate Git trailer: {key}")
+        values[key] = value.strip()
     return values
 
 
-def _commit_body(root: Path, sha: str) -> str:
-    return run_git(root, "show", "-s", "--format=%B", sha).stdout
+def _compact_trailers(body: str) -> dict[str, str]:
+    """Interpret the historical compact trailer form at the body suffix.
+
+    Git requires a blank separator before a trailer block.  v119 also accepts
+    the established compact form used by existing milestone commits (the
+    labels are contiguous at EOF), while still refusing labels followed by
+    ordinary prose.  This is deliberately a suffix-only fallback; the normal
+    path remains Git's ``trailers:only,unfold`` interpretation.
+    """
+    lines = body.splitlines()
+    while lines and not lines[-1].strip():
+        lines.pop()
+    suffix: list[str] = []
+    while lines:
+        key, separator, _value = lines[-1].partition(":")
+        if not separator or key not in _WORKFLOW_TRAILER_KEYS:
+            break
+        suffix.append(lines.pop())
+    if not suffix:
+        return {}
+    return _trailers("\n".join(reversed(suffix)))
+
+
+def _commit_metadata(root: Path, sha: str) -> tuple[str, str, str, dict[str, str]]:
+    """Read commit identity and interpreted trailers in one Git invocation."""
+    fields = run_git(
+        root,
+        "show",
+        "-s",
+        "--format=%H%x00%ct%x00%s%x00%B%x00%(trailers:only,unfold)",
+        sha,
+    ).stdout.split("\x00", 4)
+    commit_sha = fields[0] if fields else ""
+    timestamp = fields[1] if len(fields) > 1 else ""
+    subject = fields[2].strip() if len(fields) > 2 else ""
+    body = fields[3] if len(fields) > 3 else ""
+    trailer_text = fields[4] if len(fields) > 4 else ""
+    trailers = _trailers(trailer_text)
+    if not trailers:
+        trailers = _compact_trailers(body)
+    return commit_sha, timestamp, subject, trailers
 
 
 def command_contract_merge(args: argparse.Namespace) -> dict[str, Any]:
@@ -137,7 +190,7 @@ def command_contract_merge(args: argparse.Namespace) -> dict[str, Any]:
         raise OrchestrateError(f"managed implementation worktree does not exist: {path}")
     if not state["clean"]:
         raise OrchestrateError(f"implementation worktree must be clean: {path}")
-    trailers = _trailers(_commit_body(root, contract))
+    _commit_sha, _timestamp, _subject, trailers = _commit_metadata(root, contract)
     wave = trailers.get("Wave", "")
     slice_id = trailers.get("Slice", "")
     if wave != str(args.wave_id) or not slice_id or trailers.get("Role") != "oracle":
@@ -156,10 +209,15 @@ def command_contract_merge(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _commit_info(root: Path, sha: str) -> dict[str, Any]:
-    fields = run_git(root, "show", "-s", "--format=%H%x00%ct%x00%s%x00%B", sha).stdout.split("\x00", 3)
-    body = fields[3] if len(fields) > 3 else ""
-    trailers = _trailers(body)
-    return {"sha": fields[0], "timestamp": int(fields[1]), "wave": trailers.get("Wave", ""), "slice": trailers.get("Slice", ""), "role": trailers.get("Role", ""), "subject": fields[2].strip() if len(fields) > 2 else ""}
+    commit_sha, timestamp, subject, trailers = _commit_metadata(root, sha)
+    return {
+        "sha": commit_sha,
+        "timestamp": int(timestamp),
+        "wave": trailers.get("Wave", ""),
+        "slice": trailers.get("Slice", ""),
+        "role": trailers.get("Role", ""),
+        "subject": subject,
+    }
 
 
 def _range_numstat(

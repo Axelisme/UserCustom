@@ -15,7 +15,7 @@ creates and attaches the wave-implementer pipeline from the first real Implement
 after the first Contract merge. Root controls dependency depth and queue placement. Ready commits use Git trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and the role-specific `Role: oracle` or `Role: implementation`.
 
 After emitting the terminal `slice-ready` handoff, the role immediately ends its turn and
-makes no further worktree changes. The handoff carries Slice and the full exact SHA. After
+makes no further worktree changes. The handoff carries Slice and the full exact SHA.
 
 ## Profile routing
 

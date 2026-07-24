@@ -187,6 +187,7 @@ def _range_numstat(
 
 
 def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
+    """Report profile accounting from one global, slice-partitioned topology walk."""
     root = Path(args.root).resolve()
     try:
         base = exact_commit(root, str(args.base), label="base")
@@ -214,8 +215,6 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
     infos: list[dict[str, Any]] = []
     for sha in raw.splitlines():
         info = _commit_info(root, sha)
-        # Only the v119 checkpoint role is part of the profile surface.  In
-        # particular, a legacy Role: checkpoint commit must be invisible.
         if (
             info["wave"] == wave
             and info["slice"]
@@ -225,11 +224,7 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
 
     warnings: list[str] = []
 
-    def interval(
-        after: dict[str, Any],
-        before: dict[str, Any],
-        label: str,
-    ) -> int | None:
+    def interval(after: dict[str, Any], before: dict[str, Any], label: str) -> int | None:
         delta = after["timestamp"] - before["timestamp"]
         if delta < 0:
             warnings.append(
@@ -246,120 +241,106 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
                 f"after {after['sha']} ({after['timestamp']})"
             )
 
-    # Oracle-ready intervals are measured against the previous ready Oracle
-    # across the wave, so a Slice's latest attempt remains comparable to other
-    # Slices.  A backwards clock produces null plus an explicit warning.
     oracle_intervals: dict[str, int | None] = {}
     previous_oracle: dict[str, Any] | None = None
     for info in infos:
-        if info["role"] != "oracle":
-            continue
-        oracle_intervals[info["sha"]] = (
-            None if previous_oracle is None else interval(info, previous_oracle, "Oracle-ready")
-        )
-        previous_oracle = info
-
-    slices: dict[str, dict[str, Any]] = {}
-    for position, info in enumerate(infos):
-        entry = slices.setdefault(
-            info["slice"],
-            {
-                "attempts": [],
-                "oracle_interval_seconds": None,
-                "handoff_interval_seconds": None,
-                "implementation_interval_seconds": None,
-                "contract_numstat": {"files": 0, "insertions": 0, "deletions": 0},
-                "implementation_numstat": {"files": 0, "insertions": 0, "deletions": 0},
-            },
-        )
         if info["role"] == "oracle":
-            entry.setdefault("_oracles", []).append((position, info))
-        elif info["role"] == "merge":
-            entry.setdefault("_merges", []).append((position, info))
-        elif info["role"] == "implementation":
-            entry.setdefault("_implementations", []).append((position, info))
-        else:
-            entry.setdefault("checkpoints", []).append(info)
+            oracle_intervals[info["sha"]] = (
+                None if previous_oracle is None else interval(info, previous_oracle, "Oracle-ready")
+            )
+            previous_oracle = info
 
-    for entry in slices.values():
-        oracle_records = entry.pop("_oracles", [])
-        merge_records = entry.pop("_merges", [])
-        implementation_records = entry.pop("_implementations", [])
-        oracles = [info for _, info in oracle_records]
-        merges = [info for _, info in merge_records]
-        implementations = [info for _, info in implementation_records]
-
-        # Contract statistics are the complete ranges from the preceding
-        # Oracle-ready boundary (or the report base) to each Oracle-ready
-        # commit.  This includes untrailed Contract drafts.
-        contract_stats: list[tuple[str, int, int]] = []
-        previous_oracle_sha = base
-        for oracle in oracles:
-            contract_stats.extend(_range_numstat(root, previous_oracle_sha, oracle["sha"]))
-            previous_oracle_sha = oracle["sha"]
-        entry["contract_numstat"] = {
-            "files": len(contract_stats),
-            "insertions": sum(item[1] for item in contract_stats),
-            "deletions": sum(item[2] for item in contract_stats),
+    def new_slice() -> dict[str, Any]:
+        return {
+            "attempts": [],
+            "oracle_interval_seconds": None,
+            "handoff_interval_seconds": None,
+            "implementation_interval_seconds": None,
+            "contract_numstat": {"files": 0, "insertions": 0, "deletions": 0},
+            "implementation_numstat": {"files": 0, "insertions": 0, "deletions": 0},
         }
 
-        # Each attempt owns the implementation topology after its Contract
-        # merge and before the next merge.  A ready Implementation is the
-        # endpoint; otherwise the latest clean checkpoint is the endpoint.
-        # Thus a checkpoint before readiness is folded into the eventual ready
-        # range rather than counted a second time.
-        implementation_by_merge: dict[int, dict[str, Any]] = {}
-        implementation_endpoints: dict[int, dict[str, Any]] = {}
-        for merge_index, (merge_position, _merge) in enumerate(merge_records):
-            next_merge_position = (
-                merge_records[merge_index + 1][0]
-                if merge_index + 1 < len(merge_records)
-                else len(infos)
-            )
-            ready_candidates = [
-                (position, implementation)
-                for position, implementation in implementation_records
-                if merge_position < position < next_merge_position
-            ]
-            if ready_candidates:
-                position, implementation = ready_candidates[-1]
-                implementation_by_merge[merge_index] = implementation
-                implementation_endpoints[merge_index] = implementation
+    slices: dict[str, dict[str, Any]] = {}
+    oracle_records: list[tuple[int, dict[str, Any]]] = []
+    merge_records: list[tuple[int, dict[str, Any]]] = []
+    endpoint_records: list[tuple[int, dict[str, Any]]] = []
+    for position, info in enumerate(infos):
+        entry = slices.setdefault(info["slice"], new_slice())
+        if info["role"] == "oracle":
+            oracle_records.append((position, info))
+        elif info["role"] == "merge":
+            merge_records.append((position, info))
+        else:
+            endpoint_records.append((position, info))
+            if info["role"] == "implementation-checkpoint":
+                entry.setdefault("_checkpoints", []).append(info)
+
+    # Every Oracle range is diffed once in global readiness order.  The cached
+    # result is partitioned by endpoint Slice and also supplies Wave totals.
+    contract_ranges: list[list[tuple[str, int, int]]] = []
+    previous_oracle_sha = base
+    for _position, oracle in oracle_records:
+        stats = _range_numstat(root, previous_oracle_sha, oracle["sha"])
+        contract_ranges.append(stats)
+        slices[oracle["slice"]].setdefault("_contract_stats", []).extend(stats)
+        previous_oracle_sha = oracle["sha"]
+
+    # Merge windows are traversed with one monotone endpoint cursor.  A ready
+    # Implementation wins over checkpoints in its matching merge Slice; a
+    # checkpoint is only a statistics endpoint and does not become a ready
+    # attempt endpoint.
+    endpoint_cursor = 0
+    merge_ready_endpoints: dict[int, dict[str, Any]] = {}
+    merge_ranges: dict[int, list[tuple[str, int, int]]] = {}
+    for merge_index, (merge_position, merge) in enumerate(merge_records):
+        next_merge_position = (
+            merge_records[merge_index + 1][0]
+            if merge_index + 1 < len(merge_records)
+            else len(infos)
+        )
+        latest_ready: dict[str, Any] | None = None
+        latest_checkpoint: dict[str, Any] | None = None
+        while endpoint_cursor < len(endpoint_records):
+            endpoint_position, endpoint = endpoint_records[endpoint_cursor]
+            if endpoint_position >= next_merge_position:
+                break
+            endpoint_cursor += 1
+            if endpoint_position <= merge_position or endpoint["slice"] != merge["slice"]:
                 continue
-            checkpoint_candidates = [
-                (position, checkpoint)
-                for position, checkpoint in enumerate(infos)
-                if merge_position < position < next_merge_position
-                and checkpoint["role"] == "implementation-checkpoint"
-            ]
-            if checkpoint_candidates:
-                _position, checkpoint = checkpoint_candidates[-1]
-                implementation_endpoints[merge_index] = checkpoint
+            if endpoint["role"] == "implementation":
+                latest_ready = endpoint
+            else:
+                latest_checkpoint = endpoint
+        endpoint = latest_ready or latest_checkpoint
+        if endpoint is None:
+            continue
+        if latest_ready is not None:
+            merge_ready_endpoints[merge_index] = latest_ready
+        merge_ranges[merge_index] = _range_numstat(root, merge["sha"], endpoint["sha"])
+        slices[merge["slice"]].setdefault("_implementation_stats", []).extend(
+            merge_ranges[merge_index]
+        )
 
-        implementation_stats: list[tuple[str, int, int]] = []
-        for merge_index, endpoint in implementation_endpoints.items():
-            merge_sha = merge_records[merge_index][1]["sha"]
-            implementation_stats.extend(_range_numstat(root, merge_sha, endpoint["sha"]))
-        if implementation_stats:
-            entry["implementation_numstat"] = {
-                "files": len({item[0] for item in implementation_stats}),
-                "insertions": sum(item[1] for item in implementation_stats),
-                "deletions": sum(item[2] for item in implementation_stats),
-            }
+    # Pair attempts within each Slice as before, but consume the endpoint
+    # selected by the global merge window above.
+    merge_indices_by_slice: dict[str, list[int]] = {}
+    for merge_index, (_position, merge) in enumerate(merge_records):
+        merge_indices_by_slice.setdefault(merge["slice"], []).append(merge_index)
+    oracle_by_slice: dict[str, list[dict[str, Any]]] = {}
+    for _position, oracle in oracle_records:
+        oracle_by_slice.setdefault(oracle["slice"], []).append(oracle)
 
+    for slice_id, entry in slices.items():
+        oracle_list = oracle_by_slice.get(slice_id, [])
+        merge_indices = merge_indices_by_slice.get(slice_id, [])
         attempts: list[dict[str, Any]] = []
-        for index, oracle in enumerate(oracles):
-            merge = merges[index] if index < len(merges) else None
-            implementation = implementation_by_merge.get(index)
-            handoff = (
-                None
-                if merge is None
-                else interval(merge, oracle, "Contract handoff")
-            )
-            implementation_interval = (
-                None
-                if merge is None or implementation is None
-                else interval(implementation, merge, "Implementation")
+        for index, oracle in enumerate(oracle_list):
+            merge_index = merge_indices[index] if index < len(merge_indices) else None
+            merge = merge_records[merge_index][1] if merge_index is not None else None
+            implementation = (
+                merge_ready_endpoints.get(merge_index)
+                if merge_index is not None
+                else None
             )
             attempts.append(
                 {
@@ -368,13 +349,17 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
                     "contract_merge_sha": merge["sha"] if merge else None,
                     "implementation_sha": implementation["sha"] if implementation else None,
                     "oracle_interval_seconds": oracle_intervals.get(oracle["sha"]),
-                    "handoff_interval_seconds": handoff,
-                    "implementation_interval_seconds": implementation_interval,
+                    "handoff_interval_seconds": (
+                        None if merge is None else interval(merge, oracle, "Contract handoff")
+                    ),
+                    "implementation_interval_seconds": (
+                        None
+                        if merge is None or implementation is None
+                        else interval(implementation, merge, "Implementation")
+                    ),
                 }
             )
         entry["attempts"] = attempts
-        # These three Slice fields are a projection of the latest Contract
-        # attempt only; never combine first-attempt and last-attempt timings.
         if attempts:
             latest = attempts[-1]
             for key in (
@@ -383,25 +368,33 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
                 "implementation_interval_seconds",
             ):
                 entry[key] = latest[key]
-        if entry.get("checkpoints"):
-            entry["checkpoints"] = [checkpoint["sha"] for checkpoint in entry["checkpoints"]]
+        contract_stats = entry.pop("_contract_stats", [])
+        entry["contract_numstat"] = {
+            "files": len(contract_stats),
+            "insertions": sum(item[1] for item in contract_stats),
+            "deletions": sum(item[2] for item in contract_stats),
+        }
+        implementation_stats = entry.pop("_implementation_stats", [])
+        if implementation_stats:
+            entry["implementation_numstat"] = {
+                "files": len({item[0] for item in implementation_stats}),
+                "insertions": sum(item[1] for item in implementation_stats),
+                "deletions": sum(item[2] for item in implementation_stats),
+            }
+        checkpoints = entry.pop("_checkpoints", [])
+        if checkpoints:
+            entry["checkpoints"] = [checkpoint["sha"] for checkpoint in checkpoints]
 
-    wave_contract_stats: list[tuple[str, int, int]] = []
-    previous_oracle_sha = base
-    for info in infos:
-        if info["role"] == "oracle":
-            wave_contract_stats.extend(_range_numstat(root, previous_oracle_sha, info["sha"]))
-            previous_oracle_sha = info["sha"]
+    wave_contract_stats = [stat for stats in contract_ranges for stat in stats]
     wave_impl_stats = {"files": 0, "insertions": 0, "deletions": 0}
     for entry in slices.values():
         current = entry["implementation_numstat"]
         wave_impl_stats["files"] += current["files"]
         wave_impl_stats["insertions"] += current["insertions"]
         wave_impl_stats["deletions"] += current["deletions"]
-    first_oracle = next((item for item in infos if item["role"] == "oracle"), None)
+    first_oracle = oracle_records[0][1] if oracle_records else None
     final_impl = next(
-        (item for item in reversed(infos) if item["role"] == "implementation"),
-        None,
+        (item for item in reversed(infos) if item["role"] == "implementation"), None
     )
     return {
         "ok": True,

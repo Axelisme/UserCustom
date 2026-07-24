@@ -88,10 +88,13 @@ replace_orchestrate_destination() {
   orchestrate_destination_is_current "$src" "$dst"
 }
 
+V119_SKILL_LAYOUTS=(.codex/skills .pi/agent/skills)
+V119_SKILLS=(orchestrate code-review dev-flow planning-with-files to-spec to-tickets)
+
 replace_current_orchestrate_destinations() {
   local skill layout
-  for layout in .codex/skills .pi/agent/skills; do
-    for skill in orchestrate code-review dev-flow planning-with-files to-spec to-tickets; do
+  for layout in "${V119_SKILL_LAYOUTS[@]}"; do
+    for skill in "${V119_SKILLS[@]}"; do
       replace_orchestrate_destination "$UserCustom/home/$layout/$skill" "$HOME/$layout/$skill"
     done
   done
@@ -133,8 +136,8 @@ replace_current_orchestrate_destinations
 
 validate_orchestrate_skill_destinations() {
   local layout skill source destination
-  for layout in .codex/skills .pi/agent/skills; do
-    for skill in orchestrate code-review dev-flow planning-with-files to-spec to-tickets; do
+  for layout in "${V119_SKILL_LAYOUTS[@]}"; do
+    for skill in "${V119_SKILLS[@]}"; do
       source="$UserCustom/home/$layout/$skill"
       destination="$HOME/$layout/$skill"
       [ -d "$source" ] || continue

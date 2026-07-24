@@ -84,11 +84,11 @@
       "sha256": "f640872a5619f323bfd871a0b0d138e9c7658f0f0f153ae353fa12a3d197892c"
     },
     "scripts/_orchestrate/v119_core.py": {
-      "bytes": 19340,
+      "bytes": 19092,
       "sections": {
-        "__file__": "9b37f9ce261676cde00be04dc6381070d24261a6ef54c6732f1978fe717db6fd"
+        "__file__": "7a28c5946a5a18d8bcd2037f39e2c00ee3d37d74cf58a8161333b27ff2ba5e8f"
       },
-      "sha256": "9b37f9ce261676cde00be04dc6381070d24261a6ef54c6732f1978fe717db6fd"
+      "sha256": "7a28c5946a5a18d8bcd2037f39e2c00ee3d37d74cf58a8161333b27ff2ba5e8f"
     },
     "scripts/orchestrate.py": {
       "bytes": 227,
@@ -298,6 +298,144 @@
       "sha256": "4f0d9bb49eadc0da6cd094ffa56d239037abcbb1eec2f676beb512d41f9097dc",
       "standing_orders_sha256": "b464d4b4861377930cd3f5cc512b08ec815f7c45ec046216b9e0da2475a9da95"
     }
+  },
+  "release_delta": {
+    "acknowledge_removed": [
+      "references/coordination.md",
+      "references/publication-review.md"
+    ],
+    "changed_profiles": [
+      ".claude/agents/contract-planner.md",
+      ".claude/agents/integration-reviewer.md",
+      ".claude/agents/wave-implementer.md",
+      ".claude/agents/wave-oracle.md",
+      ".claude/agents/wave-reviewer.md",
+      ".codex/agents/contract-planner.toml",
+      ".codex/agents/integration-reviewer.toml",
+      ".codex/agents/wave-implementer.toml",
+      ".codex/agents/wave-oracle.toml",
+      ".codex/agents/wave-reviewer.toml",
+      ".pi/agent/APPEND_SYSTEM.md",
+      ".pi/agent/agents/contract-planner.md",
+      ".pi/agent/agents/integration-reviewer.md",
+      ".pi/agent/agents/wave-implementer.md",
+      ".pi/agent/agents/wave-oracle.md",
+      ".pi/agent/agents/wave-reviewer.md"
+    ],
+    "changed_sections": {
+      "SKILL.md": [
+        "Acceptance and migration",
+        "CLI surface",
+        "Control loop \u2014 root's serial duty cycle",
+        "Definition of done",
+        "Iron rules",
+        "Machinery",
+        "Orchestrate",
+        "Orchestrate v119",
+        "Pipeline model",
+        "Runtime bindings",
+        "Shaping heuristics",
+        "Workflow"
+      ],
+      "references/coordination.md": [
+        "Coordination",
+        "Git topology",
+        "Handoff",
+        "Landing",
+        "Milestones and liveness",
+        "Review",
+        "Roles and dispatch",
+        "Skill upgrades",
+        "Wave attachment policy",
+        "Wave close"
+      ],
+      "references/publication-review.md": [
+        "Immutable review lifecycle",
+        "Post-commit failure taxonomy",
+        "Publication review",
+        "The authority transaction"
+      ],
+      "runtime-claude.md": [
+        "Blocked checkpoint contract",
+        "Capability boundaries",
+        "Continuation and acceptance",
+        "Dual-role handoff",
+        "Milestones and flow control",
+        "Orchestrate \u2014 Claude Code runtime binding",
+        "Orchestrate \u2014 Claude runtime binding",
+        "Tool and profile binding"
+      ],
+      "runtime-codex.md": [
+        "Acceptance",
+        "Blocked checkpoint contract",
+        "Dual-role native agents and terminal handoff",
+        "Milestones",
+        "Native generations",
+        "Orchestrate \u2014 Codex runtime binding",
+        "Pipeline capability and named fallback",
+        "Profile bootstrap and dispatch",
+        "Profile bootstrap and safety",
+        "Runtime limits",
+        "Tool binding"
+      ],
+      "runtime-pi.md": [
+        "Activation and leases",
+        "Blocked checkpoint contract",
+        "Capability boundaries",
+        "Cleanup lease check",
+        "Cumulative review scheduling",
+        "Dual-role generic pipelines and terminal handoff",
+        "Milestones and flow control",
+        "Orchestrate \u2014 Pi runtime binding",
+        "Pi goal yield policy",
+        "Pipeline adoption",
+        "Profile routing",
+        "Profile routing and launch modes",
+        "Recommended launch presets",
+        "Runtime budgets",
+        "Tool and profile binding",
+        "`exact-sha-review`",
+        "`lane-writer`",
+        "`read-only-evidence`"
+      ],
+      "scripts/_orchestrate/cli.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/feedback.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/findings.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/git_ops.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/landing.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/lanes.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/release.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/review.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/v119_core.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/worktrees.py": [
+        "__file__"
+      ]
+    },
+    "from_version": 118,
+    "must_reread": [
+      "SKILL.md",
+      "runtime-claude.md",
+      "runtime-codex.md",
+      "runtime-pi.md"
+    ]
   },
   "schema_version": 1,
   "skill_version": 119

@@ -68,6 +68,7 @@ Look for:
 - Unclear naming, surprising control flow, or low-value comments.
 - Excessive nesting, especially JSX or UI layout nesting.
 - Error handling that hides failures instead of failing fast.
+- Test hygiene in the changed set: duplicated assertions, tests that cannot fail for their own specific reason, leftover tests for removed behavior, fixture sprawl, and test files whose structure no longer mirrors the production layout.
 
 #### Efficiency
 
@@ -95,6 +96,7 @@ Skip or report issues instead of editing when:
 - The fix requires an architectural decision not already made.
 - The fix needs product, API, schema, or compatibility judgement.
 - The change would alter behavior beyond the user's request.
+- The test is part of an immutable acceptance surface (e.g. Oracle-owned contract tests in dev-flow): report the finding for the next Contract correction or the candidate backlog instead of editing it.
 - The apparent problem is in generated, vendored, or intentionally duplicated code.
 
 ### 4. Apply Edits

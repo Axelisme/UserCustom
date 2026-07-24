@@ -2,13 +2,13 @@
   "theme": "dark",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.5",
-  "defaultThinkingLevel": "xhigh",
+  "defaultThinkingLevel": "high",
   "packages": [
     "npm:@juicesharp/rpiv-ask-user-question",
     "/home/axel/Documents/VSCode/Typescript/pi-subagents",
-    "../../Documents/VSCode/Typescript/pi-goal",
+    "/home/axel/Documents/VSCode/Typescript/pi-goal",
     "npm:pi-mcp-adapter",
     "npm:pi-native-search"
   ],
-  "lastChangelogVersion": "0.80.10"
+  "lastChangelogVersion": "0.81.1"
 }

@@ -43,7 +43,7 @@
         "Profile routing": "413f0a7d6a376a8234b29f10908ff76f1ddbfe58f951800861b7131aef3fde9a",
         "Runtime budgets": "0ca619d7020dfade4a50800b3327f5d388d5967339833337cd7315ee54627b83"
       },
-      "sha256": "d574ee2173c509934c359cc4ae11f0aff0cd7eba76cabe41218aac2c6a6ff3be"
+      "sha256": "26802a43d51e8b732952b6e804d0db1ca778ca68202df26b416b9723fb1d057d"
     },
     "scripts/_orchestrate/__init__.py": {
       "bytes": 55,
@@ -375,7 +375,7 @@
         "Capability boundaries",
         "Cleanup lease check",
         "Cumulative review scheduling",
-        "Dual-role generic pipelines (Implementation pipeline is lazy) and terminal handoff",
+        "Dual-role generic pipelines and terminal handoff",
         "Milestones and flow control",
         "Orchestrate \u2014 Pi runtime binding",
         "Pi goal yield policy",

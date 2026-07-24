@@ -8,7 +8,11 @@ without emulating runtime state.
 Run two persistent native role agents per Wave: `wave-oracle` authors the public Interface,
 contract tests, fixtures, and intended red Contract; `wave-implementer` fills shared
 production paths after Root merges the exact Contract SHA. Native messaging, follow-up, and
-continuation are used when available in v1 and v2.
+continuation are used when available in v1 and v2. The role stream identity is exactly
+`<task-id>.<wave-id>.<role>`, and the stable runtime item identity is `slice-<slice-id>`;
+it has no attempt detail. After a restart, native continuation coexists with Git/task-plan
+recovery: recover position from the task plan and Git refs/history. Root consumes a ready
+SHA only after the corresponding runtime task has completed.
 
 A terminal `slice-ready` message carries Slice and a full exact SHA; the role then
 immediately ends its turn. In degraded v1 transport, the terminal response carries the exact commit

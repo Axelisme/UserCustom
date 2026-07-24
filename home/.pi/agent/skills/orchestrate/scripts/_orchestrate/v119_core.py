@@ -134,47 +134,20 @@ def _trailers(text: str) -> dict[str, str]:
     return values
 
 
-def _compact_trailers(body: str) -> dict[str, str]:
-    """Interpret the historical compact trailer form at the body suffix.
-
-    Git requires a blank separator before a trailer block.  v119 also accepts
-    the established compact form used by existing milestone commits (the
-    labels are contiguous at EOF), while still refusing labels followed by
-    ordinary prose.  This is deliberately a suffix-only fallback; the normal
-    path remains Git's ``trailers:only,unfold`` interpretation.
-    """
-    lines = body.splitlines()
-    while lines and not lines[-1].strip():
-        lines.pop()
-    suffix: list[str] = []
-    while lines:
-        key, separator, _value = lines[-1].partition(":")
-        if not separator or key not in _WORKFLOW_TRAILER_KEYS:
-            break
-        suffix.append(lines.pop())
-    if not suffix:
-        return {}
-    return _trailers("\n".join(reversed(suffix)))
-
-
 def _commit_metadata(root: Path, sha: str) -> tuple[str, str, str, dict[str, str]]:
     """Read commit identity and interpreted trailers in one Git invocation."""
     fields = run_git(
         root,
         "show",
         "-s",
-        "--format=%H%x00%ct%x00%s%x00%B%x00%(trailers:only,unfold)",
+        "--format=%H%x00%ct%x00%s%x00%(trailers:only,unfold)",
         sha,
-    ).stdout.split("\x00", 4)
+    ).stdout.split("\x00", 3)
     commit_sha = fields[0] if fields else ""
     timestamp = fields[1] if len(fields) > 1 else ""
     subject = fields[2].strip() if len(fields) > 2 else ""
-    body = fields[3] if len(fields) > 3 else ""
-    trailer_text = fields[4] if len(fields) > 4 else ""
-    trailers = _trailers(trailer_text)
-    if not trailers:
-        trailers = _compact_trailers(body)
-    return commit_sha, timestamp, subject, trailers
+    trailer_text = fields[3] if len(fields) > 3 else ""
+    return commit_sha, timestamp, subject, _trailers(trailer_text)
 
 
 def command_contract_merge(args: argparse.Namespace) -> dict[str, Any]:

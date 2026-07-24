@@ -13,7 +13,7 @@ Use this skill for work that needs a frozen contract and more than one session. 
 wayfinder → to-spec → to-tickets → orchestrate → acceptance → landing → close-out
 ```
 
-The orchestrate station publishes an exact Implementation candidate. Acceptance does not create another workflow ledger and does not replace Git as durable truth.
+The orchestrate station publishes an exact Implementation candidate. Acceptance does not create another workflow ledger and does not replace Git as durable truth. Workflow evolution reads [design principles](references/design-principles.md).
 
 ## v119 acceptance order
 
@@ -64,7 +64,7 @@ budget spent → stop; reassess scope and the shortest convergent path; the next
 
 Run focused tests during modification; run the full canonical suite once only after focused green on a clean writer tree. If a background writer's wait time exceeds Root's own estimate for a bounded fix, Root stops that writer and takes over directly. Full Wave ceremony is reserved for new seams, cross-authority changes, or an untrusted writer.
 
-Maintain one update-in-place acceptance record per release with candidate SHA, blockers, focused/full gate results, review verdict, deployment, and cleanup; do not create overlapping review/simplify artifacts per round. Once live tracer evidence has proved the core workflow, dogfood is complete; release corrections use the shortest verifiable single-writer path, not forced dual-role ceremony.
+Maintain one update-in-place acceptance record per release with candidate SHA, blockers, focused/full gate results, review verdict, deployment, and cleanup; do not create overlapping review/simplify artifacts per round.
 
 The contract tests and fixtures are immutable during simplify and throughout Implementation. Role identities and each role worktree are retained through acceptance and landing; close runtime identities before removing clean worktrees.
 

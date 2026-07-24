@@ -21,11 +21,6 @@ Installed in the matching always-resident runtime context (`~/.codex/AGENTS.md` 
 3. Mutation of a persistence branch requires current user authority.
 4. After compaction, re-read this skill and the durable task plan before dispatch.
 
-## Pipeline model
-
-The workflow is two role streams joined by one exact Contract merge; runtime lifecycle remains
-with the native binding.
-
 ## Workflow
 
 A Wave has one `wave-oracle` and one `wave-implementer`, each with a deterministic Git
@@ -37,10 +32,11 @@ carries Slice plus exact SHA; the role ends its turn immediately afterward.
 
 A Wave collects into the task integration branch after its machine gates (contract suite,
 focused tests, lint/format/type) are green; the next Wave bases on the integration tip.
-Root decides dependency depth and placement. Pi maps the roles to generic pipelines: Oracle
-starts at C0 and Implementation starts lazily at its first real task. Codex maps them to two
-persistent native role agents using native messaging and continuation. Neither binding
-creates a simulated queue; task plan plus Git recover position after restart.
+Root decides dependency depth and placement. Runtime bindings own lifecycle. Pi maps the
+roles to generic pipelines: Oracle starts at C0 and Implementation starts lazily at its first
+real task. Codex maps them to two persistent native role agents using native messaging and
+continuation. Neither binding creates a simulated queue; task plan plus Git recover position
+after restart.
 
 ## CLI surface
 

@@ -122,7 +122,7 @@ class PiRuntimeParityTests(unittest.TestCase):
         self.assertEqual((HOME / ".codex" / "AGENTS.md").read_bytes(), (HOME / ".pi" / "agent" / "APPEND_SYSTEM.md").read_bytes())
         skill = (CODEX_SKILL / "SKILL.md").read_text(encoding="utf-8")
         source = (HOME / ".pi" / "agent" / "APPEND_SYSTEM.md").read_text(encoding="utf-8")
-        self.assertEqual(" ".join(skill[skill.index("\n1."):skill.index("\n## Pipeline model")].split()), " ".join(source[source.index("\n1."):].split()))
+        self.assertEqual(" ".join(skill[skill.index("\n1."):skill.index("\n## Workflow")].split()), " ".join(source[source.index("\n1."):].split()))
         self.assertTrue(all(path.stat().st_size <= 16_384 for path in CODEX_SKILL.rglob("*.md")))
 
 

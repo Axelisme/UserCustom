@@ -1,17 +1,16 @@
 {
   "documents": {
     "SKILL.md": {
-      "bytes": 4150,
+      "bytes": 4042,
       "sections": {
         "Acceptance and migration": "50deab6b7c5635bac045737d459d6768d6e7bba4ea9726b2ebfc9bfd3919dff7",
         "CLI surface": "f4d0aca1f3dd77c5f7fc4e264f60b3ecc927e358c3d942890e6b583528def737",
         "Iron rules": "c361d09bee6a9c3b82e00dfc32264fcc2e7ea00b36a211474799e0186387192c",
         "Orchestrate v119": "71ad02b7936dd3ad6c6158bb138baf4746fd6a2b4e9f2b44648598452c1fcf65",
-        "Pipeline model": "8a116ff06f377eb11ba7f346647e74a7746d220e1710f4c12409bc99dbbc4af4",
         "Runtime bindings": "70dcc43671bd57337a27f45432d9ca7bd9fe6b2cfd9e37ef6899490bf4976a30",
-        "Workflow": "62a03af107983ee76dc9997c90c19146aab00157131843c1636a78c6a1e01f36"
+        "Workflow": "f891326c9599cbcfad1a4a7db7b0b358d895fc9dcdfe3af9a4fd812db3374fa3"
       },
-      "sha256": "8c95750deea2aad93de2504d5a96a848e8b588d43243f9597ca1e7307cef6d3c"
+      "sha256": "728454c84e0609e25f15d4c664deb4623a42e86022464d9340a87697d86e2c27"
     },
     "runtime-claude.md": {
       "bytes": 1450,

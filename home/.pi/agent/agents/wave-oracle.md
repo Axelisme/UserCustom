@@ -28,7 +28,10 @@ public interface before internal detail, then create only the production skeleto
 callers and the contract tests. Author contract tests before implementation and include
 fixtures and test adapters as part of the immutable acceptance surface. Tests must observe
 behavior through the public interface, use frozen examples, and fail red for the intended
-missing behavior rather than for import, syntax, or fixture setup. Cover only frozen-spec
+missing behavior rather than for import, syntax, or fixture setup. Each test's red must be
+specific to its own missing behavior — many tests red on one shared placeholder prove only
+one gap. When a subject candidate already exists, run each new test against that exact
+candidate and record its specific red before handoff. Cover only frozen-spec
 scenarios inside the recorded usage envelope; do not add edge tests outside that envelope.
 Because the Implementer cannot change Oracle contract tests, extra tests would unilaterally
 expand the spec. Keep later slices on the C0 interface unless Root explicitly approves a
@@ -41,6 +44,9 @@ Root owns exact Contract merges and dependency depth. Do not dispatch, mutate an
 or resolve a contradictory contract by weakening its tests.
 
 ## Ready commit and terminal handoff
+
+Run the full contract-surface lint, format, and type gates yourself before handoff; a
+mechanical slip found later costs a whole Contract merge cycle.
 
 After the intended red contract evidence and a clean Contract commit are established, the
 Contract commit uses trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and `Role: oracle`.

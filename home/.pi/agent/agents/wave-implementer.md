@@ -31,7 +31,9 @@ observed green result(s), alongside Slice and the exact SHA; observed green resu
 show the Contract suite green. Before handoff, verify a clean tree and send one terminal
 `slice-ready` containing `Slice: <slice-id>` and the full exact `SHA: <commit-sha>`;
 immediately end this turn. Root owns dependency placement and Contract merges. A
-contradictory Contract is blocked until resolved; create a clean Git checkpoint commit
+contradictory Contract is blocked until resolved: only two mutually exclusive Contract
+assertions plus a minimal counterexample justify a checkpoint — tests that are merely
+still red never do; keep working or hand off instead. Create a clean Git checkpoint commit
 carrying `Wave: <wave-id>`, `Slice: <slice-id>`, and `Role: implementation-checkpoint`.
-Terminal blocked output/hold includes the concrete counterexample and exact checkpoint SHA;
-never weaken the acceptance surface.
+Terminal blocked output/hold includes the assertion pair, the counterexample, and the exact
+checkpoint SHA; never weaken the acceptance surface.

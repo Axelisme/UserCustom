@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts" / "orchestrate.py"
 
 
-class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
-    """Black-box Contract for assigning an Implementation to its Contract attempt."""
+class ProfileReportContractHarness(unittest.TestCase):
+    """Shared Git/CLI helpers for profile report Contract tests."""
 
     task_id = "profile-correction-task"
     wave_id = "profile-correction-wave"
@@ -83,6 +83,9 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
             env={"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date},
         )
         return self.git(worktree, "rev-parse", "HEAD")
+
+class ProfileCorrectionAttemptAssignmentContractTests(ProfileReportContractHarness):
+    """Black-box Contract for assigning an Implementation to its Contract attempt."""
 
     def test_final_implementation_belongs_to_latest_preceding_contract_merge(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -267,6 +270,121 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
             self.assertEqual(slice_report["oracle_interval_seconds"], 120)
             self.assertEqual(slice_report["handoff_interval_seconds"], 60)
             self.assertEqual(slice_report["implementation_interval_seconds"], 60)
+
+
+class ProfileInterleavedSliceContractTests(ProfileReportContractHarness):
+    """Endpoints keep their Slice attempt when another Slice merges in between."""
+
+    def commit_empty(self, worktree: Path, slice_id: str, subject: str, date: str) -> str:
+        message = (
+            f"{subject}\n\n"
+            f"Wave: {self.wave_id}\n"
+            f"Slice: {slice_id}\n"
+            f"Role: implementation"
+        )
+        self.git(
+            worktree,
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            message,
+            env={"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date},
+        )
+        return self.git(worktree, "rev-parse", "HEAD")
+
+    def test_interleaved_slice_merges_keep_each_implementation_endpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary)
+            self.git(repo, "init", "-q", "-b", "main")
+            self.git(repo, "config", "user.name", "Profile Contract Test")
+            self.git(repo, "config", "user.email", "profile-contract@example.test")
+            (repo / "README").write_text("base\n", encoding="utf-8")
+            self.git(
+                repo,
+                "add",
+                "README",
+            )
+            self.git(
+                repo,
+                "commit",
+                "-q",
+                "-m",
+                "base",
+                env={
+                    "GIT_AUTHOR_DATE": "2025-01-01T00:00:00+0000",
+                    "GIT_COMMITTER_DATE": "2025-01-01T00:00:00+0000",
+                },
+            )
+            base = self.git(repo, "rev-parse", "HEAD")
+            implementation = self.cli(
+                repo, "worktree", "create", "--root", str(repo),
+                "--task-id", self.task_id, "--wave-id", self.wave_id,
+                "--role", "implementation", "--base", base,
+            )
+            oracle = self.cli(
+                repo, "worktree", "create", "--root", str(repo),
+                "--task-id", self.task_id, "--wave-id", self.wave_id,
+                "--role", "oracle", "--base", base,
+            )
+            implementation_worktree = Path(str(implementation["worktree"]))
+            oracle_worktree = Path(str(oracle["worktree"]))
+
+            # Slice A and Slice B each merge a Contract before either
+            # Implementation lands, so Slice A's endpoint sits inside Slice
+            # B's global merge window.
+            self.slice_id = "slice-a"
+            oracle_a = self.commit_file(
+                oracle_worktree, "tests/a.txt", "contract a\n",
+                "Oracle A", "oracle", "2025-01-01T00:01:00+0000",
+            )
+            merge_a = str(self.cli(
+                repo, "contract", "merge", "--root", str(repo),
+                "--task-id", self.task_id, "--wave-id", self.wave_id,
+                "--contract-sha", oracle_a,
+                env={
+                    "GIT_AUTHOR_DATE": "2025-01-01T00:02:00+0000",
+                    "GIT_COMMITTER_DATE": "2025-01-01T00:02:00+0000",
+                },
+            )["merge_sha"])
+            self.slice_id = "slice-b"
+            oracle_b = self.commit_file(
+                oracle_worktree, "tests/b.txt", "contract b\n",
+                "Oracle B", "oracle", "2025-01-01T00:03:00+0000",
+            )
+            merge_b = str(self.cli(
+                repo, "contract", "merge", "--root", str(repo),
+                "--task-id", self.task_id, "--wave-id", self.wave_id,
+                "--contract-sha", oracle_b,
+                env={
+                    "GIT_AUTHOR_DATE": "2025-01-01T00:04:00+0000",
+                    "GIT_COMMITTER_DATE": "2025-01-01T00:04:00+0000",
+                },
+            )["merge_sha"])
+
+            # Slice A hands off with an --allow-empty commit: a legal exact
+            # consumption marker after a non-behavioral Contract correction.
+            implementation_a = self.commit_empty(
+                implementation_worktree, "slice-a",
+                "Empty Implementation handoff A", "2025-01-01T00:05:00+0000",
+            )
+            self.slice_id = "slice-b"
+            implementation_b = self.commit_file(
+                implementation_worktree, "src/b.txt", "ready b\n",
+                "Implementation B", "implementation", "2025-01-01T00:06:00+0000",
+            )
+
+            report = self.cli(
+                repo, "profile", "report", "--root", str(repo),
+                "--task-id", self.task_id, "--wave-id", self.wave_id,
+                "--base", base,
+            )
+            slice_a = report["slices"]["slice-a"]["attempts"]
+            slice_b = report["slices"]["slice-b"]["attempts"]
+            self.assertEqual(slice_a[-1]["contract_merge_sha"], merge_a)
+            self.assertEqual(slice_a[-1]["implementation_sha"], implementation_a)
+            self.assertEqual(slice_b[-1]["contract_merge_sha"], merge_b)
+            self.assertEqual(slice_b[-1]["implementation_sha"], implementation_b)
 
 
 if __name__ == "__main__":

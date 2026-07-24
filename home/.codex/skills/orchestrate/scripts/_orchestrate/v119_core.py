@@ -324,38 +324,51 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         wave_contract_stats["deletions"] += sum(item[2] for item in stats)
         previous_oracle_sha = oracle["sha"]
 
-    # Merge windows are traversed with one monotone endpoint cursor.  A ready
-    # Implementation wins over checkpoints in its matching merge Slice; a
-    # checkpoint is only a statistics endpoint and does not become a ready
-    # attempt endpoint.
-    endpoint_cursor = 0
+    # Merge windows are traversed per Slice with one monotone endpoint cursor
+    # each, so another Slice's later merge can never consume this Slice's
+    # endpoint. A ready Implementation wins over checkpoints in its matching
+    # merge Slice; a checkpoint is only a statistics endpoint and does not
+    # become a ready attempt endpoint.
     merge_ready_endpoints: dict[int, dict[str, Any]] = {}
-    for merge_index, (merge_position, merge) in enumerate(merge_records):
-        next_merge_position = (
-            merge_records[merge_index + 1][0]
-            if merge_index + 1 < len(merge_records)
-            else len(infos)
+    endpoints_by_slice: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+    for endpoint_position, endpoint in endpoint_records:
+        endpoints_by_slice.setdefault(endpoint["slice"], []).append(
+            (endpoint_position, endpoint)
         )
-        latest_ready: dict[str, Any] | None = None
-        latest_checkpoint: dict[str, Any] | None = None
-        while endpoint_cursor < len(endpoint_records):
-            endpoint_position, endpoint = endpoint_records[endpoint_cursor]
-            if endpoint_position >= next_merge_position:
-                break
-            endpoint_cursor += 1
-            if endpoint_position <= merge_position or endpoint["slice"] != merge["slice"]:
+    merges_by_slice: dict[str, list[tuple[int, int, dict[str, Any]]]] = {}
+    for merge_index, (merge_position, merge) in enumerate(merge_records):
+        merges_by_slice.setdefault(merge["slice"], []).append(
+            (merge_index, merge_position, merge)
+        )
+    for slice_id, slice_merges in merges_by_slice.items():
+        slice_endpoints = endpoints_by_slice.get(slice_id, [])
+        endpoint_cursor = 0
+        for order, (merge_index, merge_position, merge) in enumerate(slice_merges):
+            next_merge_position = (
+                slice_merges[order + 1][1]
+                if order + 1 < len(slice_merges)
+                else len(infos)
+            )
+            latest_ready: dict[str, Any] | None = None
+            latest_checkpoint: dict[str, Any] | None = None
+            while endpoint_cursor < len(slice_endpoints):
+                endpoint_position, endpoint = slice_endpoints[endpoint_cursor]
+                if endpoint_position >= next_merge_position:
+                    break
+                endpoint_cursor += 1
+                if endpoint_position <= merge_position:
+                    continue
+                if endpoint["role"] == "implementation":
+                    latest_ready = endpoint
+                else:
+                    latest_checkpoint = endpoint
+            endpoint = latest_ready or latest_checkpoint
+            if endpoint is None:
                 continue
-            if endpoint["role"] == "implementation":
-                latest_ready = endpoint
-            else:
-                latest_checkpoint = endpoint
-        endpoint = latest_ready or latest_checkpoint
-        if endpoint is None:
-            continue
-        if latest_ready is not None:
-            merge_ready_endpoints[merge_index] = latest_ready
-        stats = _range_numstat(root, merge["sha"], endpoint["sha"])
-        slices[merge["slice"]].setdefault("_implementation_stats", []).extend(stats)
+            if latest_ready is not None:
+                merge_ready_endpoints[merge_index] = latest_ready
+            stats = _range_numstat(root, merge["sha"], endpoint["sha"])
+            slices[merge["slice"]].setdefault("_implementation_stats", []).extend(stats)
 
     # Pair attempts within each Slice as before, but consume the endpoint
     # selected by the global merge window above.

@@ -13,8 +13,10 @@ axis. The gate reports both axes separately and never changes the checkout.
 1. Confirm simplify and the canonical test command have passed; otherwise no gate.
 2. Confirm the checkout is clean and detached, resolve the supplied fixed point and
    `HEAD`, and record the exact SHA plus `git diff <fixed-point>...HEAD`.
-3. Identify the repository standards and originating frozen specification. If either is
-   unavailable, say so in that axis rather than inventing authority.
+3. Identify the repository standards and originating frozen specification. When dispatching
+   the axes, pass the frozen spec and acceptance record as absolute paths — gitignored plan
+   files are invisible from a detached checkout. If either standard is unavailable, say so
+   in that axis rather than inventing authority.
 4. Run the Standards and Spec axes in parallel, report separate headings, cite file/hunk
    evidence, and keep each axis under 400 words. Every finding is tagged `blocking` or
    `backlog` and includes `contract_basis` naming the exact frozen-spec clause/item;

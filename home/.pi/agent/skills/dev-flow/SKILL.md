@@ -29,6 +29,13 @@ exit: full canonical suite green ∧ review has no blocking finding
 
 for each review finding:
   not blocking (closed enum + contract_basis)   → backlog, continue
+  mechanical Contract-surface slip (import/
+           format/typo ∧ AST + collected node
+           IDs unchanged)                       → Root applies the reviewer patch, merges
+                                                  the Contract, records an explicit empty
+                                                  Implementation handoff, reruns only
+                                                  collection, lint, and directly affected
+                                                  tests; consumes no correction budget
   bounded (≤~30 lines local logic ∧ known seam
            ∧ direct contract test exists)       → fast path: Root or current single
                                                   writer fixes directly; focused tests;
@@ -47,7 +54,9 @@ for each review finding:
 
 budget per acceptance cycle: 1 Oracle Contract correction, 1 Implementation fix,
                              1 focused suite, 1 full suite, 1 detached review
-budget spent → stop; reassess scope and the shortest convergent path; never auto-loop
+budget spent → stop; reassess scope and the shortest convergent path; group remaining
+               behavior findings into one Oracle correction in the next cycle, updating
+               the same acceptance record — never auto-loop per finding
 ```
 
 Run focused tests during modification; run the full canonical suite once only after focused green on a clean writer tree. If a background writer's wait time exceeds Root's own estimate for a bounded fix, Root stops that writer and takes over directly. Full Wave ceremony is reserved for new seams, cross-authority changes, or an untrusted writer.

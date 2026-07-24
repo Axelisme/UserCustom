@@ -14,7 +14,11 @@ owns the public Interface, contract tests, fixtures, and test adapters. Those su
 immutable: I cannot edit, weaken, delete, or relocate them. I may modify and overlap the
 same production paths Oracle created, and own the hidden production behavior behind them.
 Do not add behavior merely to be "more robust" when no contract test or frozen-spec item
-requires it; defensive code stops at the recorded usage envelope.
+requires it; defensive code stops at the recorded usage envelope. Implement the smallest
+clear production behavior that satisfies the Contract and the frozen spec — no speculative
+generality, configuration, or hooks. Minimal is not sloppy: follow repository conventions
+and keep the code simple. If the Contract seems to demand more than the tests express,
+raise a counterexample to Root instead of building extra.
 
 Run the named contract tests, add only implementation-local tests when useful, and make the
 Implementation-ready commit with trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and

@@ -149,16 +149,16 @@
       "standing_orders_sha256": "0c7b74083a5807f1b9922b54e68c427280349ef7dbe50bea92e2f0120ee5e8fd"
     },
     ".claude/agents/wave-implementer.md": {
-      "bytes": 1894,
-      "profile_contract_sha256": "c0646894be79af6437160ce6cb7d56bb9451938ee4dd8be66297972b8a05f642",
-      "sha256": "3184609647961dc2449faf4c621b5b49462ce9526265947262945fb121089a31",
-      "standing_orders_sha256": "aa9c489a861f6b29bfe8b1af1fd5f3ce165efb8bdc89d880fa3a1a68685a8d25"
+      "bytes": 2245,
+      "profile_contract_sha256": "3b236fdb4012ae4accf3f2916d4db4ad4efacd71a3b2b1d02de70ac0e1782b4c",
+      "sha256": "dad973fb25908ab69525cde5265c0646384c9dcd5b28787c82d46e9dca0507f7",
+      "standing_orders_sha256": "43b3522da9954b37605cff61603fe715be579771efdf6060152c4a9a441a52e3"
     },
     ".claude/agents/wave-oracle.md": {
-      "bytes": 2993,
-      "profile_contract_sha256": "02f3ef663c9a254d0aa73563fad83d1272fc01c907272bf3e3752f10b48f3793",
-      "sha256": "461bd0e12f01204ad21ff6a806892f786b66f79019402c387acb77bb55668b07",
-      "standing_orders_sha256": "25ba31dc97a9a67dafa7562ee909ed233b28b5423c32c3f7fd48424fa46304c2"
+      "bytes": 3157,
+      "profile_contract_sha256": "f69cf96ab6c6a468aa7fb76b5626162d44ed7547c6595051ca2bcb3850fcac2a",
+      "sha256": "6dd5939343b4c3a373671d9e0f0a2969b32ff67b693e8704f7297d53cc5ad364",
+      "standing_orders_sha256": "0d983f86ed383ad9c3c636318582e32680a96f5ebf430f7a044429d56a4eb2d3"
     },
     ".claude/agents/web-researcher.md": {
       "bytes": 967,
@@ -215,16 +215,16 @@
       "standing_orders_sha256": "0c7b74083a5807f1b9922b54e68c427280349ef7dbe50bea92e2f0120ee5e8fd"
     },
     ".codex/agents/wave-implementer.toml": {
-      "bytes": 1970,
-      "profile_contract_sha256": "8e8fa8c1728d4e35360acec0c44ad72e0caadc91917c0d6be905ce36dc4ee650",
-      "sha256": "9d153c023be9c2456cb8e41335057f982fd3e159930083fd0c77c33fc8578267",
-      "standing_orders_sha256": "aa9c489a861f6b29bfe8b1af1fd5f3ce165efb8bdc89d880fa3a1a68685a8d25"
+      "bytes": 2321,
+      "profile_contract_sha256": "380207b694006d7fe7ae7e63f4a82d2c886c4a56b85b30d6552c1896cae5ee8f",
+      "sha256": "80d6638099ad5eb5f26dcf7699a0630290c61eb117f6151bf7b14d0c20fa8e11",
+      "standing_orders_sha256": "43b3522da9954b37605cff61603fe715be579771efdf6060152c4a9a441a52e3"
     },
     ".codex/agents/wave-oracle.toml": {
-      "bytes": 3069,
-      "profile_contract_sha256": "d96dbaabcde8c20a64f3ce126f5cb3434f7cd34fdaa65663874ee61ac1ff50fd",
-      "sha256": "d1948fa056c477f52f5cfd779de160b667e487c23801468941899d16c2952bfb",
-      "standing_orders_sha256": "25ba31dc97a9a67dafa7562ee909ed233b28b5423c32c3f7fd48424fa46304c2"
+      "bytes": 3233,
+      "profile_contract_sha256": "3f049d5b039be6d79b262b52feb2a1d7c428e2aac6ac7efca1a3e68b8c08279b",
+      "sha256": "ec5dee74c2ab23b0e636a1688931920c1ff6a9d9877e6d48e306bb8489d70215",
+      "standing_orders_sha256": "0d983f86ed383ad9c3c636318582e32680a96f5ebf430f7a044429d56a4eb2d3"
     },
     ".codex/agents/web-researcher.toml": {
       "bytes": 1036,
@@ -281,16 +281,16 @@
       "standing_orders_sha256": "474893db2d008e6c5034be08348f488968260a857b783352efa5f6206e0dd9da"
     },
     ".pi/agent/agents/wave-implementer.md": {
-      "bytes": 2174,
-      "profile_contract_sha256": "95c83bd9c7507ab35c75df565321726670b3faa80c989e8dbfcbc9945597f9f1",
-      "sha256": "6e8d6908f0a449c3f04e7e6670b85a49de8453e2deca55b56fe302006e5ea24e",
-      "standing_orders_sha256": "aa9c489a861f6b29bfe8b1af1fd5f3ce165efb8bdc89d880fa3a1a68685a8d25"
+      "bytes": 2525,
+      "profile_contract_sha256": "05d5d1210090dda071128c6c84b3cf7e9c6719b8adac0b62ae4e99528544a918",
+      "sha256": "7c29d4ef4b517a0b098cd31a802a328919ade3f4b5ff24d1fe73484d4134d5fa",
+      "standing_orders_sha256": "43b3522da9954b37605cff61603fe715be579771efdf6060152c4a9a441a52e3"
     },
     ".pi/agent/agents/wave-oracle.md": {
-      "bytes": 3313,
-      "profile_contract_sha256": "c5cc9e55ee89dfbd6992a7073b78dc5588293a92124dbba22334ffe042dcf76b",
-      "sha256": "b3d582aa1e20b4064b3643789a386a966113d47ea48ecf3cb015109743e21c7e",
-      "standing_orders_sha256": "25ba31dc97a9a67dafa7562ee909ed233b28b5423c32c3f7fd48424fa46304c2"
+      "bytes": 3477,
+      "profile_contract_sha256": "55ca0721aec1e37cd9aa5d7f4cc8bf36112ea99bba8bf5e78ccba3be95b01add",
+      "sha256": "f82fab338b6dfa49cecbcf9820fb913affa3a4a2a756166f102d0a078e453495",
+      "standing_orders_sha256": "0d983f86ed383ad9c3c636318582e32680a96f5ebf430f7a044429d56a4eb2d3"
     },
     ".pi/agent/agents/web-researcher.md": {
       "bytes": 1125,

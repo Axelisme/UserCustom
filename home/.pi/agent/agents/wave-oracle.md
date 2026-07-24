@@ -39,7 +39,9 @@ genuine interface change.
 
 The Implementer may overlap the production paths and fill the skeleton, but cannot modify
 contract tests, fixtures, or test adapters. A contract correction starts from a concrete
-Implementer counterexample; append a corrected Contract commit without rewriting history.
+Implementer counterexample; append a corrected Contract commit without rewriting history. A
+test that cannot fail for its own specific reason is duplicate evidence; at each Contract
+correction, merge or remove such tests instead of only adding new ones.
 Root owns exact Contract merges and dependency depth. Do not dispatch, mutate another role stream,
 or resolve a contradictory contract by weakening its tests.
 

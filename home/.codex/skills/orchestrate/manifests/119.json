@@ -24,29 +24,29 @@
       "sha256": "997622c5eb557b7a03c69efdcfd3dc499b10153acbf0e519b6da2814cf02b568"
     },
     "runtime-codex.md": {
-      "bytes": 2452,
+      "bytes": 2820,
       "sections": {
         "Acceptance": "8db5e55d7c684b197116254df2202d63af145d3f68e94bd59b1eabe5b0eea10a",
         "Blocked checkpoint contract": "1f0569e9dcf6756dc7cea10e84cc46bfda45a7cfefab2a8b77c780d63b2e7fac",
-        "Dual-role native agents and terminal handoff": "1f06be9988a264b6306062345ba7206f69e3e64586fc03824f20d5c0d32fc8e1",
+        "Dual-role native agents and terminal handoff": "883b540497e3375af2ae2dcb72b554cf7e5f4d19d8ab65b8e12bb2047894f259",
         "Native generations": "64015421912e3a3ec2ba5eaad81de73d7bb9355531016e972f2909c67fe1f468",
         "Orchestrate \u2014 Codex runtime binding": "1a755627e749ad095d030be0c13fb4246e51a35fdecf350b081a2a44b3ab8bd4",
         "Profile bootstrap and safety": "9f751889320ddaedf591fbcde3843acb6fc6e0c74fe6012188cb4766007e5ccc"
       },
-      "sha256": "382eac03354d3fd01401aa7786df162130827e93e405db64fa0386629698fddc"
+      "sha256": "d4d418ae3bbd3b893fedd10e25af54703d8cadf35f981aedfc0b6a763ae20f2c"
     },
     "runtime-pi.md": {
-      "bytes": 2704,
+      "bytes": 3072,
       "sections": {
         "Activation and leases": "aaf688a36d895c159ab8253172598ba478a3f0c811a6df447b7eb7a218de687f",
         "Blocked checkpoint contract": "1f0569e9dcf6756dc7cea10e84cc46bfda45a7cfefab2a8b77c780d63b2e7fac",
         "Dual-role generic pipelines and terminal handoff": "900a40585b0f5055b3dc22db8f70a6c26eb6a268803ea3ceecb0c46d0c50f27b",
         "Milestones and flow control": "d381f9777def57e53487ae6e55c67f7bf71415c82a3a59729304ab6612e5f7c9",
-        "Orchestrate \u2014 Pi runtime binding": "ae7d663ceb3f01e05adad12e2af0c6f713de4a9692a29cf6380aad10488dda75",
+        "Orchestrate \u2014 Pi runtime binding": "1c8bcab8a92367da28d1edcb38fc19d72d6b2ff868fdf8927e8aea76e923e0a0",
         "Profile routing": "413f0a7d6a376a8234b29f10908ff76f1ddbfe58f951800861b7131aef3fde9a",
         "Runtime budgets": "0ca619d7020dfade4a50800b3327f5d388d5967339833337cd7315ee54627b83"
       },
-      "sha256": "f441f064c35c565349da83986dbd18b6b9f2d76e7660943e2cb5694413bdfd25"
+      "sha256": "3d08ee459313017e8072888c2f05637b03656293ce9ade736c11add5968172b6"
     },
     "scripts/_orchestrate/__init__.py": {
       "bytes": 55,
@@ -149,16 +149,16 @@
       "standing_orders_sha256": "0c7b74083a5807f1b9922b54e68c427280349ef7dbe50bea92e2f0120ee5e8fd"
     },
     ".claude/agents/wave-implementer.md": {
-      "bytes": 1354,
-      "profile_contract_sha256": "742c3e15cf1e7421b71c6b2ef1de3d11b1cc0b91d1b9232518201a1a14673630",
-      "sha256": "5e0e9ef78b9c1bd362aa449dca31bb178e63401efedcbcb9512d9ede2fefc9e8",
-      "standing_orders_sha256": "b4ef6bda1323374c32fbfb507d9c4185cf8a5fa7e58d3a050a7da22c2ef8913a"
+      "bytes": 1623,
+      "profile_contract_sha256": "27e761deb1429766c8985b91d455eeed7fcdebc6e1b2256999de006b7dcb242e",
+      "sha256": "4af9b68b99ac245a63f9916806f4f4479567a3732dce4a50434aca87f11402f8",
+      "standing_orders_sha256": "7105ada5fbf4f562136a939cf01ab6be87bedd59773b97bb65a4ea66f91bef3b"
     },
     ".claude/agents/wave-oracle.md": {
-      "bytes": 2120,
-      "profile_contract_sha256": "ae70b0dbb44063a8180991f2fe642bd5a9db51ec4af3516609d793addc219b6e",
-      "sha256": "46f16f185e45950c757a5552719c18d1049359d03ec17fd4dbf8cc2defb0fb2b",
-      "standing_orders_sha256": "925e3327d6bc62e25eccc50800318f63042bc74ed57b09775842ccd6e45bb678"
+      "bytes": 2440,
+      "profile_contract_sha256": "087e000af205716268fcec0664a8d4aac9d4a7dbab922f8613b2bef6adbd7882",
+      "sha256": "8e224072d32aaa6b2d6829e6ddce7a861189fb8a034cdb80a6c2db2a58071825",
+      "standing_orders_sha256": "008818a538a456133d2cdaaa62115aa487c09ef5b38d4e3ae09eec6b0aa1025a"
     },
     ".claude/agents/web-researcher.md": {
       "bytes": 967,
@@ -215,16 +215,16 @@
       "standing_orders_sha256": "0c7b74083a5807f1b9922b54e68c427280349ef7dbe50bea92e2f0120ee5e8fd"
     },
     ".codex/agents/wave-implementer.toml": {
-      "bytes": 1430,
-      "profile_contract_sha256": "a754896c75afd7481f486f46c11a42e5926b773773b510f12f212c9f81220ac8",
-      "sha256": "2912e038f05dbad17b48535f3f7669e0dd780aba121078352f266f2d65b43c47",
-      "standing_orders_sha256": "b4ef6bda1323374c32fbfb507d9c4185cf8a5fa7e58d3a050a7da22c2ef8913a"
+      "bytes": 1699,
+      "profile_contract_sha256": "8cd48c76cdc35d60be6127f97e26213d7ad10a82b87b08d5763c0c1faf3c7959",
+      "sha256": "43c2f9cde90ff7cc5945568b2340aa74299251c40265d2232493a4edbc0fc9df",
+      "standing_orders_sha256": "7105ada5fbf4f562136a939cf01ab6be87bedd59773b97bb65a4ea66f91bef3b"
     },
     ".codex/agents/wave-oracle.toml": {
-      "bytes": 2196,
-      "profile_contract_sha256": "30d419677d8d56bf30f517b4fd83037694d85880a3925f6b12c01b44022a6b06",
-      "sha256": "744cc4572e7cfad6d48865074202278a010365116d2fab05eb1cbd0e07e57f5c",
-      "standing_orders_sha256": "925e3327d6bc62e25eccc50800318f63042bc74ed57b09775842ccd6e45bb678"
+      "bytes": 2516,
+      "profile_contract_sha256": "8e27cdb8397c1816d5c68fe8d9c8e7cce5d228dae8892e4124a3e0974eb7a5f3",
+      "sha256": "d11efa51a8d0829384faf9293ea0868682bdc17fcef3e326c22ea57131ae7a94",
+      "standing_orders_sha256": "008818a538a456133d2cdaaa62115aa487c09ef5b38d4e3ae09eec6b0aa1025a"
     },
     ".codex/agents/web-researcher.toml": {
       "bytes": 1036,
@@ -281,16 +281,16 @@
       "standing_orders_sha256": "474893db2d008e6c5034be08348f488968260a857b783352efa5f6206e0dd9da"
     },
     ".pi/agent/agents/wave-implementer.md": {
-      "bytes": 1634,
-      "profile_contract_sha256": "947dfd2f966f0ca4ee05af0aac38b38f2872a423832c74c708403f7e7648f791",
-      "sha256": "7c7595878da4c00f99272effdbdca2de7410cb374f815fc16af7e115c5847b58",
-      "standing_orders_sha256": "b4ef6bda1323374c32fbfb507d9c4185cf8a5fa7e58d3a050a7da22c2ef8913a"
+      "bytes": 1903,
+      "profile_contract_sha256": "3bd0f5f0790c01d3a7bc2a1ba7fe301573237b6797ab2df34d0074bd7a501093",
+      "sha256": "a40cd263f7364617bbea9e48f69fbfe484a7ee3579f0ec2515493d308692ff38",
+      "standing_orders_sha256": "7105ada5fbf4f562136a939cf01ab6be87bedd59773b97bb65a4ea66f91bef3b"
     },
     ".pi/agent/agents/wave-oracle.md": {
-      "bytes": 2440,
-      "profile_contract_sha256": "c3525d09cc421a3ba1b9620897a64487f8f847dbcc50905a88e585fe3fa2202d",
-      "sha256": "af209bc31321a454d0fa7096cc0cbadb277539f7bda31011333fc817b7e1fd66",
-      "standing_orders_sha256": "925e3327d6bc62e25eccc50800318f63042bc74ed57b09775842ccd6e45bb678"
+      "bytes": 2760,
+      "profile_contract_sha256": "5dfe5ece05bea412e8eb7661321691ed6a194909d0c167d00611f1b2d4cba692",
+      "sha256": "48215240312ffc10d19ef143e99fc2b98f9b8a033ca02c4b7d3918e3a474dda3",
+      "standing_orders_sha256": "008818a538a456133d2cdaaa62115aa487c09ef5b38d4e3ae09eec6b0aa1025a"
     },
     ".pi/agent/agents/web-researcher.md": {
       "bytes": 1125,

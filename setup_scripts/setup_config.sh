@@ -90,7 +90,13 @@ replace_orchestrate_destination() {
 
 V119_SKILL_LAYOUTS=(.codex/skills .pi/agent/skills)
 V119_SKILLS=(orchestrate code-review dev-flow planning-with-files to-spec to-tickets)
+# One exact-replacement inventory is shared by installation and validation.  These
+# planner identities are shipped workflow assets too; unlike unrelated user profiles,
+# stale, foreign, and dangling destinations must be backed up and refreshed.
 V119_PROFILE_PATHS=(
+  .pi/agent/agents/contract-planner.md
+  .codex/agents/contract-planner.toml
+  .claude/agents/contract-planner.md
   .pi/agent/agents/wave-oracle.md
   .pi/agent/agents/wave-implementer.md
   .codex/agents/wave-oracle.toml
@@ -158,6 +164,9 @@ validate_orchestrate_skill_destinations() {
 validate_orchestrate_profile_destinations() {
   local relative path
   for relative in "${V119_PROFILE_PATHS[@]}"; do
+    # Keep this migration helper compatible with reduced fixture source trees while
+    # validating every shipped identity when its source asset is present.
+    [ -e "$UserCustom/home/$relative" ] || continue
     path="$HOME/$relative"
     if [ ! -f "$path" ] || ! orchestrate_destination_is_current "$UserCustom/home/$relative" "$path"; then
       echo "error: unusable orchestrate destination (expected shipped identity): $path" >&2

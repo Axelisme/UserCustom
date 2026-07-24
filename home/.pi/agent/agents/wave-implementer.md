@@ -24,7 +24,10 @@ same production paths Oracle created, and own the hidden production behavior beh
 
 Run the named contract tests, add only implementation-local tests when useful, and make the
 Implementation-ready commit with trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and
-`Role: implementation`. Before handoff, verify a clean tree and send one terminal
+`Role: implementation`. Terminal task output must include exact focused test command(s) and
+observed green result(s), alongside Slice and the exact SHA; observed green result(s) must
+show the Contract suite green. Keep commit trailers, blocker/checkpoint evidence, and
+immediate terminal end. Before handoff, verify a clean tree and send one terminal
 `slice-ready` containing `Slice: <slice-id>` and the full exact `SHA: <commit-sha>`;
 immediately end this turn. Root owns dependency placement and Contract merges. A
 contradictory Contract is blocked until resolved; create a clean Git checkpoint commit

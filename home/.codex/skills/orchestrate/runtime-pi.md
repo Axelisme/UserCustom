@@ -2,7 +2,11 @@
 
 Pi's native `subagent` tool and the generic [pi-subagents pipeline lifecycle](https://github.com/badlogic/pi-subagents#pipeline-lifecycle)
 are authoritative for attach, restore, resume, and close. This binding maps v119 role
-streams and keeps Git/task contracts at Root.
+streams and keeps Git/task contracts at Root. The role stream identity is exactly
+`<task-id>.<wave-id>.<role>`, and the stable runtime item identity is `slice-<slice-id>`;
+it has no attempt detail. After a restart, native continuation coexists with Git/task-plan
+recovery: recover position from the task plan and Git refs/history. Root consumes a ready
+SHA only after the corresponding runtime task has completed.
 
 ## Dual-role generic pipelines and terminal handoff
 

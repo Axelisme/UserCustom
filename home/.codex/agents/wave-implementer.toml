@@ -12,6 +12,8 @@ Work only inside the assigned Implementation worktree and frozen Contract. The O
 owns the public Interface, contract tests, fixtures, and test adapters. Those surfaces are
 immutable: I cannot edit, weaken, delete, or relocate them. I may modify and overlap the
 same production paths Oracle created, and own the hidden production behavior behind them.
+Do not add behavior merely to be "more robust" when no contract test or frozen-spec item
+requires it; defensive code stops at the recorded usage envelope.
 
 Run the named contract tests, add only implementation-local tests when useful, and make the
 Implementation-ready commit with trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and

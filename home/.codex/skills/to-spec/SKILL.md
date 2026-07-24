@@ -3,7 +3,7 @@ name: to-spec
 description: Turn the current conversation into a spec and publish it to the repo's plan directory or issue tracker — no interview, just synthesis of what you've already discussed.
 ---
 
-This skill takes the current conversation context and codebase understanding and produces a spec (you may know this document as a PRD). Do NOT interview the user — just synthesize what you already know.
+This skill takes the current conversation context and codebase understanding and produces a spec (you may know this document as a PRD). Do NOT interview the user — just synthesize what you already know. Closed exception: before freezing the spec, confirm the usage envelope with 3-5 short questions, not an open-ended interview: concurrency model (single caller, multiprocess, lock/atomic needs), realistic data scale and call frequency, failure tolerance (recovery or rerun), and caller population (personal/internal script or external users).
 
 ## Process
 
@@ -11,10 +11,10 @@ This skill takes the current conversation context and codebase understanding and
 
 2. Sketch out the seams at which you're going to test the feature. Existing seams should be preferred to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. The fewer seams across the codebase, the better - the ideal number is one.
 
-Check with the user that these seams match their expectations.
+Check with the user that these seams and the usage envelope match their expectations.
 
 The published spec is the frozen Contract consumed by the Oracle and Implementation roles.
-Only final code-review's Spec axis checks the implementation against this Contract. The workflow records Git evidence and does not assess source or spec.
+Only final code-review's Spec axis checks the implementation against this Contract. The workflow records Git evidence and does not assess source or spec. A review finding about behavior outside the recorded usage envelope has no contract basis.
 
 3. Write the spec using the template below, then publish it to whichever backend this repo uses:
 
@@ -55,6 +55,7 @@ A list of implementation decisions that were made. This can include:
 - Schema changes
 - API contracts
 - Specific interactions
+- The recorded usage envelope: concurrency model, scale/call frequency, failure tolerance, and caller population.
 
 Do NOT include specific file paths or code snippets. They may end up being outdated very quickly.
 
@@ -70,7 +71,7 @@ A list of testing decisions that were made. Include:
 
 ## Out of Scope
 
-A description of the things that are out of scope for this spec.
+A description of the things that are out of scope for this spec. Include explicit non-goals for behavior outside the recorded usage envelope; envelope-outside robustness findings are backlog, not Contract.
 
 ## Further Notes
 

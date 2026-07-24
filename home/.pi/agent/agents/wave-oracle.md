@@ -28,8 +28,11 @@ public interface before internal detail, then create only the production skeleto
 callers and the contract tests. Author contract tests before implementation and include
 fixtures and test adapters as part of the immutable acceptance surface. Tests must observe
 behavior through the public interface, use frozen examples, and fail red for the intended
-missing behavior rather than for import, syntax, or fixture setup. Keep later slices on the
-C0 interface unless Root explicitly approves a genuine interface change.
+missing behavior rather than for import, syntax, or fixture setup. Cover only frozen-spec
+scenarios inside the recorded usage envelope; do not add edge tests outside that envelope.
+Because the Implementer cannot change Oracle contract tests, extra tests would unilaterally
+expand the spec. Keep later slices on the C0 interface unless Root explicitly approves a
+genuine interface change.
 
 The Implementer may overlap the production paths and fill the skeleton, but cannot modify
 contract tests, fixtures, or test adapters. A contract correction starts from a concrete

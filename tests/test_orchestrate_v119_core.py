@@ -189,6 +189,47 @@ class V119CoreContractTests(unittest.TestCase):
             self.base,
         )
 
+    def test_status_reports_a_manually_detached_managed_worktree_from_live_git(self) -> None:
+        created = self.create_worktree(self.root, "implementation")
+        worktree = Path(str(created["worktree"]))
+        expected_branch = f"wave/{self.task_id}/{self.wave_id}/implementation"
+
+        attached = self.payload(self.cli(
+            self.root, "worktree", "status", "--root", str(self.root),
+            "--task-id", self.task_id, "--wave-id", self.wave_id,
+            "--role", "implementation",
+        ))
+        self.assertEqual(attached["branch"], expected_branch)
+
+        self.git(worktree, "checkout", "--detach", "-q")
+        self.assertEqual(
+            self.git(worktree, "symbolic-ref", "--quiet", "--short", "HEAD", check=False),
+            "",
+        )
+        detached = self.payload(self.cli(
+            self.root, "worktree", "status", "--root", str(self.root),
+            "--task-id", self.task_id, "--wave-id", self.wave_id,
+            "--role", "implementation",
+        ))
+
+        self.assertIsNone(detached["branch"])
+        self.assertIs(detached.get("detached"), True)
+        for field in (
+            "operation", "exists", "path", "head", "tree", "clean", "changed_paths"
+        ):
+            with self.subTest(field=field):
+                self.assertEqual(detached[field], attached[field])
+
+        missing = self.payload(self.cli(
+            self.root, "worktree", "status", "--root", str(self.root),
+            "--task-id", self.task_id, "--wave-id", self.wave_id,
+            "--role", "oracle",
+        ))
+        self.assertFalse(missing["exists"])
+        self.assertEqual(
+            missing["branch"], f"wave/{self.task_id}/{self.wave_id}/oracle"
+        )
+
     def test_create_refuses_existing_derived_branch_or_path(self) -> None:
         first = self.create_worktree(self.root, "oracle")
         duplicate = self.error_payload(self.cli(

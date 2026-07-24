@@ -110,6 +110,11 @@ class V119RoleRuntimeContractTests(unittest.TestCase):
             1,
             "Pi must state the lazy Implementation pipeline rule once in direct Root wording",
         )
+        self.assertEqual(
+            re.findall(r"\blazy\w*\b", text, re.IGNORECASE),
+            ["lazily"],
+            "Pi must express lazy Implementation creation only once, in the required sentence",
+        )
         self.assertIn("## Dual-role generic pipelines and terminal handoff", text)
         self.assertIn(
             "Root creates and attaches the wave-oracle pipeline from the real C0 task.",
@@ -126,7 +131,6 @@ class V119RoleRuntimeContractTests(unittest.TestCase):
         self.assertNotIn("Create the / the Implementation pipeline", text)
         self.assertNotIn("followed by immediately end this turn", text)
         self.assertRegex(text, r"(?i)oracle.{0,180}(generic )?pipeline")
-        self.assertRegex(text, r"(?i)implementation.{0,240}(lazy|first real task)")
         self.assertRegex(text, r"Root.{0,180}(dependenc|queue).{0,180}(depth|placement)")
         self.assertNotRegex(text, r"\broot\b.{0,180}(dependenc|queue).{0,180}(depth|placement)")
         self.assertRegex(text, r"(?i)C0.{0,180}(oracle|pipeline)")

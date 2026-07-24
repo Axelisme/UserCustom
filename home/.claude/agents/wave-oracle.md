@@ -35,8 +35,7 @@ After the intended red contract evidence and a clean Contract commit are establi
 Contract commit uses trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and `Role: oracle`.
 Terminal task output must include exact focused test command(s) and observed red result(s),
 alongside Slice and the exact SHA. Observed red result(s) must distinguish intended missing
-behavior from import, syntax, or fixture setup failures. Keep commit trailers,
-blocker/checkpoint evidence, and immediate terminal end. Then emit one terminal `slice-ready`
+behavior from import, syntax, or fixture setup failures. Then emit one terminal `slice-ready`
 handoff carrying `Slice: <slice-id>` and the full exact `SHA: <commit-sha>`. The terminal
 handoff is followed by immediate turn completion: end this turn immediately and do not
 mutate afterward. If a blocker needs Root, use the native hold/message path and include the

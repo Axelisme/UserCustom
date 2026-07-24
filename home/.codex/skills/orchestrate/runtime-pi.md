@@ -44,10 +44,6 @@ Keep runtime spawn, turn, tool, and wall-clock limits distinct. Do not impose ar
 count budgets on a mutation-capable role expected to commit and hand off. A wall-clock cap is
 process safety and requires inspection on expiry, not a delivery verdict.
 
-## Blocked checkpoint contract
-
-If Implementation is blocked by a contradiction, an infeasible Contract, or an underspecified Contract, it creates a clean Git checkpoint commit carrying `Wave: <wave-id>`, `Slice: <slice-id>`, and `Role: implementation-checkpoint`. Terminal blocked output/hold includes the concrete counterexample and exact checkpoint SHA; ready and terminal contracts remain unchanged.
-
 ## Milestones and flow control
 
 The role commit is the durable milestone. Root consumes only a clean exact SHA and checks

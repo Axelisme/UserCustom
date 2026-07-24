@@ -168,21 +168,13 @@ class ProfileCorrectionAttemptAssignmentContractTests(ProfileReportContractHarne
             )
             merge_1 = str(merge_1_payload["merge_sha"])
 
-            checkpoint = self.commit_file(
+            retired_checkpoint = self.commit_file(
                 implementation_worktree,
-                "src/checkpoint.txt",
-                "counterexample preserved\n",
-                "Implementation checkpoint before Contract correction",
+                "src/retired-checkpoint.txt",
+                "not a v119 milestone\n",
+                "Commit carrying the retired checkpoint role",
                 "implementation-checkpoint",
                 "2025-01-01T00:02:15+0000",
-            )
-            obsolete_checkpoint = self.commit_file(
-                implementation_worktree,
-                "src/obsolete-checkpoint.txt",
-                "not a v119 milestone\n",
-                "Commit carrying the removed checkpoint spelling",
-                "checkpoint",
-                "2025-01-01T00:02:30+0000",
             )
 
             oracle_2 = self.commit_file(
@@ -240,8 +232,9 @@ class ProfileCorrectionAttemptAssignmentContractTests(ProfileReportContractHarne
             self.assertEqual(report["wave_id"], self.wave_id)
             self.assertEqual(report["base"], base)
             slice_report = report["slices"][self.slice_id]
-            self.assertEqual(slice_report["checkpoints"], [checkpoint])
-            self.assertNotIn(obsolete_checkpoint, json.dumps(report, sort_keys=True))
+            rendered = json.dumps(report, sort_keys=True)
+            self.assertNotIn(retired_checkpoint, rendered)
+            self.assertNotIn("checkpoint", rendered)
 
             attempts = slice_report["attempts"]
             self.assertEqual(

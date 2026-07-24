@@ -370,8 +370,7 @@ def _range_numstat(
 
     Ready trailers identify boundaries, not the only commits to count.  Using a
     range diff includes untrailed work between those boundaries and, unlike
-    summing each commit, counts a checkpoint and its eventual ready commit only
-    once when the ready endpoint exists.
+    summing each commit, counts the whole merge-to-ready range exactly once.
     """
     revisions = [end] if start is None else [start, end]
     output = run_git(root, "diff", "--numstat", *revisions).stdout
@@ -419,7 +418,7 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         if (
             info["wave"] == wave
             and info["slice"]
-            and info["role"] in {"oracle", "merge", "implementation", "implementation-checkpoint"}
+            and info["role"] in {"oracle", "merge", "implementation"}
         ):
             infos.append(info)
 
@@ -473,8 +472,6 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
             merge_records.append((position, info))
         else:
             endpoint_records.append((position, info))
-            if info["role"] == "implementation-checkpoint":
-                entry.setdefault("_checkpoints", []).append(info)
 
     # Every Oracle range is diffed once in global readiness order.  The cached
     # result is partitioned by endpoint Slice and also supplies Wave totals.
@@ -490,9 +487,7 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
 
     # Merge windows are traversed per Slice with one monotone endpoint cursor
     # each, so another Slice's later merge can never consume this Slice's
-    # endpoint. A ready Implementation wins over checkpoints in its matching
-    # merge Slice; a checkpoint is only a statistics endpoint and does not
-    # become a ready attempt endpoint.
+    # endpoint.
     merge_ready_endpoints: dict[int, dict[str, Any]] = {}
     endpoints_by_slice: dict[str, list[tuple[int, dict[str, Any]]]] = {}
     for endpoint_position, endpoint in endpoint_records:
@@ -514,7 +509,6 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
                 else len(infos)
             )
             latest_ready: dict[str, Any] | None = None
-            latest_checkpoint: dict[str, Any] | None = None
             while endpoint_cursor < len(slice_endpoints):
                 endpoint_position, endpoint = slice_endpoints[endpoint_cursor]
                 if endpoint_position >= next_merge_position:
@@ -522,16 +516,11 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
                 endpoint_cursor += 1
                 if endpoint_position <= merge_position:
                     continue
-                if endpoint["role"] == "implementation":
-                    latest_ready = endpoint
-                else:
-                    latest_checkpoint = endpoint
-            endpoint = latest_ready or latest_checkpoint
-            if endpoint is None:
+                latest_ready = endpoint
+            if latest_ready is None:
                 continue
-            if latest_ready is not None:
-                merge_ready_endpoints[merge_index] = latest_ready
-            stats = _range_numstat(root, merge["sha"], endpoint["sha"])
+            merge_ready_endpoints[merge_index] = latest_ready
+            stats = _range_numstat(root, merge["sha"], latest_ready["sha"])
             slices[merge["slice"]].setdefault("_implementation_stats", []).extend(stats)
 
     # Pair attempts within each Slice as before, but consume the endpoint
@@ -594,9 +583,6 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
                 "insertions": sum(item[1] for item in implementation_stats),
                 "deletions": sum(item[2] for item in implementation_stats),
             }
-        checkpoints = entry.pop("_checkpoints", [])
-        if checkpoints:
-            entry["checkpoints"] = [checkpoint["sha"] for checkpoint in checkpoints]
 
     wave_impl_stats = {"files": 0, "insertions": 0, "deletions": 0}
     for entry in slices.values():

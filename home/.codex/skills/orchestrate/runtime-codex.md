@@ -18,7 +18,8 @@ A terminal `slice-ready` message carries Slice and a full exact SHA; the role th
 immediately ends its turn. In degraded v1 transport, the terminal response carries the exact commit
 SHA while the commit uses Git trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and `Role: <role>` (oracle or implementation).
 
-Codex has no simulated queue. Root owns dependency depth and placement.
+Codex has no simulated queue. Root owns dependency depth and placement. A blocked role reports through the native hold/message path with its reason and evidence, not a
+ceremony commit.
 
 ## Native generations
 
@@ -34,10 +35,6 @@ At first use, verify the role profile instructions are active. Every dispatch na
 cwd, frozen base or subject SHA, write scope, pre-existing dirt, required evidence, and stop
 conditions. Workers do not create child workers or claim repository authority. Root proves
 clean Git state before consuming a handoff.
-
-## Blocked checkpoint contract
-
-If Implementation is blocked by a contradiction, an infeasible Contract, or an underspecified Contract, it creates a clean Git checkpoint commit carrying `Wave: <wave-id>`, `Slice: <slice-id>`, and `Role: implementation-checkpoint`. Terminal blocked output/hold includes the concrete counterexample and exact checkpoint SHA; ready and terminal contracts remain unchanged.
 
 ## Acceptance
 

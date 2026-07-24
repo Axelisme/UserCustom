@@ -265,7 +265,7 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
             "wrong-role",
             "slice",
             "wrong role\n",
-            role="implementation-checkpoint",
+            role="oracle",
         )
         error = self.error_payload(
             self.cli(

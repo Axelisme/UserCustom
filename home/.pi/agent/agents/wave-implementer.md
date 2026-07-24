@@ -42,7 +42,6 @@ concrete obstacle — write scope, missing seam, environment — and the smalles
 change), `underspecified` (two incompatible behaviors that both satisfy the Contract, and
 which one the frozen spec implies), `cost-alarm` (satisfiable, but remaining cost far exceeds
 this Wave's assumption: done, remaining, why). Still-red tests are none of these; keep working
-or hand off. Create a clean Git checkpoint commit carrying `Wave: <wave-id>`,
-`Slice: <slice-id>`, and `Role: implementation-checkpoint` where the work stopped. Terminal
-blocked output/hold names the enum value, the counterexample or obstacle, and the exact
-checkpoint SHA; never weaken the acceptance surface.
+or hand off. Report through the native hold/message path, naming the enum value, its evidence,
+and the exact Contract SHA in play; leave the worktree as it stands for Root to inspect and
+never weaken the acceptance surface.

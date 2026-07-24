@@ -103,7 +103,7 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
         )
         return str(payload["merge_sha"])
 
-    def test_report_uses_complete_attempt_ranges_and_checkpoint_fallback(self) -> None:
+    def test_report_counts_each_complete_attempt_range_exactly_once(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repo = Path(temporary)
             self.git(repo, "init", "-q", "-b", "main")
@@ -190,8 +190,8 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
                 "implementation",
             )
 
-            # Attempt 2 has no ready Implementation. Its latest clean checkpoint before
-            # the next Contract merge is the terminal boundary for Implementation numstat.
+            # Attempt 2 has no ready Implementation, so it contributes no endpoint
+            # and no Implementation numstat at all.
             self.commit(
                 oracle,
                 "tests/public_contract.txt",
@@ -215,17 +215,9 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
                 "untrailed blocked Implementation work",
                 "2025-01-01T00:09:00+0000",
             )
-            checkpoint_2 = self.commit(
-                implementation,
-                "src/attempt_2.txt",
-                "draft\ncounterexample preserved\n",
-                "Clean blocked checkpoint 2",
-                "2025-01-01T00:10:00+0000",
-                "implementation-checkpoint",
-            )
 
-            # Attempt 3 has a checkpoint followed by a ready commit. The complete
-            # merge-to-ready net range is counted exactly once, not checkpoint + ready.
+            # Attempt 3 has untrailed work followed by a ready commit. The complete
+            # merge-to-ready net range is counted exactly once, not per commit.
             self.commit(
                 oracle,
                 "tests/public_contract.txt",
@@ -242,25 +234,17 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
                 "oracle",
             )
             merge_3 = self.merge_contract(repo, oracle_3, "2025-01-01T00:13:00+0000")
-            checkpoint_3 = self.commit(
-                implementation,
-                "src/attempt_3.txt",
-                "checkpoint\n",
-                "Clean checkpoint before eventual readiness",
-                "2025-01-01T00:14:00+0000",
-                "implementation-checkpoint",
-            )
             self.commit(
                 implementation,
                 "src/attempt_3.txt",
-                "checkpoint\nuntrailed continuation\n",
-                "untrailed continuation after checkpoint",
+                "draft\n",
+                "untrailed Implementation draft 3",
                 "2025-01-01T00:15:00+0000",
             )
             implementation_3 = self.commit(
                 implementation,
                 "src/attempt_3.txt",
-                "checkpoint\nuntrailed continuation\nready\n",
+                "draft\nready\n",
                 "Implementation ready 3",
                 "2025-01-01T00:16:00+0000",
                 "implementation",
@@ -307,14 +291,14 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
                     <= set(attempt),
                     attempt,
                 )
-            self.assertEqual(slice_report["checkpoints"], [checkpoint_2, checkpoint_3])
             self.assertEqual(
                 slice_report["contract_numstat"],
                 {"files": 3, "insertions": 6, "deletions": 0},
             )
             self.assertEqual(
                 slice_report["implementation_numstat"],
-                {"files": 3, "insertions": 7, "deletions": 0},
+                {"files": 2, "insertions": 4, "deletions": 0},
+                "the endpointless attempt 2 must contribute nothing",
             )
             self.assertEqual(
                 report["wave"]["contract_numstat"],
@@ -419,7 +403,7 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
             merge_b = self.merge_contract(repo, oracle_b, "2025-02-01T00:06:00+0000")
 
             # A deliberately has no endpoint before merge B. Only B owns the
-            # complete merge-B-to-checkpoint range, including its untrailed work.
+            # complete merge-B-to-ready range, including its untrailed work.
             self.commit(
                 implementation,
                 "src/slice_b.py",
@@ -427,13 +411,13 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
                 "untrailed Slice B Implementation work",
                 "2025-02-01T00:07:00+0000",
             )
-            checkpoint_b = self.commit(
+            implementation_b_sha = self.commit(
                 implementation,
                 "src/slice_b.py",
-                "draft = True\ncheckpoint = True\n",
-                "Slice B clean blocked checkpoint",
+                "draft = True\nready = True\n",
+                "Slice B Implementation ready",
                 "2025-02-01T00:08:00+0000",
-                "implementation-checkpoint",
+                "implementation",
                 slice_id="slice-b",
             )
 
@@ -474,7 +458,7 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
                     )
                     for attempt in slice_b["attempts"]
                 ],
-                [(oracle_b, merge_b, None)],
+                [(oracle_b, merge_b, implementation_b_sha)],
             )
             contract_a = {"files": 1, "insertions": 2, "deletions": 0}
             contract_b = {"files": 1, "insertions": 2, "deletions": 0}
@@ -489,14 +473,13 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
             self.assertEqual(
                 slice_a["implementation_numstat"],
                 implementation_a,
-                "Slice A must stop at merge B rather than claim B's checkpoint",
+                "Slice A must stop at merge B rather than claim B's range",
             )
             self.assertEqual(
                 slice_b["implementation_numstat"],
                 implementation_b,
-                "Slice B must own its complete merge-to-checkpoint range",
+                "Slice B must own its complete merge-to-ready range",
             )
-            self.assertEqual(slice_b["checkpoints"], [checkpoint_b])
 
             for metric in ("contract_numstat", "implementation_numstat"):
                 isolated_total = {
@@ -520,55 +503,6 @@ class Final738ProfileTextContractTests(unittest.TestCase):
     def normalized(self, path: Path) -> str:
         self.assertTrue(path.is_file(), f"missing shipped surface: {path}")
         return " ".join(path.read_text(encoding="utf-8").split())
-
-    def test_blocked_checkpoint_contract_is_bound_in_profiles_and_runtimes(self) -> None:
-        surfaces = {
-            f"{runtime}-profile": root / f"wave-implementer{suffix}"
-            for runtime, (root, suffix) in self.profile_roots.items()
-        }
-        surfaces.update(
-            {
-                "codex-binding": HOME
-                / ".codex"
-                / "skills"
-                / "orchestrate"
-                / "runtime-codex.md",
-                "claude-binding": HOME
-                / ".codex"
-                / "skills"
-                / "orchestrate"
-                / "runtime-claude.md",
-                "pi-binding": HOME
-                / ".pi"
-                / "agent"
-                / "skills"
-                / "orchestrate"
-                / "runtime-pi.md",
-            }
-        )
-        for name, path in surfaces.items():
-            with self.subTest(surface=name):
-                text = self.normalized(path)
-                lowered = text.lower()
-                self.assertRegex(
-                    text,
-                    r"(?i)blocked.{0,500}clean (?:git )?checkpoint commit"
-                    r"|clean (?:git )?checkpoint commit.{0,500}blocked",
-                )
-                for trailer in (
-                    "Wave: <wave-id>",
-                    "Slice: <slice-id>",
-                    "Role: implementation-checkpoint",
-                ):
-                    self.assertIn(trailer, text)
-                self.assertNotRegex(text, r"(?i)Role:\s*checkpoint\b")
-                self.assertRegex(
-                    lowered,
-                    r"(?:terminal blocked|blocked (?:output|hold)).{0,500}counterexample"
-                    r".{0,300}(?:exact )?checkpoint sha"
-                    r"|counterexample.{0,300}(?:exact )?checkpoint sha.{0,500}"
-                    r"(?:terminal blocked|blocked (?:output|hold))",
-                )
 
     def test_contract_planner_profiles_publish_dependency_addressable_v119_slices(self) -> None:
         for runtime, (root, suffix) in self.profile_roots.items():

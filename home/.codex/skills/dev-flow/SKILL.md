@@ -17,15 +17,42 @@ The orchestrate station publishes an exact Implementation candidate. Acceptance 
 
 ## v119 acceptance order
 
-For every candidate, run **simplify**, then the **canonical tests**, then one **clean-detached code-review** of the **post-simplify exact SHA**. The final review must inspect that exact SHA from a clean detached checkout; never review a moving worktree or an earlier pre-simplify commit. At acceptance entry the exit condition is frozen: **full canonical suite green + exact-SHA clean-detached review with no blocking finding → landing immediately**.
+For every candidate, run **simplify**, then the **canonical tests**, then one **clean-detached code-review** of the **post-simplify exact SHA**; never review a moving worktree or an earlier pre-simplify commit. At acceptance entry the exit condition is frozen.
 
-Blocking is closed to spec violation, data loss, security, or reproducible behavior failure within the frozen spec's usage envelope. The final review must not expand the frozen spec; a finding without a contract basis in the frozen spec is backlog, never a blocker. Robustness, quality, and out-of-envelope findings go through `candidate-backlog` and do not block landing. Do not implement features the frozen spec does not require; defenses beyond the usage envelope go to the candidate backlog.
+Blocking is closed to spec violation, data loss, security, or reproducible behavior failure within the frozen spec's usage envelope. The final review must not expand the frozen spec; a finding without a contract basis in the frozen spec is backlog, never a blocker. Robustness, quality, and out-of-envelope findings go through `candidate-backlog` and do not block landing. Do not implement features the frozen spec does not require.
 
-A blocking `needs_fix` returns to the same Wave only when the fix is Wave-scale. Spec or behavior correction returns through Oracle and Implementation, beginning with an executable contract regression; Root-elected quality cleanup remains non-blocking and returns directly to Implementation. After a fix, regenerate the relevant Git profile output, then repeat simplify, canonical tests, and a new exact-SHA clean-detached code-review before landing. This full ceremony is reserved for new seams, cross-authority changes, or an untrusted writer.
+Routing is fixed below; cost judgement stays with Root.
 
-Proportional fast path: if the correction is roughly ≤30 lines of local logic, touches only a known seam, and already has a direct contract test, Root or the current single writer fixes it directly. Run focused tests during modification; only after focused green and a clean writer tree run the full canonical suite once. Re-review only the incremental diff from the previously reviewed SHA to the new SHA. If a background writer's wait time exceeds Root's own estimated completion time for such a bounded fix, Root stops that writer and takes over directly.
+```text
+exit: full canonical suite green ∧ review has no blocking finding
+      → land immediately, add nothing
 
-Default correction budget per acceptance cycle is one Oracle Contract correction, one Implementation fix, one focused suite, one full canonical suite, and one clean-detached review. When the budget is spent, Root stops and reassesses scope plus the shortest convergent path; do not auto-loop. Maintain one update-in-place acceptance record per release with candidate SHA, blockers, focused/full gate results, review verdict, deployment, and cleanup; do not create overlapping review/simplify artifacts per round. Once live tracer evidence has proved the core workflow, dogfood is complete; release corrections use the shortest verifiable single-writer path, not forced dual-role ceremony.
+for each review finding:
+  not blocking (closed enum + contract_basis)   → backlog, continue
+  bounded (≤~30 lines local logic ∧ known seam
+           ∧ direct contract test exists)       → fast path: Root or current single
+                                                  writer fixes directly; focused tests;
+                                                  re-review only the delta from the
+                                                  previously reviewed SHA
+  otherwise                                     → needs_fix returns to the same Wave
+                                                  (consumes budget): a Spec or behavior
+                                                  finding goes through Oracle then
+                                                  Implementation, starting from an
+                                                  executable contract regression; a
+                                                  quality finding returns directly to
+                                                  Implementation. After a fix, regenerate
+                                                  the Git profile output, then simplify +
+                                                  canonical tests + a new exact-SHA
+                                                  clean-detached code-review
+
+budget per acceptance cycle: 1 Oracle Contract correction, 1 Implementation fix,
+                             1 focused suite, 1 full suite, 1 detached review
+budget spent → stop; reassess scope and the shortest convergent path; never auto-loop
+```
+
+Run focused tests during modification; run the full canonical suite once only after focused green on a clean writer tree. If a background writer's wait time exceeds Root's own estimate for a bounded fix, Root stops that writer and takes over directly. Full Wave ceremony is reserved for new seams, cross-authority changes, or an untrusted writer.
+
+Maintain one update-in-place acceptance record per release with candidate SHA, blockers, focused/full gate results, review verdict, deployment, and cleanup; do not create overlapping review/simplify artifacts per round. Once live tracer evidence has proved the core workflow, dogfood is complete; release corrections use the shortest verifiable single-writer path, not forced dual-role ceremony.
 
 The contract tests and fixtures are immutable during simplify and throughout Implementation. Role identities and each role worktree are retained through acceptance and landing; close runtime identities before removing clean worktrees.
 

@@ -44,14 +44,26 @@ def _record_branch(record: dict[str, Any]) -> str | None:
     return raw.removeprefix("refs/heads/")
 
 
-def _status(root: Path, path: Path, expected_branch: str) -> dict[str, Any]:
+def _status(
+    root: Path,
+    path: Path,
+    expected_branch: str,
+    *,
+    require_expected_branch: bool = False,
+) -> dict[str, Any]:
     record = _record_for(root, path)
     if record is None:
         return {"ok": True, "operation": "worktree-status", "exists": False, "path": str(path), "branch": expected_branch, "head": None, "tree": None, "clean": False, "changed_paths": []}
-    if not path.exists():
-        return {"ok": True, "operation": "worktree-status", "exists": False, "path": str(path), "branch": _record_branch(record), "head": record.get("HEAD"), "tree": None, "clean": False, "changed_paths": []}
-    changed = [line for line in run_git(path, "status", "--porcelain").stdout.splitlines() if line]
     live_branch = _record_branch(record)
+    if not path.exists():
+        return {"ok": True, "operation": "worktree-status", "exists": False, "path": str(path), "branch": live_branch, "head": record.get("HEAD"), "tree": None, "clean": False, "changed_paths": []}
+    if require_expected_branch and live_branch != expected_branch:
+        rendered_live = live_branch if live_branch else "detached"
+        raise OrchestrateError(
+            f"implementation worktree must be attached to exact derived branch {expected_branch}; "
+            f"live state is {rendered_live}"
+        )
+    changed = [line for line in run_git(path, "status", "--porcelain").stdout.splitlines() if line]
     detached = live_branch is None
     return {
         "ok": True,
@@ -120,16 +132,9 @@ def command_contract_merge(args: argparse.Namespace) -> dict[str, Any]:
     oracle_ref = f"refs/heads/{oracle_branch}"
     if run_git(root, "merge-base", "--is-ancestor", contract, oracle_ref, check=False).returncode != 0:
         raise OrchestrateError(f"Contract SHA is not reachable from Oracle ref: {oracle_branch}")
-    state = _status(root, path, branch)
+    state = _status(root, path, branch, require_expected_branch=True)
     if not state["exists"]:
         raise OrchestrateError(f"managed implementation worktree does not exist: {path}")
-    live_branch = state.get("branch")
-    if live_branch != branch:
-        rendered_live = live_branch if live_branch else "detached"
-        raise OrchestrateError(
-            f"implementation worktree must be attached to exact derived branch {branch}; "
-            f"live state is {rendered_live}"
-        )
     if not state["clean"]:
         raise OrchestrateError(f"implementation worktree must be clean: {path}")
     trailers = _trailers(_commit_body(root, contract))

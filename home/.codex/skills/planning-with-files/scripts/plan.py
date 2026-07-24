@@ -49,7 +49,6 @@ HTML_TAG_NAMES = frozenset({
     "ol", "p", "pre", "script", "section", "small", "span", "strong", "style",
     "summary", "table", "tbody", "td", "th", "thead", "title", "tr", "ul",
 })
-MIGRATION_PUNCH_LIST_MARKER = "<!-- migration-punch-list: pending -->"
 VERIFY_CLASSIFICATIONS = ("green", "baseline-debt", "environment-blocked")
 LIVE_GIT_LABEL_PATTERN = re.compile(
     r"(?:^|[\s*`_-])(HEAD|tree|branch)(?:(?:\s*[:=]\s*)|(?:\s+))([^\s,;]+)",
@@ -398,109 +397,6 @@ def has_placeholder(value: str) -> bool:
     return False
 
 
-def clear_migration_punch_list(index: str) -> str:
-    return index.replace(MIGRATION_PUNCH_LIST_MARKER + "\n", "")
-
-
-# ---- inventory --------------------------------------------------------------
-
-
-def inventory_bytes(path: Path) -> int:
-    total = 0
-    for child in path.rglob("*"):
-        if child.is_symlink():
-            raise PlanError(f"planning tree contains symlink: {child}")
-        if child.is_file():
-            total += child.stat().st_size
-    return total
-
-
-def classify_inventory_path(path: Path) -> tuple[str, str]:
-    """Classify one plan directory without repairing or migrating it."""
-    index = path / INDEX_FILE
-    legacy = path / "task_plan.md"
-    if index.is_file():
-        fmt = "new"
-        try:
-            issues = validate_plan(path)
-        except (OSError, UnicodeError, PlanError):
-            issues = ["unreadable plan"]
-        if issues:
-            return fmt, "invalid"
-        board = read_board(read_index(path))
-        return fmt, "completed" if board and all(
-            row["status"] == "completed" for row in board
-        ) else "open"
-    if legacy.is_file():
-        return "legacy", "unknown"
-    try:
-        has_content = any(path.iterdir())
-    except OSError:
-        return "unknown", "invalid"
-    return ("unknown", "unknown") if has_content else ("empty", "unknown")
-
-
-def inventory_record(root: Path, task_id: str, location: str, path: Path) -> dict[str, Any]:
-    reject_symlink_tree(root, path)
-    fmt, state = classify_inventory_path(path)
-    return {
-        "task_id": task_id,
-        "location": location,
-        "format": fmt,
-        "state": state,
-        "bytes": inventory_bytes(path),
-        "conflict": False,
-    }
-
-
-def command_inventory(args: argparse.Namespace) -> dict[str, Any]:
-    root = Path(args.root).resolve()
-    plans_root = root / ".agent_state" / "plans"
-    archives_root = root / ".agent_state" / "archives"
-    for directory in (plans_root, archives_root):
-        if directory.exists():
-            reject_symlink_tree(root, directory)
-
-    records: list[dict[str, Any]] = []
-    active_ids: set[str] = set()
-    archive_ids: set[str] = set()
-    if plans_root.is_dir():
-        for path in sorted(plans_root.iterdir(), key=lambda item: item.name):
-            if path.is_dir() and not path.is_symlink():
-                active_ids.add(path.name)
-                records.append(inventory_record(root, path.name, "active", path))
-    if archives_root.is_dir():
-        for task_root in sorted(archives_root.iterdir(), key=lambda item: item.name):
-            if task_root.is_symlink():
-                raise PlanError(f"planning tree contains symlink: {task_root}")
-            if not task_root.is_dir():
-                continue
-            path = task_root / "plan"
-            if path.exists() or path.is_symlink():
-                archive_ids.add(task_root.name)
-                records.append(inventory_record(root, task_root.name, "archive", path))
-
-    conflicts = active_ids & archive_ids
-    for record in records:
-        record["conflict"] = record["task_id"] in conflicts
-    records.sort(key=lambda item: (item["task_id"], item["location"]))
-    formats = {name: 0 for name in ("new", "legacy", "unknown", "empty")}
-    states = {name: 0 for name in ("open", "completed", "invalid", "unknown")}
-    for record in records:
-        formats[record["format"]] += 1
-        states[record["state"]] += 1
-    summary = {
-        "total": len(records),
-        "conflicts": sum(1 for record in records if record["conflict"]),
-        "locations": {
-            "active": sum(1 for record in records if record["location"] == "active"),
-            "archive": sum(1 for record in records if record["location"] == "archive"),
-        },
-        "formats": formats,
-        "states": states,
-    }
-    return {"ok": True, "operation": "inventory", "plans": records, "summary": summary}
-
 
 # ---- commands ---------------------------------------------------------------
 
@@ -552,9 +448,7 @@ def command_phase_start(args: argparse.Namespace) -> dict[str, Any]:
     create_new(plan / record, render_phase(number, topic))
     atomic_write(
         plan / INDEX_FILE,
-        upsert_board_row(
-            clear_migration_punch_list(read_index(plan)), number, "in_progress", record
-        ),
+        upsert_board_row(read_index(plan), number, "in_progress", record),
     )
     return {
         "ok": True,
@@ -598,7 +492,7 @@ def command_phase_set(args: argparse.Namespace) -> dict[str, Any]:
     status = args.status or read_phase_field(text, "Status")
     atomic_write(
         plan / INDEX_FILE,
-        upsert_board_row(clear_migration_punch_list(read_index(plan)), number, status, record),
+        upsert_board_row(read_index(plan), number, status, record),
     )
     return {"ok": True, "operation": "phase-set", "phase": number, "status": status}
 
@@ -670,13 +564,9 @@ def lifecycle_has_started(index: str) -> bool:
     )
 
 
-def unresolved_placeholder_issues(
-    plan: Path, index: str, *, allow_migration_recovery: bool = False
-) -> list[str]:
+def unresolved_placeholder_issues(plan: Path, index: str) -> list[str]:
     """Find live template slots after work begins, without matching translated prompt text."""
     if not lifecycle_has_started(index):
-        return []
-    if allow_migration_recovery and MIGRATION_PUNCH_LIST_MARKER in index:
         return []
 
     issues: list[str] = []
@@ -712,7 +602,7 @@ def unresolved_placeholder_issues(
     return issues
 
 
-def validate_plan(plan: Path, *, allow_migration_recovery: bool = False) -> list[str]:
+def validate_plan(plan: Path) -> list[str]:
     """Structural checks across INDEX and the stores; returns human-readable issues."""
     issues: list[str] = []
     index = read_index(plan)
@@ -725,9 +615,7 @@ def validate_plan(plan: Path, *, allow_migration_recovery: bool = False) -> list
             issues.append(f"INDEX is missing the '{heading}' section")
     if all(heading in index for heading in ("## Current State", "## Decisions", BOARD_HEADING)):
         issues.extend(
-            unresolved_placeholder_issues(
-                plan, index, allow_migration_recovery=allow_migration_recovery
-            )
+            unresolved_placeholder_issues(plan, index)
         )
     board_rows = read_board(index) if BOARD_HEADING in index else []
     board_by_phase: dict[str, dict[str, str]] = {}
@@ -768,225 +656,13 @@ def validate_plan(plan: Path, *, allow_migration_recovery: bool = False) -> list
     return issues
 
 
-# ---- migration (old task_plan.md -> new INDEX + stores) ---------------------
-
-
-def _old_section_body(text: str, heading: str) -> str:
-    lines = text.splitlines()
-    start = next((i for i, line in enumerate(lines) if line.strip() == heading), -1)
-    if start < 0:
-        return ""
-    end = len(lines)
-    for index in range(start + 1, len(lines)):
-        if lines[index].startswith("## "):
-            end = index
-            break
-    return "\n".join(lines[start + 1 : end]).strip("\n")
-
-
-def _old_table_rows(body: str) -> list[list[str]]:
-    data = [line for line in body.splitlines() if line.lstrip().startswith("|")]
-    rows: list[list[str]] = []
-    for line in data:
-        cells = row_cells(line)
-        joined = "".join(cells)
-        if not joined or set(joined) <= set("-: "):
-            continue  # header separator or blank
-        rows.append(cells)
-    return rows[1:] if rows else rows  # drop the header row
-
-
-def _old_active_notes(text: str) -> dict[str, dict[str, str]]:
-    """Parse `### Phase N — topic` blocks under `## Active Notes`."""
-    body = _old_section_body(text, "## Active Notes")
-    notes: dict[str, dict[str, str]] = {}
-    current: str = ""
-    for line in body.splitlines():
-        heading = re.match(r"^### Phase\s+([0-9]+)\s*[—-]\s*(.*)$", line)
-        if heading:
-            current = heading.group(1) or ""
-            notes[current] = {"topic": (heading.group(2) or "").strip(), "detail": ""}
-        elif current:
-            notes[current]["detail"] += line + "\n"
-    return notes
-
-
-def replace_section_body(text: str, heading: str, body_lines: list[str]) -> str:
-    lines = text.splitlines()
-    start, end = section_span(lines, heading)
-    new = [lines[start], ""] + body_lines + [""]
-    result = lines[:start] + new + lines[end:]
-    return "\n".join(result) + ("\n" if text.endswith("\n") else "")
-
-
-def command_migrate(args: argparse.Namespace) -> dict[str, Any]:
-    root = Path(args.root).resolve()
-    validate_task_id(args.task_id)
-    plan = plan_dir(root, args.task_id)
-    reject_symlink_tree(root, plan)
-    old = plan / "task_plan.md"
-    if not old.is_file():
-        raise PlanError(
-            f"no old task_plan.md under {plan} (already migrated, or not a plan)"
-        )
-    if (plan / INDEX_FILE).exists():
-        raise PlanError(f"{INDEX_FILE} already exists; refusing to overwrite")
-    text = old.read_text(encoding="utf-8")
-    goal = _old_section_body(text, "## Goal").strip()
-    if not goal:
-        raise PlanError("old task_plan.md has no '## Goal'; migrate by hand")
-
-    punch_list: list[str] = []
-    # INDEX scaffold from the template, then surgically filled.
-    index = (
-        (template_dir() / INDEX_FILE)
-        .read_text(encoding="utf-8")
-        .replace("<task-id>", args.task_id)
-        .replace("<一段話描述本 task 要達成的具體結果。穩定,少動。>", goal)
-    )
-    # Current State = old Current State + Architecture Baseline (root prunes stale).
-    current = _old_section_body(text, "## Current State").splitlines()
-    arch = _old_section_body(text, "## Architecture Baseline").strip()
-    body = [line for line in current if line.strip()] or ["- (migrated; prune me)"]
-    if arch:
-        body += ["", "*Architecture baseline (merge or drop):*"] + [
-            line for line in arch.splitlines() if line.strip()
-        ]
-    body += ["- **Next gate:** <填入下一個可機械驗收動作>"]
-    index = replace_section_body(index, "## Current State", body)
-    index = index.replace("## Decisions", f"{MIGRATION_PUNCH_LIST_MARKER}\n\n## Decisions")
-    punch_list.append("prune Current State to what is still live; set Next gate")
-
-    # Decisions table carried across (old col4 'Supersedes/Authority' -> 'Authority').
-    decision_rows = _old_table_rows(_old_section_body(text, "## Decisions"))
-    if decision_rows:
-        table = ["| ID | Status | Decision | Authority |", "|---|---|---|---|"]
-        for cells in decision_rows:
-            padded = (cells + ["", "", "", ""])[:4]
-            table.append(f"| {padded[0]} | {padded[1]} | {padded[2]} | {padded[3]} |")
-        index = replace_section_body(index, "## Decisions", table)
-        punch_list.append("confirm each decision's Status (active vs superseded)")
-
-    atomic_write(plan / INDEX_FILE, index)
-    phases_path(plan).mkdir(parents=True, exist_ok=True)
-
-    # Phases: union of the Phase Status table and the Active Notes blocks.
-    status_rows = _old_table_rows(_old_section_body(text, "## Phase Status"))
-    hist_rows = _old_table_rows(_old_section_body(text, "## Historical Phase Summary"))
-    notes = _old_active_notes(text)
-    hist_concl = {row[0].replace("Phase", "").strip(): row[-1] for row in hist_rows if row}
-    created_phases: list[str] = []
-    seen: set[str] = set()
-
-    def phase_number(label: str) -> str:
-        digits = re.sub(r"[^0-9]", "", label)
-        return f"{int(digits):02d}" if digits else ""
-
-    ordered: list[tuple[str, str, str, str]] = []  # (num, topic, status, scope)
-    for cells in status_rows:
-        num = phase_number(cells[0])
-        if not num:
-            continue
-        topic = notes.get(str(int(num)), {}).get("topic", "") or (
-            cells[2] if len(cells) > 2 else ""
-        )
-        status = cells[1].strip() if len(cells) > 1 else "pending"
-        scope = cells[2].strip() if len(cells) > 2 else "none"
-        ordered.append((num, topic, status, scope))
-    for pnum, note in notes.items():  # notes without a status row
-        num = f"{int(pnum):02d}"
-        if all(existing[0] != num for existing in ordered):
-            ordered.append((num, note.get("topic", ""), "completed", "none"))
-
-    for num, topic, status, scope in sorted(ordered):
-        if num in seen:
-            continue
-        seen.add(num)
-        slug = slugify(topic) or f"phase-{int(num)}"
-        conclusion = (hist_concl.get(str(int(num)), "") or "").strip() or "pending"
-        detail = notes.get(str(int(num)), {}).get("detail", "").strip()
-        status = status if status in PHASE_STATUSES else "pending"
-        commit_match = re.search(r"\b[0-9a-f]{7,40}\b", conclusion)
-        commit = commit_match.group(0) if commit_match else "none"
-        record = f"{PHASES_DIR}/{num}-{slug}.md"
-        phase_text = (
-            f"# Phase {num} — {topic or slug}\n\n"
-            f"- **Status:** {status}\n"
-            f"- **Scope:** {scope or 'none'}\n"
-            f"- **Decisions made:** none\n"
-            f"- **Conclusion:** {conclusion}\n"
-            f"- **Commit:** {commit}\n"
-            f"- **Evidence:** none\n\n"
-            f"## Notes\n\n"
-            f"{detail or '- (migrated)'}\n"
-        )
-        create_new(plan / record, phase_text)
-        atomic_write(
-            plan / INDEX_FILE, upsert_board_row(read_index(plan), num, status, record)
-        )
-        created_phases.append(record)
-    if created_phases:
-        punch_list.append("check phase slugs and fill any Conclusion left 'pending'")
-
-    # progress.md tables -> progress.jsonl
-    progress_old = plan / "progress.md"
-    progress_rows = 0
-    if progress_old.is_file():
-        ptext = progress_old.read_text(encoding="utf-8")
-        for cells in _old_table_rows(_old_section_body(ptext, "## Timeline")):
-            padded = (cells + ["", "", "", "", ""])[:5]
-            row = {
-                "ts": padded[0] or now_ts(),
-                "kind": "event",
-                "actor": padded[1] or "unknown",
-                "action": padded[2],
-                "result": padded[3],
-            }
-            if padded[4]:
-                row["next"] = padded[4]
-            append_line(plan / PROGRESS_FILE, json.dumps(row, ensure_ascii=False, sort_keys=True))
-            progress_rows += 1
-        for cells in _old_table_rows(_old_section_body(ptext, "## Verification Log")):
-            padded = (cells + ["", "", ""])[:3]
-            row = {"ts": padded[0] or now_ts(), "kind": "verify", "command": padded[1], "result": padded[2]}
-            append_line(plan / PROGRESS_FILE, json.dumps(row, ensure_ascii=False, sort_keys=True))
-            progress_rows += 1
-
-    # Preserve every original under history/pre-migration/ (nothing is deleted).
-    preserved = plan / "history" / "pre-migration"
-    preserved.mkdir(parents=True, exist_ok=True)
-    for name in ("task_plan.md", "progress.md"):
-        source = plan / name
-        if source.is_file():
-            shutil.move(str(source), str(preserved / name))
-    for directory in ("domains", "history"):
-        source = plan / directory
-        if directory == "domains" and source.is_dir():
-            shutil.move(str(source), str(preserved / directory))
-            punch_list.append(f"merge {directory}/ packets into Current State, then drop")
-
-    hints = live_git_hints(read_index(plan))
-    punch_list.extend(hints)
-    return {
-        "ok": True,
-        "operation": "migrate",
-        "task_id": args.task_id,
-        "phases": created_phases,
-        "progress_rows": progress_rows,
-        "preserved_under": str(preserved.relative_to(plan)),
-        "punch_list": punch_list,
-        "hints": hints,
-    }
-
-
 def command_checkpoint(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     validate_task_id(args.task_id)
     plan = require_plan(root, args.task_id)
     index = read_index(plan)
-    migration_recovery = MIGRATION_PUNCH_LIST_MARKER in index
     hints = live_git_hints(index)
-    issues = validate_plan(plan, allow_migration_recovery=migration_recovery)
+    issues = validate_plan(plan)
     if issues:
         raise PlanError("plan is not schema-valid: " + "; ".join(issues))
     size = utf8_size(index)
@@ -997,13 +673,9 @@ def command_checkpoint(args: argparse.Namespace) -> dict[str, Any]:
             f" (actual size {size} bytes); prune Current State and superseded decisions —"
             " phase detail belongs in its phases/ record, not the entry"
         )
-    if migration_recovery:
-        index = clear_migration_punch_list(index)
-        atomic_write(plan / INDEX_FILE, index)
-        size = utf8_size(index)
     return {
         "ok": True,
-        "operation": args.operation if hasattr(args, "operation") else "checkpoint",
+        "operation": "checkpoint",
         "task_id": args.task_id,
         "index_bytes": size,
         "hints": hints,
@@ -1043,19 +715,6 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def command_check(args: argparse.Namespace) -> dict[str, Any]:
-    root = Path(args.root).resolve()
-    validate_task_id(args.task_id)
-    plan = require_plan(root, args.task_id)
-    issues = validate_plan(plan)
-    if issues:
-        raise PlanError("plan is not complete: " + "; ".join(issues))
-    open_phases = [row["phase"] for row in read_board(read_index(plan)) if row["status"] in OPEN_STATUSES]
-    if open_phases:
-        raise PlanError(f"phase board still has open phases: {', '.join(open_phases)}")
-    return {"ok": True, "operation": "check", "task_id": args.task_id}
-
-
 def command_archive(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     validate_task_id(args.task_id)
@@ -1064,6 +723,12 @@ def command_archive(args: argparse.Namespace) -> dict[str, Any]:
     reject_symlink_components(root, destination)
     if destination.exists():
         raise PlanError(f"archive destination already exists: {destination}")
+    issues = validate_plan(plan)
+    if issues:
+        raise PlanError("plan is not complete: " + "; ".join(issues))
+    open_phases = [row["phase"] for row in read_board(read_index(plan)) if row["status"] in OPEN_STATUSES]
+    if open_phases:
+        raise PlanError(f"phase board still has open phases: {', '.join(open_phases)}")
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(plan), str(destination))
     return {"ok": True, "operation": "archive", "task_id": args.task_id, "archived_to": str(destination)}
@@ -1087,9 +752,6 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("task_id")
     status.add_argument("--worktree")
     status.set_defaults(handler=command_status)
-
-    inventory = commands.add_parser("inventory")
-    inventory.set_defaults(handler=command_inventory)
 
     phase_start = commands.add_parser("phase-start")
     phase_start.add_argument("task_id")
@@ -1121,18 +783,9 @@ def build_parser() -> argparse.ArgumentParser:
     log.add_argument("--classification")
     log.set_defaults(handler=command_log)
 
-    for name in ("checkpoint", "compact"):
-        command = commands.add_parser(name)
-        command.add_argument("task_id")
-        command.set_defaults(handler=command_checkpoint, operation=name)
-
-    migrate = commands.add_parser("migrate")
-    migrate.add_argument("task_id")
-    migrate.set_defaults(handler=command_migrate)
-
-    check = commands.add_parser("check")
-    check.add_argument("task_id")
-    check.set_defaults(handler=command_check)
+    checkpoint = commands.add_parser("checkpoint")
+    checkpoint.add_argument("task_id")
+    checkpoint.set_defaults(handler=command_checkpoint)
 
     archive = commands.add_parser("archive")
     archive.add_argument("task_id")

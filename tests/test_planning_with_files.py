@@ -155,7 +155,7 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(rows[1]["kind"], "verify")
             self.assertEqual(rows[1]["sha"], "deadbeef")
 
-    def test_check_blocks_open_phases_then_passes(self) -> None:
+    def test_archive_blocks_open_phases_then_moves_after_completion(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             run_plan(root, "init", "demo", "--goal", "g")
@@ -170,11 +170,14 @@ class LifecycleTests(unittest.TestCase):
                 re.sub(r"<[^<>\n]+>", "filled", phase_path.read_text(encoding="utf-8")),
                 encoding="utf-8",
             )
-            blocked = run_plan(root, "check", "demo")
+            blocked = run_plan(root, "archive", "demo")
             self.assertEqual(blocked.returncode, 1)
             self.assertIn("open phases", blocked.stdout)
+            self.assertTrue((plan_dir(root) / "INDEX.md").is_file())
             run_plan(root, "phase-set", "demo", "--phase", "1", "--status", "completed", "--commit", "a", "--conclusion", "c")
-            self.assertEqual(run_plan(root, "check", "demo").returncode, 0)
+            archived = run_plan(root, "archive", "demo")
+            self.assertEqual(archived.returncode, 0, archived.stdout)
+            self.assertTrue((root / ".agent_state" / "archives" / "demo" / "plan" / "INDEX.md").is_file())
 
     def test_archive_moves_and_refuses_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -211,11 +214,11 @@ class CheckpointTests(unittest.TestCase):
             checkpoint = run_plan(root, "checkpoint", "demo")
             self.assertEqual(checkpoint.returncode, 1)
             self.assertIn("unresolved", checkpoint.stdout)
-            complete = run_plan(root, "check", "demo")
+            complete = run_plan(root, "archive", "demo")
             self.assertEqual(complete.returncode, 1)
             self.assertIn("unresolved", complete.stdout)
 
-    def test_fully_populated_started_plan_passes_checkpoint_and_check(self) -> None:
+    def test_fully_populated_started_plan_passes_checkpoint_and_archive(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             run_plan(root, "init", "demo", "--goal", "g")
@@ -235,7 +238,7 @@ class CheckpointTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual(run_plan(root, "checkpoint", "demo").returncode, 0)
-            self.assertEqual(run_plan(root, "check", "demo").returncode, 0)
+            self.assertEqual(run_plan(root, "archive", "demo").returncode, 0)
 
     def test_rejects_board_record_disagreement_and_invalid_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -307,7 +310,7 @@ class CheckpointTests(unittest.TestCase):
                 phase_path.read_text(encoding="utf-8").replace("- **Evidence:** filled", "- **Evidence:**"),
                 encoding="utf-8",
             )
-            completed = run_plan(root, "check", "demo")
+            completed = run_plan(root, "archive", "demo")
             self.assertEqual(completed.returncode, 1)
             self.assertIn("empty required field 'Evidence'", completed.stdout)
 
@@ -355,108 +358,6 @@ class CheckpointTests(unittest.TestCase):
             self.assertIn("budget", over.stdout)
             actual_size = len(index_path.read_bytes())
             self.assertIn(f"{actual_size - 16_384} bytes over", over.stdout)
-
-
-class MigrationTests(unittest.TestCase):
-    OLD_PLAN = "\n".join([
-        "# legacy 任務計劃", "", "**Last updated:** 2026-07-01", "",
-        "## Goal", "", "遷移到新格式。", "",
-        "## Current State", "", "- 在 dev 分支", "",
-        "## Architecture Baseline", "", "- ADR-003", "",
-        "## Active Domain Packets", "", "### auth", "", "- Domain: auth", "",
-        "## Phase Status", "",
-        "| Phase | Status | Scope | Acceptance |", "|---|---|---|---|",
-        "| Phase 1 | completed | schema | tests |",
-        "| Phase 2 | in_progress | rewrite | pytest |", "",
-        "## Decisions", "",
-        "| ID | Status | Decision | Supersedes / Authority |", "|---|---|---|---|",
-        "| D-001 | active | 用 jsonl | none |", "",
-        "## Historical Phase Summary", "",
-        "| Phase | Topic | Conclusion / Commit |", "|---|---|---|",
-        "| Phase 1 | schema | done at abc1234def |", "",
-        "## Active Notes", "", "### Phase 2 — rewrite plan.py", "",
-        "- Conclusion / Commit: pending", "- Detail: 正在重寫。", "",
-    ])
-    OLD_PROGRESS = "\n".join([
-        "# legacy progress", "", "## Timeline", "",
-        "| Time | Actor | Action | Result | Next |", "|---|---|---|---|---|",
-        "| 2026-07-01 | root | 開工 | ok | schema |", "",
-        "## Verification Log", "",
-        "| Date | Command | Result |", "|---|---|---|",
-        "| 2026-07-01 | pytest | 10 pass |", "",
-    ])
-
-    def _seed(self, root: Path) -> Path:
-        plan = plan_dir(root, "legacy")
-        plan.mkdir(parents=True)
-        (plan / "task_plan.md").write_text(self.OLD_PLAN, encoding="utf-8")
-        (plan / "progress.md").write_text(self.OLD_PROGRESS, encoding="utf-8")
-        (plan / "domains").mkdir()
-        (plan / "domains" / "auth.md").write_text("packet", encoding="utf-8")
-        return plan
-
-    def test_migrate_scaffolds_new_format_and_preserves_originals(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            plan = self._seed(root)
-            result = run_plan(root, "migrate", "legacy")
-            self.assertEqual(result.returncode, 0, result.stderr)
-            data = payload(result)
-            self.assertEqual(len(data["phases"]), 2)
-            self.assertEqual(data["progress_rows"], 2)
-            self.assertTrue(data["punch_list"])
-            index = (plan / "INDEX.md").read_text(encoding="utf-8")
-            self.assertIn("**Goal:** 遷移到新格式。", index)
-            self.assertIn("| 01 | completed | phases/01-schema.md |", index)
-            self.assertIn("| 02 | in_progress | phases/02-rewrite-plan-py.md |", index)
-            self.assertIn("| D-001 | active | 用 jsonl | none |", index)
-            # Commit SHA lifted out of the historical conclusion.
-            phase1 = (plan / "phases" / "01-schema.md").read_text(encoding="utf-8")
-            self.assertIn("- **Commit:** abc1234def", phase1)
-            # progress converted to jsonl.
-            rows = [json.loads(line) for line in (plan / "progress.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
-            self.assertEqual({r["kind"] for r in rows}, {"event", "verify"})
-            # Nothing deleted: originals live under pre-migration.
-            preserved = plan / "history" / "pre-migration"
-            self.assertTrue((preserved / "task_plan.md").is_file())
-            self.assertTrue((preserved / "progress.md").is_file())
-            self.assertTrue((preserved / "domains").is_dir())
-            self.assertFalse((plan / "task_plan.md").exists())
-
-    def test_migration_recovery_is_one_checkpoint_and_check_never_exempts(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            plan = self._seed(root)
-            run_plan(root, "migrate", "legacy")
-            # A completed migrated plan must never pass the completion gate on its marker.
-            complete = run_plan(root, "check", "legacy")
-            self.assertEqual(complete.returncode, 1)
-            self.assertIn("unresolved", complete.stdout)
-            # One successful checkpoint is the explicit recovery window and consumes it.
-            self.assertEqual(run_plan(root, "checkpoint", "legacy").returncode, 0)
-            self.assertNotIn("migration-punch-list", (plan / "INDEX.md").read_text(encoding="utf-8"))
-            repeated = run_plan(root, "checkpoint", "legacy")
-            self.assertEqual(repeated.returncode, 1)
-            self.assertIn("unresolved", repeated.stdout)
-
-    def test_migrate_refuses_when_index_exists(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            plan = self._seed(root)
-            (plan / "INDEX.md").write_text("# legacy\n", encoding="utf-8")
-            result = run_plan(root, "migrate", "legacy")
-            self.assertEqual(result.returncode, 1)
-            self.assertIn("already exists", result.stdout)
-
-    def test_migrate_fast_fails_without_goal(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            plan = plan_dir(root, "legacy")
-            plan.mkdir(parents=True)
-            (plan / "task_plan.md").write_text("# legacy\n\n## Current State\n\n- x\n", encoding="utf-8")
-            result = run_plan(root, "migrate", "legacy")
-            self.assertEqual(result.returncode, 1)
-            self.assertIn("Goal", result.stdout)
 
 
 class TracerContractTests(unittest.TestCase):
@@ -524,49 +425,6 @@ class TracerContractTests(unittest.TestCase):
             subprocess.run(["git", "checkout", "-q", "--detach"], cwd=linked, check=True)
             self.assertIsNone(payload(run_plan(root, "status", "demo", "--worktree", str(linked)))["git"]["branch"])
 
-    def test_inventory_is_sorted_read_only_and_reports_mixed_formats_states_and_conflicts(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            run_plan(root, "init", "new-open", "--goal", "g")
-            legacy = plan_dir(root, "legacy")
-            legacy.mkdir(parents=True)
-            (legacy / "task_plan.md").write_text("legacy", encoding="utf-8")
-            unknown = plan_dir(root, "unknown")
-            unknown.mkdir(parents=True)
-            (unknown / "notes.txt").write_text("unknown", encoding="utf-8")
-            empty = root / ".agent_state" / "archives" / "empty" / "plan"
-            empty.mkdir(parents=True)
-            archived = root / ".agent_state" / "archives" / "closed" / "plan"
-            archived.mkdir(parents=True)
-            (archived / "INDEX.md").write_text("# broken\n", encoding="utf-8")
-            conflict_archive = root / ".agent_state" / "archives" / "new-open" / "plan"
-            conflict_archive.mkdir(parents=True)
-            (conflict_archive / "INDEX.md").write_text("# archived\n", encoding="utf-8")
-            before = sorted(path.relative_to(root) for path in root.rglob("*"))
-            result = run_plan(root, "inventory")
-            self.assertEqual(result.returncode, 0, result.stderr)
-            data = payload(result)
-            self.assertEqual([(p["task_id"], p["location"]) for p in data["plans"]], [
-                ("closed", "archive"), ("empty", "archive"), ("legacy", "active"),
-                ("new-open", "active"), ("new-open", "archive"), ("unknown", "active"),
-            ])
-            self.assertEqual(data["summary"]["conflicts"], 2)
-            self.assertEqual(data["summary"]["formats"]["legacy"], 1)
-            self.assertEqual(data["summary"]["formats"]["empty"], 1)
-            self.assertEqual(sorted(path.relative_to(root) for path in root.rglob("*")), before)
-
-    def test_inventory_fails_closed_on_symlink(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            target = root / "target"
-            target.mkdir()
-            (target / "INDEX.md").write_text("# x\n", encoding="utf-8")
-            plan_dir(root, "linked").parent.mkdir(parents=True, exist_ok=True)
-            (plan_dir(root, "linked")).symlink_to(target, target_is_directory=True)
-            result = run_plan(root, "inventory")
-            self.assertEqual(result.returncode, 1)
-            self.assertIn("symlink", result.stdout)
-
     def test_structured_verify_delta_and_invalid_combinations_do_not_append(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -601,26 +459,6 @@ class TracerContractTests(unittest.TestCase):
             self.assertEqual(row["result"], "ok")
             self.assertNotIn("subject_result", row)
 
-    def test_migration_and_checkpoint_hint_only_explicit_live_current_state_labels(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            plan = plan_dir(root, "legacy")
-            plan.mkdir(parents=True)
-            (plan / "task_plan.md").write_text(
-                "# legacy\n\n## Goal\n\nGoal.\n\n## Current State\n\n"
-                "- HEAD abc1234\n- branch: dev\n- tree = def5678\n"
-                "- **Next gate:** preserve HEAD fedcba9\n\n## Decisions\n\n"
-                "## Phase Status\n\n## Historical Phase Summary\n\n",
-                encoding="utf-8",
-            )
-            migrated = payload(run_plan(root, "migrate", "legacy"))
-            self.assertEqual(len(migrated["hints"]), 3)
-            self.assertFalse(any("fedcba9" in hint for hint in migrated["hints"]))
-            checkpoint = payload(run_plan(root, "checkpoint", "legacy"))
-            self.assertEqual(checkpoint["hints"], migrated["hints"])
-            self.assertIn("HEAD abc1234", (plan / "INDEX.md").read_text(encoding="utf-8"))
-
-
 class StatusGitTests(unittest.TestCase):
     def test_status_derives_git_snapshot_inside_a_repo(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -648,9 +486,21 @@ class StatusGitTests(unittest.TestCase):
 class SkillContractTests(unittest.TestCase):
     def test_skill_declares_version_and_mental_model(self) -> None:
         text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("skill_version: 11", text)
-        for phrase in ("refs vs object log", "只讀 `INDEX.md`", "指標不抄本", "migrate"):
+        self.assertIn("skill_version: 12", text)
+        for phrase in ("refs vs object log", "只讀 `INDEX.md`", "指標不抄本"):
             self.assertIn(phrase, text)
+        for retired in ("migrate", "inventory", "check <id>"):
+            self.assertNotIn(retired, text)
+
+
+    def test_retired_commands_are_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for command in ("migrate", "inventory", "check", "compact"):
+                with self.subTest(command=command):
+                    result = run_plan(root, command, "demo") if command != "inventory" else run_plan(root, command)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn("invalid choice", result.stderr)
 
     def test_templates_are_the_new_set(self) -> None:
         names = {p.name for p in (SKILL / "templates").glob("*.md")}

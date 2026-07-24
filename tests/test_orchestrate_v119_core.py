@@ -432,42 +432,68 @@ class V119CoreContractTests(unittest.TestCase):
         self.assertIn("oracle_interval_seconds", second_report["attempts"][0])
         self.assertEqual(second_report["attempts"][0].get("oracle_interval_seconds"), 120)
 
-    def test_profile_non_monotonic_oracle_ready_interval_warns_and_is_null(self) -> None:
-        self.create_worktree(self.root, "implementation")
+    def test_profile_non_monotonic_attempt_intervals_warn_and_are_null(self) -> None:
+        implementation = self.create_worktree(self.root, "implementation")
+        implementation_path = Path(str(implementation["worktree"]))
         oracle_path = Path(str(self.create_worktree(self.root, "oracle")["worktree"]))
         first = self.commit_file(
             oracle_path, "contracts/api.txt", "one\n",
             "first\nWave: wave-a\nSlice: correction\nRole: oracle\n",
             "2025-01-01T00:03:00+0000",
         )
-        self.payload(self.cli(
+        first_merge = self.payload(self.cli(
             self.root, "contract", "merge", "--root", str(self.root), "--task-id", self.task_id,
             "--wave-id", self.wave_id, "--contract-sha", first,
             env={"GIT_AUTHOR_DATE": "2025-01-01T00:04:00+0000", "GIT_COMMITTER_DATE": "2025-01-01T00:04:00+0000"},
-        ))
+        ))["merge_sha"]
         second = self.commit_file(
             oracle_path, "contracts/api.txt", "two\n",
             "correction\nWave: wave-a\nSlice: correction\nRole: oracle\n",
             "2025-01-01T00:02:00+0000",
         )
-        self.payload(self.cli(
+        second_merge = self.payload(self.cli(
             self.root, "contract", "merge", "--root", str(self.root), "--task-id", self.task_id,
             "--wave-id", self.wave_id, "--contract-sha", second,
-            env={"GIT_AUTHOR_DATE": "2025-01-01T00:05:00+0000", "GIT_COMMITTER_DATE": "2025-01-01T00:05:00+0000"},
-        ))
+            env={"GIT_AUTHOR_DATE": "2025-01-01T00:01:00+0000", "GIT_COMMITTER_DATE": "2025-01-01T00:01:00+0000"},
+        ))["merge_sha"]
+        implementation_sha = self.commit_file(
+            implementation_path,
+            "src/correction.txt",
+            "implemented despite skewed clock\n",
+            "implementation\nWave: wave-a\nSlice: correction\nRole: implementation\n",
+            "2025-01-01T00:00:30+0000",
+        )
         report = self.payload(self.cli(
             self.root, "profile", "report", "--root", str(self.root), "--task-id", self.task_id,
             "--wave-id", self.wave_id, "--base", self.base,
         ))
         correction = report["slices"]["correction"]
-        self.assertIsNone(correction["oracle_interval_seconds"])
-        self.assertTrue(
-            all("oracle_interval_seconds" in attempt for attempt in correction["attempts"])
-        )
         self.assertEqual(
-            [attempt.get("oracle_interval_seconds") for attempt in correction["attempts"]],
-            [None, None],
+            correction["attempts"],
+            [
+                {
+                    "attempt": 1,
+                    "oracle_sha": first,
+                    "contract_merge_sha": first_merge,
+                    "implementation_sha": None,
+                    "oracle_interval_seconds": None,
+                    "handoff_interval_seconds": 60,
+                    "implementation_interval_seconds": None,
+                },
+                {
+                    "attempt": 2,
+                    "oracle_sha": second,
+                    "contract_merge_sha": second_merge,
+                    "implementation_sha": implementation_sha,
+                    "oracle_interval_seconds": None,
+                    "handoff_interval_seconds": None,
+                    "implementation_interval_seconds": None,
+                },
+            ],
         )
+        self.assertIsNone(correction["oracle_interval_seconds"])
+        self.assertIsNone(correction["handoff_interval_seconds"])
+        self.assertIsNone(correction["implementation_interval_seconds"])
         self.assertTrue(any("non-monotonic" in warning for warning in report["warnings"]))
 
     def test_profile_accepts_shared_production_paths_and_status_projects_dirty_tree(self) -> None:

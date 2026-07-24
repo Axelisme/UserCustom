@@ -165,6 +165,23 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
             )
             merge_1 = str(merge_1_payload["merge_sha"])
 
+            checkpoint = self.commit_file(
+                implementation_worktree,
+                "src/checkpoint.txt",
+                "counterexample preserved\n",
+                "Implementation checkpoint before Contract correction",
+                "implementation-checkpoint",
+                "2025-01-01T00:02:15+0000",
+            )
+            obsolete_checkpoint = self.commit_file(
+                implementation_worktree,
+                "src/obsolete-checkpoint.txt",
+                "not a v119 milestone\n",
+                "Commit carrying the removed checkpoint spelling",
+                "checkpoint",
+                "2025-01-01T00:02:30+0000",
+            )
+
             oracle_2 = self.commit_file(
                 oracle_worktree,
                 "tests/contract.txt",
@@ -219,7 +236,11 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
             self.assertEqual(report["task_id"], self.task_id)
             self.assertEqual(report["wave_id"], self.wave_id)
             self.assertEqual(report["base"], base)
-            attempts = report["slices"][self.slice_id]["attempts"]
+            slice_report = report["slices"][self.slice_id]
+            self.assertEqual(slice_report["checkpoints"], [checkpoint])
+            self.assertNotIn(obsolete_checkpoint, json.dumps(report, sort_keys=True))
+
+            attempts = slice_report["attempts"]
             self.assertEqual(
                 attempts,
                 [
@@ -229,6 +250,8 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
                         "contract_merge_sha": merge_1,
                         "implementation_sha": None,
                         "oracle_interval_seconds": None,
+                        "handoff_interval_seconds": 60,
+                        "implementation_interval_seconds": None,
                     },
                     {
                         "attempt": 2,
@@ -236,9 +259,14 @@ class ProfileCorrectionAttemptAssignmentContractTests(unittest.TestCase):
                         "contract_merge_sha": merge_2,
                         "implementation_sha": implementation_sha,
                         "oracle_interval_seconds": 120,
+                        "handoff_interval_seconds": 60,
+                        "implementation_interval_seconds": 60,
                     },
                 ],
             )
+            self.assertEqual(slice_report["oracle_interval_seconds"], 120)
+            self.assertEqual(slice_report["handoff_interval_seconds"], 60)
+            self.assertEqual(slice_report["implementation_interval_seconds"], 60)
 
 
 if __name__ == "__main__":

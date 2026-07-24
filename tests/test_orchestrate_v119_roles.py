@@ -102,7 +102,7 @@ class V119RoleRuntimeContractTests(unittest.TestCase):
     def test_pi_binds_roles_to_lazy_generic_pipelines_and_root_depth(self) -> None:
         text = " ".join((PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split())
         lazy_creation_rule = (
-            "Root creates and attaches the wave-implementer pipeline lazily from the first "
+            "Root lazily creates and attaches the wave-implementer pipeline from the first "
             "real Implementation task after the first Contract merge."
         )
         self.assertEqual(
@@ -110,15 +110,19 @@ class V119RoleRuntimeContractTests(unittest.TestCase):
             1,
             "Pi must state the lazy Implementation pipeline rule once in direct Root wording",
         )
+        self.assertIn("## Dual-role generic pipelines and terminal handoff", text)
         self.assertIn(
             "Root creates and attaches the wave-oracle pipeline from the real C0 task.",
             text,
         )
+        self.assertIn("Root controls dependency depth", text)
         self.assertIn(
             "After emitting the terminal `slice-ready` handoff, the role immediately ends "
             "its turn and makes no further worktree changes.",
             text,
         )
+        self.assertNotIn("Implementation pipeline is lazy", text)
+        self.assertNotIn("pipeline lazily", text)
         self.assertNotIn("Create the / the Implementation pipeline", text)
         self.assertNotIn("followed by immediately end this turn", text)
         self.assertRegex(text, r"(?i)oracle.{0,180}(generic )?pipeline")

@@ -158,6 +158,50 @@ class V119RoleRuntimeContractTests(unittest.TestCase):
                     r"(?:immediate(ly)? (?:end|complete|completion)|ends? (?:this )?turn immediate)",
                 )
 
+    def test_interactive_pi_root_does_not_wait_on_role_pipeline_completion(self) -> None:
+        text = " ".join((PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split())
+        self.assertRegex(
+            text,
+            r"(?i)interactive Pi Root.{0,120}(?:does not|do not|must not|should not|never)"
+            r".{0,120}(?:`subagent_wait`.{0,40}`wait_subagent`|"
+            r"`wait_subagent`.{0,40}`subagent_wait`).{0,120}"
+            r"(?:merely|only|just).{0,40}wait.{0,100}(?:pipeline|role).{0,60}completion",
+        )
+
+    def test_interactive_pi_root_ends_turn_for_completion_notification(self) -> None:
+        text = " ".join((PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split())
+        self.assertRegex(
+            text,
+            r"(?i)no independent local work remains.{0,120}"
+            r"(?:Root )?(?:should )?ends? (?:the|its) turn.{0,180}"
+            r"(?:Pi(?:'s)? )?subagent completion notification.{0,80}wakes? (?:the )?session",
+        )
+
+    def test_active_pi_goal_mode_yields_for_named_pending_completion(self) -> None:
+        text = " ".join((PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split())
+        self.assertRegex(
+            text,
+            r"(?i)active goal(?:-mode| mode) session.{0,120}`yield_goal`.{0,180}"
+            r"reason.{0,120}pending.{0,80}(?:pipeline|role).{0,60}completion",
+        )
+
+    def test_pi_explicit_wait_exception_is_limited_to_noninteractive_runs(self) -> None:
+        text = (PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8")
+        sentences = re.split(r"(?<=[.!?])\s+", " ".join(text.split()))
+        self.assertTrue(
+            any(
+                "headless" in sentence.lower()
+                and "run-to-completion" in sentence.lower()
+                and "wait" in sentence.lower()
+                and any(
+                    limit in sentence.lower()
+                    for limit in ("only", "reserve", "exception")
+                )
+                for sentence in sentences
+            ),
+            "explicit waiting must be limited to the headless/run-to-completion exception",
+        )
+
     def test_pi_binds_roles_to_lazy_generic_pipelines_and_root_depth(self) -> None:
         text = " ".join((PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split())
         lazy_creation_rule = (

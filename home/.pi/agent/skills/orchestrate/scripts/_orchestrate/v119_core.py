@@ -46,12 +46,15 @@ def _status(root: Path, path: Path, branch: str) -> dict[str, Any]:
     if not path.exists():
         return {"ok": True, "operation": "worktree-status", "exists": False, "path": str(path), "branch": branch, "head": record.get("HEAD"), "tree": None, "clean": False, "changed_paths": []}
     changed = [line for line in run_git(path, "status", "--porcelain").stdout.splitlines() if line]
+    live_branch = run_git(path, "symbolic-ref", "--quiet", "--short", "HEAD", check=False).stdout.strip()
+    detached = not live_branch
     return {
         "ok": True,
         "operation": "worktree-status",
         "exists": True,
         "path": str(path),
-        "branch": branch,
+        "branch": live_branch if live_branch else None,
+        **({"detached": True} if detached else {}),
         "head": record.get("HEAD"),
         "tree": "dirty" if changed else "clean",
         "clean": not changed,

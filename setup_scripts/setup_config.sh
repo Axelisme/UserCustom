@@ -98,18 +98,20 @@ replace_current_orchestrate_destinations() {
   replace_orchestrate_destination "$UserCustom/home/.pi/agent/agents/wave-implementer.md" "$HOME/.pi/agent/agents/wave-implementer.md"
   replace_orchestrate_destination "$UserCustom/home/.claude/agents/wave-oracle.md" "$HOME/.claude/agents/wave-oracle.md"
   replace_orchestrate_destination "$UserCustom/home/.claude/agents/wave-implementer.md" "$HOME/.claude/agents/wave-implementer.md"
+  replace_orchestrate_destination "$UserCustom/home/.codex/AGENTS.md" "$HOME/.codex/AGENTS.md"
+  replace_orchestrate_destination "$UserCustom/home/.pi/agent/APPEND_SYSTEM.md" "$HOME/.pi/agent/APPEND_SYSTEM.md"
 }
 
 remove_obsolete_orchestrate_profiles() {
   # Retire only exact legacy role identities after every v119 role is installed.
   if [ -e "$UserCustom/home/.pi/agent/agents/wave-oracle.md" ]; then
-    rm -f "$HOME/.pi/agent/agents/wave-reviewer.md" "$HOME/.pi/agent/agents/integration-reviewer.md"
+    rm -f "$HOME/.pi/agent/agents/wave-reviewer.md" "$HOME/.pi/agent/agents/integration-reviewer.md" "$HOME/.pi/agent/agents/implementer.md"
   fi
   if [ -e "$UserCustom/home/.codex/agents/wave-oracle.toml" ]; then
-    rm -f "$HOME/.codex/agents/wave-reviewer.toml" "$HOME/.codex/agents/integration-reviewer.toml"
+    rm -f "$HOME/.codex/agents/wave-reviewer.toml" "$HOME/.codex/agents/integration-reviewer.toml" "$HOME/.codex/agents/implementer.toml"
   fi
   if [ -e "$UserCustom/home/.claude/agents/wave-oracle.md" ]; then
-    rm -f "$HOME/.claude/agents/wave-reviewer.md" "$HOME/.claude/agents/integration-reviewer.md"
+    rm -f "$HOME/.claude/agents/wave-reviewer.md" "$HOME/.claude/agents/integration-reviewer.md" "$HOME/.claude/agents/implementer.md"
   fi
 }
 
@@ -135,9 +137,11 @@ validate_orchestrate_profile_destinations() {
     "$HOME/.codex/agents/wave-oracle.toml" \
     "$HOME/.codex/agents/wave-implementer.toml" \
     "$HOME/.claude/agents/wave-oracle.md" \
-    "$HOME/.claude/agents/wave-implementer.md"; do
-    if [ ! -f "$path" ]; then
-      echo "error: unusable wave profile destination (expected regular file): $path" >&2
+    "$HOME/.claude/agents/wave-implementer.md" \
+    "$HOME/.codex/AGENTS.md" \
+    "$HOME/.pi/agent/APPEND_SYSTEM.md"; do
+    if [ ! -f "$path" ] || ! orchestrate_destination_is_current "$UserCustom/home/${path#"$HOME/"}" "$path"; then
+      echo "error: unusable orchestrate destination (expected shipped identity): $path" >&2
       return 1
     fi
   done

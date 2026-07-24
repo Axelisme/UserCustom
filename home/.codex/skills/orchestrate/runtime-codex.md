@@ -11,8 +11,8 @@ production paths after Root merges the exact Contract SHA. Native messaging, fol
 continuation are used when available in v1 and v2.
 
 A terminal `slice-ready` message carries Slice and a full exact SHA; the role then
-immediately ends its turn. In degraded v1, the terminal response carries the exact commit
-SHA while commit trailers carry only Slice and Seam-Ready.
+immediately ends its turn. In degraded v1 transport, the terminal response carries the exact commit
+SHA while the commit uses Git trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and `Role: <role>` (oracle or implementation).
 
 Codex has no simulated queue. Root owns dependency depth and placement. After restart or
 compaction, recover pending position from the task plan and Git refs/history.

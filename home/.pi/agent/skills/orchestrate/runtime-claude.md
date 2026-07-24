@@ -6,8 +6,7 @@ base SHA, write scope, acceptance commands, authority, stop conditions, and arti
 ## Dual-role handoff
 
 Run `wave-oracle` for public Interface, contract tests, fixtures, adapters, and red Contract;
-run `wave-implementer` after Root merges that Contract to fill production behavior. Both
-roles emit one terminal `slice-ready` handoff with Slice and exact SHA, then immediately end this turn. Workers do not create child agents.
+run `wave-implementer` after Root merges that Contract to fill production behavior. Ready commits use Git trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and the role-specific `Role: oracle` or `Role: implementation`; both roles emit one terminal `slice-ready` handoff with Slice and the full exact SHA, then immediately end this turn. Workers do not create child agents.
 
 ## Continuation and acceptance
 

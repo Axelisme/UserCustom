@@ -14,36 +14,36 @@
       "sha256": "de8d11a29b8b03a2bc13d840d5599977e644a12bb6414a9c45e65d5660ce3f98"
     },
     "runtime-claude.md": {
-      "bytes": 947,
+      "bytes": 1091,
       "sections": {
         "Continuation and acceptance": "abf3e7fa3512b4d8d0f0b65018108fab3b70a707a6fa32a1bc4ad0b93b23fe73",
-        "Dual-role handoff": "d35d4417c7afd31cd8059a772d08803b2c59688e56bf7f7e26eca520b585fde7",
+        "Dual-role handoff": "c343135f48b37d95e47de215bcc9dddb3f7cfbea76ab665190ea732078cc030e",
         "Orchestrate \u2014 Claude runtime binding": "3704d57f6cdb2d03c1bb3737287fbdae3c10960afbc27ef3f00e976d194adb41"
       },
-      "sha256": "01dae399e6bda135bda681ed3fda21aa38c533385440244db8a64a2892bc0981"
+      "sha256": "9cff1fdccf0e9393169ec9fb6d8958ce914bfbff7699f5a72f8e5ae87fe8fc5d"
     },
     "runtime-codex.md": {
-      "bytes": 2016,
+      "bytes": 2093,
       "sections": {
         "Acceptance": "8db5e55d7c684b197116254df2202d63af145d3f68e94bd59b1eabe5b0eea10a",
-        "Dual-role native agents and terminal handoff": "7c01373d408473987f0c1189ff87bdd2257b044e5093cf7b64d8acce13d81e0f",
+        "Dual-role native agents and terminal handoff": "1f06be9988a264b6306062345ba7206f69e3e64586fc03824f20d5c0d32fc8e1",
         "Native generations": "64015421912e3a3ec2ba5eaad81de73d7bb9355531016e972f2909c67fe1f468",
         "Orchestrate \u2014 Codex runtime binding": "1a755627e749ad095d030be0c13fb4246e51a35fdecf350b081a2a44b3ab8bd4",
         "Profile bootstrap and safety": "9f751889320ddaedf591fbcde3843acb6fc6e0c74fe6012188cb4766007e5ccc"
       },
-      "sha256": "6dc079a53133690bd29824c3db57feff8d5a701d6571d39e81c5adfc6305685e"
+      "sha256": "4dd337c682370986e65fead4f9d13e06c051b0cc6e7caf94c0683048d81f9bf3"
     },
     "runtime-pi.md": {
-      "bytes": 2210,
+      "bytes": 2345,
       "sections": {
         "Activation and leases": "aaf688a36d895c159ab8253172598ba478a3f0c811a6df447b7eb7a218de687f",
-        "Dual-role generic pipelines and terminal handoff": "c91cdc83fe8bdcacc54c5edda6f512898c569204cca8a1c1fabefb4ca37d4060",
+        "Dual-role generic pipelines and terminal handoff": "900a40585b0f5055b3dc22db8f70a6c26eb6a268803ea3ceecb0c46d0c50f27b",
         "Milestones and flow control": "d381f9777def57e53487ae6e55c67f7bf71415c82a3a59729304ab6612e5f7c9",
         "Orchestrate \u2014 Pi runtime binding": "ae7d663ceb3f01e05adad12e2af0c6f713de4a9692a29cf6380aad10488dda75",
         "Profile routing": "413f0a7d6a376a8234b29f10908ff76f1ddbfe58f951800861b7131aef3fde9a",
         "Runtime budgets": "0ca619d7020dfade4a50800b3327f5d388d5967339833337cd7315ee54627b83"
       },
-      "sha256": "26802a43d51e8b732952b6e804d0db1ca778ca68202df26b416b9723fb1d057d"
+      "sha256": "e5fbaa7a00629d35c5e73d67a128766b3813d036ca332f15b9a3d3ef7e3421ba"
     },
     "scripts/_orchestrate/__init__.py": {
       "bytes": 55,
@@ -81,11 +81,11 @@
       "sha256": "f640872a5619f323bfd871a0b0d138e9c7658f0f0f153ae353fa12a3d197892c"
     },
     "scripts/_orchestrate/v119_core.py": {
-      "bytes": 16906,
+      "bytes": 17125,
       "sections": {
-        "__file__": "b592499194a45955276bdc45c45ebfb88eb48035af3864c3b00a9e50f23f9e3e"
+        "__file__": "c86e262132b517fa06df50e69a58289658291dc6d91248da103202ded47c713b"
       },
-      "sha256": "b592499194a45955276bdc45c45ebfb88eb48035af3864c3b00a9e50f23f9e3e"
+      "sha256": "c86e262132b517fa06df50e69a58289658291dc6d91248da103202ded47c713b"
     },
     "scripts/orchestrate.py": {
       "bytes": 227,
@@ -146,16 +146,16 @@
       "standing_orders_sha256": "0c7b74083a5807f1b9922b54e68c427280349ef7dbe50bea92e2f0120ee5e8fd"
     },
     ".claude/agents/wave-implementer.md": {
-      "bytes": 1107,
-      "profile_contract_sha256": "132bb0140e7ba591887b70cd8f565a5903cf32c9f0b2d9eaee95dc9a82a56aaa",
-      "sha256": "37b03424c5d5a86a3d4832ad92a8b6e2f658e687de22acb1458d2a7f4e28f00c",
-      "standing_orders_sha256": "52ca489ec29eafb448905699cf0da6d12cd8d705514044024fc81c96bde1ae88"
+      "bytes": 1192,
+      "profile_contract_sha256": "f8ad698f56f281c9e0441f55ea0cb972ef235204044da81f28e70c7aa90c0354",
+      "sha256": "1931b918f02ca6020e0bd4de5b6c0de5402a0993ac628128220b9e6e1c077c66",
+      "standing_orders_sha256": "f854db614068f51327ca7549a8a3ffb8f61d8a8692a3a09161abc70656507516"
     },
     ".claude/agents/wave-oracle.md": {
-      "bytes": 2004,
-      "profile_contract_sha256": "a7568e1bec37d5839e6d47e292cd5d28157b39a9662b58421a2aecf057a79e2f",
-      "sha256": "0e69a1e08f2daa1556e619863a675847830bda6b7b381d6c9bb0fdf3968146fb",
-      "standing_orders_sha256": "752118d8d340cebd0c16476492376ffabec40916719cfd7befda857f0762b4e9"
+      "bytes": 2120,
+      "profile_contract_sha256": "ae70b0dbb44063a8180991f2fe642bd5a9db51ec4af3516609d793addc219b6e",
+      "sha256": "46f16f185e45950c757a5552719c18d1049359d03ec17fd4dbf8cc2defb0fb2b",
+      "standing_orders_sha256": "925e3327d6bc62e25eccc50800318f63042bc74ed57b09775842ccd6e45bb678"
     },
     ".claude/agents/web-researcher.md": {
       "bytes": 967,
@@ -212,16 +212,16 @@
       "standing_orders_sha256": "0c7b74083a5807f1b9922b54e68c427280349ef7dbe50bea92e2f0120ee5e8fd"
     },
     ".codex/agents/wave-implementer.toml": {
-      "bytes": 1183,
-      "profile_contract_sha256": "c8077e46f7f1119f3ce4f92df5802d3c09071e07c2dabfa4bd62dacede0d2e57",
-      "sha256": "3bf7d609b84bdab976fff8ad5b90c31f06b7ed79f684298b36e0b702b2d733b4",
-      "standing_orders_sha256": "52ca489ec29eafb448905699cf0da6d12cd8d705514044024fc81c96bde1ae88"
+      "bytes": 1268,
+      "profile_contract_sha256": "fef6510d88148b65b4442f2d67910829507cf9cc1ee676980686ee0f132202b0",
+      "sha256": "0c24f2d974807eccb24798ce8850fc9dd5f26cce3f847467b3b174f10d4f9d4e",
+      "standing_orders_sha256": "f854db614068f51327ca7549a8a3ffb8f61d8a8692a3a09161abc70656507516"
     },
     ".codex/agents/wave-oracle.toml": {
-      "bytes": 2080,
-      "profile_contract_sha256": "e82bbca17925069ed986707bf97db0d971dbd6643997293d6b73ce04c78f127b",
-      "sha256": "7c77abf58dca92661eaee270f1cac02240611e87dcc1c76b2cc59dde6dca7689",
-      "standing_orders_sha256": "752118d8d340cebd0c16476492376ffabec40916719cfd7befda857f0762b4e9"
+      "bytes": 2196,
+      "profile_contract_sha256": "30d419677d8d56bf30f517b4fd83037694d85880a3925f6b12c01b44022a6b06",
+      "sha256": "744cc4572e7cfad6d48865074202278a010365116d2fab05eb1cbd0e07e57f5c",
+      "standing_orders_sha256": "925e3327d6bc62e25eccc50800318f63042bc74ed57b09775842ccd6e45bb678"
     },
     ".codex/agents/web-researcher.toml": {
       "bytes": 1036,
@@ -278,16 +278,16 @@
       "standing_orders_sha256": "474893db2d008e6c5034be08348f488968260a857b783352efa5f6206e0dd9da"
     },
     ".pi/agent/agents/wave-implementer.md": {
-      "bytes": 1387,
-      "profile_contract_sha256": "3ff9b2d27cdf68f54414d99823a23124acf7cf069dfb8580a7af8221ae04292c",
-      "sha256": "458744565e82f37a3c5c09f8bc7611c0b32a8bcddbaca2dae59448fe2888e2f4",
-      "standing_orders_sha256": "52ca489ec29eafb448905699cf0da6d12cd8d705514044024fc81c96bde1ae88"
+      "bytes": 1472,
+      "profile_contract_sha256": "55d9add9ea51253641066b33da8461c9a3006f51225cc6b339cfe17912ba7836",
+      "sha256": "d443d55d19177dbc5ef7477b154c0f97d5ce00ddda94f21f310d9e7fdb62715e",
+      "standing_orders_sha256": "f854db614068f51327ca7549a8a3ffb8f61d8a8692a3a09161abc70656507516"
     },
     ".pi/agent/agents/wave-oracle.md": {
-      "bytes": 2324,
-      "profile_contract_sha256": "82abef88b71a8e4a191c0f900f30719a653a93b975895fc1ccaa773e4196bca9",
-      "sha256": "6c15dc817d9ed310bbebff86a2944bf08287584ecfcb25ca9a5fec5bb9ca572d",
-      "standing_orders_sha256": "752118d8d340cebd0c16476492376ffabec40916719cfd7befda857f0762b4e9"
+      "bytes": 2440,
+      "profile_contract_sha256": "c3525d09cc421a3ba1b9620897a64487f8f847dbcc50905a88e585fe3fa2202d",
+      "sha256": "af209bc31321a454d0fa7096cc0cbadb277539f7bda31011333fc817b7e1fd66",
+      "standing_orders_sha256": "925e3327d6bc62e25eccc50800318f63042bc74ed57b09775842ccd6e45bb678"
     },
     ".pi/agent/agents/web-researcher.md": {
       "bytes": 1125,
@@ -295,138 +295,6 @@
       "sha256": "4f0d9bb49eadc0da6cd094ffa56d239037abcbb1eec2f676beb512d41f9097dc",
       "standing_orders_sha256": "b464d4b4861377930cd3f5cc512b08ec815f7c45ec046216b9e0da2475a9da95"
     }
-  },
-  "release_delta": {
-    "acknowledge_removed": [
-      "references/coordination.md",
-      "references/publication-review.md"
-    ],
-    "changed_profiles": [
-      ".claude/agents/integration-reviewer.md",
-      ".claude/agents/wave-implementer.md",
-      ".claude/agents/wave-oracle.md",
-      ".claude/agents/wave-reviewer.md",
-      ".codex/agents/integration-reviewer.toml",
-      ".codex/agents/wave-implementer.toml",
-      ".codex/agents/wave-oracle.toml",
-      ".codex/agents/wave-reviewer.toml",
-      ".pi/agent/APPEND_SYSTEM.md",
-      ".pi/agent/agents/integration-reviewer.md",
-      ".pi/agent/agents/wave-implementer.md",
-      ".pi/agent/agents/wave-oracle.md",
-      ".pi/agent/agents/wave-reviewer.md"
-    ],
-    "changed_sections": {
-      "SKILL.md": [
-        "Acceptance and migration",
-        "CLI surface",
-        "Control loop \u2014 root's serial duty cycle",
-        "Definition of done",
-        "Iron rules",
-        "Machinery",
-        "Orchestrate",
-        "Orchestrate v119",
-        "Pipeline model",
-        "Runtime bindings",
-        "Shaping heuristics",
-        "Workflow"
-      ],
-      "references/coordination.md": [
-        "Coordination",
-        "Git topology",
-        "Handoff",
-        "Landing",
-        "Milestones and liveness",
-        "Review",
-        "Roles and dispatch",
-        "Skill upgrades",
-        "Wave attachment policy",
-        "Wave close"
-      ],
-      "references/publication-review.md": [
-        "Immutable review lifecycle",
-        "Post-commit failure taxonomy",
-        "Publication review",
-        "The authority transaction"
-      ],
-      "runtime-claude.md": [
-        "Capability boundaries",
-        "Continuation and acceptance",
-        "Dual-role handoff",
-        "Milestones and flow control",
-        "Orchestrate \u2014 Claude Code runtime binding",
-        "Orchestrate \u2014 Claude runtime binding",
-        "Tool and profile binding"
-      ],
-      "runtime-codex.md": [
-        "Acceptance",
-        "Dual-role native agents and terminal handoff",
-        "Milestones",
-        "Native generations",
-        "Orchestrate \u2014 Codex runtime binding",
-        "Pipeline capability and named fallback",
-        "Profile bootstrap and dispatch",
-        "Profile bootstrap and safety",
-        "Runtime limits",
-        "Tool binding"
-      ],
-      "runtime-pi.md": [
-        "Activation and leases",
-        "Capability boundaries",
-        "Cleanup lease check",
-        "Cumulative review scheduling",
-        "Dual-role generic pipelines and terminal handoff",
-        "Milestones and flow control",
-        "Orchestrate \u2014 Pi runtime binding",
-        "Pi goal yield policy",
-        "Pipeline adoption",
-        "Profile routing",
-        "Profile routing and launch modes",
-        "Recommended launch presets",
-        "Runtime budgets",
-        "Tool and profile binding",
-        "`exact-sha-review`",
-        "`lane-writer`",
-        "`read-only-evidence`"
-      ],
-      "scripts/_orchestrate/cli.py": [
-        "__file__"
-      ],
-      "scripts/_orchestrate/feedback.py": [
-        "__file__"
-      ],
-      "scripts/_orchestrate/findings.py": [
-        "__file__"
-      ],
-      "scripts/_orchestrate/git_ops.py": [
-        "__file__"
-      ],
-      "scripts/_orchestrate/landing.py": [
-        "__file__"
-      ],
-      "scripts/_orchestrate/lanes.py": [
-        "__file__"
-      ],
-      "scripts/_orchestrate/release.py": [
-        "__file__"
-      ],
-      "scripts/_orchestrate/review.py": [
-        "__file__"
-      ],
-      "scripts/_orchestrate/v119_core.py": [
-        "__file__"
-      ],
-      "scripts/_orchestrate/worktrees.py": [
-        "__file__"
-      ]
-    },
-    "from_version": 118,
-    "must_reread": [
-      "SKILL.md",
-      "runtime-claude.md",
-      "runtime-codex.md",
-      "runtime-pi.md"
-    ]
   },
   "schema_version": 1,
   "skill_version": 119

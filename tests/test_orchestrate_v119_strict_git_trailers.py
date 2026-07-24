@@ -161,6 +161,17 @@ class StrictGitTrailerContractTests(unittest.TestCase):
         trailers.insert(index + 1, trailers[index])
         return "duplicate workflow trailer\n\n" + "\n".join(trailers)
 
+    def mixed_case_duplicate_message(self, key: str) -> str:
+        trailers = [
+            f"Wave: {self.wave_id}",
+            "Slice: mixed-case-duplicate",
+            "Role: oracle",
+        ]
+        index = {"Wave": 0, "Slice": 1, "Role": 2}[key]
+        _, value = trailers[index].split(":", 1)
+        trailers.insert(index + 1, f"{key.lower()}:{value}")
+        return "mixed-case duplicate workflow trailer\n\n" + "\n".join(trailers)
+
     def test_body_labels_followed_by_prose_are_rejected_without_merge_mutation(
         self,
     ) -> None:
@@ -370,6 +381,96 @@ class StrictGitTrailerContractTests(unittest.TestCase):
                 self.assertRegex(
                     str(error["error"]).lower(), r"duplicate|ambiguous|trailer"
                 )
+
+    def test_mixed_case_semantic_duplicates_reject_merge_before_mutation(self) -> None:
+        for key in ("Wave", "Slice", "Role"):
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                base = self.init_repo(root)
+                implementation = self.create_worktree(root, base, "implementation")
+                oracle = self.create_worktree(root, base, "oracle")
+                contract = self.commit_file(
+                    oracle,
+                    f"contracts/mixed-case-duplicate-{key.lower()}.txt",
+                    "ambiguous despite token casing\n",
+                    self.mixed_case_duplicate_message(key),
+                )
+                actual = self.trailer_lines(root, contract)
+                tokens = [line.split(":", 1)[0].lower() for line in actual]
+                self.assertEqual(tokens.count(key.lower()), 2, actual)
+                head_before = self.git(implementation, "rev-parse", "HEAD")
+                refs_before = self.git(root, "show-ref")
+
+                error = self.error_payload(self.merge(root, contract))
+
+                self.assertRegex(
+                    str(error["error"]).lower(), r"duplicate|ambiguous|trailer"
+                )
+                self.assertEqual(
+                    self.git(implementation, "rev-parse", "HEAD"), head_before
+                )
+                self.assertEqual(self.git(root, "show-ref"), refs_before)
+                self.assertFalse(
+                    Path(
+                        self.git(
+                            implementation, "rev-parse", "--git-path", "MERGE_HEAD"
+                        )
+                    ).exists()
+                )
+
+    def test_mixed_case_semantic_duplicates_reject_profile_authority(self) -> None:
+        for key in ("Wave", "Slice", "Role"):
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                base = self.init_repo(root)
+                oracle = self.create_worktree(root, base, "oracle")
+                commit = self.commit_file(
+                    oracle,
+                    f"contracts/profile-mixed-case-duplicate-{key.lower()}.txt",
+                    "ambiguous profile authority\n",
+                    self.mixed_case_duplicate_message(key),
+                )
+                actual = self.trailer_lines(root, commit)
+                tokens = [line.split(":", 1)[0].lower() for line in actual]
+                self.assertEqual(tokens.count(key.lower()), 2, actual)
+
+                error = self.error_payload(self.profile(root, base))
+
+                self.assertRegex(
+                    str(error["error"]).lower(), r"duplicate|ambiguous|trailer"
+                )
+
+    def test_single_mixed_case_variants_normalize_for_merge_and_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            base = self.init_repo(root)
+            self.create_worktree(root, base, "implementation")
+            oracle = self.create_worktree(root, base, "oracle")
+            contract = self.commit_file(
+                oracle,
+                "contracts/single-mixed-case-variants.txt",
+                "case-insensitive workflow metadata\n",
+                "single semantic trailer per workflow key\n\n"
+                f"wAvE: {self.wave_id}\n"
+                "sLiCe: normalized-case\n"
+                "rOlE: oracle",
+            )
+            self.assertEqual(
+                self.trailer_lines(root, contract),
+                [
+                    f"wAvE: {self.wave_id}",
+                    "sLiCe: normalized-case",
+                    "rOlE: oracle",
+                ],
+            )
+
+            merged = self.success_payload(self.merge(root, contract))
+            report = self.success_payload(self.profile(root, base))
+
+            self.assertEqual(merged["slice"], "normalized-case")
+            attempt = report["slices"]["normalized-case"]["attempts"][0]
+            self.assertEqual(attempt["oracle_sha"], contract)
+            self.assertEqual(attempt["contract_merge_sha"], merged["merge_sha"])
 
 
 if __name__ == "__main__":

@@ -264,7 +264,7 @@ class V119CoreContractTests(unittest.TestCase):
         self.assertEqual(self.git(implementation_path, "status", "--porcelain"), "?? uncommitted")
 
         contract = self.commit_file(
-            oracle_path, "public/interface.py", "CONTRACT = True\n", "contract\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n"
+            oracle_path, "public/interface.py", "CONTRACT = True\n", "contract\n\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n"
         )
         merge_error = self.error_payload(self.cli(
             self.root, "contract", "merge", "--root", str(self.root), "--task-id",
@@ -284,7 +284,7 @@ class V119CoreContractTests(unittest.TestCase):
             self.root,
             "unrelated/contract.py",
             "VALID_TRAILERS_ARE_NOT_PROVENANCE = True\n",
-            "unrelated commit\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n",
+            "unrelated commit\n\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n",
         )
 
         result = self.cli(
@@ -307,7 +307,7 @@ class V119CoreContractTests(unittest.TestCase):
             oracle_path,
             "shared/guarded_api.py",
             "GUARDED = True\n",
-            "guarded contract\nWave: wave-a\nSlice: live-branch-guard\nRole: oracle\n",
+            "guarded contract\n\nWave: wave-a\nSlice: live-branch-guard\nRole: oracle\n",
         )
 
         if mode == "unrelated":
@@ -360,7 +360,7 @@ class V119CoreContractTests(unittest.TestCase):
         self.create_worktree(self.root, "implementation")
         oracle_path = Path(str(self.create_worktree(self.root, "oracle")["worktree"]))
         contract = self.commit_file(
-            oracle_path, "shared/public_api.py", "VALUE = 1\n", "publish contract\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n", "2025-01-01T00:01:00+0000"
+            oracle_path, "shared/public_api.py", "VALUE = 1\n", "publish contract\n\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n", "2025-01-01T00:01:00+0000"
         )
         merged = self.payload(self.cli(
             self.root, "contract", "merge", "--root", str(self.root), "--task-id",
@@ -387,7 +387,7 @@ class V119CoreContractTests(unittest.TestCase):
         oracle_path = Path(str(oracle["worktree"]))
         self.commit_file(implementation_path, "shared/conflict.txt", "implementation\n", "implementation base")
         contract = self.commit_file(
-            oracle_path, "shared/conflict.txt", "oracle\n", "conflicting contract\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n"
+            oracle_path, "shared/conflict.txt", "oracle\n", "conflicting contract\n\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n"
         )
         result = self.cli(
             self.root, "contract", "merge", "--root", str(self.root), "--task-id",
@@ -420,7 +420,7 @@ class V119CoreContractTests(unittest.TestCase):
             oracle_path,
             "shared/conflict.txt",
             "oracle\n",
-            "contract edit\nWave: wave-a\nSlice: modify-conflict\nRole: oracle\n",
+            "contract edit\n\nWave: wave-a\nSlice: modify-conflict\nRole: oracle\n",
         )
 
         result = self.cli(
@@ -443,7 +443,7 @@ class V119CoreContractTests(unittest.TestCase):
         oracle_path = Path(str(oracle["worktree"]))
         implementation_path = Path(str(implementation["worktree"]))
         first = self.commit_file(
-            oracle_path, "shared/api.py", "VERSION = 1\n", "first contract\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n", "2025-01-01T00:01:00+0000"
+            oracle_path, "shared/api.py", "VERSION = 1\n", "first contract\n\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n", "2025-01-01T00:01:00+0000"
         )
         self.payload(self.cli(
             self.root, "contract", "merge", "--root", str(self.root), "--task-id", self.task_id,
@@ -451,10 +451,10 @@ class V119CoreContractTests(unittest.TestCase):
             env={"GIT_AUTHOR_DATE": "2025-01-01T00:02:00+0000", "GIT_COMMITTER_DATE": "2025-01-01T00:02:00+0000"},
         ))
         self.commit_file(
-            implementation_path, "shared/impl.py", "IMPLEMENTED = 1\n", "implementation\nWave: wave-a\nSlice: core-git-tracer\nRole: implementation\n", "2025-01-01T00:03:00+0000"
+            implementation_path, "shared/impl.py", "IMPLEMENTED = 1\n", "implementation\n\nWave: wave-a\nSlice: core-git-tracer\nRole: implementation\n", "2025-01-01T00:03:00+0000"
         )
         second = self.commit_file(
-            oracle_path, "shared/api.py", "VERSION = 2\n", "corrected contract\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n", "2025-01-01T00:02:30+0000"
+            oracle_path, "shared/api.py", "VERSION = 2\n", "corrected contract\n\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n", "2025-01-01T00:02:30+0000"
         )
         self.payload(self.cli(
             self.root, "contract", "merge", "--root", str(self.root), "--task-id", self.task_id,
@@ -462,7 +462,7 @@ class V119CoreContractTests(unittest.TestCase):
             env={"GIT_AUTHOR_DATE": "2025-01-01T00:04:00+0000", "GIT_COMMITTER_DATE": "2025-01-01T00:04:00+0000"},
         ))
         self.commit_file(
-            implementation_path, "shared/impl.py", "IMPLEMENTED = 2\n", "implementation correction\nWave: wave-a\nSlice: core-git-tracer\nRole: implementation\n", "2025-01-01T00:05:00+0000"
+            implementation_path, "shared/impl.py", "IMPLEMENTED = 2\n", "implementation correction\n\nWave: wave-a\nSlice: core-git-tracer\nRole: implementation\n", "2025-01-01T00:05:00+0000"
         )
         report = self.payload(self.cli(
             self.root, "profile", "report", "--root", str(self.root), "--task-id", self.task_id,
@@ -499,7 +499,7 @@ class V119CoreContractTests(unittest.TestCase):
             oracle_path,
             "contracts/first.txt",
             "first\n",
-            "first ready\nWave: wave-a\nSlice: first\nRole: oracle\n",
+            "first ready\n\nWave: wave-a\nSlice: first\nRole: oracle\n",
             "2025-01-01T00:01:00+0000",
         )
         self.payload(self.cli(
@@ -511,7 +511,7 @@ class V119CoreContractTests(unittest.TestCase):
             oracle_path,
             "contracts/second.txt",
             "second\n",
-            "second ready\nWave: wave-a\nSlice: second\nRole: oracle\n",
+            "second ready\n\nWave: wave-a\nSlice: second\nRole: oracle\n",
             "2025-01-01T00:03:00+0000",
         )
         self.payload(self.cli(
@@ -538,7 +538,7 @@ class V119CoreContractTests(unittest.TestCase):
         oracle_path = Path(str(self.create_worktree(self.root, "oracle")["worktree"]))
         first = self.commit_file(
             oracle_path, "contracts/api.txt", "one\n",
-            "first\nWave: wave-a\nSlice: correction\nRole: oracle\n",
+            "first\n\nWave: wave-a\nSlice: correction\nRole: oracle\n",
             "2025-01-01T00:03:00+0000",
         )
         first_merge = self.payload(self.cli(
@@ -548,7 +548,7 @@ class V119CoreContractTests(unittest.TestCase):
         ))["merge_sha"]
         second = self.commit_file(
             oracle_path, "contracts/api.txt", "two\n",
-            "correction\nWave: wave-a\nSlice: correction\nRole: oracle\n",
+            "correction\n\nWave: wave-a\nSlice: correction\nRole: oracle\n",
             "2025-01-01T00:02:00+0000",
         )
         second_merge = self.payload(self.cli(
@@ -560,7 +560,7 @@ class V119CoreContractTests(unittest.TestCase):
             implementation_path,
             "src/correction.txt",
             "implemented despite skewed clock\n",
-            "implementation\nWave: wave-a\nSlice: correction\nRole: implementation\n",
+            "implementation\n\nWave: wave-a\nSlice: correction\nRole: implementation\n",
             "2025-01-01T00:00:30+0000",
         )
         report = self.payload(self.cli(
@@ -602,13 +602,13 @@ class V119CoreContractTests(unittest.TestCase):
         oracle_path = Path(str(oracle["worktree"]))
         implementation_path = Path(str(implementation["worktree"]))
         contract = self.commit_file(
-            oracle_path, "src/shared.py", "PUBLIC = 1\n", "contract\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n"
+            oracle_path, "src/shared.py", "PUBLIC = 1\n", "contract\n\nWave: wave-a\nSlice: core-git-tracer\nRole: oracle\n"
         )
         self.payload(self.cli(
             self.root, "contract", "merge", "--root", str(self.root), "--task-id", self.task_id,
             "--wave-id", self.wave_id, "--contract-sha", contract,
         ))
-        self.commit_file(implementation_path, "src/shared.py", "PUBLIC = 2\nPRIVATE = 3\n", "implementation\nWave: wave-a\nSlice: core-git-tracer\nRole: implementation\n")
+        self.commit_file(implementation_path, "src/shared.py", "PUBLIC = 2\nPRIVATE = 3\n", "implementation\n\nWave: wave-a\nSlice: core-git-tracer\nRole: implementation\n")
         (implementation_path / "dirty.txt").write_text("not committed\n", encoding="utf-8")
         status = self.payload(self.cli(
             self.root, "worktree", "status", "--root", str(self.root), "--task-id", self.task_id,

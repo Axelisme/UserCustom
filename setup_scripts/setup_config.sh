@@ -89,8 +89,12 @@ replace_orchestrate_destination() {
 }
 
 replace_current_orchestrate_destinations() {
-  replace_orchestrate_destination "$UserCustom/home/.codex/skills/orchestrate" "$HOME/.codex/skills/orchestrate"
-  replace_orchestrate_destination "$UserCustom/home/.pi/agent/skills/orchestrate" "$HOME/.pi/agent/skills/orchestrate"
+  local skill layout
+  for layout in .codex/skills .pi/agent/skills; do
+    for skill in orchestrate code-review dev-flow planning-with-files to-spec to-tickets; do
+      replace_orchestrate_destination "$UserCustom/home/$layout/$skill" "$HOME/$layout/$skill"
+    done
+  done
   replace_orchestrate_destination "$UserCustom/home/.claude/skills/orchestrate" "$HOME/.claude/skills/orchestrate"
   replace_orchestrate_destination "$UserCustom/home/.codex/agents/wave-oracle.toml" "$HOME/.codex/agents/wave-oracle.toml"
   replace_orchestrate_destination "$UserCustom/home/.codex/agents/wave-implementer.toml" "$HOME/.codex/agents/wave-implementer.toml"
@@ -127,6 +131,22 @@ backup_cp "$UserCustom/home/.local/include" "$HOME/.local/include"
 
 replace_current_orchestrate_destinations
 
+validate_orchestrate_skill_destinations() {
+  local layout skill source destination
+  for layout in .codex/skills .pi/agent/skills; do
+    for skill in orchestrate code-review dev-flow planning-with-files to-spec to-tickets; do
+      source="$UserCustom/home/$layout/$skill"
+      destination="$HOME/$layout/$skill"
+      [ -d "$source" ] || continue
+      if [ ! -f "$source/SKILL.md" ] || [ ! -f "$destination/SKILL.md" ] \
+        || ! orchestrate_destination_is_current "$source" "$destination"; then
+        echo "error: unusable shipped v119 skill destination: $destination" >&2
+        return 1
+      fi
+    done
+  done
+}
+
 validate_orchestrate_profile_destinations() {
   local path
   for path in \
@@ -146,6 +166,7 @@ validate_orchestrate_profile_destinations() {
 }
 
 # Retire the old identities only after every source tree has installed successfully and
-# every replacement destination resolves to a usable regular profile file.
+# every replacement destination resolves to a usable regular profile file or skill.
+validate_orchestrate_skill_destinations
 validate_orchestrate_profile_destinations
 remove_obsolete_orchestrate_profiles

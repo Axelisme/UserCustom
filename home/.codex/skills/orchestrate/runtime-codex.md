@@ -32,6 +32,10 @@ cwd, frozen base or subject SHA, write scope, pre-existing dirt, required eviden
 conditions. Workers do not create child workers or claim repository authority. Root proves
 clean Git state before consuming a handoff.
 
+## Blocked checkpoint contract
+
+If Implementation is blocked by a contradictory Contract, it creates a clean Git checkpoint commit carrying `Wave: <wave-id>`, `Slice: <slice-id>`, and `Role: implementation-checkpoint`. Terminal blocked output/hold includes the concrete counterexample and exact checkpoint SHA; ready and terminal contracts remain unchanged.
+
 ## Acceptance
 
 Dev-flow runs simplify, canonical tests, and one clean-detached exact-SHA code-review. A

@@ -27,5 +27,7 @@ Implementation-ready commit with trailers `Wave: <wave-id>`, `Slice: <slice-id>`
 `Role: implementation`. Before handoff, verify a clean tree and send one terminal
 `slice-ready` containing `Slice: <slice-id>` and the full exact `SHA: <commit-sha>`;
 immediately end this turn. Root owns dependency placement and Contract merges. A
-contradictory Contract gets a clean checkpoint and a native hold/message with a concrete
-counterexample, never a weakened acceptance surface.
+contradictory Contract is blocked until resolved; create a clean Git checkpoint commit
+carrying `Wave: <wave-id>`, `Slice: <slice-id>`, and `Role: implementation-checkpoint`.
+Terminal blocked output/hold includes the concrete counterexample and exact checkpoint SHA;
+never weaken the acceptance surface.

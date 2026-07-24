@@ -162,8 +162,18 @@ def _commit_info(root: Path, sha: str) -> dict[str, Any]:
     return {"sha": fields[0], "timestamp": int(fields[1]), "wave": trailers.get("Wave", ""), "slice": trailers.get("Slice", ""), "role": trailers.get("Role", ""), "subject": fields[2].strip() if len(fields) > 2 else ""}
 
 
-def _numstat(root: Path, commit: str) -> list[tuple[str, int, int]]:
-    output = run_git(root, "diff", "--numstat", f"{commit}^", commit).stdout
+def _range_numstat(
+    root: Path, start: str | None, end: str
+) -> list[tuple[str, int, int]]:
+    """Return the net numstat for one topology range.
+
+    Ready trailers identify boundaries, not the only commits to count.  Using a
+    range diff includes untrailed work between those boundaries and, unlike
+    summing each commit, counts a checkpoint and its eventual ready commit only
+    once when the ready endpoint exists.
+    """
+    revisions = [end] if start is None else [start, end]
+    output = run_git(root, "diff", "--numstat", *revisions).stdout
     result: list[tuple[str, int, int]] = []
     for line in output.splitlines():
         parts = line.split("\t", 2)
@@ -213,11 +223,6 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         ):
             infos.append(info)
 
-    stats_by_sha = {
-        info["sha"]: _numstat(root, info["sha"])
-        for info in infos
-        if info["role"] in {"oracle", "implementation"}
-    }
     warnings: list[str] = []
 
     def interval(
@@ -284,37 +289,63 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         merges = [info for _, info in merge_records]
         implementations = [info for _, info in implementation_records]
 
-        oracle_stats = [
-            item for oracle in oracles for item in stats_by_sha.get(oracle["sha"], [])
-        ]
+        # Contract statistics are the complete ranges from the preceding
+        # Oracle-ready boundary (or the report base) to each Oracle-ready
+        # commit.  This includes untrailed Contract drafts.
+        contract_stats: list[tuple[str, int, int]] = []
+        previous_oracle_sha = base
+        for oracle in oracles:
+            contract_stats.extend(_range_numstat(root, previous_oracle_sha, oracle["sha"]))
+            previous_oracle_sha = oracle["sha"]
         entry["contract_numstat"] = {
-            "files": len(oracle_stats),
-            "insertions": sum(item[1] for item in oracle_stats),
-            "deletions": sum(item[2] for item in oracle_stats),
+            "files": len(contract_stats),
+            "insertions": sum(item[1] for item in contract_stats),
+            "deletions": sum(item[2] for item in contract_stats),
         }
-        implementation_stats = [
-            item for impl in implementations for item in stats_by_sha.get(impl["sha"], [])
-        ]
-        if implementations:
+
+        # Each attempt owns the implementation topology after its Contract
+        # merge and before the next merge.  A ready Implementation is the
+        # endpoint; otherwise the latest clean checkpoint is the endpoint.
+        # Thus a checkpoint before readiness is folded into the eventual ready
+        # range rather than counted a second time.
+        implementation_by_merge: dict[int, dict[str, Any]] = {}
+        implementation_endpoints: dict[int, dict[str, Any]] = {}
+        for merge_index, (merge_position, _merge) in enumerate(merge_records):
+            next_merge_position = (
+                merge_records[merge_index + 1][0]
+                if merge_index + 1 < len(merge_records)
+                else len(infos)
+            )
+            ready_candidates = [
+                (position, implementation)
+                for position, implementation in implementation_records
+                if merge_position < position < next_merge_position
+            ]
+            if ready_candidates:
+                position, implementation = ready_candidates[-1]
+                implementation_by_merge[merge_index] = implementation
+                implementation_endpoints[merge_index] = implementation
+                continue
+            checkpoint_candidates = [
+                (position, checkpoint)
+                for position, checkpoint in enumerate(infos)
+                if merge_position < position < next_merge_position
+                and checkpoint["role"] == "implementation-checkpoint"
+            ]
+            if checkpoint_candidates:
+                _position, checkpoint = checkpoint_candidates[-1]
+                implementation_endpoints[merge_index] = checkpoint
+
+        implementation_stats: list[tuple[str, int, int]] = []
+        for merge_index, endpoint in implementation_endpoints.items():
+            merge_sha = merge_records[merge_index][1]["sha"]
+            implementation_stats.extend(_range_numstat(root, merge_sha, endpoint["sha"]))
+        if implementation_stats:
             entry["implementation_numstat"] = {
                 "files": len({item[0] for item in implementation_stats}),
                 "insertions": sum(item[1] for item in implementation_stats),
                 "deletions": sum(item[2] for item in implementation_stats),
             }
-
-        # Attach each Implementation to the latest Contract merge that
-        # precedes it in the topology.  This deliberately does not use commit
-        # timestamps: corrected attempts may have skewed clocks.
-        implementation_by_merge: dict[int, dict[str, Any]] = {}
-        merge_cursor = 0
-        for implementation_position, implementation in implementation_records:
-            while (
-                merge_cursor + 1 < len(merge_records)
-                and merge_records[merge_cursor + 1][0] < implementation_position
-            ):
-                merge_cursor += 1
-            if merge_records and merge_records[merge_cursor][0] < implementation_position:
-                implementation_by_merge[merge_cursor] = implementation
 
         attempts: list[dict[str, Any]] = []
         for index, oracle in enumerate(oracles):
@@ -355,12 +386,12 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         if entry.get("checkpoints"):
             entry["checkpoints"] = [checkpoint["sha"] for checkpoint in entry["checkpoints"]]
 
-    wave_contract_stats = [
-        item
-        for info in infos
-        if info["role"] == "oracle"
-        for item in stats_by_sha.get(info["sha"], [])
-    ]
+    wave_contract_stats: list[tuple[str, int, int]] = []
+    previous_oracle_sha = base
+    for info in infos:
+        if info["role"] == "oracle":
+            wave_contract_stats.extend(_range_numstat(root, previous_oracle_sha, info["sha"]))
+            previous_oracle_sha = info["sha"]
     wave_impl_stats = {"files": 0, "insertions": 0, "deletions": 0}
     for entry in slices.values():
         current = entry["implementation_numstat"]

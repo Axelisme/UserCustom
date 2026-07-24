@@ -63,6 +63,7 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
         subject: str,
         date: str,
         role: str | None = None,
+        slice_id: str | None = None,
     ) -> str:
         target = worktree / relative
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -72,7 +73,7 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
         if role is not None:
             message += (
                 f"\n\nWave: {self.wave_id}\n"
-                f"Slice: {self.slice_id}\n"
+                f"Slice: {slice_id or self.slice_id}\n"
                 f"Role: {role}"
             )
         self.git(
@@ -323,6 +324,190 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
                 report["wave"]["implementation_numstat"],
                 slice_report["implementation_numstat"],
             )
+
+    def test_report_isolates_ranges_across_slices_in_one_wave(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary)
+            self.git(repo, "init", "-q", "-b", "main")
+            self.git(repo, "config", "user.name", "Multi-Slice Contract Test")
+            self.git(repo, "config", "user.email", "multi-slice@example.test")
+            (repo / "README").write_text("base\n", encoding="utf-8")
+            self.git(repo, "add", "README")
+            self.git(
+                repo,
+                "commit",
+                "-q",
+                "-m",
+                "base",
+                env={
+                    "GIT_AUTHOR_DATE": "2025-02-01T00:00:00+0000",
+                    "GIT_COMMITTER_DATE": "2025-02-01T00:00:00+0000",
+                },
+            )
+            base = self.git(repo, "rev-parse", "HEAD")
+
+            implementation_payload = self.cli(
+                repo,
+                "worktree",
+                "create",
+                "--root",
+                str(repo),
+                "--task-id",
+                self.task_id,
+                "--wave-id",
+                self.wave_id,
+                "--role",
+                "implementation",
+                "--base",
+                base,
+            )
+            oracle_payload = self.cli(
+                repo,
+                "worktree",
+                "create",
+                "--root",
+                str(repo),
+                "--task-id",
+                self.task_id,
+                "--wave-id",
+                self.wave_id,
+                "--role",
+                "oracle",
+                "--base",
+                base,
+            )
+            implementation = Path(str(implementation_payload["worktree"]))
+            oracle = Path(str(oracle_payload["worktree"]))
+
+            # Slice A publishes a two-commit Contract range and is merged first.
+            self.commit(
+                oracle,
+                "tests/slice_a_contract.txt",
+                "A draft\n",
+                "untrailed Slice A Contract work",
+                "2025-02-01T00:01:00+0000",
+            )
+            oracle_a = self.commit(
+                oracle,
+                "tests/slice_a_contract.txt",
+                "A ready one\nA ready two\n",
+                "Slice A Contract ready",
+                "2025-02-01T00:02:00+0000",
+                "oracle",
+                slice_id="slice-a",
+            )
+            merge_a = self.merge_contract(repo, oracle_a, "2025-02-01T00:03:00+0000")
+
+            # Slice B continues the Oracle topology. Its Contract range starts at
+            # Oracle A, never at the report base, and is merged after A.
+            self.commit(
+                oracle,
+                "tests/slice_b_contract.txt",
+                "B draft\n",
+                "untrailed Slice B Contract work",
+                "2025-02-01T00:04:00+0000",
+            )
+            oracle_b = self.commit(
+                oracle,
+                "tests/slice_b_contract.txt",
+                "B ready one\nB ready two\n",
+                "Slice B Contract ready",
+                "2025-02-01T00:05:00+0000",
+                "oracle",
+                slice_id="slice-b",
+            )
+            merge_b = self.merge_contract(repo, oracle_b, "2025-02-01T00:06:00+0000")
+
+            # A deliberately has no endpoint before merge B. Only B owns the
+            # complete merge-B-to-checkpoint range, including its untrailed work.
+            self.commit(
+                implementation,
+                "src/slice_b.py",
+                "draft = True\n",
+                "untrailed Slice B Implementation work",
+                "2025-02-01T00:07:00+0000",
+            )
+            checkpoint_b = self.commit(
+                implementation,
+                "src/slice_b.py",
+                "draft = True\ncheckpoint = True\n",
+                "Slice B clean blocked checkpoint",
+                "2025-02-01T00:08:00+0000",
+                "implementation-checkpoint",
+                slice_id="slice-b",
+            )
+
+            report = self.cli(
+                repo,
+                "profile",
+                "report",
+                "--root",
+                str(repo),
+                "--task-id",
+                self.task_id,
+                "--wave-id",
+                self.wave_id,
+                "--base",
+                base,
+            )
+            self.assertEqual(report["warnings"], [])
+            slice_a = report["slices"]["slice-a"]
+            slice_b = report["slices"]["slice-b"]
+
+            self.assertEqual(
+                [
+                    (
+                        attempt["oracle_sha"],
+                        attempt["contract_merge_sha"],
+                        attempt["implementation_sha"],
+                    )
+                    for attempt in slice_a["attempts"]
+                ],
+                [(oracle_a, merge_a, None)],
+            )
+            self.assertEqual(
+                [
+                    (
+                        attempt["oracle_sha"],
+                        attempt["contract_merge_sha"],
+                        attempt["implementation_sha"],
+                    )
+                    for attempt in slice_b["attempts"]
+                ],
+                [(oracle_b, merge_b, None)],
+            )
+            contract_a = {"files": 1, "insertions": 2, "deletions": 0}
+            contract_b = {"files": 1, "insertions": 2, "deletions": 0}
+            implementation_a = {"files": 0, "insertions": 0, "deletions": 0}
+            implementation_b = {"files": 1, "insertions": 2, "deletions": 0}
+            self.assertEqual(
+                slice_b["contract_numstat"],
+                contract_b,
+                "Slice B must exclude Slice A's base-to-Oracle Contract range",
+            )
+            self.assertEqual(slice_a["contract_numstat"], contract_a)
+            self.assertEqual(
+                slice_a["implementation_numstat"],
+                implementation_a,
+                "Slice A must stop at merge B rather than claim B's checkpoint",
+            )
+            self.assertEqual(
+                slice_b["implementation_numstat"],
+                implementation_b,
+                "Slice B must own its complete merge-to-checkpoint range",
+            )
+            self.assertEqual(slice_b["checkpoints"], [checkpoint_b])
+
+            for metric in ("contract_numstat", "implementation_numstat"):
+                isolated_total = {
+                    key: slice_a[metric][key] + slice_b[metric][key]
+                    for key in ("files", "insertions", "deletions")
+                }
+                self.assertEqual(
+                    report["wave"][metric],
+                    isolated_total,
+                    f"Wave {metric} must sum isolated Slice ranges exactly once",
+                )
 
 
 class Final738ProfileTextContractTests(unittest.TestCase):

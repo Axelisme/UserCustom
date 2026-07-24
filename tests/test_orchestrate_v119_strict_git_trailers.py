@@ -194,6 +194,59 @@ class StrictGitTrailerContractTests(unittest.TestCase):
             )
             self.assertFalse(merge_head.exists())
 
+    def test_eof_labels_without_git_trailer_separator_reject_before_merge_mutation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            base = self.init_repo(root)
+            implementation = self.create_worktree(root, base, "implementation")
+            oracle = self.create_worktree(root, base, "oracle")
+            contract = self.commit_file(
+                oracle,
+                "contracts/no-separator.txt",
+                "not authoritative\n",
+                "subject\n"
+                f"Wave: {self.wave_id}\n"
+                "Slice: no-separator\n"
+                "Role: oracle",
+            )
+            self.assertEqual(self.trailer_lines(root, contract), [])
+            head_before = self.git(implementation, "rev-parse", "HEAD")
+            refs_before = self.git(root, "show-ref")
+
+            error = self.error_payload(self.merge(root, contract))
+
+            self.assertRegex(str(error["error"]).lower(), r"trailer|contract")
+            self.assertEqual(self.git(implementation, "rev-parse", "HEAD"), head_before)
+            self.assertEqual(self.git(root, "show-ref"), refs_before)
+            self.assertFalse((implementation / "contracts/no-separator.txt").exists())
+            merge_head = Path(
+                self.git(implementation, "rev-parse", "--git-path", "MERGE_HEAD")
+            )
+            self.assertFalse(merge_head.exists())
+
+    def test_profile_omits_eof_labels_without_git_trailer_separator(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            base = self.init_repo(root)
+            oracle = self.create_worktree(root, base, "oracle")
+            commit = self.commit_file(
+                oracle,
+                "contracts/profile-no-separator.txt",
+                "not a profile milestone\n",
+                "subject\n"
+                f"Wave: {self.wave_id}\n"
+                "Slice: no-separator\n"
+                "Role: oracle",
+            )
+            self.assertEqual(self.trailer_lines(root, commit), [])
+
+            report = self.success_payload(self.profile(root, base))
+
+            self.assertEqual(report["slices"], {})
+            self.assertNotIn(commit, json.dumps(report, sort_keys=True))
+
     def test_profile_ignores_body_labels_but_classifies_a_final_git_trailer_block(
         self,
     ) -> None:

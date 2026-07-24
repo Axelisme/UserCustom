@@ -34,16 +34,16 @@
       "sha256": "6dc079a53133690bd29824c3db57feff8d5a701d6571d39e81c5adfc6305685e"
     },
     "runtime-pi.md": {
-      "bytes": 2260,
+      "bytes": 2240,
       "sections": {
         "Activation and leases": "aaf688a36d895c159ab8253172598ba478a3f0c811a6df447b7eb7a218de687f",
-        "Dual-role generic pipelines and terminal handoff": "a91661f4a65df935d4cfa2441059f294f21d1f3c679d83ba685f23bb156ebeea",
+        "Dual-role generic pipelines and terminal handoff": "7126364678e725809ce6405dd417116b1f0b0628d93df36d851e6b43628332b7",
         "Milestones and flow control": "d381f9777def57e53487ae6e55c67f7bf71415c82a3a59729304ab6612e5f7c9",
         "Orchestrate \u2014 Pi runtime binding": "ae7d663ceb3f01e05adad12e2af0c6f713de4a9692a29cf6380aad10488dda75",
         "Profile routing": "413f0a7d6a376a8234b29f10908ff76f1ddbfe58f951800861b7131aef3fde9a",
         "Runtime budgets": "0ca619d7020dfade4a50800b3327f5d388d5967339833337cd7315ee54627b83"
       },
-      "sha256": "af9c9180e2ea547144f04b80f60c9b37b555d38d938e7f3760ca3724979659b8"
+      "sha256": "f661046e831fd804a20ad82a11c45a2ad52f4010f2e180b69c01ad58f5d96f93"
     },
     "scripts/_orchestrate/__init__.py": {
       "bytes": 55,

@@ -50,6 +50,7 @@ def _status(
     expected_branch: str,
     *,
     require_expected_branch: bool = False,
+    identity_label: str = "implementation worktree",
 ) -> dict[str, Any]:
     record = _record_for(root, path)
     if record is None:
@@ -60,7 +61,7 @@ def _status(
     if require_expected_branch and live_branch != expected_branch:
         rendered_live = live_branch if live_branch else "detached"
         raise OrchestrateError(
-            f"implementation worktree must be attached to exact derived branch {expected_branch}; "
+            f"{identity_label} must be attached to exact derived branch {expected_branch}; "
             f"live state is {rendered_live}"
         )
     changed = [line for line in run_git(path, "status", "--porcelain").stdout.splitlines() if line]
@@ -109,6 +110,154 @@ def command_worktree_remove(args: argparse.Namespace) -> dict[str, Any]:
         raise OrchestrateError(f"cannot remove worktree because it is not clean: {path}")
     run_git(root, "worktree", "remove", str(path))
     return {"ok": True, "operation": "worktree-remove", "task_id": args.task_id, "wave_id": args.wave_id, "role": role, "worktree": str(path), "branch": branch, "removed": True}
+
+
+def _integration_identity(args: argparse.Namespace) -> tuple[str, Path, str]:
+    task = require_identifier(str(args.task_id), label="task id")
+    root = Path(args.root).resolve()
+    branch = f"wave/{task}/integration"
+    path = managed_worktree_root(root) / f"{task}-integration"
+    return task, path, branch
+
+
+def command_integration_create(args: argparse.Namespace) -> dict[str, Any]:
+    task, path, branch = _integration_identity(args)
+    root = Path(args.root).resolve()
+    try:
+        base = exact_commit(root, str(args.base), label="base")
+    except OrchestrateError as exc:
+        raise OrchestrateError(f"invalid base: {exc}") from exc
+    if _branch_exists(root, branch) or os.path.lexists(path):
+        raise OrchestrateError(f"derived worktree path or branch already exists: {path} / {branch}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    run_git(root, "worktree", "add", "-b", branch, str(path), base)
+    evidence = _status(root, path, branch)
+    return {
+        "ok": True,
+        "operation": "integration-create",
+        "task_id": task,
+        "branch": branch,
+        "worktree": str(path),
+        "base": base,
+        "head": evidence["head"],
+        "tree": evidence["tree"],
+        "clean": evidence["clean"],
+    }
+
+
+def _integration_base_from_reflog(root: Path, branch: str) -> str | None:
+    reflog = run_git(root, "reflog", "show", "--format=%H", "--reverse", branch, check=False)
+    entries = [line for line in reflog.stdout.splitlines() if line]
+    return entries[0] if reflog.returncode == 0 and entries else None
+
+
+def _collected_integrations(root: Path, branch: str) -> list[dict[str, str]]:
+    if not _branch_exists(root, branch):
+        return []
+    base = _integration_base_from_reflog(root, branch)
+    revision = f"{base}..{branch}" if base else branch
+    raw = run_git(root, "rev-list", "--first-parent", "--reverse", revision).stdout
+    collected: list[dict[str, str]] = []
+    for sha in raw.splitlines():
+        if not sha:
+            continue
+        _commit_sha, _timestamp, _subject, trailers = _commit_metadata(root, sha)
+        if trailers.get("Role") != "collect":
+            continue
+        wave = trailers.get("Wave", "")
+        slice_id = trailers.get("Slice", "")
+        parents = run_git(root, "rev-list", "--parents", "-n", "1", sha).stdout.split()
+        implementation_sha = parents[2] if len(parents) >= 3 else ""
+        collected.append(
+            {
+                "wave": wave,
+                "slice": slice_id,
+                "collect_sha": sha,
+                "implementation_sha": implementation_sha,
+            }
+        )
+    return collected
+
+
+def command_integration_status(args: argparse.Namespace) -> dict[str, Any]:
+    task, path, branch = _integration_identity(args)
+    root = Path(args.root).resolve()
+    state = _status(root, path, branch)
+    state.update(
+        {
+            "operation": "integration-status",
+            "task_id": task,
+            "worktree": str(path),
+            "collected": _collected_integrations(root, branch),
+        }
+    )
+    return state
+
+
+def command_integration_collect(args: argparse.Namespace) -> dict[str, Any]:
+    task, path, branch = _integration_identity(args)
+    wave_id = require_identifier(str(args.wave_id), label="wave id")
+    root = Path(args.root).resolve()
+    implementation_sha = exact_commit(root, str(args.implementation_sha), label="implementation SHA")
+    _commit_sha, _timestamp, _subject, trailers = _commit_metadata(root, implementation_sha)
+    slice_id = trailers.get("Slice", "")
+    if trailers.get("Wave") != wave_id or not slice_id or trailers.get("Role") != "implementation":
+        raise OrchestrateError(
+            "implementation SHA must carry matching Wave, non-empty Slice, and Role: implementation trailers"
+        )
+    state = _status(
+        root,
+        path,
+        branch,
+        require_expected_branch=True,
+        identity_label="integration worktree",
+    )
+    if not state["exists"]:
+        raise OrchestrateError(f"managed integration worktree does not exist: {path}")
+    if not state["clean"]:
+        raise OrchestrateError(f"integration worktree must be clean: {path}")
+    if any(item.get("wave") == wave_id for item in _collected_integrations(root, branch)):
+        raise OrchestrateError(f"Wave already collected into integration branch: {wave_id}")
+    merged = run_git(path, "merge", "--no-ff", "--no-commit", implementation_sha, check=False)
+    if merged.returncode:
+        detail = merged.stderr.strip() or merged.stdout.strip() or "integration collect conflict"
+        raise OrchestrateError(f"git integration collect failed: {detail}")
+    message = f"Collect Wave {wave_id}\n\nWave: {wave_id}\nSlice: {slice_id}\nRole: collect"
+    committed = run_git(path, "commit", "-m", message, check=False)
+    if committed.returncode:
+        detail = committed.stderr.strip() or committed.stdout.strip()
+        raise OrchestrateError(f"git commit failed while recording integration collect: {detail}")
+    collect_sha = run_git(path, "rev-parse", "HEAD").stdout.strip()
+    return {
+        "ok": True,
+        "operation": "integration-collect",
+        "task_id": task,
+        "wave_id": wave_id,
+        "slice": slice_id,
+        "implementation_sha": implementation_sha,
+        "collect_sha": collect_sha,
+        "branch": branch,
+        "worktree": str(path),
+    }
+
+
+def command_integration_remove(args: argparse.Namespace) -> dict[str, Any]:
+    task, path, branch = _integration_identity(args)
+    root = Path(args.root).resolve()
+    state = _status(root, path, branch)
+    if not state["exists"]:
+        raise OrchestrateError(f"managed integration worktree does not exist: {path}")
+    if not state["clean"]:
+        raise OrchestrateError(f"cannot remove worktree because it is not clean: {path}")
+    run_git(root, "worktree", "remove", str(path))
+    return {
+        "ok": True,
+        "operation": "integration-remove",
+        "task_id": task,
+        "worktree": str(path),
+        "branch": branch,
+        "removed": True,
+    }
 
 
 _WORKFLOW_TRAILER_KEYS = frozenset({"Wave", "Slice", "Role"})

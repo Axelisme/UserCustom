@@ -17,6 +17,10 @@ from .release import (
 )
 from .v119_core import (
     command_contract_merge,
+    command_integration_collect,
+    command_integration_create,
+    command_integration_remove,
+    command_integration_status,
     command_profile_report,
     command_worktree_create,
     command_worktree_remove,
@@ -57,6 +61,24 @@ def build_parser() -> argparse.ArgumentParser:
     merge.add_argument("--wave-id", required=True)
     merge.add_argument("--contract-sha", required=True)
     merge.set_defaults(handler=command_contract_merge)
+
+    integration = commands.add_parser("integration", help="v119 task integration worktree lifecycle")
+    integration_commands = integration.add_subparsers(dest="integration_command", required=True, parser_class=JsonArgumentParser)
+    for operation, handler in (
+        ("create", command_integration_create),
+        ("status", command_integration_status),
+        ("collect", command_integration_collect),
+        ("remove", command_integration_remove),
+    ):
+        operation_parser = integration_commands.add_parser(operation)
+        add_root(operation_parser)
+        operation_parser.add_argument("--task-id", required=True)
+        if operation == "create":
+            operation_parser.add_argument("--base", required=True)
+        elif operation == "collect":
+            operation_parser.add_argument("--wave-id", required=True)
+            operation_parser.add_argument("--implementation-sha", required=True)
+        operation_parser.set_defaults(handler=handler)
 
     profile = commands.add_parser("profile", help="read-only Git profile projections")
     profile_commands = profile.add_subparsers(dest="profile_command", required=True, parser_class=JsonArgumentParser)

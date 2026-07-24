@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -29,6 +30,7 @@ class OrchestrateV119ReleaseContractTests(unittest.TestCase):
     retained_commands = {
         "worktree",
         "contract",
+        "integration",
         "profile",
         "doctor",
         "diff",
@@ -189,16 +191,21 @@ class OrchestrateV119ReleaseContractTests(unittest.TestCase):
 
     def test_codex_and_pi_skill_packages_keep_shared_document_parity(self) -> None:
         def files(skill: Path) -> set[str]:
-            return {
-                path.relative_to(skill).as_posix()
-                for path in skill.rglob("*")
-                if (
-                    path.is_file()
-                    and "manifests" not in path.relative_to(skill).parts
-                    and "__pycache__" not in path.relative_to(skill).parts
-                    and path.suffix != ".pyc"
-                )
-            }
+            retained: set[str] = set()
+            for directory, names, filenames in os.walk(skill, followlinks=True):
+                root = Path(directory)
+                relative_root = root.relative_to(skill)
+                if "manifests" in relative_root.parts or "__pycache__" in relative_root.parts:
+                    names[:] = []
+                    continue
+                names[:] = [name for name in names if name not in {"manifests", "__pycache__"}]
+                for filename in filenames:
+                    path = root / filename
+                    relative = path.relative_to(skill)
+                    if path.suffix == ".pyc":
+                        continue
+                    retained.add(relative.as_posix())
+            return retained
 
         self.assertEqual(files(CODEX_SKILL), files(PI_SKILL))
         for relative in sorted(files(CODEX_SKILL)):

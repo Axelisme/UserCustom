@@ -17,7 +17,7 @@ The orchestrate station publishes an exact Implementation candidate. Acceptance 
 
 ## v119 acceptance order
 
-For every candidate, run **simplify**, then the **canonical tests**, then one **clean-detached code-review** of the **post-simplify exact SHA**; never review a moving worktree or an earlier pre-simplify commit. At acceptance entry the exit condition is frozen.
+At an integration milestone candidate, run **simplify**, then the **canonical tests**, then one **clean-detached code-review** of the **post-simplify exact SHA**; never review a moving worktree or an earlier pre-simplify commit. At acceptance entry the exit condition is frozen. Between milestones each Wave passes only machine gates before collect; the expensive review context is spent once on the accumulated diff, never per Wave.
 
 Blocking is closed to spec violation, data loss, security, or reproducible behavior failure within the frozen spec's usage envelope. The final review must not expand the frozen spec; a finding without a contract basis in the frozen spec is backlog, never a blocker. Robustness, quality, and out-of-envelope findings go through `candidate-backlog` and do not block landing. Do not implement features the frozen spec does not require.
 

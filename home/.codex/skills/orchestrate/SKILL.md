@@ -35,6 +35,8 @@ Implementation may overlap Oracle production paths and fills hidden behavior aft
 the exact Contract SHA with no fast-forward. `slice-ready` is the one terminal handoff and
 carries Slice plus exact SHA; the role ends its turn immediately afterward.
 
+A Wave collects into the task integration branch after its machine gates (contract suite,
+focused tests, lint/format/type) are green; the next Wave bases on the integration tip.
 Root decides dependency depth and placement. Pi maps the roles to generic pipelines: Oracle
 starts at C0 and Implementation starts lazily at its first real task. Codex maps them to two
 persistent native role agents using native messaging and continuation. Neither binding
@@ -42,21 +44,27 @@ creates a simulated queue; task plan plus Git recover position after restart.
 
 ## CLI surface
 
-The JSON-only workflow commands are `worktree create|status|remove`, `contract merge`, and
-`profile report`. Retained administration is `doctor`, `diff`, `pin status|set|migrate`, and
-`release`. Creation refuses an existing path or branch. Removal requires a clean worktree
-and leaves its branch. Contract merge leaves ordinary conflicts visible. Profile statistics
-use Git committer timestamps and numstat only; non-monotonic timestamps are warnings.
+The JSON-only workflow commands are `worktree create|status|remove`, `contract merge`,
+`integration create|status|collect|remove`, and `profile report`. Retained administration is
+`doctor`, `diff`, `pin status|set|migrate`, and `release`. Creation refuses an existing path
+or branch. Removal requires a clean worktree and leaves its branch. Contract merge leaves
+ordinary conflicts visible. Integration collect merges one exact implementation SHA into the
+task integration branch with `Role: collect` trailers; conflicts stay visible; the collected
+list is a read-only Git projection. Profile statistics use Git committer timestamps and
+numstat only; non-monotonic timestamps are warnings.
 
 ## Acceptance and migration
 
-Dev-flow acceptance is simplify, canonical tests, then one clean-detached exact-SHA
-code-review. A behavior correction returns through Oracle and Implementation in the same
-Wave; a quality correction stays with Implementation. Landing is repo policy and current
-user authority, outside this CLI. For an older pin, `pin migrate` preserves the existing
-JSON shape and reports manual v118-to-v119 requirements: stop old dispatch, preserve
-read-only evidence, select an exact base, create a new Wave, and continue as v119 without
-automatic conversion.
+Simplify, canonical full suite, and the one clean-detached two-axis review run at an
+integration milestone — by default once per task, before landing, over the whole
+base..integration-tip diff. Root may insert an earlier milestone after a high-risk Wave (new
+seam, cross-authority change); never per-Wave formal review by default. A behavior
+correction returns through Oracle and Implementation in the same Wave; a quality correction
+stays with Implementation. Landing publishes the integration tip to the persistence branch
+under current user authority, once per task. For an older pin, `pin migrate` preserves the
+existing JSON shape and reports manual v118-to-v119 requirements: stop old dispatch,
+preserve read-only evidence, select an exact base, create a new Wave, and continue as v119
+without automatic conversion.
 
 ## Runtime bindings
 

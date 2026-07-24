@@ -380,5 +380,83 @@ class ProfileInterleavedSliceContractTests(ProfileReportContractHarness):
             self.assertEqual(slice_b[-1]["implementation_sha"], implementation_b)
 
 
+class ProfileUnattributedEndpointContractTests(ProfileReportContractHarness):
+    """A handoff recorded before any Contract merge must not vanish silently."""
+
+    def test_endpoint_before_every_contract_merge_is_reported_as_unattributed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary)
+            self.git(repo, "init", "-q", "-b", "main")
+            self.git(repo, "config", "user.name", "Profile Contract Test")
+            self.git(repo, "config", "user.email", "profile-contract@example.test")
+            (repo / "README").write_text("base\n", encoding="utf-8")
+            self.git(repo, "add", "README")
+            self.git(
+                repo,
+                "commit",
+                "-q",
+                "-m",
+                "base",
+                env={
+                    "GIT_AUTHOR_DATE": "2025-01-01T00:00:00+0000",
+                    "GIT_COMMITTER_DATE": "2025-01-01T00:00:00+0000",
+                },
+            )
+            base = self.git(repo, "rev-parse", "HEAD")
+            worktrees = {
+                role: Path(
+                    str(
+                        self.cli(
+                            repo, "worktree", "create", "--root", str(repo),
+                            "--task-id", self.task_id, "--wave-id", self.wave_id,
+                            "--role", role, "--base", base,
+                        )["worktree"]
+                    )
+                )
+                for role in ("oracle", "implementation")
+            }
+
+            misplaced = self.commit_file(
+                worktrees["implementation"],
+                "src/early.txt",
+                "handoff before any Contract merge\n",
+                "Implementation handoff recorded too early",
+                "implementation",
+                "2025-01-01T00:01:00+0000",
+            )
+            oracle_sha = self.commit_file(
+                worktrees["oracle"],
+                "tests/contract.txt",
+                "attempt 1\n",
+                "Oracle Contract attempt 1",
+                "oracle",
+                "2025-01-01T00:02:00+0000",
+            )
+            self.cli(
+                repo, "contract", "merge", "--root", str(repo),
+                "--task-id", self.task_id, "--wave-id", self.wave_id,
+                "--contract-sha", oracle_sha,
+                env={
+                    "GIT_AUTHOR_DATE": "2025-01-01T00:03:00+0000",
+                    "GIT_COMMITTER_DATE": "2025-01-01T00:03:00+0000",
+                },
+            )
+
+            report = self.cli(
+                repo, "profile", "report", "--root", str(repo),
+                "--task-id", self.task_id, "--wave-id", self.wave_id,
+                "--base", base,
+            )
+            attempts = report["slices"][self.slice_id]["attempts"]
+            self.assertEqual(attempts[-1]["implementation_sha"], None)
+            self.assertTrue(
+                any(
+                    misplaced in warning and "unattributed" in warning
+                    for warning in report["warnings"]
+                ),
+                report["warnings"],
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

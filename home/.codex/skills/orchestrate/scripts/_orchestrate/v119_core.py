@@ -523,6 +523,19 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
             stats = _range_numstat(root, merge["sha"], latest_ready["sha"])
             slices[merge["slice"]].setdefault("_implementation_stats", []).extend(stats)
 
+    # An endpoint that precedes every Contract merge of its Slice belongs to no
+    # attempt window.  Reporting it keeps a misplaced handoff visible instead of
+    # leaving the attempt's implementation_sha silently null.
+    for slice_id, slice_endpoints in endpoints_by_slice.items():
+        slice_merges = merges_by_slice.get(slice_id, [])
+        first_merge_position = slice_merges[0][1] if slice_merges else len(infos)
+        for endpoint_position, endpoint in slice_endpoints:
+            if endpoint_position <= first_merge_position:
+                warnings.append(
+                    f"unattributed implementation endpoint {endpoint['sha']} in Slice "
+                    f"{slice_id}: it precedes every Contract merge of that Slice"
+                )
+
     # Pair attempts within each Slice as before, but consume the endpoint
     # selected by the global merge window above.
     merge_indices_by_slice: dict[str, list[int]] = {}

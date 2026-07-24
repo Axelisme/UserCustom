@@ -13,6 +13,9 @@ HOME = ROOT / "home"
 CODEX_SKILL = HOME / ".codex" / "skills" / "orchestrate"
 PI_SKILL = HOME / ".pi" / "agent" / "skills" / "orchestrate"
 CODEX_SCRIPT = CODEX_SKILL / "scripts" / "orchestrate.py"
+SHIPPED_VERSION = int(
+    re.search(r"(?m)^skill_version: (\d+)$", (CODEX_SKILL / "SKILL.md").read_text(encoding="utf-8")).group(1)
+)
 
 
 class OrchestrateV119ReleaseContractTests(unittest.TestCase):
@@ -153,16 +156,16 @@ class OrchestrateV119ReleaseContractTests(unittest.TestCase):
                 self.assertIsNotNone(oracle, f"missing wave-oracle under {profile_root}")
                 self.assertFalse(any(profile_root.glob("wave-reviewer.*")))
 
-    def test_v119_skill_manifests_and_doctors_are_current(self) -> None:
+    def test_shipped_skill_manifests_and_doctors_are_current(self) -> None:
         for skill in (CODEX_SKILL, PI_SKILL):
             with self.subTest(skill=skill):
                 skill_text = (skill / "SKILL.md").read_text(encoding="utf-8")
-                self.assertRegex(skill_text, r"(?m)^skill_version: 119$")
-                manifest_path = skill / "manifests" / "119.json"
-                self.assertTrue(manifest_path.is_file(), f"missing v119 manifest: {manifest_path}")
+                self.assertRegex(skill_text, rf"(?m)^skill_version: {SHIPPED_VERSION}$")
+                manifest_path = skill / "manifests" / f"{SHIPPED_VERSION}.json"
+                self.assertTrue(manifest_path.is_file(), f"missing manifest: {manifest_path}")
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                self.assertEqual(manifest["skill_version"], 119)
-                self.assertEqual(manifest["orchestrate_compat"], 119)
+                self.assertEqual(manifest["skill_version"], SHIPPED_VERSION)
+                self.assertEqual(manifest["orchestrate_compat"], SHIPPED_VERSION)
 
                 script = skill / "scripts" / "orchestrate.py"
                 result = subprocess.run(
@@ -175,8 +178,8 @@ class OrchestrateV119ReleaseContractTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 payload = json.loads(result.stdout)
                 self.assertTrue(payload["ok"], payload)
-                self.assertEqual(payload["skill_version"], 119)
-                self.assertEqual(payload["orchestrate_compat"], 119)
+                self.assertEqual(payload["skill_version"], SHIPPED_VERSION)
+                self.assertEqual(payload["orchestrate_compat"], SHIPPED_VERSION)
                 self.assertEqual(payload["errors"], [])
 
     def test_retained_markdown_documents_fit_the_single_read_budget(self) -> None:

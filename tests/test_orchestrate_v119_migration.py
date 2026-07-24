@@ -36,28 +36,22 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
             raise AssertionError(result.stderr)
         return result.stdout.strip()
 
-    def v119_skill_fixture(self, root: Path, release) -> Path:
+    def shipped_skill_fixture(self, root: Path, release) -> tuple[Path, int]:
         # Copy the shipped package as an installed-package-shaped fixture.  A
         # missing v118 manifest intentionally exercises the documented manual
         # migration path rather than a synthetic private helper.
         home = root / "home"
         shutil.copytree(ROOT / "home", home)
         skill = home / ".codex" / "skills" / "orchestrate"
-        skill_md = skill / "SKILL.md"
-        skill_md.write_text(
-            skill_md.read_text(encoding="utf-8").replace(
-                "skill_version: 118", "skill_version: 119", 1
-            ),
-            encoding="utf-8",
-        )
+        version = release.skill_version(skill)
         (skill / "manifests" / "118.json").unlink()
-        manifest = release.build_manifest(skill, 119)
-        (skill / "manifests" / "119.json").write_text(
+        manifest = release.build_manifest(skill, version)
+        (skill / "manifests" / f"{version}.json").write_text(
             json.dumps(manifest), encoding="utf-8"
         )
-        return skill
+        return skill, version
 
-    def test_pin_migrate_preserves_shape_and_emits_manual_v119_requirements(self) -> None:
+    def test_pin_migrate_preserves_shape_and_emits_every_crossed_boundary(self) -> None:
         release = load_release_module()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -65,7 +59,7 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
             self.git(root, "config", "user.name", "Oracle Test")
             self.git(root, "config", "user.email", "oracle@example.test")
             self.git(root, "commit", "--allow-empty", "-qm", "base")
-            skill = self.v119_skill_fixture(root, release)
+            skill, version = self.shipped_skill_fixture(root, release)
 
             # Legacy evidence and state are read-only migration input.  The
             # migration must not attempt to convert or delete either asset.
@@ -105,19 +99,32 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
             )
             self.assertEqual(result["operation"], "pin-migrate")
             self.assertEqual(result["from_version"], 118)
-            self.assertEqual(result["to_version"], 119)
+            self.assertEqual(result["to_version"], version)
             self.assertIsNone(result["delta"])
-            self.assertIsNotNone(result["migration_requirements"])
-            requirements = result["migration_requirements"]
-            self.assertEqual(requirements["reason"], "v118-to-v119-manual-restart")
-            self.assertTrue(requirements["stop_legacy_dispatch"])
-            self.assertTrue(requirements["preserve_legacy_evidence"])
-            self.assertTrue(requirements["select_exact_base"])
-            self.assertTrue(requirements["create_new_wave"])
-            self.assertTrue(requirements["continue_as_v119_wave"])
-            self.assertFalse(requirements["automatic_conversion"])
+            requirements = {block["reason"]: block for block in result["migration_requirements"]}
+            restart = requirements["v118-to-v119-manual-restart"]
+            self.assertTrue(restart["stop_legacy_dispatch"])
+            self.assertTrue(restart["preserve_legacy_evidence"])
+            self.assertTrue(restart["select_exact_base"])
+            self.assertTrue(restart["create_new_wave"])
+            self.assertTrue(restart["continue_as_v119_wave"])
+            self.assertFalse(restart["automatic_conversion"])
+            # Crossing v120 must also publish what the unchanged Git model does not imply.
+            adoption = requirements["v119-to-v120-workflow-adoption"]
+            for surface in (
+                "adopt_integration_cli",
+                "record_integration_base_ref",
+                "machine_gates_then_collect_per_wave",
+                "milestone_acceptance_replaces_per_wave_review",
+                "correction_after_collect_is_a_new_wave",
+                "declare_runtime_pipelines_before_enqueue",
+                "empty_handoff_after_contract_merge",
+                "blocked_reason_enum_replaces_checkpoint",
+            ):
+                self.assertTrue(adoption[surface], surface)
+            self.assertFalse(adoption["automatic_conversion"])
             self.assertEqual(
-                json.loads(pin.read_text(encoding="utf-8"))["skill_version"], 119
+                json.loads(pin.read_text(encoding="utf-8"))["skill_version"], version
             )
             self.assertEqual(evidence.read_text(encoding="utf-8"), '{"legacy": true}\n')
             self.assertEqual(legacy_state.read_text(encoding="utf-8"), '{"lane": "old"}\n')
@@ -151,11 +158,11 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
             self.git(root, "config", "user.name", "Oracle Test")
             self.git(root, "config", "user.email", "oracle@example.test")
             self.git(root, "commit", "--allow-empty", "-qm", "base")
-            skill = self.v119_skill_fixture(root, release)
+            skill, version = self.shipped_skill_fixture(root, release)
             pin = root / ".agent_state" / "orchestrate" / "version-pin.json"
             pin.parent.mkdir(parents=True)
             pin.write_text(
-                json.dumps({"skill_version": 119, "orchestrate_compat": 119}),
+                json.dumps({"skill_version": version, "orchestrate_compat": version}),
                 encoding="utf-8",
             )
 
@@ -168,7 +175,7 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
                     "ok": True,
                     "operation": "pin-migrate",
                     "recovered": "already-current",
-                    "pinned_version": 119,
+                    "pinned_version": version,
                 },
             )
 

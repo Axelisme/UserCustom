@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import re
 import sys
 import tempfile
 import unittest
@@ -10,6 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 HOME = ROOT / "home"
 CODEX_SKILL = HOME / ".codex" / "skills" / "orchestrate"
 PI_SKILL = HOME / ".pi" / "agent" / "skills" / "orchestrate"
+SHIPPED_VERSION = int(
+    re.search(r"(?m)^skill_version: (\d+)$", (CODEX_SKILL / "SKILL.md").read_text(encoding="utf-8")).group(1)
+)
 
 
 def load_release_module():
@@ -33,7 +37,7 @@ class PiRuntimeParityTests(unittest.TestCase):
 
     def test_manifest_inventory_covers_every_runtime_and_profile(self) -> None:
         for skill in (CODEX_SKILL, PI_SKILL):
-            manifest = self.release.build_manifest(skill, 119)
+            manifest = self.release.build_manifest(skill, SHIPPED_VERSION)
             self.assertTrue({"runtime-codex.md", "runtime-claude.md", "runtime-pi.md"} <= set(manifest["documents"]))
             expected = {
                 path.relative_to(HOME).as_posix()

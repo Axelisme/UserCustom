@@ -462,7 +462,7 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
             "pinned_version": old_version,
         }
     delta: dict[str, Any] | None
-    migration_requirements: dict[str, Any] | None = None
+    requirements: list[dict[str, Any]] = []
     try:
         delta = compare_manifests(
             load_manifest(skill_dir, old_version),
@@ -471,20 +471,22 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
     except OrchestrateError:
         delta = None
         current = load_manifest(skill_dir, new_version)
-        migration_requirements = {
-            "reason": "source-manifest-unavailable",
-            "must_reread": sorted(
-                name
-                for name in current["documents"]
-                if name.endswith(".md")
-            ),
-            "must_rebootstrap_profiles": sorted(current["profiles"]),
-            "must_acknowledge_standing_orders": [
-                name
-                for name in sorted(current["profiles"])
-                if name.endswith("/APPEND_SYSTEM.md") or name.endswith("/AGENTS.md")
-            ],
-        }
+        requirements.append(
+            {
+                "reason": "source-manifest-unavailable",
+                "must_reread": sorted(
+                    name
+                    for name in current["documents"]
+                    if name.endswith(".md")
+                ),
+                "must_rebootstrap_profiles": sorted(current["profiles"]),
+                "must_acknowledge_standing_orders": [
+                    name
+                    for name in sorted(current["profiles"])
+                    if name.endswith("/APPEND_SYSTEM.md") or name.endswith("/AGENTS.md")
+                ],
+            }
+        )
 
     # v119 is a breaking workflow rewrite.  Keep the pin operation and its
     # response shape, but never translate v118 workflow state into the new
@@ -492,15 +494,35 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
     # as a new Wave.  This requirement is additive to a manifest delta and is
     # also emitted when an old manifest is unavailable.
     if old_version < 119 <= new_version:
-        migration_requirements = {
-            "reason": "v118-to-v119-manual-restart",
-            "stop_legacy_dispatch": True,
-            "preserve_legacy_evidence": True,
-            "select_exact_base": True,
-            "create_new_wave": True,
-            "continue_as_v119_wave": True,
-            "automatic_conversion": False,
-        }
+        requirements.append(
+            {
+                "reason": "v118-to-v119-manual-restart",
+                "stop_legacy_dispatch": True,
+                "preserve_legacy_evidence": True,
+                "select_exact_base": True,
+                "create_new_wave": True,
+                "continue_as_v119_wave": True,
+                "automatic_conversion": False,
+            }
+        )
+    # v120 keeps the v119 Git model but moves where work lands and where the
+    # expensive gates run, so a task pinned to v119 must adopt the new surfaces
+    # deliberately rather than infer them from an unchanged manifest.
+    if old_version < 120 <= new_version:
+        requirements.append(
+            {
+                "reason": "v119-to-v120-workflow-adoption",
+                "adopt_integration_cli": True,
+                "record_integration_base_ref": True,
+                "machine_gates_then_collect_per_wave": True,
+                "milestone_acceptance_replaces_per_wave_review": True,
+                "correction_after_collect_is_a_new_wave": True,
+                "declare_runtime_pipelines_before_enqueue": True,
+                "empty_handoff_after_contract_merge": True,
+                "blocked_reason_enum_replaces_checkpoint": True,
+                "automatic_conversion": False,
+            }
+        )
     write_version_pin(root, new_version, result["orchestrate_compat"])
     return {
         "ok": True,
@@ -508,7 +530,7 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
         "from_version": old_version,
         "to_version": new_version,
         "delta": delta,
-        "migration_requirements": migration_requirements,
+        "migration_requirements": requirements or None,
         "delta_note": (
             None
             if delta is not None

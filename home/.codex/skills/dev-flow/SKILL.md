@@ -1,6 +1,6 @@
 ---
 name: dev-flow
-description: Route a heavy effort through frozen planning, v119 orchestrate implementation, and evidence-based acceptance.
+description: Route a heavy effort through frozen planning, v120 orchestrate implementation, and evidence-based acceptance.
 ---
 
 # Dev Flow
@@ -15,7 +15,7 @@ wayfinder → to-spec → to-tickets → orchestrate → acceptance → landing 
 
 The orchestrate station publishes an exact Implementation candidate. Acceptance does not create another workflow ledger and does not replace Git as durable truth. Workflow evolution reads [design principles](references/design-principles.md).
 
-## v119 acceptance order
+## v120 acceptance order
 
 At an integration milestone candidate, run **simplify**, then the **canonical tests**, then one **clean-detached code-review** of the **post-simplify exact SHA**; never review a moving worktree or an earlier pre-simplify commit. The candidate is the integration tip, and simplify and the review both work over the committed `base..integration-tip` range. At acceptance entry the exit condition is frozen. Between milestones each Wave passes only machine gates before collect; the expensive review context is spent once on the accumulated diff, never per Wave. Land exactly the reviewed SHA; a later commit reopens the gate.
 
@@ -36,7 +36,8 @@ for each review finding:
            format/typo ∧ AST + collected node
            IDs unchanged)                       → Root applies the reviewer patch, merges
                                                   the Contract, records an explicit empty
-                                                  Implementation handoff, reruns only
+                                                  Implementation handoff on that branch after
+                                                  the merge, reruns only
                                                   collection, lint, and directly affected
                                                   tests; consumes no correction budget
   bounded (≤~30 lines local logic ∧ known seam

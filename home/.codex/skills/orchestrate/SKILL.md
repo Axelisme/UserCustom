@@ -1,10 +1,10 @@
 ---
 name: orchestrate
-description: Minimal Git-backed Oracle and Implementation workflow for v119.
-skill_version: 119
+description: Minimal Git-backed Oracle and Implementation workflow for v120.
+skill_version: 120
 ---
 
-# Orchestrate v119
+# Orchestrate v120
 
 Orchestrate provides one small workflow surface: two role worktrees, exact Contract merge,
 and a read-only Git profile. Git commits, refs, SHAs, trailers, and worktree state are the
@@ -50,7 +50,10 @@ ordinary conflicts visible. Integration collect merges one exact implementation 
 task integration branch with `Role: collect` trailers; conflicts stay visible; the collected
 list is a read-only projection bounded by the base ref `refs/orchestrate/<task>/integration/base`
 that `create` records, and a missing base ref fails closed. Profile statistics use Git
-committer timestamps and numstat only; non-monotonic timestamps are warnings.
+committer timestamps and numstat only; non-monotonic timestamps are warnings. An
+Implementation endpoint belongs to the attempt whose Contract merge precedes it, empty
+handoffs included; an endpoint recorded before every merge of its Slice is reported as
+unattributed rather than silently dropped.
 
 ## Acceptance and migration
 
@@ -61,9 +64,10 @@ seam, cross-authority change); never per-Wave formal review by default. A behavi
 correction returns through Oracle and Implementation in the same Wave; a quality correction
 stays with Implementation. Landing publishes the integration tip to the persistence branch
 under current user authority, once per task. For an older pin, `pin migrate` preserves the
-existing JSON shape and reports manual v118-to-v119 requirements: stop old dispatch,
-preserve read-only evidence, select an exact base, create a new Wave, and continue as v119
-without automatic conversion.
+existing JSON shape and reports the manual requirements for every boundary it crosses: from
+v118, stop old dispatch, preserve read-only evidence, select an exact base and continue as a
+new Wave; from v119, adopt the integration CLI, per-Wave machine gates, milestone acceptance,
+declared runtime pipelines, and the blocked reason enum. Nothing converts automatically.
 
 ## Runtime bindings
 

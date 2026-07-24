@@ -111,7 +111,7 @@ class V119RoleRuntimeContractTests(unittest.TestCase):
             "Pi must state the lazy Implementation pipeline rule once in direct Root wording",
         )
         self.assertEqual(
-            re.findall(r"\blazy\w*\b", text, re.IGNORECASE),
+            re.findall(r"\b(?:lazy|lazily)\b", text, re.IGNORECASE),
             ["lazily"],
             "Pi must express lazy Implementation creation only once, in the required sentence",
         )

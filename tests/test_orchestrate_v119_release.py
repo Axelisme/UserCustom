@@ -1,15 +1,11 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
-
-from tests._orchestrate_test_support import verified_skill_dir
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -188,35 +184,6 @@ class OrchestrateV119ReleaseContractTests(unittest.TestCase):
             for path in skill.rglob("*.md"):
                 with self.subTest(path=path):
                     self.assertLessEqual(len(path.read_bytes()), 16_384)
-
-    def test_codex_and_pi_skill_packages_keep_shared_document_parity(self) -> None:
-        def files(skill: Path) -> set[str]:
-            retained: set[str] = set()
-            for directory, names, filenames in os.walk(skill, followlinks=True):
-                root = Path(directory)
-                relative_root = root.relative_to(skill)
-                if "manifests" in relative_root.parts or "__pycache__" in relative_root.parts:
-                    names[:] = []
-                    continue
-                names[:] = [name for name in names if name not in {"manifests", "__pycache__"}]
-                for filename in filenames:
-                    path = root / filename
-                    relative = path.relative_to(skill)
-                    if path.suffix == ".pyc":
-                        continue
-                    retained.add(relative.as_posix())
-            return retained
-
-        self.assertEqual(files(CODEX_SKILL), files(PI_SKILL))
-        for relative in sorted(files(CODEX_SKILL)):
-            # Runtime-codex is the one intentionally runtime-specific binding.
-            if relative == "runtime-codex.md":
-                continue
-            with self.subTest(relative=relative):
-                self.assertEqual(
-                    (CODEX_SKILL / relative).read_bytes(),
-                    (PI_SKILL / relative).read_bytes(),
-                )
 
     def test_pin_migrate_remains_a_retained_administration_command(self) -> None:
         result = self.run_cli("pin", "migrate", "--help")

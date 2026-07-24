@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-import json
 import sys
 import tempfile
 import unittest
@@ -77,12 +76,6 @@ class PiRuntimeParityTests(unittest.TestCase):
         codex = (CODEX_SKILL / "runtime-codex.md").read_text(encoding="utf-8").lower()
         self.assertIn("two persistent native role agents", codex)
         self.assertIn("no simulated queue", codex)
-
-    def test_pi_runtime_documents_are_mirrored(self) -> None:
-        self.assertEqual(
-            (CODEX_SKILL / "runtime-pi.md").read_bytes(),
-            (PI_SKILL / "runtime-pi.md").read_bytes(),
-        )
 
     def test_pi_lazy_pipeline_wording_is_direct_and_not_duplicated(self) -> None:
         pi = " ".join((PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split())

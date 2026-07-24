@@ -205,8 +205,8 @@ class V119RoleRuntimeContractTests(unittest.TestCase):
     def test_pi_binds_roles_to_lazy_generic_pipelines_and_root_depth(self) -> None:
         text = " ".join((PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split())
         lazy_creation_rule = (
-            "Root lazily creates and attaches the wave-implementer pipeline from the first "
-            "real Implementation task after the first Contract merge."
+            "Root lazily declares the wave-implementer pipeline bound to the `wave-implementer` "
+            "agent after the first Contract merge, then enqueues the first real Implementation task."
         )
         self.assertEqual(
             text.count(lazy_creation_rule),
@@ -220,7 +220,8 @@ class V119RoleRuntimeContractTests(unittest.TestCase):
         )
         self.assertIn("## Dual-role generic pipelines and terminal handoff", text)
         self.assertIn(
-            "Root creates and attaches the wave-oracle pipeline from the real C0 task.",
+            "Root declares the wave-oracle pipeline bound to the `wave-oracle` agent before "
+            "enqueueing the real C0 task.",
             text,
         )
         self.assertIn("Root controls dependency depth", text)
@@ -232,6 +233,7 @@ class V119RoleRuntimeContractTests(unittest.TestCase):
         self.assertNotIn("Implementation pipeline is lazy", text)
         self.assertNotIn("pipeline lazily", text)
         self.assertNotIn("Create the / the Implementation pipeline", text)
+        self.assertNotIn("pipeline from the first real Implementation task", text)
         self.assertNotIn("followed by immediately end this turn", text)
         self.assertRegex(text, r"(?i)oracle.{0,180}(generic )?pipeline")
         self.assertRegex(text, r"Root.{0,180}(dependenc|queue).{0,180}(depth|placement)")

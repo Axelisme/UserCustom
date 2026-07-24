@@ -36,18 +36,18 @@
       "sha256": "b1b635c9bcd6539a6cec7a55aa016b1398121d4156258c907a3f67e7d1b6b4b1"
     },
     "runtime-pi.md": {
-      "bytes": 3461,
+      "bytes": 3531,
       "sections": {
         "Activation and leases": "aaf688a36d895c159ab8253172598ba478a3f0c811a6df447b7eb7a218de687f",
         "Blocked checkpoint contract": "1f0569e9dcf6756dc7cea10e84cc46bfda45a7cfefab2a8b77c780d63b2e7fac",
-        "Dual-role generic pipelines and terminal handoff": "cc676b23b6a494c60c98339c42d1c621ee5e6f1e71332e5e517d98f0c359ddba",
+        "Dual-role generic pipelines and terminal handoff": "8654f390683258d7c75cde02ee8c82489d876bd4706bd1c745e978b36d0c6014",
         "Interactive Root completion flow": "cc854e5254e5e097b8a50a18f0564f0941b13af87d5ddd4be0f03023e9934ad6",
         "Milestones and flow control": "d381f9777def57e53487ae6e55c67f7bf71415c82a3a59729304ab6612e5f7c9",
         "Orchestrate \u2014 Pi runtime binding": "e3dfc556435a6c19554f3fe00ea4d1b1d3249ca591116d8a8f9fd3338cb3c7a6",
         "Profile routing": "413f0a7d6a376a8234b29f10908ff76f1ddbfe58f951800861b7131aef3fde9a",
         "Runtime budgets": "0ca619d7020dfade4a50800b3327f5d388d5967339833337cd7315ee54627b83"
       },
-      "sha256": "3ca7ad35a9e28bad0fbb4462382bde66f339bdd3dd67b53a3ca12edd3e51de3c"
+      "sha256": "b3bc2c2f5438631acbc600ea4d5c62f14113dbde294f8243deed30206b09ff97"
     },
     "scripts/_orchestrate/__init__.py": {
       "bytes": 55,

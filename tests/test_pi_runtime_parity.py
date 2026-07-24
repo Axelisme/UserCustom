@@ -87,8 +87,8 @@ class PiRuntimeParityTests(unittest.TestCase):
     def test_pi_lazy_pipeline_wording_is_direct_and_not_duplicated(self) -> None:
         pi = " ".join((PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split())
         lazy_creation_rule = (
-            "Root lazily creates and attaches the wave-implementer pipeline from the first "
-            "real Implementation task after the first Contract merge."
+            "Root lazily declares the wave-implementer pipeline bound to the `wave-implementer` "
+            "agent after the first Contract merge, then enqueues the first real Implementation task."
         )
         self.assertIn("generic pipeline", pi.lower())
         self.assertEqual(pi.count(lazy_creation_rule), 1)
@@ -96,6 +96,7 @@ class PiRuntimeParityTests(unittest.TestCase):
         self.assertIn("Root controls dependency depth", pi)
         self.assertNotIn("Implementation pipeline is lazy", pi)
         self.assertNotIn("pipeline lazily", pi)
+        self.assertNotIn("pipeline from the first real Implementation task", pi)
 
     def test_runtime_core_has_no_binding_authority(self) -> None:
         source = (CODEX_SKILL / "scripts" / "_orchestrate" / "v119_core.py").read_text(encoding="utf-8")

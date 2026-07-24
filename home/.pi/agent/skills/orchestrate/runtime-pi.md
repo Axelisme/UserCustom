@@ -10,9 +10,7 @@ consumes a ready SHA only after the corresponding runtime task has completed.
 
 ## Dual-role generic pipelines and terminal handoff
 
-Root creates and attaches the wave-oracle pipeline from the real C0 task. Root lazily
-creates and attaches the wave-implementer pipeline from the first real Implementation task
-after the first Contract merge. Root controls dependency depth and queue placement. Ready commits use Git trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and the role-specific `Role: oracle` or `Role: implementation`.
+Root declares the wave-oracle pipeline bound to the `wave-oracle` agent before enqueueing the real C0 task. Root lazily declares the wave-implementer pipeline bound to the `wave-implementer` agent after the first Contract merge, then enqueues the first real Implementation task. Root controls dependency depth and queue placement. Ready commits use Git trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and the role-specific `Role: oracle` or `Role: implementation`.
 
 After emitting the terminal `slice-ready` handoff, the role immediately ends its turn and
 makes no further worktree changes. The handoff carries Slice and the full exact SHA.

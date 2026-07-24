@@ -277,12 +277,14 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
 
     # Every Oracle range is diffed once in global readiness order.  The cached
     # result is partitioned by endpoint Slice and also supplies Wave totals.
-    contract_ranges: list[list[tuple[str, int, int]]] = []
+    wave_contract_stats = {"files": 0, "insertions": 0, "deletions": 0}
     previous_oracle_sha = base
     for _position, oracle in oracle_records:
         stats = _range_numstat(root, previous_oracle_sha, oracle["sha"])
-        contract_ranges.append(stats)
         slices[oracle["slice"]].setdefault("_contract_stats", []).extend(stats)
+        wave_contract_stats["files"] += len(stats)
+        wave_contract_stats["insertions"] += sum(item[1] for item in stats)
+        wave_contract_stats["deletions"] += sum(item[2] for item in stats)
         previous_oracle_sha = oracle["sha"]
 
     # Merge windows are traversed with one monotone endpoint cursor.  A ready
@@ -291,7 +293,6 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
     # attempt endpoint.
     endpoint_cursor = 0
     merge_ready_endpoints: dict[int, dict[str, Any]] = {}
-    merge_ranges: dict[int, list[tuple[str, int, int]]] = {}
     for merge_index, (merge_position, merge) in enumerate(merge_records):
         next_merge_position = (
             merge_records[merge_index + 1][0]
@@ -316,10 +317,8 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
             continue
         if latest_ready is not None:
             merge_ready_endpoints[merge_index] = latest_ready
-        merge_ranges[merge_index] = _range_numstat(root, merge["sha"], endpoint["sha"])
-        slices[merge["slice"]].setdefault("_implementation_stats", []).extend(
-            merge_ranges[merge_index]
-        )
+        stats = _range_numstat(root, merge["sha"], endpoint["sha"])
+        slices[merge["slice"]].setdefault("_implementation_stats", []).extend(stats)
 
     # Pair attempts within each Slice as before, but consume the endpoint
     # selected by the global merge window above.
@@ -385,7 +384,6 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         if checkpoints:
             entry["checkpoints"] = [checkpoint["sha"] for checkpoint in checkpoints]
 
-    wave_contract_stats = [stat for stats in contract_ranges for stat in stats]
     wave_impl_stats = {"files": 0, "insertions": 0, "deletions": 0}
     for entry in slices.values():
         current = entry["implementation_numstat"]
@@ -412,11 +410,7 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
                 and final_impl["timestamp"] >= first_oracle["timestamp"]
                 else None
             ),
-            "contract_numstat": {
-                "files": len(wave_contract_stats),
-                "insertions": sum(item[1] for item in wave_contract_stats),
-                "deletions": sum(item[2] for item in wave_contract_stats),
-            },
+            "contract_numstat": wave_contract_stats,
             "implementation_numstat": wave_impl_stats,
         },
     }

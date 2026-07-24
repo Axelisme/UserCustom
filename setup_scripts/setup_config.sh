@@ -90,23 +90,28 @@ replace_orchestrate_destination() {
 
 V119_SKILL_LAYOUTS=(.codex/skills .pi/agent/skills)
 V119_SKILLS=(orchestrate code-review dev-flow planning-with-files to-spec to-tickets)
+V119_PROFILE_PATHS=(
+  .pi/agent/agents/wave-oracle.md
+  .pi/agent/agents/wave-implementer.md
+  .codex/agents/wave-oracle.toml
+  .codex/agents/wave-implementer.toml
+  .claude/agents/wave-oracle.md
+  .claude/agents/wave-implementer.md
+  .codex/AGENTS.md
+  .pi/agent/APPEND_SYSTEM.md
+)
 
 replace_current_orchestrate_destinations() {
-  local skill layout
+  local skill layout relative
   for layout in "${V119_SKILL_LAYOUTS[@]}"; do
     for skill in "${V119_SKILLS[@]}"; do
       replace_orchestrate_destination "$UserCustom/home/$layout/$skill" "$HOME/$layout/$skill"
     done
   done
   replace_orchestrate_destination "$UserCustom/home/.claude/skills/orchestrate" "$HOME/.claude/skills/orchestrate"
-  replace_orchestrate_destination "$UserCustom/home/.codex/agents/wave-oracle.toml" "$HOME/.codex/agents/wave-oracle.toml"
-  replace_orchestrate_destination "$UserCustom/home/.codex/agents/wave-implementer.toml" "$HOME/.codex/agents/wave-implementer.toml"
-  replace_orchestrate_destination "$UserCustom/home/.pi/agent/agents/wave-oracle.md" "$HOME/.pi/agent/agents/wave-oracle.md"
-  replace_orchestrate_destination "$UserCustom/home/.pi/agent/agents/wave-implementer.md" "$HOME/.pi/agent/agents/wave-implementer.md"
-  replace_orchestrate_destination "$UserCustom/home/.claude/agents/wave-oracle.md" "$HOME/.claude/agents/wave-oracle.md"
-  replace_orchestrate_destination "$UserCustom/home/.claude/agents/wave-implementer.md" "$HOME/.claude/agents/wave-implementer.md"
-  replace_orchestrate_destination "$UserCustom/home/.codex/AGENTS.md" "$HOME/.codex/AGENTS.md"
-  replace_orchestrate_destination "$UserCustom/home/.pi/agent/APPEND_SYSTEM.md" "$HOME/.pi/agent/APPEND_SYSTEM.md"
+  for relative in "${V119_PROFILE_PATHS[@]}"; do
+    replace_orchestrate_destination "$UserCustom/home/$relative" "$HOME/$relative"
+  done
 }
 
 remove_obsolete_orchestrate_profiles() {
@@ -151,17 +156,10 @@ validate_orchestrate_skill_destinations() {
 }
 
 validate_orchestrate_profile_destinations() {
-  local path
-  for path in \
-    "$HOME/.pi/agent/agents/wave-oracle.md" \
-    "$HOME/.pi/agent/agents/wave-implementer.md" \
-    "$HOME/.codex/agents/wave-oracle.toml" \
-    "$HOME/.codex/agents/wave-implementer.toml" \
-    "$HOME/.claude/agents/wave-oracle.md" \
-    "$HOME/.claude/agents/wave-implementer.md" \
-    "$HOME/.codex/AGENTS.md" \
-    "$HOME/.pi/agent/APPEND_SYSTEM.md"; do
-    if [ ! -f "$path" ] || ! orchestrate_destination_is_current "$UserCustom/home/${path#"$HOME/"}" "$path"; then
+  local relative path
+  for relative in "${V119_PROFILE_PATHS[@]}"; do
+    path="$HOME/$relative"
+    if [ ! -f "$path" ] || ! orchestrate_destination_is_current "$UserCustom/home/$relative" "$path"; then
       echo "error: unusable orchestrate destination (expected shipped identity): $path" >&2
       return 1
     fi

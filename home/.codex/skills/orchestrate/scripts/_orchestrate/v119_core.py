@@ -33,9 +33,9 @@ def _record_for(root: Path, path: Path, branch: str) -> dict[str, Any] | None:
         raw = record.get("worktree")
         if not isinstance(raw, str) or Path(raw).resolve() != resolved:
             continue
-        record_branch = str(record.get("branch", "")).removeprefix("refs/heads/")
-        if record_branch == branch or "detached" in record or not branch:
-            return record
+        # The managed path identifies the worktree; its checked-out branch is
+        # live state and may have been changed manually after creation.
+        return record
     return None
 
 

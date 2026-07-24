@@ -120,6 +120,10 @@ def _integration_identity(args: argparse.Namespace) -> tuple[str, Path, str]:
     return task, path, branch
 
 
+def _integration_base_ref(task: str) -> str:
+    return f"refs/orchestrate/{task}/integration/base"
+
+
 def command_integration_create(args: argparse.Namespace) -> dict[str, Any]:
     task, path, branch = _integration_identity(args)
     root = Path(args.root).resolve()
@@ -131,11 +135,13 @@ def command_integration_create(args: argparse.Namespace) -> dict[str, Any]:
         raise OrchestrateError(f"derived worktree path or branch already exists: {path} / {branch}")
     path.parent.mkdir(parents=True, exist_ok=True)
     run_git(root, "worktree", "add", "-b", branch, str(path), base)
+    run_git(root, "update-ref", _integration_base_ref(task), base)
     evidence = _status(root, path, branch)
     return {
         "ok": True,
         "operation": "integration-create",
         "task_id": task,
+        "base_ref": _integration_base_ref(task),
         "branch": branch,
         "worktree": str(path),
         "base": base,
@@ -145,35 +151,43 @@ def command_integration_create(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def _integration_base_from_reflog(root: Path, branch: str) -> str | None:
-    reflog = run_git(root, "reflog", "show", "--format=%H", "--reverse", branch, check=False)
-    entries = [line for line in reflog.stdout.splitlines() if line]
-    return entries[0] if reflog.returncode == 0 and entries else None
+def _integration_base(root: Path, task: str) -> str:
+    """Read the exact base recorded at create time.
+
+    The base is a ref rather than a message trailer because it is a property of
+    the task, not of any one commit; a reflog would expire and leave the walk
+    unbounded, so a missing ref fails closed instead of reporting a wider range.
+    """
+    ref = _integration_base_ref(task)
+    probe = run_git(root, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}", check=False)
+    base = probe.stdout.strip()
+    if probe.returncode or not base:
+        raise OrchestrateError(
+            f"integration base ref is missing: {ref}; recreate the integration worktree or "
+            f"restore it with git update-ref {ref} <exact base sha>"
+        )
+    return base
 
 
-def _collected_integrations(root: Path, branch: str) -> list[dict[str, str]]:
+def _collected_integrations(root: Path, task: str, branch: str) -> list[dict[str, Any]]:
     if not _branch_exists(root, branch):
         return []
-    base = _integration_base_from_reflog(root, branch)
-    revision = f"{base}..{branch}" if base else branch
-    raw = run_git(root, "rev-list", "--first-parent", "--reverse", revision).stdout
-    collected: list[dict[str, str]] = []
+    base = _integration_base(root, task)
+    raw = run_git(root, "rev-list", "--first-parent", "--reverse", f"{base}..{branch}").stdout
+    collected: list[dict[str, Any]] = []
     for sha in raw.splitlines():
         if not sha:
             continue
         _commit_sha, _timestamp, _subject, trailers = _commit_metadata(root, sha)
         if trailers.get("Role") != "collect":
             continue
-        wave = trailers.get("Wave", "")
-        slice_id = trailers.get("Slice", "")
         parents = run_git(root, "rev-list", "--parents", "-n", "1", sha).stdout.split()
-        implementation_sha = parents[2] if len(parents) >= 3 else ""
         collected.append(
             {
-                "wave": wave,
-                "slice": slice_id,
+                "wave": trailers.get("Wave", ""),
+                "slice": trailers.get("Slice", ""),
                 "collect_sha": sha,
-                "implementation_sha": implementation_sha,
+                "implementation_sha": parents[2] if len(parents) >= 3 else None,
             }
         )
     return collected
@@ -188,7 +202,8 @@ def command_integration_status(args: argparse.Namespace) -> dict[str, Any]:
             "operation": "integration-status",
             "task_id": task,
             "worktree": str(path),
-            "collected": _collected_integrations(root, branch),
+            "base_ref": _integration_base_ref(task),
+            "collected": _collected_integrations(root, task, branch),
         }
     )
     return state
@@ -216,7 +231,7 @@ def command_integration_collect(args: argparse.Namespace) -> dict[str, Any]:
         raise OrchestrateError(f"managed integration worktree does not exist: {path}")
     if not state["clean"]:
         raise OrchestrateError(f"integration worktree must be clean: {path}")
-    if any(item.get("wave") == wave_id for item in _collected_integrations(root, branch)):
+    if any(item.get("wave") == wave_id for item in _collected_integrations(root, task, branch)):
         raise OrchestrateError(f"Wave already collected into integration branch: {wave_id}")
     merged = run_git(path, "merge", "--no-ff", "--no-commit", implementation_sha, check=False)
     if merged.returncode:

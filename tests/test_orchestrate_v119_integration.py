@@ -15,6 +15,7 @@ SCRIPT = ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts" / "orch
 
 class IntegrationWorktreeContractTests(unittest.TestCase):
     task_id = "integration-task"
+    base_ref = f"refs/orchestrate/{task_id}/integration/base"
 
     def git(
         self,
@@ -420,6 +421,68 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
             )
         )
         self.assertIn("not clean", str(dirty_remove["error"]))
+
+    def test_collected_projection_is_bounded_by_the_recorded_base_ref(self) -> None:
+        # A landed task leaves its own collect commits in the persistence branch history.
+        (self.root / "landed.txt").write_text("landed\n", encoding="utf-8")
+        self.git(self.root, "add", "landed.txt")
+        self.git(
+            self.root,
+            "commit",
+            "-q",
+            "-m",
+            "Collect Wave wave-a\n\nWave: wave-a\nSlice: slice-a\nRole: collect",
+            env={
+                "GIT_AUTHOR_DATE": "2025-01-01T00:00:30+0000",
+                "GIT_COMMITTER_DATE": "2025-01-01T00:00:30+0000",
+            },
+        )
+        landed_base = self.git(self.root, "rev-parse", "HEAD")
+
+        created = self.integration_create(base=landed_base)
+        self.assertEqual(self.status()["collected"], [])
+        self.assertEqual(created["base_ref"], self.base_ref)
+        self.assertEqual(self.git(self.root, "rev-parse", "--verify", self.base_ref), landed_base)
+
+        # The reused wave id belongs to the previous task, so it must not be rejected here.
+        wave_tree = self.implementation_create("wave-a", landed_base)
+        implementation = self.commit_implementation(wave_tree, "wave-a", "slice-a", "wave a\n")
+        collected = self.collect("wave-a", implementation)
+        self.assertEqual(
+            self.status()["collected"],
+            [
+                {
+                    "wave": "wave-a",
+                    "slice": "slice-a",
+                    "collect_sha": collected["collect_sha"],
+                    "implementation_sha": implementation,
+                }
+            ],
+        )
+
+    def test_status_and_collect_fail_closed_without_the_base_ref(self) -> None:
+        self.integration_create()
+        self.git(self.root, "update-ref", "-d", self.base_ref)
+
+        wave_tree = self.implementation_create("wave-a", self.base)
+        implementation = self.commit_implementation(wave_tree, "wave-a", "slice-a", "wave a\n")
+        for arguments in (
+            ("integration", "status", "--root", str(self.root), "--task-id", self.task_id),
+            (
+                "integration",
+                "collect",
+                "--root",
+                str(self.root),
+                "--task-id",
+                self.task_id,
+                "--wave-id",
+                "wave-a",
+                "--implementation-sha",
+                implementation,
+            ),
+        ):
+            error = self.error_payload(self.cli(self.root, *arguments))
+            self.assertIn("integration base ref is missing", str(error["error"]))
 
 
 if __name__ == "__main__":

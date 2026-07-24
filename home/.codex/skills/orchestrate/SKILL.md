@@ -46,7 +46,9 @@ The JSON-only workflow commands are `worktree create|status|remove`, `contract m
 or branch. Removal requires a clean worktree and leaves its branch. Contract merge leaves
 ordinary conflicts visible. Integration collect merges one exact implementation SHA into the
 task integration branch with `Role: collect` trailers; conflicts stay visible; the collected
-list is a read-only Git projection. Profile statistics use Git committer timestamps and
+list is a read-only projection of the commits after the exact base that `create` records in
+`refs/orchestrate/<task>/integration/base`, and a missing base ref fails closed rather than
+widening the range. Profile statistics use Git committer timestamps and
 numstat only; non-monotonic timestamps are warnings.
 
 ## Acceptance and migration

@@ -126,11 +126,17 @@ def _trailers(text: str) -> dict[str, str]:
     values: dict[str, str] = {}
     for line in text.splitlines():
         key, separator, value = line.partition(":")
-        if not separator or key not in _WORKFLOW_TRAILER_KEYS:
+        if not separator:
             continue
-        if key in values:
-            raise OrchestrateError(f"duplicate Git trailer: {key}")
-        values[key] = value.strip()
+        canonical = next(
+            (candidate for candidate in _WORKFLOW_TRAILER_KEYS if key.casefold() == candidate.casefold()),
+            None,
+        )
+        if canonical is None:
+            continue
+        if canonical in values:
+            raise OrchestrateError(f"ambiguous Git trailer: {canonical}")
+        values[canonical] = value.strip()
     return values
 
 

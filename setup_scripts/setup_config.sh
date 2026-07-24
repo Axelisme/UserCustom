@@ -90,22 +90,25 @@ replace_orchestrate_destination() {
 
 V119_SKILL_LAYOUTS=(.codex/skills .pi/agent/skills)
 V119_SKILLS=(orchestrate code-review dev-flow planning-with-files to-spec to-tickets)
-# One exact-replacement inventory is shared by installation and validation.  These
-# planner identities are shipped workflow assets too; unlike unrelated user profiles,
-# stale, foreign, and dangling destinations must be backed up and refreshed.
-V119_PROFILE_PATHS=(
-  .pi/agent/agents/contract-planner.md
-  .codex/agents/contract-planner.toml
-  .claude/agents/contract-planner.md
-  .pi/agent/agents/wave-oracle.md
-  .pi/agent/agents/wave-implementer.md
-  .codex/agents/wave-oracle.toml
-  .codex/agents/wave-implementer.toml
-  .claude/agents/wave-oracle.md
-  .claude/agents/wave-implementer.md
-  .codex/AGENTS.md
-  .pi/agent/APPEND_SYSTEM.md
-)
+# Exact replacement is driven by the shipped source inventory, not a partial list of
+# known identities.  Unrelated installed profiles remain managed by the generic copy.
+V119_PROFILE_ROOTS=(.codex/agents .claude/agents .pi/agent/agents)
+V119_STANDING_ORDER_PATHS=(.codex/AGENTS.md .pi/agent/APPEND_SYSTEM.md)
+
+shipped_orchestrate_profile_inventory() {
+  local root source relative
+  for relative in "${V119_STANDING_ORDER_PATHS[@]}"; do
+    source="$UserCustom/home/$relative"
+    [ -f "$source" ] && printf '%s\n' "$relative"
+  done
+  for root in "${V119_PROFILE_ROOTS[@]}"; do
+    [ -d "$UserCustom/home/$root" ] || continue
+    while IFS= read -r source; do
+      relative=${source#"$UserCustom/home/"}
+      printf '%s\n' "$relative"
+    done < <(find "$UserCustom/home/$root" -type f -print | sort)
+  done
+}
 
 replace_current_orchestrate_destinations() {
   local skill layout relative
@@ -115,22 +118,32 @@ replace_current_orchestrate_destinations() {
     done
   done
   replace_orchestrate_destination "$UserCustom/home/.claude/skills/orchestrate" "$HOME/.claude/skills/orchestrate"
-  for relative in "${V119_PROFILE_PATHS[@]}"; do
+  while IFS= read -r relative; do
     replace_orchestrate_destination "$UserCustom/home/$relative" "$HOME/$relative"
-  done
+  done < <(shipped_orchestrate_profile_inventory)
 }
 
 remove_obsolete_orchestrate_profiles() {
-  # Retire only exact legacy role identities after every v119 role is installed.
-  if [ -e "$UserCustom/home/.pi/agent/agents/wave-oracle.md" ]; then
-    rm -f "$HOME/.pi/agent/agents/wave-reviewer.md" "$HOME/.pi/agent/agents/integration-reviewer.md" "$HOME/.pi/agent/agents/implementer.md"
-  fi
-  if [ -e "$UserCustom/home/.codex/agents/wave-oracle.toml" ]; then
-    rm -f "$HOME/.codex/agents/wave-reviewer.toml" "$HOME/.codex/agents/integration-reviewer.toml" "$HOME/.codex/agents/implementer.toml"
-  fi
-  if [ -e "$UserCustom/home/.claude/agents/wave-oracle.md" ]; then
-    rm -f "$HOME/.claude/agents/wave-reviewer.md" "$HOME/.claude/agents/integration-reviewer.md" "$HOME/.claude/agents/implementer.md"
-  fi
+  # Retire only exact legacy role identities after every shipped profile is installed.
+  # A fixture or future release may legitimately ship one of these names, so never
+  # retire a destination that is present in the source inventory.
+  local runtime legacy relative source_relative ready
+  for runtime in pi codex claude; do
+    case "$runtime" in
+      pi) legacy=(wave-reviewer.md integration-reviewer.md implementer.md); ready=.pi/agent/agents/wave-oracle.md ;;
+      codex) legacy=(wave-reviewer.toml integration-reviewer.toml implementer.toml); ready=.codex/agents/wave-oracle.toml ;;
+      claude) legacy=(wave-reviewer.md integration-reviewer.md implementer.md); ready=.claude/agents/wave-oracle.md ;;
+    esac
+    [ -f "$UserCustom/home/$ready" ] || continue
+    for relative in "${legacy[@]}"; do
+      case "$runtime" in
+        pi) source_relative=".pi/agent/agents/$relative" ;;
+        codex) source_relative=".codex/agents/$relative" ;;
+        claude) source_relative=".claude/agents/$relative" ;;
+      esac
+      [ -f "$UserCustom/home/$source_relative" ] || rm -f "$HOME/$source_relative"
+    done
+  done
 }
 
 backup_cp "$UserCustom/home/.config" "$HOME/.config"
@@ -163,16 +176,13 @@ validate_orchestrate_skill_destinations() {
 
 validate_orchestrate_profile_destinations() {
   local relative path
-  for relative in "${V119_PROFILE_PATHS[@]}"; do
-    # Keep this migration helper compatible with reduced fixture source trees while
-    # validating every shipped identity when its source asset is present.
-    [ -e "$UserCustom/home/$relative" ] || continue
+  while IFS= read -r relative; do
     path="$HOME/$relative"
     if [ ! -f "$path" ] || ! orchestrate_destination_is_current "$UserCustom/home/$relative" "$path"; then
       echo "error: unusable orchestrate destination (expected shipped identity): $path" >&2
       return 1
     fi
-  done
+  done < <(shipped_orchestrate_profile_inventory)
 }
 
 # Retire the old identities only after every source tree has installed successfully and

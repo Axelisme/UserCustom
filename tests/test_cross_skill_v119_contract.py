@@ -13,6 +13,7 @@ SHARED_DOCUMENTS = (
     Path("code-review/SKILL.md"),
     Path("planning-with-files/SKILL.md"),
     Path("planning-with-files/templates/INDEX.md"),
+    Path("to-spec/SKILL.md"),
     Path("to-tickets/SKILL.md"),
 )
 
@@ -65,6 +66,25 @@ class CrossSkillV119ContractTests(unittest.TestCase):
         ):
             with self.subTest(obsolete_instruction=obsolete_instruction):
                 self.assertNotRegex(lowered, obsolete_instruction)
+
+    def test_to_spec_assigns_the_frozen_spec_only_to_roles_and_final_code_review(self) -> None:
+        text = self.normalized(self.document(CODEX_SKILLS, "to-spec/SKILL.md"))
+        lowered = text.lower()
+        self.assertRegex(
+            lowered,
+            r"frozen contract.{0,220}(?:consum|used).{0,120}oracle"
+            r".{0,100}implementation",
+        )
+        self.assertRegex(
+            lowered,
+            r"(?:only|solely).{0,100}(?:final )?code-review.{0,100}spec axis"
+            r"|(?:final )?code-review.{0,100}spec axis.{0,100}(?:only|solely)",
+        )
+        self.assertNotRegex(
+            lowered,
+            r"orchestrat(?:e|or|ion).{0,100}(?:reviews?|checks?)"
+            r"|(?:reviews?|checks?).{0,100}orchestrat(?:e|or|ion)",
+        )
 
     def test_planning_documents_do_not_restore_removed_findings_authority(self) -> None:
         documents = {

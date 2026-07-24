@@ -76,6 +76,65 @@ class V119RoleRuntimeContractTests(unittest.TestCase):
                     self.assertIn(phrase, text)
                 self.assertRegex(text, r"cannot|must not|do not")
 
+    def test_ready_commits_and_terminal_handoffs_use_the_v119_git_contract(self) -> None:
+        for runtime in self.role_profiles:
+            for role, milestone, role_trailer in (
+                ("wave-oracle", r"(?:Contract|Oracle-ready) commits?", "Role: oracle"),
+                (
+                    "wave-implementer",
+                    r"(?:ready|Implementation-ready) commits?",
+                    "Role: implementation",
+                ),
+            ):
+                with self.subTest(runtime=runtime, role=role):
+                    text = " ".join(self.read_profile(runtime, role).split())
+                    self.assertRegex(text, rf"(?i){milestone}.{{0,360}}trailers?")
+                    for trailer in (
+                        "Wave: <wave-id>", "Slice: <slice-id>", role_trailer
+                    ):
+                        self.assertIn(trailer, text)
+                    self.assertNotIn("seam-ready", text.lower())
+                    self.assertNotRegex(
+                        text,
+                        r"(?i)commit trailers?\s*\([^)]*\bSHA\b",
+                        "the exact SHA belongs to terminal slice-ready, not its own commit",
+                    )
+                    self.assertNotRegex(
+                        text,
+                        r"(?i)(?:SHA:\s*<commit-sha>.{0,80}(?:commit )?trailer"
+                        r"|(?:commit )?trailer.{0,80}SHA:\s*<commit-sha>)",
+                    )
+
+        runtime_bindings = {
+            "codex": SKILL / "runtime-codex.md",
+            "pi": PI_SKILL / "runtime-pi.md",
+            "claude": SKILL / "runtime-claude.md",
+        }
+        for runtime, path in runtime_bindings.items():
+            with self.subTest(runtime_binding=runtime):
+                text = " ".join(path.read_text(encoding="utf-8").split())
+                self.assertNotIn("seam-ready", text.lower())
+                self.assertNotRegex(text, r"(?i)commit trailers?\s*\([^)]*\bSHA\b")
+                self.assertNotRegex(
+                    text,
+                    r"(?i)(?:SHA:\s*<commit-sha>.{0,80}(?:commit )?trailer"
+                    r"|(?:commit )?trailer.{0,80}SHA:\s*<commit-sha>)",
+                )
+
+        codex = " ".join(runtime_bindings["codex"].read_text(encoding="utf-8").split())
+        degraded = codex[codex.lower().index("degraded v1 transport") :]
+        for trailer in ("Wave: <wave-id>", "Slice: <slice-id>"):
+            self.assertIn(trailer, degraded)
+        self.assertRegex(
+            degraded,
+            r"Role: (?:<role>|oracle.{0,80}implementation|implementation.{0,80}oracle)",
+        )
+        self.assertRegex(
+            degraded,
+            r"(?i)(?:terminal.{0,240}(?:full exact|exact 40-character|exact commit) SHA"
+            r"|(?:full exact|exact 40-character|exact commit) SHA.{0,240}terminal)",
+        )
+
     def test_slice_ready_is_terminal_and_carries_slice_and_exact_sha(self) -> None:
         surfaces = {
             "oracle-codex": self.read_profile("codex", "wave-oracle"),

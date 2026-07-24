@@ -17,6 +17,15 @@ after the first Contract merge. Root controls dependency depth and queue placeme
 After emitting the terminal `slice-ready` handoff, the role immediately ends its turn and
 makes no further worktree changes. The handoff carries Slice and the full exact SHA.
 
+## Interactive Root completion flow
+
+Interactive Pi Root should not call `subagent_wait` or `wait_subagent` merely to wait for
+role pipeline completion. When no independent local work remains, Root should end its turn
+and let Pi's subagent completion notification wake the session. In an active goal-mode
+session, use `yield_goal` with a reason naming pending pipeline or role completion when
+available. Reserve explicit wait calls only for noninteractive, headless run-to-completion
+cases.
+
 ## Profile routing
 
 Use the shipped `wave-oracle` and `wave-implementer` profiles for this frozen workflow and

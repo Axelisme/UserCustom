@@ -6,7 +6,7 @@ streams and keeps Git/task contracts at Root.
 
 ## Dual-role generic pipelines and terminal handoff
 
-Root creates and attaches the wave-oracle pipeline from the real C0 task. Root lazily creates and attaches the wave-implementer pipeline from the first real Implementation task after the first Contract merge. Root controls dependency depth and queue placement for lazy Implementation tasks.
+Root creates and attaches the wave-oracle pipeline from the real C0 task. Root lazily creates and attaches the wave-implementer pipeline from the first real Implementation task after the first Contract merge. Root controls dependency depth and queue placement.
 
 After emitting the terminal `slice-ready` handoff, the role immediately ends its turn and
 makes no further worktree changes. The handoff carries Slice and the full exact SHA. After

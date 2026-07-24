@@ -130,7 +130,6 @@ def document_paths(skill_dir: Path) -> list[Path]:
 PROFILE_NAMES = (
     "contract-planner",
     "impl-detail-planner",
-    "integration-reviewer",
     "mcp-skill-tester",
     "mechanical-implementer",
     "plan-item-implementer",
@@ -138,7 +137,7 @@ PROFILE_NAMES = (
     "python-module-reviewer",
     "repo-investigator",
     "wave-implementer",
-    "wave-reviewer",
+    "wave-oracle",
     "web-researcher",
 )
 
@@ -377,21 +376,6 @@ def read_version_pin(root: Path) -> dict[str, Any] | None:
     return payload
 
 
-def check_version_pin(root: Path, current_version: int) -> dict[str, Any] | None:
-    """Fail fast when the installed skill moved past the task's pinned release."""
-    pin = read_version_pin(root)
-    if pin is None:
-        return None
-    pinned = pin["skill_version"]
-    if pinned != current_version:
-        raise OrchestrateError(
-            f"task is pinned to orchestrate v{pinned} but the installed skill is"
-            f" v{current_version}: adopt the release at a safe boundary with"
-            " `orchestrate pin migrate --root <repo>`, then rerun"
-        )
-    return {"pinned_version": pinned}
-
-
 def write_version_pin(root: Path, version: int, compat: Any) -> Path:
     path = version_pin_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -501,6 +485,22 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
                 if name.endswith("/APPEND_SYSTEM.md") or name.endswith("/AGENTS.md")
             ],
         }
+
+    # v119 is a breaking workflow rewrite.  Keep the pin operation and its
+    # response shape, but never translate v118 workflow state into the new
+    # model: callers must preserve evidence and restart from an explicit base
+    # as a new Wave.  This requirement is additive to a manifest delta and is
+    # also emitted when an old manifest is unavailable.
+    if old_version < 119 <= new_version:
+        migration_requirements = {
+            "reason": "v118-to-v119-manual-restart",
+            "stop_legacy_dispatch": True,
+            "preserve_legacy_evidence": True,
+            "select_exact_base": True,
+            "create_new_wave": True,
+            "continue_as_v119_wave": True,
+            "automatic_conversion": False,
+        }
     write_version_pin(root, new_version, result["orchestrate_compat"])
     return {
         "ok": True,
@@ -516,21 +516,6 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
             " and re-bootstrap profiles/standing orders"
         ),
     }
-
-
-def require_release_preflight(
-    skill_dir: Path, root: str | None = None
-) -> dict[str, Any]:
-    result = require_verified_release(skill_dir)
-    payload = {
-        "skill_version": result["skill_version"],
-        "orchestrate_compat": result["orchestrate_compat"],
-    }
-    if root is not None:
-        pin_info = check_version_pin(Path(root).resolve(), result["skill_version"])
-        if pin_info is not None:
-            payload.update(pin_info)
-    return payload
 
 
 def compare_manifests(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:

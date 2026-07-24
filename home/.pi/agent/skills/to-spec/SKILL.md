@@ -13,9 +13,12 @@ This skill takes the current conversation context and codebase understanding and
 
 Check with the user that these seams match their expectations.
 
+The published spec is the frozen Contract consumed by the Oracle and Implementation roles.
+Only final code-review's Spec axis checks the implementation against this Contract. The workflow records Git evidence and does not assess source or spec.
+
 3. Write the spec using the template below, then publish it to whichever backend this repo uses:
 
-- **Plan-directory repo** (CLAUDE.md / AGENTS.md documents a `planning-with-files` / `.agent_state/plans/` convention): write the spec to `.agent_state/plans/<task-id>/spec.md`, initializing the plan directory via `planning-with-files` if it doesn't exist yet. This spec is the **frozen contract** that orchestrate reviews and `/code-review`'s Spec axis later point at.
+- **Plan-directory repo** (CLAUDE.md / AGENTS.md documents a `planning-with-files` / `.agent_state/plans/` convention): write the spec to `.agent_state/plans/<task-id>/spec.md`, initializing the plan directory via `planning-with-files` if it doesn't exist yet. This spec is the **frozen Contract** that the Oracle and Implementation roles consume and whose Spec axis is checked only by `/code-review`.
 - **Tracker repo** (an issue tracker is documented, e.g. `docs/agents/issue-tracker.md`): publish it as an issue and apply whatever "ready for agent" triage convention the repo documents — no additional triage.
 - **Neither**: write it to `.scratch/<feature-slug>/spec.md` and tell the user where it landed.
 

@@ -34,10 +34,9 @@ session 與 plan 用中文,程式碼/變數/技術名詞用英文。
 | `findings.md` | investigation findings(事實/風險/設計筆記) | 否 |
 | `../../artifacts/<task-id>/` | 證據大塊(plan 目錄外,task 收尾即刪) | — |
 
-**指標不抄本**:有 authority 來源的一律指過去。review findings 與 feedback 的真相是
-orchestrate ledger(`findings status` / `.agent_state/orchestrate/feedback/`),`INDEX.md`
-只在 Stores 節指過去,**不手抄**——抄本必然落後於來源。`findings.md` 只收 investigation
-findings,review findings 不進此檔。
+**指標不抄本**:有 authority 來源的一律指過去。`INDEX.md` 只在 Stores 節指向
+實際存在的 task-local stores，**不手抄**——抄本必然落後於來源。`findings.md` 只收
+investigation findings；其他審查或回饋證據留在本 task 的 artifacts 或 progress records。
 
 ## 介面(命令明帶 task-id,無 active/default/latest)
 

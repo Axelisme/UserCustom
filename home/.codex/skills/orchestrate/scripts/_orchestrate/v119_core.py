@@ -27,33 +27,38 @@ def _branch_exists(root: Path, branch: str) -> bool:
     return run_git(root, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}", check=False).returncode == 0
 
 
-def _record_for(root: Path, path: Path, branch: str) -> dict[str, Any] | None:
+def _record_for(root: Path, path: Path) -> dict[str, Any] | None:
     resolved = path.resolve()
     for record in worktree_records(root):
         raw = record.get("worktree")
         if not isinstance(raw, str) or Path(raw).resolve() != resolved:
             continue
-        # The managed path identifies the worktree; its checked-out branch is
-        # live state and may have been changed manually after creation.
         return record
     return None
 
 
-def _status(root: Path, path: Path, branch: str) -> dict[str, Any]:
-    record = _record_for(root, path, branch)
+def _record_branch(record: dict[str, Any]) -> str | None:
+    raw = record.get("branch")
+    if not isinstance(raw, str) or not raw:
+        return None
+    return raw.removeprefix("refs/heads/")
+
+
+def _status(root: Path, path: Path, expected_branch: str) -> dict[str, Any]:
+    record = _record_for(root, path)
     if record is None:
-        return {"ok": True, "operation": "worktree-status", "exists": False, "path": str(path), "branch": branch, "head": None, "tree": None, "clean": False, "changed_paths": []}
+        return {"ok": True, "operation": "worktree-status", "exists": False, "path": str(path), "branch": expected_branch, "head": None, "tree": None, "clean": False, "changed_paths": []}
     if not path.exists():
-        return {"ok": True, "operation": "worktree-status", "exists": False, "path": str(path), "branch": branch, "head": record.get("HEAD"), "tree": None, "clean": False, "changed_paths": []}
+        return {"ok": True, "operation": "worktree-status", "exists": False, "path": str(path), "branch": _record_branch(record), "head": record.get("HEAD"), "tree": None, "clean": False, "changed_paths": []}
     changed = [line for line in run_git(path, "status", "--porcelain").stdout.splitlines() if line]
-    live_branch = run_git(path, "symbolic-ref", "--quiet", "--short", "HEAD", check=False).stdout.strip()
-    detached = not live_branch
+    live_branch = _record_branch(record)
+    detached = live_branch is None
     return {
         "ok": True,
         "operation": "worktree-status",
         "exists": True,
         "path": str(path),
-        "branch": live_branch if live_branch else None,
+        "branch": live_branch,
         **({"detached": True} if detached else {}),
         "head": record.get("HEAD"),
         "tree": "dirty" if changed else "clean",
@@ -118,6 +123,13 @@ def command_contract_merge(args: argparse.Namespace) -> dict[str, Any]:
     state = _status(root, path, branch)
     if not state["exists"]:
         raise OrchestrateError(f"managed implementation worktree does not exist: {path}")
+    live_branch = state.get("branch")
+    if live_branch != branch:
+        rendered_live = live_branch if live_branch else "detached"
+        raise OrchestrateError(
+            f"implementation worktree must be attached to exact derived branch {branch}; "
+            f"live state is {rendered_live}"
+        )
     if not state["clean"]:
         raise OrchestrateError(f"implementation worktree must be clean: {path}")
     trailers = _trailers(_commit_body(root, contract))

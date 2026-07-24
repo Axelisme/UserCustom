@@ -34,16 +34,16 @@
       "sha256": "6dc079a53133690bd29824c3db57feff8d5a701d6571d39e81c5adfc6305685e"
     },
     "runtime-pi.md": {
-      "bytes": 2247,
+      "bytes": 2244,
       "sections": {
         "Activation and leases": "aaf688a36d895c159ab8253172598ba478a3f0c811a6df447b7eb7a218de687f",
-        "Dual-role generic pipelines and terminal handoff": "93b8f50d0b32ff7ce62d98d8683f2fb71030a7d2e275dfdc7fcc4cfd0a059deb",
+        "Dual-role generic pipelines (Implementation pipeline is lazy) and terminal handoff": "903cb2878318c65baee8ed57c9ccae0b46e32c73de726c308d6342bbff1eccd0",
         "Milestones and flow control": "d381f9777def57e53487ae6e55c67f7bf71415c82a3a59729304ab6612e5f7c9",
         "Orchestrate \u2014 Pi runtime binding": "ae7d663ceb3f01e05adad12e2af0c6f713de4a9692a29cf6380aad10488dda75",
         "Profile routing": "413f0a7d6a376a8234b29f10908ff76f1ddbfe58f951800861b7131aef3fde9a",
         "Runtime budgets": "0ca619d7020dfade4a50800b3327f5d388d5967339833337cd7315ee54627b83"
       },
-      "sha256": "80752d6e833a5fe81db0c0758fb5166f55097cdcedb21c958a9abbd2eea1cecf"
+      "sha256": "16dbe19b0d590c24be6558bc661e8618e03839fe600c05b47ac4f26266c1985d"
     },
     "scripts/_orchestrate/__init__.py": {
       "bytes": 55,
@@ -81,11 +81,11 @@
       "sha256": "f640872a5619f323bfd871a0b0d138e9c7658f0f0f153ae353fa12a3d197892c"
     },
     "scripts/_orchestrate/v119_core.py": {
-      "bytes": 15027,
+      "bytes": 16976,
       "sections": {
-        "__file__": "b1897121f84605871278cc3c1f4a32c8424d1663b18af488fcfe7f747e671048"
+        "__file__": "890d18b6799da5219d43990fe1adeb84eed5327498bf34bc5d301c77809e2aa1"
       },
-      "sha256": "b1897121f84605871278cc3c1f4a32c8424d1663b18af488fcfe7f747e671048"
+      "sha256": "890d18b6799da5219d43990fe1adeb84eed5327498bf34bc5d301c77809e2aa1"
     },
     "scripts/orchestrate.py": {
       "bytes": 227,
@@ -375,7 +375,7 @@
         "Capability boundaries",
         "Cleanup lease check",
         "Cumulative review scheduling",
-        "Dual-role generic pipelines and terminal handoff",
+        "Dual-role generic pipelines (Implementation pipeline is lazy) and terminal handoff",
         "Milestones and flow control",
         "Orchestrate \u2014 Pi runtime binding",
         "Pi goal yield policy",

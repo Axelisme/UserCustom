@@ -27,6 +27,5 @@
 - phases — `phases/NN-<slug>.md`,一 phase 一檔,完成即 seal
 - progress — `progress.jsonl`,append-only;讀尾巴或時間區段
 - findings(investigation)— `findings.md`,或 none
-- review findings — `orchestrate findings status`（ledger 為真相,不抄此處）
-- feedback — `.agent_state/orchestrate/feedback/<task-id>.jsonl`,按需讀
+- evidence — task-local validation records in `progress.jsonl` or `findings.md`
 - artifacts — `../../artifacts/<task-id>/`

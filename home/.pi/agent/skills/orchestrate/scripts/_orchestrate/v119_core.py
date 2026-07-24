@@ -165,36 +165,88 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
     task = require_identifier(str(args.task_id), label="task id")
     wave = require_identifier(str(args.wave_id), label="wave id")
     refs = [f"refs/heads/wave/{task}/{wave}/{role}" for role in ("oracle", "implementation")]
-    refs = [ref for ref in refs if run_git(root, "show-ref", "--verify", "--quiet", ref, check=False).returncode == 0]
-    raw = run_git(root, "rev-list", "--ancestry-path", "--topo-order", "--reverse", *[f"{base}..{ref}" for ref in refs]).stdout if refs else ""
-    infos = []
+    refs = [
+        ref for ref in refs
+        if run_git(root, "show-ref", "--verify", "--quiet", ref, check=False).returncode == 0
+    ]
+    raw = (
+        run_git(
+            root,
+            "rev-list",
+            "--ancestry-path",
+            "--topo-order",
+            "--reverse",
+            *[f"{base}..{ref}" for ref in refs],
+        ).stdout
+        if refs
+        else ""
+    )
+    infos: list[dict[str, Any]] = []
     for sha in raw.splitlines():
         info = _commit_info(root, sha)
-        if info["wave"] == wave and info["slice"] and info["role"] in {"oracle", "merge", "implementation", "checkpoint"}:
+        # Only the v119 checkpoint role is part of the profile surface.  In
+        # particular, a legacy Role: checkpoint commit must be invisible.
+        if (
+            info["wave"] == wave
+            and info["slice"]
+            and info["role"] in {"oracle", "merge", "implementation", "implementation-checkpoint"}
+        ):
             infos.append(info)
-    stats_by_sha = {info["sha"]: _numstat(root, info["sha"]) for info in infos if info["role"] in {"oracle", "implementation"}}
+
+    stats_by_sha = {
+        info["sha"]: _numstat(root, info["sha"])
+        for info in infos
+        if info["role"] in {"oracle", "implementation"}
+    }
     warnings: list[str] = []
+
+    def interval(
+        after: dict[str, Any],
+        before: dict[str, Any],
+        label: str,
+    ) -> int | None:
+        delta = after["timestamp"] - before["timestamp"]
+        if delta < 0:
+            warnings.append(
+                f"non-monotonic {label} timestamps: {before['sha']} ({before['timestamp']}) "
+                f"before {after['sha']} ({after['timestamp']})"
+            )
+            return None
+        return delta
+
     for before, after in zip(infos, infos[1:]):
         if after["timestamp"] < before["timestamp"]:
-            warnings.append(f"non-monotonic committer timestamps: {before['sha']} ({before['timestamp']}) after {after['sha']} ({after['timestamp']})")
+            warnings.append(
+                f"non-monotonic committer timestamps: {before['sha']} ({before['timestamp']}) "
+                f"after {after['sha']} ({after['timestamp']})"
+            )
+
+    # Oracle-ready intervals are measured against the previous ready Oracle
+    # across the wave, so a Slice's latest attempt remains comparable to other
+    # Slices.  A backwards clock produces null plus an explicit warning.
     oracle_intervals: dict[str, int | None] = {}
-    previous_oracle_timestamp: int | None = None
-    previous_oracle_sha: str | None = None
+    previous_oracle: dict[str, Any] | None = None
     for info in infos:
         if info["role"] != "oracle":
             continue
-        if previous_oracle_timestamp is None:
-            oracle_intervals[info["sha"]] = None
-        elif info["timestamp"] < previous_oracle_timestamp:
-            oracle_intervals[info["sha"]] = None
-            warnings.append(f"non-monotonic Oracle-ready timestamps: {previous_oracle_sha} ({previous_oracle_timestamp}) before {info['sha']} ({info['timestamp']})")
-        else:
-            oracle_intervals[info["sha"]] = info["timestamp"] - previous_oracle_timestamp
-        previous_oracle_timestamp = info["timestamp"]
-        previous_oracle_sha = info["sha"]
+        oracle_intervals[info["sha"]] = (
+            None if previous_oracle is None else interval(info, previous_oracle, "Oracle-ready")
+        )
+        previous_oracle = info
+
     slices: dict[str, dict[str, Any]] = {}
     for position, info in enumerate(infos):
-        entry = slices.setdefault(info["slice"], {"attempts": [], "oracle_interval_seconds": None, "handoff_interval_seconds": None, "implementation_interval_seconds": None, "contract_numstat": {"files": 0, "insertions": 0, "deletions": 0}, "implementation_numstat": {"files": 0, "insertions": 0, "deletions": 0}})
+        entry = slices.setdefault(
+            info["slice"],
+            {
+                "attempts": [],
+                "oracle_interval_seconds": None,
+                "handoff_interval_seconds": None,
+                "implementation_interval_seconds": None,
+                "contract_numstat": {"files": 0, "insertions": 0, "deletions": 0},
+                "implementation_numstat": {"files": 0, "insertions": 0, "deletions": 0},
+            },
+        )
         if info["role"] == "oracle":
             entry.setdefault("_oracles", []).append((position, info))
         elif info["role"] == "merge":
@@ -203,6 +255,7 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
             entry.setdefault("_implementations", []).append((position, info))
         else:
             entry.setdefault("checkpoints", []).append(info)
+
     for entry in slices.values():
         oracle_records = entry.pop("_oracles", [])
         merge_records = entry.pop("_merges", [])
@@ -210,38 +263,87 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         oracles = [info for _, info in oracle_records]
         merges = [info for _, info in merge_records]
         implementations = [info for _, info in implementation_records]
-        oracle_stats = [item for oracle in oracles for item in stats_by_sha.get(oracle["sha"], [])]
-        entry["contract_numstat"] = {"files": len(oracle_stats), "insertions": sum(item[1] for item in oracle_stats), "deletions": sum(item[2] for item in oracle_stats)}
-        if oracles:
-            entry["oracle_interval_seconds"] = oracle_intervals.get(oracles[-1]["sha"])
-        if oracles and merges:
-            interval = merges[0]["timestamp"] - oracles[0]["timestamp"]
-            entry["handoff_interval_seconds"] = interval if interval >= 0 else None
-        if merges and implementations:
-            interval = implementations[-1]["timestamp"] - merges[-1]["timestamp"]
-            entry["implementation_interval_seconds"] = interval if interval >= 0 else None
-        implementation_stats = [item for impl in implementations for item in stats_by_sha.get(impl["sha"], [])]
+
+        oracle_stats = [
+            item for oracle in oracles for item in stats_by_sha.get(oracle["sha"], [])
+        ]
+        entry["contract_numstat"] = {
+            "files": len(oracle_stats),
+            "insertions": sum(item[1] for item in oracle_stats),
+            "deletions": sum(item[2] for item in oracle_stats),
+        }
+        implementation_stats = [
+            item for impl in implementations for item in stats_by_sha.get(impl["sha"], [])
+        ]
         if implementations:
-            entry["implementation_numstat"] = {"files": len({item[0] for item in implementation_stats}), "insertions": sum(item[1] for item in implementation_stats), "deletions": sum(item[2] for item in implementation_stats)}
-        # An implementation belongs to the latest Contract merge that precedes
-        # it in the topology.  A correction therefore leaves earlier attempts
-        # without an implementation rather than assigning the final commit to
-        # the first attempt by list position.
+            entry["implementation_numstat"] = {
+                "files": len({item[0] for item in implementation_stats}),
+                "insertions": sum(item[1] for item in implementation_stats),
+                "deletions": sum(item[2] for item in implementation_stats),
+            }
+
+        # Attach each Implementation to the latest Contract merge that
+        # precedes it in the topology.  This deliberately does not use commit
+        # timestamps: corrected attempts may have skewed clocks.
         implementation_by_merge: dict[int, dict[str, Any]] = {}
-        merge_cursor = 0
         for implementation_position, implementation in implementation_records:
-            while (
-                merge_cursor + 1 < len(merge_records)
-                and merge_records[merge_cursor + 1][0] < implementation_position
+            preceding = [
+                index
+                for index, (merge_position, _) in enumerate(merge_records)
+                if merge_position < implementation_position
+            ]
+            if preceding:
+                implementation_by_merge[preceding[-1]] = implementation
+
+        attempts: list[dict[str, Any]] = []
+        for index, oracle in enumerate(oracles):
+            merge = merges[index] if index < len(merges) else None
+            implementation = implementation_by_merge.get(index)
+            handoff = (
+                None
+                if merge is None
+                else interval(merge, oracle, "Contract handoff")
+            )
+            implementation_interval = (
+                None
+                if merge is None or implementation is None
+                else interval(implementation, merge, "Implementation")
+            )
+            attempts.append(
+                {
+                    "attempt": index + 1,
+                    "oracle_sha": oracle["sha"],
+                    "contract_merge_sha": merge["sha"] if merge else None,
+                    "implementation_sha": implementation["sha"] if implementation else None,
+                    "oracle_interval_seconds": oracle_intervals.get(oracle["sha"]),
+                    "handoff_interval_seconds": handoff,
+                    "implementation_interval_seconds": implementation_interval,
+                }
+            )
+        entry["attempts"] = attempts
+        # These three Slice fields are a projection of the latest Contract
+        # attempt only; never combine first-attempt and last-attempt timings.
+        if attempts:
+            latest = attempts[-1]
+            for key in (
+                "oracle_interval_seconds",
+                "handoff_interval_seconds",
+                "implementation_interval_seconds",
             ):
-                merge_cursor += 1
-            if merge_records and merge_records[merge_cursor][0] < implementation_position:
-                implementation_by_merge[merge_cursor] = implementation
-        entry["attempts"] = [{"attempt": index + 1, "oracle_sha": oracle["sha"], "oracle_interval_seconds": oracle_intervals.get(oracle["sha"]), "contract_merge_sha": merges[index]["sha"] if index < len(merges) else None, "implementation_sha": implementation_by_merge[index]["sha"] if index in implementation_by_merge else None} for index, oracle in enumerate(oracles)]
+                entry[key] = latest[key]
         if entry.get("checkpoints"):
             entry["checkpoints"] = [checkpoint["sha"] for checkpoint in entry["checkpoints"]]
-    wave_commits = [info for info in infos if info["role"] in {"oracle", "merge", "implementation", "checkpoint"}]
-    wave_contract_stats = [item for info in infos if info["role"] == "oracle" for item in stats_by_sha.get(info["sha"], [])]
+
+    wave_commits = [
+        info for info in infos
+        if info["role"] in {"oracle", "merge", "implementation", "implementation-checkpoint"}
+    ]
+    wave_contract_stats = [
+        item
+        for info in infos
+        if info["role"] == "oracle"
+        for item in stats_by_sha.get(info["sha"], [])
+    ]
     wave_impl_stats = {"files": 0, "insertions": 0, "deletions": 0}
     for entry in slices.values():
         current = entry["implementation_numstat"]
@@ -249,5 +351,31 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         wave_impl_stats["insertions"] += current["insertions"]
         wave_impl_stats["deletions"] += current["deletions"]
     first_oracle = next((item for item in wave_commits if item["role"] == "oracle"), None)
-    final_impl = next((item for item in reversed(wave_commits) if item["role"] == "implementation"), None)
-    return {"ok": True, "operation": "profile-report", "task_id": task, "wave_id": wave, "base": base, "warnings": sorted(set(warnings)), "slices": slices, "wave": {"elapsed_seconds": final_impl["timestamp"] - first_oracle["timestamp"] if first_oracle and final_impl and final_impl["timestamp"] >= first_oracle["timestamp"] else None, "contract_numstat": {"files": len(wave_contract_stats), "insertions": sum(item[1] for item in wave_contract_stats), "deletions": sum(item[2] for item in wave_contract_stats)}, "implementation_numstat": wave_impl_stats}}
+    final_impl = next(
+        (item for item in reversed(wave_commits) if item["role"] == "implementation"),
+        None,
+    )
+    return {
+        "ok": True,
+        "operation": "profile-report",
+        "task_id": task,
+        "wave_id": wave,
+        "base": base,
+        "warnings": sorted(set(warnings)),
+        "slices": slices,
+        "wave": {
+            "elapsed_seconds": (
+                final_impl["timestamp"] - first_oracle["timestamp"]
+                if first_oracle
+                and final_impl
+                and final_impl["timestamp"] >= first_oracle["timestamp"]
+                else None
+            ),
+            "contract_numstat": {
+                "files": len(wave_contract_stats),
+                "insertions": sum(item[1] for item in wave_contract_stats),
+                "deletions": sum(item[2] for item in wave_contract_stats),
+            },
+            "implementation_numstat": wave_impl_stats,
+        },
+    }

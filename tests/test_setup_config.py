@@ -36,8 +36,16 @@ class SetupConfigMigrationTests(unittest.TestCase):
         custom.write_text("user profile\n", encoding="utf-8")
         return source, home
 
-    def run_setup(self, script: Path, home: Path) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(["bash", str(script)], env={**os.environ, "HOME": str(home)}, capture_output=True, text=True, check=False)
+    def run_setup(
+        self, script: Path, home: Path, env: dict[str, str] | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["bash", str(script)],
+            env={**os.environ, "HOME": str(home), **(env or {})},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
 
     def test_upgrade_installs_v119_roles_and_retires_legacy_roles(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -118,6 +126,96 @@ class SetupConfigMigrationTests(unittest.TestCase):
                 protected_pi_settings.with_name("settings.json.bak").read_bytes(),
                 b"user pi settings\n",
             )
+            self.assertTrue(all(not legacy.exists() for legacy in legacy_profiles))
+
+    def test_dangling_standing_order_links_are_backed_up_and_replaced_before_legacy_retirement(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            for relative in (
+                ".pi/agent/agents/wave-reviewer.md",
+                ".codex/agents/wave-reviewer.toml",
+                ".claude/agents/wave-reviewer.md",
+            ):
+                reviewer = source / "home" / relative
+                reviewer.parent.mkdir(parents=True, exist_ok=True)
+                reviewer.write_text("v119 reviewer profile\n", encoding="utf-8")
+
+            standing_orders = (
+                ".codex/AGENTS.md",
+                ".pi/agent/APPEND_SYSTEM.md",
+            )
+            dangling_targets: dict[str, str] = {}
+            for index, relative in enumerate(standing_orders):
+                destination = home / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                dangling_target = str(base / f"missing-standing-orders-{index}.md")
+                self.assertFalse(Path(dangling_target).exists())
+                destination.symlink_to(dangling_target)
+                dangling_targets[relative] = dangling_target
+
+            protected_files = {
+                home / ".codex/config.toml": b"user codex config\n",
+                home / ".pi/agent/user-protected.json": b"user pi data\n",
+                home / ".config/user-protected.conf": b"user config\n",
+            }
+            for protected, content in protected_files.items():
+                protected.parent.mkdir(parents=True, exist_ok=True)
+                protected.write_bytes(content)
+
+            legacy_profiles = (
+                home / ".pi/agent/agents/implementer.md",
+                home / ".codex/agents/implementer.toml",
+                home / ".claude/agents/implementer.md",
+            )
+            for legacy in legacy_profiles:
+                legacy.parent.mkdir(parents=True, exist_ok=True)
+                legacy.write_text("legacy\n", encoding="utf-8")
+
+            retirement_marker = base / "legacy-retirement-started"
+            guard_bin = base / "guard-bin"
+            guard_bin.mkdir()
+            real_rm = shutil.which("rm")
+            self.assertIsNotNone(real_rm)
+            guarded_rm = guard_bin / "rm"
+            guarded_rm.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -e\n"
+                f"test \"$HOME/.codex/AGENTS.md\" -ef \"{source / 'home/.codex/AGENTS.md'}\"\n"
+                f"test \"$HOME/.pi/agent/APPEND_SYSTEM.md\" -ef \"{source / 'home/.pi/agent/APPEND_SYSTEM.md'}\"\n"
+                "test -L \"$HOME/.codex/AGENTS.md.bak\"\n"
+                "test -L \"$HOME/.pi/agent/APPEND_SYSTEM.md.bak\"\n"
+                f"printf 'retirement after install\\n' >> \"{retirement_marker}\"\n"
+                f"exec \"{real_rm}\" \"$@\"\n",
+                encoding="utf-8",
+            )
+            guarded_rm.chmod(0o755)
+
+            result = self.run_setup(
+                source / "setup_scripts/setup_config.sh",
+                home,
+                env={"PATH": f"{guard_bin}{os.pathsep}{os.environ['PATH']}"},
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            for relative in standing_orders:
+                with self.subTest(standing_order=relative):
+                    destination = home / relative
+                    source_file = source / "home" / relative
+                    backup = destination.with_name(f"{destination.name}.bak")
+                    self.assertTrue(destination.is_file())
+                    self.assertTrue(
+                        os.path.samefile(destination, source_file),
+                        f"{destination} must resolve to the shipped standing-order source",
+                    )
+                    self.assertEqual(destination.read_bytes(), source_file.read_bytes())
+                    self.assertTrue(backup.is_symlink(), f"missing link backup: {backup}")
+                    self.assertEqual(os.readlink(backup), dangling_targets[relative])
+
+            for protected, content in protected_files.items():
+                with self.subTest(protected=protected):
+                    self.assertEqual(protected.read_bytes(), content)
+            self.assertTrue(retirement_marker.is_file())
             self.assertTrue(all(not legacy.exists() for legacy in legacy_profiles))
 
     def test_stale_or_divergent_orchestrate_destinations_are_relinked_before_legacy_retirement(self) -> None:

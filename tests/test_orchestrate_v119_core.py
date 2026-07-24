@@ -297,6 +297,65 @@ class V119CoreContractTests(unittest.TestCase):
         self.assertFalse((implementation_path / "unrelated/contract.py").exists())
         self.assertFalse(Path(self.git(implementation_path, "rev-parse", "--git-path", "MERGE_HEAD")).exists())
 
+    def _assert_contract_merge_rejects_misdirected_implementation_head(
+        self, mode: str
+    ) -> None:
+        implementation = self.create_worktree(self.root, "implementation")
+        oracle_path = Path(str(self.create_worktree(self.root, "oracle")["worktree"]))
+        implementation_path = Path(str(implementation["worktree"]))
+        contract = self.commit_file(
+            oracle_path,
+            "shared/guarded_api.py",
+            "GUARDED = True\n",
+            "guarded contract\nWave: wave-a\nSlice: live-branch-guard\nRole: oracle\n",
+        )
+
+        if mode == "unrelated":
+            self.git(implementation_path, "checkout", "-q", "-b", "unrelated-live-branch")
+            expected_live_branch = "unrelated-live-branch"
+        elif mode == "detached":
+            self.git(implementation_path, "checkout", "--detach", "-q")
+            expected_live_branch = ""
+        else:  # pragma: no cover - contract helper misuse
+            self.fail(f"unsupported worktree mode: {mode}")
+
+        head_before = self.git(implementation_path, "rev-parse", "HEAD")
+        live_branch_before = self.git(
+            implementation_path,
+            "symbolic-ref", "--quiet", "--short", "HEAD", check=False,
+        )
+        refs_before = self.git(self.root, "show-ref")
+        self.assertEqual(live_branch_before, expected_live_branch)
+        self.assertNotIn(contract, self.git(implementation_path, "rev-list", "HEAD").splitlines())
+
+        result = self.cli(
+            self.root, "contract", "merge", "--root", str(self.root), "--task-id",
+            self.task_id, "--wave-id", self.wave_id, "--contract-sha", contract,
+        )
+        error = self.error_payload(result)
+        self.assertRegex(str(error["error"]).lower(), r"branch|worktree|detached")
+
+        self.assertEqual(self.git(implementation_path, "rev-parse", "HEAD"), head_before)
+        self.assertEqual(
+            self.git(
+                implementation_path,
+                "symbolic-ref", "--quiet", "--short", "HEAD", check=False,
+            ),
+            live_branch_before,
+        )
+        self.assertEqual(self.git(self.root, "show-ref"), refs_before)
+        self.assertNotIn(contract, self.git(implementation_path, "rev-list", "HEAD").splitlines())
+        self.assertFalse((implementation_path / "shared/guarded_api.py").exists())
+        self.assertFalse(
+            Path(self.git(implementation_path, "rev-parse", "--git-path", "MERGE_HEAD")).exists()
+        )
+
+    def test_contract_merge_rejects_unrelated_live_implementation_branch_before_mutation(self) -> None:
+        self._assert_contract_merge_rejects_misdirected_implementation_head("unrelated")
+
+    def test_contract_merge_rejects_detached_live_implementation_head_before_mutation(self) -> None:
+        self._assert_contract_merge_rejects_misdirected_implementation_head("detached")
+
     def test_exact_no_ff_contract_merge_preserves_ancestry_and_merge_trailers(self) -> None:
         self.create_worktree(self.root, "implementation")
         oracle_path = Path(str(self.create_worktree(self.root, "oracle")["worktree"]))

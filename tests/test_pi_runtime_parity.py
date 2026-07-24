@@ -74,13 +74,22 @@ class PiRuntimeParityTests(unittest.TestCase):
                 self.assertIn("exact", text)
                 self.assertIn("sha", text)
             self.assertFalse((root / f"wave-reviewer{suffix}").exists(), runtime)
-        pi = (PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8").lower()
-        self.assertIn("generic pipeline", pi)
-        self.assertIn("implementation pipeline is lazy", pi)
-        self.assertIn("root controls dependency depth", pi)
         codex = (CODEX_SKILL / "runtime-codex.md").read_text(encoding="utf-8").lower()
         self.assertIn("two persistent native role agents", codex)
         self.assertIn("no simulated queue", codex)
+
+    def test_pi_lazy_pipeline_wording_is_direct_and_not_duplicated(self) -> None:
+        pi = " ".join((PI_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split())
+        lazy_creation_rule = (
+            "Root lazily creates and attaches the wave-implementer pipeline from the first "
+            "real Implementation task after the first Contract merge."
+        )
+        self.assertIn("generic pipeline", pi.lower())
+        self.assertEqual(pi.count(lazy_creation_rule), 1)
+        self.assertIn("## Dual-role generic pipelines and terminal handoff", pi)
+        self.assertIn("Root controls dependency depth", pi)
+        self.assertNotIn("Implementation pipeline is lazy", pi)
+        self.assertNotIn("pipeline lazily", pi)
 
     def test_runtime_core_has_no_binding_authority(self) -> None:
         source = (CODEX_SKILL / "scripts" / "_orchestrate" / "v119_core.py").read_text(encoding="utf-8")

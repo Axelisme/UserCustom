@@ -30,8 +30,10 @@ Implementation may overlap Oracle production paths and fills hidden behavior aft
 the exact Contract SHA with no fast-forward. `slice-ready` is the one terminal handoff and
 carries Slice plus exact SHA; the role ends its turn immediately afterward.
 
-A Wave collects into the task integration branch after its machine gates (contract suite,
-focused tests, lint/format/type) are green; the next Wave bases on the integration tip.
+Root creates the task integration worktree once from the persistence-branch tip the task
+starts at, and the first Wave uses that same base. A Wave collects into the task integration
+branch after its machine gates (contract suite, focused tests, lint/format/type) are green;
+the next Wave bases on the integration tip.
 Root decides dependency depth and placement. Runtime bindings own lifecycle. Pi maps the
 roles to generic pipelines: Oracle starts at C0 and Implementation starts lazily at its first
 real task. Codex maps them to two persistent native role agents using native messaging and
@@ -46,10 +48,9 @@ The JSON-only workflow commands are `worktree create|status|remove`, `contract m
 or branch. Removal requires a clean worktree and leaves its branch. Contract merge leaves
 ordinary conflicts visible. Integration collect merges one exact implementation SHA into the
 task integration branch with `Role: collect` trailers; conflicts stay visible; the collected
-list is a read-only projection of the commits after the exact base that `create` records in
-`refs/orchestrate/<task>/integration/base`, and a missing base ref fails closed rather than
-widening the range. Profile statistics use Git committer timestamps and
-numstat only; non-monotonic timestamps are warnings.
+list is a read-only projection bounded by the base ref `refs/orchestrate/<task>/integration/base`
+that `create` records, and a missing base ref fails closed. Profile statistics use Git
+committer timestamps and numstat only; non-monotonic timestamps are warnings.
 
 ## Acceptance and migration
 

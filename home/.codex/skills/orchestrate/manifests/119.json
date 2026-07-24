@@ -1,44 +1,44 @@
 {
   "documents": {
     "SKILL.md": {
-      "bytes": 4210,
+      "bytes": 4304,
       "sections": {
         "Acceptance and migration": "50deab6b7c5635bac045737d459d6768d6e7bba4ea9726b2ebfc9bfd3919dff7",
-        "CLI surface": "949a895c1180cbb19b336e60264e7e6fe0813fdbf9df0b350bddeefa0cb0169c",
+        "CLI surface": "c1a0a7d05bc80f8f5c871223651490f4fac3edee1e0934b312dfcd66745716eb",
         "Iron rules": "c361d09bee6a9c3b82e00dfc32264fcc2e7ea00b36a211474799e0186387192c",
         "Orchestrate v119": "71ad02b7936dd3ad6c6158bb138baf4746fd6a2b4e9f2b44648598452c1fcf65",
         "Runtime bindings": "70dcc43671bd57337a27f45432d9ca7bd9fe6b2cfd9e37ef6899490bf4976a30",
-        "Workflow": "f891326c9599cbcfad1a4a7db7b0b358d895fc9dcdfe3af9a4fd812db3374fa3"
+        "Workflow": "b8c42f891c1fa7f1e6ae90f17fc695317084398e52f197f71fa7f1d1ea87443b"
       },
-      "sha256": "ab166fb187a754c869ed0228fe2ac859f8aa93096981e75bf397aaf62e4b5285"
+      "sha256": "1d9f68687f5be8c9d309d1130640b69f5551f2ae0a305c3d4b876ea7d814f88d"
     },
     "runtime-claude.md": {
-      "bytes": 1450,
+      "bytes": 1496,
       "sections": {
-        "Blocked checkpoint contract": "1f0569e9dcf6756dc7cea10e84cc46bfda45a7cfefab2a8b77c780d63b2e7fac",
+        "Blocked checkpoint contract": "9e34c188bd7608fcbc869b298fefaf672cdf7086de0b9eb31fb19903daa05931",
         "Continuation and acceptance": "abf3e7fa3512b4d8d0f0b65018108fab3b70a707a6fa32a1bc4ad0b93b23fe73",
         "Dual-role handoff": "c343135f48b37d95e47de215bcc9dddb3f7cfbea76ab665190ea732078cc030e",
         "Orchestrate \u2014 Claude runtime binding": "3704d57f6cdb2d03c1bb3737287fbdae3c10960afbc27ef3f00e976d194adb41"
       },
-      "sha256": "997622c5eb557b7a03c69efdcfd3dc499b10153acbf0e519b6da2814cf02b568"
+      "sha256": "c4509cb282c085e93389b2c8a46cbfe70a5b0ae30f486a6316fe5c2c2acf1eba"
     },
     "runtime-codex.md": {
-      "bytes": 2739,
+      "bytes": 2785,
       "sections": {
         "Acceptance": "8db5e55d7c684b197116254df2202d63af145d3f68e94bd59b1eabe5b0eea10a",
-        "Blocked checkpoint contract": "1f0569e9dcf6756dc7cea10e84cc46bfda45a7cfefab2a8b77c780d63b2e7fac",
+        "Blocked checkpoint contract": "9e34c188bd7608fcbc869b298fefaf672cdf7086de0b9eb31fb19903daa05931",
         "Dual-role native agents and terminal handoff": "107db5fdda327d49827da8968ad25d3b8d92692cb4e194942a95a016ac358ab6",
         "Native generations": "64015421912e3a3ec2ba5eaad81de73d7bb9355531016e972f2909c67fe1f468",
         "Orchestrate \u2014 Codex runtime binding": "1a755627e749ad095d030be0c13fb4246e51a35fdecf350b081a2a44b3ab8bd4",
         "Profile bootstrap and safety": "9f751889320ddaedf591fbcde3843acb6fc6e0c74fe6012188cb4766007e5ccc"
       },
-      "sha256": "b1b635c9bcd6539a6cec7a55aa016b1398121d4156258c907a3f67e7d1b6b4b1"
+      "sha256": "c6fb7fc7f0a59d5f8950fe92e0654d97f3610886cd066421af19a9591bd24adc"
     },
     "runtime-pi.md": {
-      "bytes": 3531,
+      "bytes": 3577,
       "sections": {
         "Activation and leases": "aaf688a36d895c159ab8253172598ba478a3f0c811a6df447b7eb7a218de687f",
-        "Blocked checkpoint contract": "1f0569e9dcf6756dc7cea10e84cc46bfda45a7cfefab2a8b77c780d63b2e7fac",
+        "Blocked checkpoint contract": "9e34c188bd7608fcbc869b298fefaf672cdf7086de0b9eb31fb19903daa05931",
         "Dual-role generic pipelines and terminal handoff": "8654f390683258d7c75cde02ee8c82489d876bd4706bd1c745e978b36d0c6014",
         "Interactive Root completion flow": "cc854e5254e5e097b8a50a18f0564f0941b13af87d5ddd4be0f03023e9934ad6",
         "Milestones and flow control": "d381f9777def57e53487ae6e55c67f7bf71415c82a3a59729304ab6612e5f7c9",
@@ -46,7 +46,7 @@
         "Profile routing": "413f0a7d6a376a8234b29f10908ff76f1ddbfe58f951800861b7131aef3fde9a",
         "Runtime budgets": "0ca619d7020dfade4a50800b3327f5d388d5967339833337cd7315ee54627b83"
       },
-      "sha256": "b3bc2c2f5438631acbc600ea4d5c62f14113dbde294f8243deed30206b09ff97"
+      "sha256": "5912fefee8d3d1345b34d5d13f0129ede1f7ea92cfaa69d2593ee86e27535379"
     },
     "scripts/_orchestrate/__init__.py": {
       "bytes": 55,
@@ -149,10 +149,10 @@
       "standing_orders_sha256": "0c7b74083a5807f1b9922b54e68c427280349ef7dbe50bea92e2f0120ee5e8fd"
     },
     ".claude/agents/wave-implementer.md": {
-      "bytes": 2245,
-      "profile_contract_sha256": "3b236fdb4012ae4accf3f2916d4db4ad4efacd71a3b2b1d02de70ac0e1782b4c",
-      "sha256": "dad973fb25908ab69525cde5265c0646384c9dcd5b28787c82d46e9dca0507f7",
-      "standing_orders_sha256": "43b3522da9954b37605cff61603fe715be579771efdf6060152c4a9a441a52e3"
+      "bytes": 2494,
+      "profile_contract_sha256": "e5d632d4d08c4becfece66e05727f9f6719389a2a8887bd18238905838f60e44",
+      "sha256": "59d05b57552958ee0a160512a88e729b40095201e7433d75a9bcd82015f25924",
+      "standing_orders_sha256": "008939b14bef11613c8b8e50be9e5520aeb42c37add7674eaaa1b4312ea2fb8d"
     },
     ".claude/agents/wave-oracle.md": {
       "bytes": 3157,
@@ -215,10 +215,10 @@
       "standing_orders_sha256": "0c7b74083a5807f1b9922b54e68c427280349ef7dbe50bea92e2f0120ee5e8fd"
     },
     ".codex/agents/wave-implementer.toml": {
-      "bytes": 2321,
-      "profile_contract_sha256": "380207b694006d7fe7ae7e63f4a82d2c886c4a56b85b30d6552c1896cae5ee8f",
-      "sha256": "80d6638099ad5eb5f26dcf7699a0630290c61eb117f6151bf7b14d0c20fa8e11",
-      "standing_orders_sha256": "43b3522da9954b37605cff61603fe715be579771efdf6060152c4a9a441a52e3"
+      "bytes": 2570,
+      "profile_contract_sha256": "c1fc3658666e41dbda2f784af9a7a1623d50996302349495811c7dd7e5e9bb7a",
+      "sha256": "3553f68b6dc8d12a2075aa6052dbda710196757e42bc12c671c258abe6c055d5",
+      "standing_orders_sha256": "008939b14bef11613c8b8e50be9e5520aeb42c37add7674eaaa1b4312ea2fb8d"
     },
     ".codex/agents/wave-oracle.toml": {
       "bytes": 3233,
@@ -281,10 +281,10 @@
       "standing_orders_sha256": "474893db2d008e6c5034be08348f488968260a857b783352efa5f6206e0dd9da"
     },
     ".pi/agent/agents/wave-implementer.md": {
-      "bytes": 2525,
-      "profile_contract_sha256": "05d5d1210090dda071128c6c84b3cf7e9c6719b8adac0b62ae4e99528544a918",
-      "sha256": "7c29d4ef4b517a0b098cd31a802a328919ade3f4b5ff24d1fe73484d4134d5fa",
-      "standing_orders_sha256": "43b3522da9954b37605cff61603fe715be579771efdf6060152c4a9a441a52e3"
+      "bytes": 2775,
+      "profile_contract_sha256": "fd8cfb0cc44014e110da260a6e8d5e274a7148afe6d5a95761e14669ea44a1e0",
+      "sha256": "81cd59b61c72c6873710876fe6459ca74bc4d12a0bdb31b445a49a13ca7c32c2",
+      "standing_orders_sha256": "008939b14bef11613c8b8e50be9e5520aeb42c37add7674eaaa1b4312ea2fb8d"
     },
     ".pi/agent/agents/wave-oracle.md": {
       "bytes": 3477,

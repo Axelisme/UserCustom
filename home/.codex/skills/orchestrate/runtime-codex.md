@@ -37,7 +37,7 @@ clean Git state before consuming a handoff.
 
 ## Blocked checkpoint contract
 
-If Implementation is blocked by a contradictory Contract, it creates a clean Git checkpoint commit carrying `Wave: <wave-id>`, `Slice: <slice-id>`, and `Role: implementation-checkpoint`. Terminal blocked output/hold includes the concrete counterexample and exact checkpoint SHA; ready and terminal contracts remain unchanged.
+If Implementation is blocked by a contradiction, an infeasible Contract, or an underspecified Contract, it creates a clean Git checkpoint commit carrying `Wave: <wave-id>`, `Slice: <slice-id>`, and `Role: implementation-checkpoint`. Terminal blocked output/hold includes the concrete counterexample and exact checkpoint SHA; ready and terminal contracts remain unchanged.
 
 ## Acceptance
 

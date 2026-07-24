@@ -25,9 +25,10 @@ axis. The gate reports both axes separately and never changes the checkout.
    `blocked_on_decision`, not `needs_fix`; stronger wishes are not existing norms.
 5. For mechanical small findings (naming, dead code, typo, or ≤30 lines of local logic),
    include a directly applicable unified diff patch proposal inside the finding. Stay
-   read-only and never modify the checkout. After Root applies such a patch, validation is
-   only: applied diff matches the proposed patch, and focused tests are green; do not open
-   another two-axis review for that patch.
+   read-only and never modify the checkout. Dev-flow routes the patch as either a mechanical
+   Contract-surface slip or a bounded fix: for a mechanical slip, validation is only that the
+   applied diff matches the proposal and focused tests are green; a bounded fix is re-reviewed
+   as the delta from this SHA. Neither reopens a full two-axis review.
 6. End with finding counts and the worst issue within each axis. Do not merge or rerank
    axes, modify files, or claim a passing gate without clean-detached exact-SHA evidence.
 

@@ -286,14 +286,15 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         # precedes it in the topology.  This deliberately does not use commit
         # timestamps: corrected attempts may have skewed clocks.
         implementation_by_merge: dict[int, dict[str, Any]] = {}
+        merge_cursor = 0
         for implementation_position, implementation in implementation_records:
-            preceding = [
-                index
-                for index, (merge_position, _) in enumerate(merge_records)
-                if merge_position < implementation_position
-            ]
-            if preceding:
-                implementation_by_merge[preceding[-1]] = implementation
+            while (
+                merge_cursor + 1 < len(merge_records)
+                and merge_records[merge_cursor + 1][0] < implementation_position
+            ):
+                merge_cursor += 1
+            if merge_records and merge_records[merge_cursor][0] < implementation_position:
+                implementation_by_merge[merge_cursor] = implementation
 
         attempts: list[dict[str, Any]] = []
         for index, oracle in enumerate(oracles):
@@ -334,10 +335,6 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         if entry.get("checkpoints"):
             entry["checkpoints"] = [checkpoint["sha"] for checkpoint in entry["checkpoints"]]
 
-    wave_commits = [
-        info for info in infos
-        if info["role"] in {"oracle", "merge", "implementation", "implementation-checkpoint"}
-    ]
     wave_contract_stats = [
         item
         for info in infos
@@ -350,9 +347,9 @@ def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
         wave_impl_stats["files"] += current["files"]
         wave_impl_stats["insertions"] += current["insertions"]
         wave_impl_stats["deletions"] += current["deletions"]
-    first_oracle = next((item for item in wave_commits if item["role"] == "oracle"), None)
+    first_oracle = next((item for item in infos if item["role"] == "oracle"), None)
     final_impl = next(
-        (item for item in reversed(wave_commits) if item["role"] == "implementation"),
+        (item for item in reversed(infos) if item["role"] == "implementation"),
         None,
     )
     return {

@@ -1,6 +1,6 @@
 # Orchestrate — Codex runtime binding
 
-Codex uses the native tools exposed by the current session. This document maps v122 roles
+Codex uses the native tools exposed by the current session. This document maps v123 roles
 without emulating runtime state.
 
 ## Dual-role native agents and terminal handoff

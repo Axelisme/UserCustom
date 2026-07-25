@@ -92,7 +92,7 @@ Skip or report issues instead of editing when:
 - The fix requires an architectural decision not already made.
 - The fix needs product, API, schema, or compatibility judgement.
 - The change would alter behavior beyond the user's request.
-- The finding touches authority, lifecycle, lock ordering, retention, or cross-process sequencing. These read as accidental complexity and are usually load-bearing; hand them to a formal review or a contract correction rather than guessing. Proposing removal of a sleep, lock, retention rule, or replay mechanism requires a minimal executable reproduction — source reading alone has argued for removing timing that turned out to hold the system together.
+- The finding would remove a load-bearing mechanism — authority, lifecycle, lock ordering, retention, or cross-process sequencing — on source reading alone. Such machinery reads as accidental complexity and often is not, so removal needs a minimal executable reproduction: reading has argued for deleting timing that held the system together. Report it rather than guessing. This cuts both ways — when nobody can produce the failing test that justifies such a mechanism, record that as its own finding, because an unjustified mechanism is a defect, not a fixture.
 - The change would alter a frozen public contract or an immutable acceptance surface (e.g. Oracle-owned contract tests in dev-flow): report it for routing to a contract correction or the candidate backlog. Never edit a test to match code you just changed — that silently rewrites what was accepted. Internal shape is always yours to simplify; the promised interface is not.
 - The apparent problem is in generated, vendored, or intentionally duplicated code.
 

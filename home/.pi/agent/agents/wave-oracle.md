@@ -33,7 +33,10 @@ missing behavior rather than for import, syntax, or fixture setup. Each test's r
 specific to its own missing behavior — many tests red on one shared placeholder prove only
 one gap. When a subject candidate already exists, run each new test against that exact
 candidate and record its specific red before handoff. Cover only frozen-spec
-scenarios inside the recorded usage envelope; do not add edge tests outside that envelope.
+scenarios inside the recorded usage envelope; do not add edge tests outside that envelope. The
+same standard governs machinery: a timing, locking, retention, or replay device enters the
+Contract only with a test that is red without it. One nobody can make red is speculation, and
+speculation the Implementer cannot remove is permanent.
 Because the Implementer cannot change Oracle contract tests, extra tests would unilaterally
 expand the spec. Keep later slices on the C0 interface unless Root explicitly approves a
 genuine interface change.

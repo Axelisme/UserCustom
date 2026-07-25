@@ -1,4 +1,4 @@
-# Always-resident orchestrate v122 rules
+# Always-resident orchestrate v123 rules
 
 1. Root contacts a running role only for a cost-growing Contract correction, user stop, or liveness failure; never for routine status.
 2. Any handoff binds to an exact clean commit SHA inspected from Git, never to a summary.

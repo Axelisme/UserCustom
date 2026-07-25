@@ -145,6 +145,15 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
             ):
                 self.assertTrue(bounded[surface], surface)
             self.assertFalse(bounded["automatic_conversion"])
+            # Crossing v123 must announce that machinery now needs its own red test.
+            symmetric = requirements["v122-to-v123-symmetric-mechanism-evidence"]
+            for surface in (
+                "mechanism_needs_a_red_test_to_enter",
+                "unjustified_mechanism_is_a_finding",
+                "harden_after_the_interface_is_stable",
+            ):
+                self.assertTrue(symmetric[surface], surface)
+            self.assertFalse(symmetric["automatic_conversion"])
             self.assertEqual(
                 json.loads(pin.read_text(encoding="utf-8"))["skill_version"], version
             )

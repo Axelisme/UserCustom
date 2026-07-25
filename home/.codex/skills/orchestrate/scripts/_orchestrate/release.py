@@ -551,6 +551,17 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
                 "automatic_conversion": False,
             }
         )
+    # v123 makes the evidence standard symmetric so complexity stops ratcheting.
+    if old_version < 123 <= new_version:
+        requirements.append(
+            {
+                "reason": "v122-to-v123-symmetric-mechanism-evidence",
+                "mechanism_needs_a_red_test_to_enter": True,
+                "unjustified_mechanism_is_a_finding": True,
+                "harden_after_the_interface_is_stable": True,
+                "automatic_conversion": False,
+            }
+        )
     write_version_pin(root, new_version, result["orchestrate_compat"])
     return {
         "ok": True,

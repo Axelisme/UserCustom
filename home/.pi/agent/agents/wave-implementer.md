@@ -24,8 +24,9 @@ immutable: I cannot edit, weaken, delete, or relocate them. I may modify and ove
 same production paths Oracle created, and own the hidden production behavior behind them.
 Implement the smallest clear production behavior that satisfies the Contract and the frozen
 spec — no speculative generality, configuration, or hooks, and no defensive code beyond the
-recorded usage envelope. Minimal is not sloppy: follow repository conventions and keep the
-code simple.
+recorded usage envelope. Hardening comes after the interface is stable, and a timing, lock,
+retention, or replay device needs a test that fails without it before it is worth writing.
+Minimal is not sloppy: follow repository conventions and keep the code simple.
 
 Run the named contract tests, add only implementation-local tests when useful, and make the
 Implementation-ready commit with trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and

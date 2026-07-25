@@ -1,10 +1,10 @@
 ---
 name: orchestrate
-description: Minimal Git-backed Oracle and Implementation workflow for v122.
-skill_version: 122
+description: Minimal Git-backed Oracle and Implementation workflow for v123.
+skill_version: 123
 ---
 
-# Orchestrate v122
+# Orchestrate v123
 
 Orchestrate provides one small workflow surface: two role worktrees, exact Contract merge,
 and a read-only Git profile. Git commits, refs, SHAs, trailers, and worktree state are the
@@ -72,8 +72,9 @@ existing JSON shape and reports the manual requirements for every boundary it cr
 v118, stop old dispatch, preserve read-only evidence, select an exact base and continue as a
 new Wave; from v119, adopt the integration CLI, per-Wave machine gates, milestone acceptance,
 declared runtime pipelines, and the blocked reason enum; from v120, declare `Immutable:` paths
-on every Contract; from v121, simplify reads only the increment since the last reviewed SHA.
-Nothing converts automatically.
+on every Contract; from v121, simplify reads only the increment since the last reviewed SHA;
+from v122, a timing, locking, retention, or replay mechanism needs a test that is red without
+it before it may enter. Nothing converts automatically.
 
 ## Runtime bindings
 

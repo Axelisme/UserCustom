@@ -282,7 +282,15 @@ def section_span(lines: list[str], heading: str) -> tuple[int, int]:
 
 
 def row_cells(line: str) -> list[str]:
-    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+    row = line.strip()
+    if row.startswith("|"):
+        row = row[1:]
+    if row.endswith("|"):
+        row = row[:-1]
+    return [
+        cell.replace(r"\|", "|").strip()
+        for cell in re.split(r"(?<!\\)\|", row)
+    ]
 
 
 def unresolved_deferred_acceptance(text: str) -> list[str]:

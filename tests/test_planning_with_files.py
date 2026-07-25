@@ -31,14 +31,16 @@ def plan_dir(root: Path, task_id: str = "demo") -> Path:
     return root / ".agent_state" / "plans" / task_id
 
 
-def set_deferred_acceptance(path: Path, status: str) -> None:
+def set_deferred_acceptance(
+    path: Path, status: str, user_steps: str = "run x"
+) -> None:
     text = path.read_text(encoding="utf-8")
     placeholder = (
         "| none | none | none | none | none | none | "
         "none (`pending_machine | reviewed_awaiting_user | accepted | rejected | stale`) | none | none |"
     )
     item = (
-        "| slice-1 | abc1234 | user runs x and sees y | cli | run x | y | "
+        f"| slice-1 | abc1234 | user runs x and sees y | cli | {user_steps} | y | "
         f"{status} | none | canonical tests pass |"
     )
     path.write_text(text.replace(placeholder, item), encoding="utf-8")
@@ -144,7 +146,7 @@ class LifecycleTests(unittest.TestCase):
             run_plan(root, "init", "demo", "--goal", "g")
             run_plan(root, "phase-start", "demo", "--topic", "x")
             phase = plan_dir(root) / "phases" / "01-x.md"
-            set_deferred_acceptance(phase, "accepted")
+            set_deferred_acceptance(phase, "accepted", r"run x \| jq .ok")
 
             result = run_plan(
                 root,

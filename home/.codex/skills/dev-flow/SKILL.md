@@ -1,6 +1,6 @@
 ---
 name: dev-flow
-description: Route a heavy effort through frozen planning, v120 orchestrate implementation, and evidence-based acceptance.
+description: Route a heavy effort through frozen planning, v121 orchestrate implementation, and evidence-based acceptance.
 ---
 
 # Dev Flow
@@ -15,7 +15,7 @@ wayfinder → to-spec → to-tickets → orchestrate → acceptance → landing 
 
 The orchestrate station publishes an exact Implementation candidate. Acceptance does not create another workflow ledger and does not replace Git as durable truth. Workflow evolution reads [design principles](references/design-principles.md).
 
-## v120 acceptance order
+## v121 acceptance order
 
 At an integration milestone candidate, run **simplify**, then the **canonical tests**, then one **clean-detached code-review** of the **post-simplify exact SHA**; never review a moving worktree or an earlier pre-simplify commit. The candidate is the integration tip, and simplify and the review both work over the committed `base..integration-tip` range. At acceptance entry the exit condition is frozen. Between milestones each Wave passes only machine gates before collect; the expensive review context is spent once on the accumulated diff, never per Wave. Land exactly the reviewed SHA; a later commit reopens the gate.
 
@@ -63,7 +63,7 @@ budget spent → stop; reassess scope and the shortest convergent path; the next
                auto-loop per finding
 ```
 
-A collected Wave is closed: a milestone finding is routed to the Wave owning the defective surface, but the correction runs as a new Wave based on the integration tip and collects again, and a finding spanning several Waves is always a new Wave. Run focused tests during modification; run the full canonical suite once only after focused green on a clean writer tree. If a background writer's wait time exceeds Root's own estimate for a bounded fix, Root stops that writer and takes over directly. Full Wave ceremony is reserved for new seams, cross-authority changes, or an untrusted writer.
+A collected Wave is closed: a milestone finding is routed to the Wave owning the defective surface, but the correction runs as a new Wave based on the integration tip and collects again, and a finding spanning several Waves is always a new Wave. Run focused tests during modification; run the full canonical suite once only after focused green on a clean writer tree. Split the reruns: the writer produces the contract-suite and focused evidence, Root reruns only the machine gates before collect, and the full canonical suite runs once per milestone — never rerun an expensive suite that a clean exact SHA already covers. If a background writer's wait time exceeds Root's own estimate for a bounded fix, Root stops that writer and takes over directly. Full Wave ceremony is reserved for new seams, cross-authority changes, or an untrusted writer.
 
 Maintain one update-in-place acceptance record per release with candidate SHA, blockers, focused/full gate results, review verdict, deployment, and cleanup; it lives in the task plan as a phase record, never in a new state file, and does not create overlapping review/simplify artifacts per round.
 

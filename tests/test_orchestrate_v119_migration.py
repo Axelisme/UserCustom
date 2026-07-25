@@ -123,6 +123,17 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
             ):
                 self.assertTrue(adoption[surface], surface)
             self.assertFalse(adoption["automatic_conversion"])
+            # Crossing v121 must announce the gate that refuses undeclared Contracts.
+            declared = requirements["v120-to-v121-declared-acceptance-surface"]
+            for surface in (
+                "declare_immutable_trailers_on_contracts",
+                "collect_verifies_object_identity",
+                "reauthor_contract_to_collect_older_wave",
+                "quantified_cost_alarm_with_preserved_sha",
+                "fresh_session_when_frozen_input_moved",
+            ):
+                self.assertTrue(declared[surface], surface)
+            self.assertFalse(declared["automatic_conversion"])
             self.assertEqual(
                 json.loads(pin.read_text(encoding="utf-8"))["skill_version"], version
             )

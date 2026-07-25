@@ -29,8 +29,10 @@ axis. The gate reports both axes separately and never changes the checkout.
    Contract-surface slip or a bounded fix: for a mechanical slip, validation is only that the
    applied diff matches the proposal and focused tests are green; a bounded fix is re-reviewed
    as the delta from this SHA. Neither reopens a full two-axis review.
-6. End with finding counts and the worst issue within each axis. Do not merge or rerank
-   axes, modify files, or claim a passing gate without clean-detached exact-SHA evidence.
+6. End with finding counts and the worst issue within each axis, plus the baseline debt that
+   already existed at the base SHA and the residual risks being accepted. Naming pre-existing
+   debt is what stops it being rescored as a new regression. Do not merge or rerank axes,
+   modify files, or claim a passing gate without clean-detached exact-SHA evidence.
 
 The review is a final dev-flow gate after simplify and canonical tests, not a
 workflow, wave, or per-slice control surface.

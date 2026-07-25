@@ -1,10 +1,10 @@
 ---
 name: orchestrate
-description: Minimal Git-backed Oracle and Implementation workflow for v120.
-skill_version: 120
+description: Minimal Git-backed Oracle and Implementation workflow for v121.
+skill_version: 121
 ---
 
-# Orchestrate v120
+# Orchestrate v121
 
 Orchestrate provides one small workflow surface: two role worktrees, exact Contract merge,
 and a read-only Git profile. Git commits, refs, SHAs, trailers, and worktree state are the
@@ -27,8 +27,10 @@ A Wave has one `wave-oracle` and one `wave-implementer`, each with a determinist
 worktree and branch from the same explicit base. Oracle owns the public Interface, skeleton,
 contract tests, fixtures, and test adapters. The tests are immutable to Implementation.
 Implementation may overlap Oracle production paths and fills hidden behavior after Root merges
-the exact Contract SHA with no fast-forward. `slice-ready` is the one terminal handoff and
-carries Slice plus exact SHA; the role ends its turn immediately afterward.
+the exact Contract SHA with no fast-forward. Because that overlap is legitimate, the Contract
+commit names its own acceptance surface in repeatable `Immutable: <path>` trailers.
+`slice-ready` is the one terminal handoff and carries Slice plus exact SHA; the role ends its
+turn immediately afterward.
 
 Root creates the task integration worktree once from the persistence-branch tip the task
 starts at, and the first Wave uses that same base. A Wave collects into the task integration
@@ -47,7 +49,9 @@ The JSON-only workflow commands are `worktree create|status|remove`, `contract m
 `doctor`, `diff`, `pin status|set|migrate`, and `release`. Creation refuses an existing path
 or branch. Removal requires a clean worktree and leaves its branch. Contract merge leaves
 ordinary conflicts visible. Integration collect merges one exact implementation SHA into the
-task integration branch with `Role: collect` trailers; conflicts stay visible; the collected
+task integration branch with `Role: collect` trailers, after proving every declared immutable
+path resolves to the same Git object id as at the Contract merge — an edited, deleted, or
+relocated acceptance surface is refused before it enters. Conflicts stay visible; the collected
 list is a read-only projection bounded by the base ref `refs/orchestrate/<task>/integration/base`
 that `create` records, and a missing base ref fails closed. Profile statistics use Git
 committer timestamps and numstat only; non-monotonic timestamps are warnings. An
@@ -67,7 +71,8 @@ under current user authority, once per task. For an older pin, `pin migrate` pre
 existing JSON shape and reports the manual requirements for every boundary it crosses: from
 v118, stop old dispatch, preserve read-only evidence, select an exact base and continue as a
 new Wave; from v119, adopt the integration CLI, per-Wave machine gates, milestone acceptance,
-declared runtime pipelines, and the blocked reason enum. Nothing converts automatically.
+declared runtime pipelines, and the blocked reason enum; from v120, declare `Immutable:` paths
+on every Contract. Nothing converts automatically.
 
 ## Runtime bindings
 

@@ -1,6 +1,6 @@
 # Orchestrate — Codex runtime binding
 
-Codex uses the native tools exposed by the current session. This document maps v120 roles
+Codex uses the native tools exposed by the current session. This document maps v121 roles
 without emulating runtime state.
 
 ## Dual-role native agents and terminal handoff
@@ -25,7 +25,7 @@ ceremony commit.
 
 In v1, `spawn_agent` loads the named profile and `send_input` is notification; use
 `resume_agent` for same-identity continuation. In v2, `spawn_agent` is generic and native
-`send_message`/`followup_task` provide messaging and continuation. `wait_agent` is the event
+`send_message`/`followup_task` provide messaging and continuation. A successor in the same role stream keeps the identity but not necessarily the context: continue the session while the frozen input is unchanged, and start a fresh one — same identity, optionally a different model — once the Contract SHA, frozen spec, or base has moved, or after a provider or liveness failure. A stale session replays conclusions it drew about an input that no longer exists. One writer per role stream either way. `wait_agent` is the event
 wait in either generation. Identify the observed tool generation at session start and do not
 invent a missing capability.
 
@@ -33,7 +33,7 @@ invent a missing capability.
 
 At first use, verify the role profile instructions are active. Every dispatch names exact
 cwd, frozen base or subject SHA, write scope, pre-existing dirt, required evidence, and stop
-conditions. Workers do not create child workers or claim repository authority. Root proves
+conditions. A dispatch also names the exact gate commands with the environment they require, the Oracle-declared immutable paths, and the production paths this role may write. Workers do not create child workers or claim repository authority. Root proves
 clean Git state before consuming a handoff.
 
 ## Acceptance

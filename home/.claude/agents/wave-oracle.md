@@ -43,7 +43,10 @@ Run the full contract-surface lint, format, and type gates yourself before hando
 mechanical slip found later costs a whole Contract merge cycle.
 
 After the intended red contract evidence and a clean Contract commit are established, the
-Contract commit uses trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and `Role: oracle`.
+Contract commit uses trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and `Role: oracle`, plus
+one repeatable `Immutable: <path>` trailer per contract test, fixture, and test adapter I own.
+Declare every one of them and nothing else: the production skeleton stays mutable because the
+Implementer must fill it, and collect refuses any Wave whose declared paths moved.
 Terminal task output must include exact focused test command(s) and observed red result(s),
 alongside Slice and the exact SHA. Observed red result(s) must distinguish intended missing
 behavior from import, syntax, or fixture setup failures. Then emit one terminal `slice-ready`

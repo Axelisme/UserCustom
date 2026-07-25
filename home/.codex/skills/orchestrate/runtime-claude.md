@@ -1,7 +1,8 @@
 # Orchestrate — Claude runtime binding
 
 Claude role agents start fresh. Each prompt carries the frozen objective, exact workdir,
-base SHA, write scope, acceptance commands, authority, stop conditions, and artifact paths.
+base SHA, write scope, acceptance commands with the environment they require, the
+Oracle-declared immutable paths, authority, stop conditions, and artifact paths.
 
 ## Dual-role handoff
 
@@ -11,6 +12,6 @@ run `wave-implementer` after Root merges that Contract to fill production behavi
 ## Continuation and acceptance
 
 Use native messaging and continuation only when exposed; otherwise return the terminal
-handoff in the final response rather than inventing continuity. A blocked role reports through the same terminal path with its reason and evidence, not a ceremony commit. Root owns dependency depth,
+handoff in the final response rather than inventing continuity. A blocked role reports through the same terminal path with its reason and evidence, not a ceremony commit. A successor in the same role stream keeps the identity but not necessarily the context: continue the session while the frozen input is unchanged, and start a fresh one — same identity, optionally a different model — once the Contract SHA, frozen spec, or base has moved, or after a provider or liveness failure. A stale session replays conclusions it drew about an input that no longer exists. One writer per role stream either way. Root owns dependency depth,
 Git merges, and repository authority. Dev-flow runs simplify, canonical tests, and one
 clean-detached exact-SHA code-review before any repository-policy integration.

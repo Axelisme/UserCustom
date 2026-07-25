@@ -32,6 +32,8 @@ User 主動觸發,表示把「當前交付的這份任務/專案」的實作裁�
   戰術,不是 frozen contract;發現不合身(如某票超出 single-context)就直接改,不必問。
 - `git commit`(見下方紀律:gate 通過才 commit)、建立或 checkout 新的 git branch。
 - 刪除可確認是 agent 自己為當前任務建立的臨時 / worktree git branch。
+- provider / liveness 失敗時,在**同一 role 與 profile** 下換 model 或開 fresh session。
+  identity、單一 writer 與 exact Git authority 不變——換的只是跑它的那顆腦袋。
 
 ## 仍須遵守(全權 ≠ 草率)
 

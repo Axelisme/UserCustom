@@ -1,7 +1,7 @@
 # Orchestrate — Pi runtime binding
 
 Pi's native `subagent` tool and the generic [pi-subagents pipeline lifecycle](https://github.com/badlogic/pi-subagents#pipeline-lifecycle)
-are authoritative for attach, restore, resume, and close. This binding maps v120 role
+are authoritative for attach, restore, resume, and close. This binding maps v121 role
 streams and keeps Git/task contracts at Root. The role stream identity is exactly
 `<task-id>.<wave-id>.<role>`, and the stable runtime item identity is `slice-<slice-id>`;
 it has no attempt detail. After a restart or compaction, native continuation coexists with
@@ -30,16 +30,16 @@ cases.
 
 Use the shipped `wave-oracle` and `wave-implementer` profiles for this frozen workflow and
 Pi builtins for unrelated delegation. Independent work defaults to `async: true`; same-role
-continuation uses native `steer` or `resume` according to observed state. Every dispatch
+continuation uses native `steer` or `resume` according to observed state. A successor in the same role stream keeps the identity but not necessarily the context: continue the session while the frozen input is unchanged, and start a fresh one — same identity, optionally a different model — once the Contract SHA, frozen spec, or base has moved, or after a provider or liveness failure. A stale session replays conclusions it drew about an input that no longer exists. One writer per role stream either way. Every dispatch
 names cwd, explicit base or subject SHA, scope, pre-existing dirt, evidence, and stop
-conditions. Do not claim Git or repository authority from a runtime preset.
+conditions. A dispatch also names the exact gate commands with the environment they require, the Oracle-declared immutable paths, and the production paths this role may write. Do not claim Git or repository authority from a runtime preset.
 
 ## Activation and leases
 
 Pipeline declarations do not survive an application restart: Root re-declares the same
 deterministic identities before enqueueing, which is expected recovery, not lost state.
 Inspect native status before continuing an identity when state is uncertain. A completion
-wake or status result is evidence; a timeout alone is not a verdict. Runtime lifecycle
+wake or status result is evidence; a timeout alone is not a verdict. When runtime state is ambiguous or its transitions disagree, Git is the authority: re-derive position from refs and history and re-enqueue rather than trusting the reported state. Runtime lifecycle
 semantics remain in the linked pi-subagents pipeline lifecycle authority.
 
 ## Runtime budgets

@@ -209,6 +209,70 @@ def command_integration_status(args: argparse.Namespace) -> dict[str, Any]:
     return state
 
 
+def _immutable_paths(root: Path, sha: str) -> list[str]:
+    """Read the acceptance-surface paths the Oracle declared on its Contract.
+
+    The declaration lives in repeatable ``Immutable:`` trailers because it is a
+    property of that one Contract commit: it enters the commit object, so it
+    cannot be edited afterwards without changing the SHA.
+    """
+    raw = run_git(
+        root, "show", "-s", "--format=%(trailers:key=Immutable,valueonly,unfold)", sha
+    ).stdout
+    return [line.strip() for line in raw.splitlines() if line.strip()]
+
+
+def _nearest_contract_merge(root: Path, implementation_sha: str, slice_id: str) -> str | None:
+    """Find the Contract merge this Implementation was built on."""
+    raw = run_git(
+        root,
+        "log",
+        "--first-parent",
+        "--max-count=256",
+        "--format=%H%x00%(trailers:only,unfold)%x1e",
+        implementation_sha,
+    ).stdout
+    for record in raw.split("\x1e"):
+        sha, _, trailer_text = record.strip().partition("\x00")
+        if not sha:
+            continue
+        trailers = _trailers(trailer_text)
+        if trailers.get("Role") == "merge" and trailers.get("Slice") == slice_id:
+            return sha
+    return None
+
+
+def _verify_immutable_surface(
+    root: Path, merge_sha: str, implementation_sha: str
+) -> tuple[list[str], list[str]]:
+    """Compare Oracle-owned objects by id between the Contract merge and the handoff.
+
+    The declaration is read from the merged Contract commit itself — the merge's
+    second parent — so the owner stays the single source.  Git is
+    content-addressed, so equal object ids prove the acceptance surface is
+    byte-identical without diffing.  A path that stopped resolving counts as a
+    violation too: deleting or relocating a contract test weakens the surface
+    exactly like editing it.
+    """
+    contract = run_git(root, "rev-parse", "--verify", "--quiet", f"{merge_sha}^2", check=False)
+    if contract.returncode:
+        return [], []
+    declared = _immutable_paths(root, contract.stdout.strip())
+    violations: list[str] = []
+    for path in declared:
+        objects = []
+        for commit in (merge_sha, implementation_sha):
+            probe = run_git(root, "rev-parse", "--verify", "--quiet", f"{commit}:{path}", check=False)
+            objects.append(probe.stdout.strip() if probe.returncode == 0 else None)
+        if objects[0] is None:
+            violations.append(f"{path} (declared immutable but absent from the Contract merge)")
+        elif objects[1] is None:
+            violations.append(f"{path} (deleted or relocated after the Contract merge)")
+        elif objects[0] != objects[1]:
+            violations.append(f"{path} ({objects[0]} -> {objects[1]})")
+    return declared, violations
+
+
 def command_integration_collect(args: argparse.Namespace) -> dict[str, Any]:
     task, path, branch = _integration_identity(args)
     wave_id = require_identifier(str(args.wave_id), label="wave id")
@@ -233,6 +297,15 @@ def command_integration_collect(args: argparse.Namespace) -> dict[str, Any]:
         raise OrchestrateError(f"integration worktree must be clean: {path}")
     if any(item.get("wave") == wave_id for item in _collected_integrations(root, task, branch)):
         raise OrchestrateError(f"Wave already collected into integration branch: {wave_id}")
+    contract_merge = _nearest_contract_merge(root, implementation_sha, slice_id)
+    declared: list[str] = []
+    if contract_merge is not None:
+        declared, violations = _verify_immutable_surface(root, contract_merge, implementation_sha)
+        if violations:
+            raise OrchestrateError(
+                "Implementation changed the Oracle-owned acceptance surface declared by the "
+                f"Contract merge {contract_merge}: " + "; ".join(violations)
+            )
     merged = run_git(path, "merge", "--no-ff", "--no-commit", implementation_sha, check=False)
     if merged.returncode:
         detail = merged.stderr.strip() or merged.stdout.strip() or "integration collect conflict"
@@ -251,6 +324,8 @@ def command_integration_collect(args: argparse.Namespace) -> dict[str, Any]:
         "slice": slice_id,
         "implementation_sha": implementation_sha,
         "collect_sha": collect_sha,
+        "contract_merge_sha": contract_merge,
+        "immutable_paths_verified": declared,
         "branch": branch,
         "worktree": str(path),
     }

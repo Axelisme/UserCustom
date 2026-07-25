@@ -460,6 +460,94 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
             ],
         )
 
+    def prepare_declared_contract(self, wave_id: str) -> tuple[Path, str]:
+        """Merge a Contract that declares one immutable acceptance-surface path."""
+        oracle = Path(
+            str(
+                self.payload(
+                    self.cli(
+                        self.root, "worktree", "create", "--root", str(self.root),
+                        "--task-id", self.task_id, "--wave-id", wave_id,
+                        "--role", "oracle", "--base", self.base,
+                    )
+                )["worktree"]
+            )
+        )
+        implementation = self.implementation_create(wave_id, self.base)
+        (oracle / "contract_test.py").write_text("assert app == 1\n", encoding="utf-8")
+        self.git(oracle, "add", "contract_test.py")
+        self.git(
+            oracle,
+            "commit",
+            "-q",
+            "-m",
+            f"Contract ready\n\nWave: {wave_id}\nSlice: slice-a\nRole: oracle\nImmutable: contract_test.py",
+            env={
+                "GIT_AUTHOR_DATE": "2025-01-01T00:01:00+0000",
+                "GIT_COMMITTER_DATE": "2025-01-01T00:01:00+0000",
+            },
+        )
+        contract_sha = self.git(oracle, "rev-parse", "HEAD")
+        self.payload(
+            self.cli(
+                self.root, "contract", "merge", "--root", str(self.root),
+                "--task-id", self.task_id, "--wave-id", wave_id,
+                "--contract-sha", contract_sha,
+                env={
+                    "GIT_AUTHOR_DATE": "2025-01-01T00:02:00+0000",
+                    "GIT_COMMITTER_DATE": "2025-01-01T00:02:00+0000",
+                },
+            )
+        )
+        return implementation, contract_sha
+
+    def test_collect_verifies_the_declared_immutable_surface(self) -> None:
+        self.integration_create()
+        implementation, _ = self.prepare_declared_contract("wave-a")
+
+        # Filling production behavior leaves the declared surface byte-identical.
+        implementation_sha = self.commit_implementation(
+            implementation, "wave-a", "slice-a", "wave a\n", date="2025-01-01T00:03:00+0000"
+        )
+        collected = self.collect("wave-a", implementation_sha)
+        self.assertEqual(collected["immutable_paths_verified"], ["contract_test.py"])
+        self.assertEqual(
+            collected["contract_merge_sha"],
+            self.git(implementation, "rev-parse", "HEAD~1"),
+        )
+
+    def test_collect_refuses_a_weakened_or_relocated_acceptance_surface(self) -> None:
+        self.integration_create()
+        implementation, _ = self.prepare_declared_contract("wave-a")
+
+        (implementation / "contract_test.py").write_text("assert True\n", encoding="utf-8")
+        self.git(implementation, "add", "contract_test.py")
+        weakened = self.commit_implementation(
+            implementation, "wave-a", "slice-a", "wave a\n", date="2025-01-01T00:03:00+0000"
+        )
+        weakened_error = self.error_payload(
+            self.cli(
+                self.root, "integration", "collect", "--root", str(self.root),
+                "--task-id", self.task_id, "--wave-id", "wave-a",
+                "--implementation-sha", weakened,
+            )
+        )
+        self.assertIn("Oracle-owned acceptance surface", str(weakened_error["error"]))
+        self.assertIn("contract_test.py", str(weakened_error["error"]))
+
+        self.git(implementation, "mv", "contract_test.py", "moved_contract_test.py")
+        relocated = self.commit_implementation(
+            implementation, "wave-a", "slice-a", "wave a moved\n", date="2025-01-01T00:04:00+0000"
+        )
+        relocated_error = self.error_payload(
+            self.cli(
+                self.root, "integration", "collect", "--root", str(self.root),
+                "--task-id", self.task_id, "--wave-id", "wave-a",
+                "--implementation-sha", relocated,
+            )
+        )
+        self.assertIn("deleted or relocated", str(relocated_error["error"]))
+
     def test_status_and_collect_fail_closed_without_the_base_ref(self) -> None:
         self.integration_create()
         self.git(self.root, "update-ref", "-d", self.base_ref)

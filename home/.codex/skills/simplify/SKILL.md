@@ -96,7 +96,7 @@ Skip or report issues instead of editing when:
 - The fix requires an architectural decision not already made.
 - The fix needs product, API, schema, or compatibility judgement.
 - The change would alter behavior beyond the user's request.
-- The test is part of an immutable acceptance surface (e.g. Oracle-owned contract tests in dev-flow): report the finding for the next Contract correction or the candidate backlog instead of editing it.
+- The change would alter a frozen public contract or an immutable acceptance surface (e.g. Oracle-owned contract tests in dev-flow): report it for routing to a contract correction or the candidate backlog. Never edit a test to match code you just changed — that silently rewrites what was accepted. Internal shape is always yours to simplify; the promised interface is not.
 - The apparent problem is in generated, vendored, or intentionally duplicated code.
 
 ### 4. Apply Edits

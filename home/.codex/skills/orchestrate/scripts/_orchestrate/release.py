@@ -523,6 +523,20 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
                 "automatic_conversion": False,
             }
         )
+    # v121 turns the acceptance-surface invariant into a machine gate, so a Contract
+    # authored under v120 has no declaration for collect to verify.
+    if old_version < 121 <= new_version:
+        requirements.append(
+            {
+                "reason": "v120-to-v121-declared-acceptance-surface",
+                "declare_immutable_trailers_on_contracts": True,
+                "collect_verifies_object_identity": True,
+                "reauthor_contract_to_collect_older_wave": True,
+                "quantified_cost_alarm_with_preserved_sha": True,
+                "fresh_session_when_frozen_input_moved": True,
+                "automatic_conversion": False,
+            }
+        )
     write_version_pin(root, new_version, result["orchestrate_compat"])
     return {
         "ok": True,

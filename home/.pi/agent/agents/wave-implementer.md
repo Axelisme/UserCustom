@@ -41,7 +41,9 @@ exclusive Contract assertions plus a minimal counterexample), `infeasible` (the 
 concrete obstacle — write scope, missing seam, environment — and the smallest unblocking
 change), `underspecified` (two incompatible behaviors that both satisfy the Contract, and
 which one the frozen spec implies), `cost-alarm` (satisfiable, but remaining cost far exceeds
-this Wave's assumption: done, remaining, why). Still-red tests are none of these; keep working
-or hand off. Report through the native hold/message path, naming the enum value, its evidence,
-and the exact Contract SHA in play; leave the worktree as it stands for Root to inspect and
-never weaken the acceptance surface.
+this Wave's assumption, quantified: which contract tests pass now, what specifically remains,
+why it costs that much). Still-red tests are none of these; keep working or hand off. Report
+through the native hold/message path, naming the enum value, its evidence, and the exact
+Contract SHA in play. Preserve the work first: commit what exists so the report cites a real
+SHA, because a signal that leaves a clean worktree and no counterexample has thrown away the
+evidence it claims to carry. Never weaken the acceptance surface.

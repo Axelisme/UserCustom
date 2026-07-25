@@ -38,6 +38,7 @@ INDEX_TITLE_PATTERN = re.compile(r"^# (\S.*)$", re.MULTILINE)
 GOAL_PATTERN = re.compile(r"^\*\*Goal:\*\*", re.MULTILINE)
 REQUIRED_HEADINGS = ("## Current State", "## Decisions", "## Phase board", "## Stores")
 BOARD_HEADING = "## Phase board"
+DEFERRED_ACCEPTANCE_HEADING = "## Deferred user acceptance"
 PHASE_FIELDS = ("Status", "Scope", "Decisions made", "Conclusion", "Commit", "Evidence")
 ANGLE_TOKEN_PATTERN = re.compile(r"<(?P<content>[^<>\n]+)>")
 # HTML tags are shipped content, unlike the skill's named/template prompt slots.
@@ -284,6 +285,27 @@ def row_cells(line: str) -> list[str]:
     return [cell.strip() for cell in line.strip().strip("|").split("|")]
 
 
+def unresolved_deferred_acceptance(text: str) -> list[str]:
+    lines = text.splitlines()
+    if DEFERRED_ACCEPTANCE_HEADING not in (line.strip() for line in lines):
+        return []
+    start, end = section_span(lines, DEFERRED_ACCEPTANCE_HEADING)
+    table = [line for line in lines[start:end] if line.lstrip().startswith("|")]
+    unresolved: list[str] = []
+    for line in table[2:]:  # skip header + separator
+        cells = row_cells(line)
+        if len(cells) < 7:
+            continue
+        slice_id = cells[0].strip("`").strip()
+        if not slice_id or slice_id.casefold() == "none":
+            continue
+        status_text = cells[6].strip("`").strip()
+        status = status_text.split(maxsplit=1)[0] if status_text else ""
+        if status != "accepted":
+            unresolved.append(f"{slice_id}:{status or 'missing'}")
+    return unresolved
+
+
 def read_board(text: str) -> list[dict[str, str]]:
     lines = text.splitlines()
     start, end = section_span(lines, BOARD_HEADING)
@@ -485,6 +507,12 @@ def command_phase_set(args: argparse.Namespace) -> dict[str, Any]:
                 raise PlanError(
                     "completing a phase requires a Commit SHA and a Conclusion"
                 )
+            unresolved = unresolved_deferred_acceptance(text)
+            if unresolved:
+                raise PlanError(
+                    "completing a phase requires all deferred user acceptance items "
+                    "to be accepted: " + ", ".join(unresolved)
+                )
         text = set_phase_field(text, "Status", args.status)
     atomic_write(path, text)
     number = f"{int(args.phase):02d}"
@@ -635,6 +663,13 @@ def validate_plan(plan: Path) -> list[str]:
                 issues.append(f"{path.name} has no '{field}' field")
         if record_status not in PHASE_STATUSES:
             issues.append(f"{path.name} has invalid Status")
+        if record_status == "completed":
+            unresolved = unresolved_deferred_acceptance(text)
+            if unresolved:
+                issues.append(
+                    f"{path.name} has unresolved deferred user acceptance: "
+                    + ", ".join(unresolved)
+                )
         board = board_by_phase.get(num)
         if board is None:
             issues.append(f"{path.name} is not listed on the INDEX phase board")

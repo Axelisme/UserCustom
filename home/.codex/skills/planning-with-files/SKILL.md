@@ -72,8 +72,7 @@ Day/Night 是 runtime scheduling policy，不另建 mode/state 檔。明確的 t
 State 只指向該 phase、記 pending count 與 oldest next item，不抄 queue。
 
 接受只對 exact SHA 有效。Day Mode oldest-first；前置 rejection 將 descendants 標 `stale`。
-Phase seal 前 queue 必須全為 `accepted` 或有明確移交到下一個 active release phase，archive
-不得吞掉 pending S5。
+Phase seal 前 queue 必須全為 `accepted`；archive 不得吞掉 pending S5。
 
 ## Compaction:只壓入口
 

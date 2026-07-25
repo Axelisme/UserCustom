@@ -31,6 +31,19 @@ def plan_dir(root: Path, task_id: str = "demo") -> Path:
     return root / ".agent_state" / "plans" / task_id
 
 
+def set_deferred_acceptance(path: Path, status: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    placeholder = (
+        "| none | none | none | none | none | none | "
+        "none (`pending_machine | reviewed_awaiting_user | accepted | rejected | stale`) | none | none |"
+    )
+    item = (
+        "| slice-1 | abc1234 | user runs x and sees y | cli | run x | y | "
+        f"{status} | none | canonical tests pass |"
+    )
+    path.write_text(text.replace(placeholder, item), encoding="utf-8")
+
+
 class LifecycleTests(unittest.TestCase):
     def test_init_creates_entry_and_phases_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -98,6 +111,67 @@ class LifecycleTests(unittest.TestCase):
             self.assertIn("- **Commit:** abc1234", record)
             index = (plan_dir(root) / "INDEX.md").read_text(encoding="utf-8")
             self.assertIn("| 01 | completed | phases/01-x.md |", index)
+
+    def test_seal_rejects_unresolved_deferred_user_acceptance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            set_deferred_acceptance(phase, "reviewed_awaiting_user")
+
+            result = run_plan(
+                root,
+                "phase-set",
+                "demo",
+                "--phase",
+                "1",
+                "--status",
+                "completed",
+                "--commit",
+                "abc1234",
+                "--conclusion",
+                "done",
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("deferred user acceptance", result.stdout)
+            self.assertIn("slice-1:reviewed_awaiting_user", result.stdout)
+
+    def test_seal_allows_accepted_deferred_user_acceptance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            set_deferred_acceptance(phase, "accepted")
+
+            result = run_plan(
+                root,
+                "phase-set",
+                "demo",
+                "--phase",
+                "1",
+                "--status",
+                "completed",
+                "--commit",
+                "abc1234",
+                "--conclusion",
+                "done",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout)
+            index = plan_dir(root) / "INDEX.md"
+            index.write_text(
+                re.sub(r"<[^<>\n]+>", "filled", index.read_text(encoding="utf-8")),
+                encoding="utf-8",
+            )
+            phase.write_text(
+                re.sub(r"<[^<>\n]+>", "filled", phase.read_text(encoding="utf-8")),
+                encoding="utf-8",
+            )
+            archived = run_plan(root, "archive", "demo")
+            self.assertEqual(archived.returncode, 0, archived.stdout)
 
     def test_completed_phase_is_sealed_against_every_phase_set_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -178,6 +252,42 @@ class LifecycleTests(unittest.TestCase):
             archived = run_plan(root, "archive", "demo")
             self.assertEqual(archived.returncode, 0, archived.stdout)
             self.assertTrue((root / ".agent_state" / "archives" / "demo" / "plan" / "INDEX.md").is_file())
+
+    def test_archive_rejects_manually_completed_phase_with_unresolved_acceptance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            index_path = plan_dir(root) / "INDEX.md"
+            index_path.write_text(
+                re.sub(r"<[^<>\n]+>", "filled", index_path.read_text(encoding="utf-8")),
+                encoding="utf-8",
+            )
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            set_deferred_acceptance(phase, "reviewed_awaiting_user")
+            phase.write_text(
+                re.sub(
+                    r"<[^<>\n]+>",
+                    "filled",
+                    phase.read_text(encoding="utf-8").replace(
+                        "- **Status:** in_progress", "- **Status:** completed"
+                    ),
+                ),
+                encoding="utf-8",
+            )
+            index_path.write_text(
+                index_path.read_text(encoding="utf-8").replace(
+                    "| 01 | in_progress |", "| 01 | completed |"
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_plan(root, "archive", "demo")
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("unresolved deferred user acceptance", result.stdout)
+            self.assertIn("slice-1:reviewed_awaiting_user", result.stdout)
+            self.assertTrue(phase.is_file())
 
     def test_archive_moves_and_refuses_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

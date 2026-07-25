@@ -33,35 +33,30 @@ Prefer git state:
 - Use `git diff --staged` for staged changes.
 - If the user asks for a specific base, use that explicit diff range instead.
 - If both staged and unstaged changes exist, inspect both and keep them conceptually separate.
+- When earlier work has already passed a formal review, start from that reviewed SHA. Re-reading an accepted diff cannot find new hygiene problems and costs the same as reading new code.
 
 If there are no git changes, fall back to recently modified files only when that is useful and safe. Tell the user that no git diff was present.
 
 Do not review generated artifacts, dependency lock churn, vendored code, build output, or large data files unless the user explicitly asks.
 
-### 2. Run Three Focused Reviews
+### 2. Run Two Focused Reviews
 
-Review the full relevant diff from three angles. For a large diff, use parallel sub-agents if available; otherwise run the same three passes yourself in separate notes before editing.
+Review the relevant diff from two angles. For a large diff, use parallel sub-agents if available; otherwise run both passes yourself in separate notes before editing.
 
 Each pass receives:
 
-- The full relevant diff or changed-file set.
+- The relevant diff or changed-file set.
 - The user's Additional Focus, if any.
 - The repository's local instructions and conventions.
 
-#### Code Reuse
+#### Shape and Reuse
 
 Look for:
 
 - Duplicated logic or copy-paste control flow.
 - Hand-rolled helpers that duplicate existing project utilities.
-- Inline patterns that should use established abstractions.
 - Similar functions or branches that can be collapsed without hiding important differences.
 - New abstractions that are shallower than the duplication they replace.
-
-#### Code Quality
-
-Look for:
-
 - Redundant state, unnecessary parameters, and parameter sprawl.
 - Leaky abstractions or call sites forced to know implementation details.
 - Stringly typed code where a stronger local type or enum already exists.
@@ -85,8 +80,9 @@ Look for:
 
 Fix issues directly when all of these are true:
 
-- The issue is supported by the diff or nearby code.
-- The fix is local and low-risk.
+- The issue is in the changed code, supported by the diff or nearby code.
+- The fix is local, low-risk, and roughly 30 lines or fewer.
+- An existing test already covers the behavior the fix touches.
 - The repository already has a clear pattern to follow.
 - The change improves simplicity without broadening scope.
 
@@ -96,6 +92,7 @@ Skip or report issues instead of editing when:
 - The fix requires an architectural decision not already made.
 - The fix needs product, API, schema, or compatibility judgement.
 - The change would alter behavior beyond the user's request.
+- The finding touches authority, lifecycle, lock ordering, retention, or cross-process sequencing. These read as accidental complexity and are usually load-bearing; hand them to a formal review or a contract correction rather than guessing. Proposing removal of a sleep, lock, retention rule, or replay mechanism requires a minimal executable reproduction — source reading alone has argued for removing timing that turned out to hold the system together.
 - The change would alter a frozen public contract or an immutable acceptance surface (e.g. Oracle-owned contract tests in dev-flow): report it for routing to a contract correction or the candidate backlog. Never edit a test to match code you just changed — that silently rewrites what was accepted. Internal shape is always yours to simplify; the promised interface is not.
 - The apparent problem is in generated, vendored, or intentionally duplicated code.
 
@@ -115,20 +112,20 @@ Use the repository's documented test, typecheck, lint, and formatting commands. 
 
 ### 6. Summarize
 
-End with:
+Report findings in three groups so the caller triages once, not per finding:
 
-- What changed.
-- What checks ran and their result.
-- Any findings intentionally skipped as false positives, subjective tradeoffs, or larger design questions.
+- **Applied**: what changed and what checks ran, with results.
+- **Needs a contract or a reproduction**: real but out of scope here — the danger categories above, and anything whose evidence is source reading alone.
+- **Backlog**: subjective or low-priority cleanup, and false positives worth recording.
 
 If no changes are needed, say the changed code already looks clean and mention any verification performed.
 
 ## Sub-Agent Prompt Template
 
-When sub-agents are available, launch three in parallel with prompts shaped like this:
+When sub-agents are available, launch both in parallel with prompts shaped like this:
 
 ```text
-Review the following diff for <Code Reuse | Code Quality | Efficiency>.
+Review the following diff for <Shape and Reuse | Efficiency>.
 
 Additional Focus:
 <user focus or "None">

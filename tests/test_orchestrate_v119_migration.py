@@ -134,6 +134,17 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
             ):
                 self.assertTrue(declared[surface], surface)
             self.assertFalse(declared["automatic_conversion"])
+            # Crossing v122 must announce the narrowed simplify scope.
+            bounded = requirements["v121-to-v122-bounded-simplify"]
+            for surface in (
+                "simplify_reads_increment_since_last_review",
+                "review_keeps_whole_integration_range",
+                "simplify_defers_authority_and_sequencing_findings",
+                "removal_of_timing_requires_reproduction",
+                "simplify_reports_three_triage_groups",
+            ):
+                self.assertTrue(bounded[surface], surface)
+            self.assertFalse(bounded["automatic_conversion"])
             self.assertEqual(
                 json.loads(pin.read_text(encoding="utf-8"))["skill_version"], version
             )

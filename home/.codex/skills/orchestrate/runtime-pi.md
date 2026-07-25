@@ -1,7 +1,7 @@
 # Orchestrate — Pi runtime binding
 
 Pi's native `subagent` tool and the generic [pi-subagents pipeline lifecycle](https://github.com/badlogic/pi-subagents#pipeline-lifecycle)
-are authoritative for attach, restore, resume, and close. This binding maps v121 role
+are authoritative for attach, restore, resume, and close. This binding maps v122 role
 streams and keeps Git/task contracts at Root. The role stream identity is exactly
 `<task-id>.<wave-id>.<role>`, and the stable runtime item identity is `slice-<slice-id>`;
 it has no attempt detail. After a restart or compaction, native continuation coexists with

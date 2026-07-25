@@ -537,6 +537,20 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
                 "automatic_conversion": False,
             }
         )
+    # v122 rebalances the milestone gates: the expensive pass keeps the whole
+    # range, the cheap one narrows to the increment it can still act on.
+    if old_version < 122 <= new_version:
+        requirements.append(
+            {
+                "reason": "v121-to-v122-bounded-simplify",
+                "simplify_reads_increment_since_last_review": True,
+                "review_keeps_whole_integration_range": True,
+                "simplify_defers_authority_and_sequencing_findings": True,
+                "removal_of_timing_requires_reproduction": True,
+                "simplify_reports_three_triage_groups": True,
+                "automatic_conversion": False,
+            }
+        )
     write_version_pin(root, new_version, result["orchestrate_compat"])
     return {
         "ok": True,

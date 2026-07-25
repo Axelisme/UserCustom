@@ -1,6 +1,6 @@
 ---
 name: dev-flow
-description: Route a heavy effort through frozen planning, v121 orchestrate implementation, and evidence-based acceptance.
+description: Route a heavy effort through frozen planning, v122 orchestrate implementation, and evidence-based acceptance.
 ---
 
 # Dev Flow
@@ -15,9 +15,9 @@ wayfinder → to-spec → to-tickets → orchestrate → acceptance → landing 
 
 The orchestrate station publishes an exact Implementation candidate. Acceptance does not create another workflow ledger and does not replace Git as durable truth. Workflow evolution reads [design principles](references/design-principles.md).
 
-## v121 acceptance order
+## v122 acceptance order
 
-At an integration milestone candidate, run **simplify**, then the **canonical tests**, then one **clean-detached code-review** of the **post-simplify exact SHA**; never review a moving worktree or an earlier pre-simplify commit. The candidate is the integration tip, and simplify and the review both work over the committed `base..integration-tip` range. At acceptance entry the exit condition is frozen. Between milestones each Wave passes only machine gates before collect; the expensive review context is spent once on the accumulated diff, never per Wave. Land exactly the reviewed SHA; a later commit reopens the gate.
+At an integration milestone candidate, run **simplify**, then the **canonical tests**, then one **clean-detached code-review** of the **post-simplify exact SHA**; never review a moving worktree or an earlier pre-simplify commit. The candidate is the integration tip. The review reads the whole committed `base..integration-tip` range, because cross-authority composition defects are only visible in the assembled picture; simplify reads only the increment since the last reviewed SHA, because accepted code cannot acquire new hygiene problems. The asymmetry is deliberate. At acceptance entry the exit condition is frozen. Between milestones each Wave passes only machine gates before collect; the expensive review context is spent once on the accumulated diff, never per Wave. Land exactly the reviewed SHA; a later commit reopens the gate.
 
 Blocking is closed to spec violation, data loss, security, or reproducible behavior failure within the frozen spec's usage envelope. The final review must not expand the frozen spec; a finding without a contract basis in the frozen spec is backlog, never a blocker. Robustness, quality, and out-of-envelope findings go through `candidate-backlog` and do not block landing. Do not implement features the frozen spec does not require.
 

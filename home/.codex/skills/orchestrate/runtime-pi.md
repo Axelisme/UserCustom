@@ -1,7 +1,7 @@
 # Orchestrate — Pi runtime binding
 
 Pi's native `subagent` tool and the generic [pi-subagents pipeline lifecycle](https://github.com/badlogic/pi-subagents#pipeline-lifecycle)
-are authoritative for attach, restore, resume, and close. This binding maps v123 role
+are authoritative for attach, restore, resume, and close. This binding maps v124 role
 streams and keeps Git/task contracts at Root. The role stream identity is exactly
 `<task-id>.<wave-id>.<role>`, and the stable runtime item identity is `slice-<slice-id>`;
 it has no attempt detail. After a restart or compaction, native continuation coexists with
@@ -28,8 +28,11 @@ cases.
 
 ## Profile routing
 
-Use the shipped `wave-oracle` and `wave-implementer` profiles for this frozen workflow and
-Pi builtins for unrelated delegation. Independent work defaults to `async: true`; same-role
+Use the shipped `wave-oracle` and `wave-implementer` profiles for this frozen workflow. For the
+final gate, enqueue two fresh read-only `acceptance-reviewer` tasks against the same exact SHA,
+one per `Axis: standards | spec`; neither joins a writer pipeline or continues into
+implementation. Use Pi builtins for unrelated delegation. Independent work defaults to
+`async: true`; same-role
 continuation uses native `steer` or `resume` according to observed state. A successor in the same role stream keeps the identity but not necessarily the context: continue the session while the frozen input is unchanged, and start a fresh one — same identity, optionally a different model — once the Contract SHA, frozen spec, or base has moved, or after a provider or liveness failure. A stale session replays conclusions it drew about an input that no longer exists. One writer per role stream either way. Every dispatch
 names cwd, explicit base or subject SHA, scope, pre-existing dirt, evidence, and stop
 conditions. A dispatch also names the exact gate commands with the environment they require, the Oracle-declared immutable paths, and the production paths this role may write. Do not claim Git or repository authority from a runtime preset.
@@ -51,5 +54,7 @@ process safety and requires inspection on expiry, not a delivery verdict.
 ## Milestones and flow control
 
 The role commit is the durable milestone. Root consumes only a clean exact SHA and checks
-contract-surface immutability. Native hold/message is the blocker path; a concrete
-counterexample returns to Oracle. No runtime state file substitutes for Git.
+contract-surface immutability. Native hold/message is the blocker path. A collected Wave is
+closed: a behavior correction starts a new Wave through Oracle then Implementation from the
+integration tip, while a quality correction starts a new Wave with Implementation. No runtime
+state file substitutes for Git.

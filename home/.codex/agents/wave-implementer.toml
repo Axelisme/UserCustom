@@ -33,7 +33,10 @@ concrete obstacle — write scope, missing seam, environment — and the smalles
 change), `underspecified` (two incompatible behaviors that both satisfy the Contract, and
 which one the frozen spec implies), `cost-alarm` (satisfiable, but remaining cost far exceeds
 this Wave's assumption, quantified: which contract tests pass now, what specifically remains,
-why it costs that much). Still-red tests are none of these; keep working or hand off. Report
+why it costs that much). A `cost-alarm` is a signal about the Slice, not a request for more
+budget or a cheaper writer on the same Slice: state plainly whether the remaining cost comes
+from the Slice being too large, so Root can recut it rather than continue it. Still-red tests
+are none of these; keep working or hand off. Report
 through the native hold/message path, naming the enum value, its evidence, and the exact
 Contract SHA in play. Preserve the work first: commit what exists so the report cites a real
 SHA, because a signal that leaves a clean worktree and no counterexample has thrown away the

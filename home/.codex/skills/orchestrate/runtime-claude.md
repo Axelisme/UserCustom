@@ -14,4 +14,8 @@ run `wave-implementer` after Root merges that Contract to fill production behavi
 Use native messaging and continuation only when exposed; otherwise return the terminal
 handoff in the final response rather than inventing continuity. A blocked role reports through the same terminal path with its reason and evidence, not a ceremony commit. A successor in the same role stream keeps the identity but not necessarily the context: continue the session while the frozen input is unchanged, and start a fresh one — same identity, optionally a different model — once the Contract SHA, frozen spec, or base has moved, or after a provider or liveness failure. A stale session replays conclusions it drew about an input that no longer exists. One writer per role stream either way. Root owns dependency depth,
 Git merges, and repository authority. Dev-flow runs simplify, canonical tests, and one
-clean-detached exact-SHA code-review before any repository-policy integration.
+clean-detached exact-SHA code-review before any repository-policy integration. Dispatch two
+fresh read-only `acceptance-reviewer` agents against that SHA, one per
+`Axis: standards | spec`; neither continues into implementation. A collected Wave is closed:
+a behavior correction starts a new Wave through Oracle then Implementation from the integration
+tip, while a quality correction starts a new Wave with Implementation.

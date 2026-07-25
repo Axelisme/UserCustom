@@ -127,12 +127,12 @@ remove_obsolete_orchestrate_profiles() {
   # Retire only exact legacy role identities after every shipped profile is installed.
   # A fixture or future release may legitimately ship one of these names, so never
   # retire a destination that is present in the source inventory.
-  local runtime legacy relative source_relative ready
+  local runtime legacy relative source_relative destination ready
   for runtime in pi codex claude; do
     case "$runtime" in
-      pi) legacy=(wave-reviewer.md integration-reviewer.md implementer.md); ready=.pi/agent/agents/wave-oracle.md ;;
-      codex) legacy=(wave-reviewer.toml integration-reviewer.toml implementer.toml); ready=.codex/agents/wave-oracle.toml ;;
-      claude) legacy=(wave-reviewer.md integration-reviewer.md implementer.md); ready=.claude/agents/wave-oracle.md ;;
+      pi) legacy=(wave-reviewer.md integration-reviewer.md implementer.md python-module-reviewer.md); ready=.pi/agent/agents/wave-oracle.md ;;
+      codex) legacy=(wave-reviewer.toml integration-reviewer.toml implementer.toml python-module-reviewer.toml); ready=.codex/agents/wave-oracle.toml ;;
+      claude) legacy=(wave-reviewer.md integration-reviewer.md implementer.md python-module-reviewer.md); ready=.claude/agents/wave-oracle.md ;;
     esac
     [ -f "$UserCustom/home/$ready" ] || continue
     for relative in "${legacy[@]}"; do
@@ -141,7 +141,13 @@ remove_obsolete_orchestrate_profiles() {
         codex) source_relative=".codex/agents/$relative" ;;
         claude) source_relative=".claude/agents/$relative" ;;
       esac
-      [ -f "$UserCustom/home/$source_relative" ] || rm -f "$HOME/$source_relative"
+      if [ ! -f "$UserCustom/home/$source_relative" ]; then
+        destination="$HOME/$source_relative"
+        if [ -e "$destination" ] || [ -L "$destination" ]; then
+          cp -a --backup=numbered -- "$destination" "$destination.bak"
+        fi
+        rm -f "$destination"
+      fi
     done
   done
 }

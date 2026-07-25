@@ -11,9 +11,13 @@ ROOT = Path(__file__).resolve().parents[1]
 HOME = ROOT / "home"
 CODEX_SKILL = HOME / ".codex" / "skills" / "orchestrate"
 PI_SKILL = HOME / ".pi" / "agent" / "skills" / "orchestrate"
-SHIPPED_VERSION = int(
-    re.search(r"(?m)^skill_version: (\d+)$", (CODEX_SKILL / "SKILL.md").read_text(encoding="utf-8")).group(1)
+VERSION_MATCH = re.search(
+    r"(?m)^skill_version: (\d+)$",
+    (CODEX_SKILL / "SKILL.md").read_text(encoding="utf-8"),
 )
+if VERSION_MATCH is None:
+    raise RuntimeError("orchestrate SKILL.md has no skill_version")
+SHIPPED_VERSION = int(VERSION_MATCH.group(1))
 
 
 def load_release_module():
@@ -49,7 +53,12 @@ class PiRuntimeParityTests(unittest.TestCase):
             self.assertNotIn(".codex/agents/wave-reviewer.toml", manifest["profiles"])
 
     def test_profile_contracts_match_across_runtimes(self) -> None:
-        for name in ("contract-planner", "wave-oracle", "wave-implementer"):
+        for name in (
+            "acceptance-reviewer",
+            "contract-planner",
+            "wave-oracle",
+            "wave-implementer",
+        ):
             files = (
                 (HOME / ".codex" / "agents" / f"{name}.toml", ".toml"),
                 (HOME / ".claude" / "agents" / f"{name}.md", ".md"),

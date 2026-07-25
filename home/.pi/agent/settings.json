@@ -8,7 +8,8 @@
     "/home/axel/Documents/VSCode/Typescript/pi-subagents",
     "/home/axel/Documents/VSCode/Typescript/pi-goal",
     "npm:pi-mcp-adapter",
-    "npm:pi-native-search"
+    "npm:pi-native-search",
+    "git:github.com/dbachelder/pi-btw"
   ],
   "lastChangelogVersion": "0.81.1"
 }

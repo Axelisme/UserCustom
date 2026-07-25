@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 import unittest
 
@@ -49,7 +48,7 @@ class DevFlowV119ContractTests(unittest.TestCase):
         # A material contract finding goes back through both role streams in
         # this Wave; quality-only cleanup never reopens Oracle.
         self.assertRegex(document, r"needs_fix")
-        self.assertRegex(document, r"needs_fix.{0,240}same Wave")
+        self.assertRegex(document, r"needs_fix.{0,240}new Wave")
         self.assertRegex(document, r"Spec.{0,240}Oracle.{0,240}Implementation")
         self.assertRegex(document, r"quality.{0,240}Implementation")
         self.assertRegex(

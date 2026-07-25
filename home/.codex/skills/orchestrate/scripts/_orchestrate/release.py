@@ -128,13 +128,13 @@ def document_paths(skill_dir: Path) -> list[Path]:
 
 
 PROFILE_NAMES = (
+    "acceptance-reviewer",
     "contract-planner",
     "impl-detail-planner",
     "mcp-skill-tester",
     "mechanical-implementer",
     "plan-item-implementer",
     "python-bug-investigator",
-    "python-module-reviewer",
     "repo-investigator",
     "wave-implementer",
     "wave-oracle",
@@ -559,6 +559,22 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
                 "mechanism_needs_a_red_test_to_enter": True,
                 "unjustified_mechanism_is_a_finding": True,
                 "harden_after_the_interface_is_stable": True,
+                "automatic_conversion": False,
+            }
+        )
+    # v124 moves production admission from one final cutover to one per Slice, and
+    # makes the admission checks decidable so no role can argue past them.
+    if old_version < 124 <= new_version:
+        requirements.append(
+            {
+                "reason": "v123-to-v124-slice-admission",
+                "read_dev_flow_admission_standard": True,
+                "land_once_per_slice_not_once_per_task": True,
+                "recut_any_planned_atomic_cutover": True,
+                "observability_gate_before_invariant_enters_contract": True,
+                "correction_waves_per_slice_capped": True,
+                "run_admission_before_acceptance": True,
+                "report_reachable_behavior_at_every_landing": True,
                 "automatic_conversion": False,
             }
         )

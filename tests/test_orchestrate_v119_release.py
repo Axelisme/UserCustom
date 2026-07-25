@@ -13,9 +13,13 @@ HOME = ROOT / "home"
 CODEX_SKILL = HOME / ".codex" / "skills" / "orchestrate"
 PI_SKILL = HOME / ".pi" / "agent" / "skills" / "orchestrate"
 CODEX_SCRIPT = CODEX_SKILL / "scripts" / "orchestrate.py"
-SHIPPED_VERSION = int(
-    re.search(r"(?m)^skill_version: (\d+)$", (CODEX_SKILL / "SKILL.md").read_text(encoding="utf-8")).group(1)
+VERSION_MATCH = re.search(
+    r"(?m)^skill_version: (\d+)$",
+    (CODEX_SKILL / "SKILL.md").read_text(encoding="utf-8"),
 )
+if VERSION_MATCH is None:
+    raise RuntimeError("orchestrate SKILL.md has no skill_version")
+SHIPPED_VERSION = int(VERSION_MATCH.group(1))
 
 
 class OrchestrateV119ReleaseContractTests(unittest.TestCase):
@@ -27,6 +31,7 @@ class OrchestrateV119ReleaseContractTests(unittest.TestCase):
     """
 
     retained_commands = {
+        "admission",
         "worktree",
         "contract",
         "integration",
@@ -153,8 +158,13 @@ class OrchestrateV119ReleaseContractTests(unittest.TestCase):
         ):
             with self.subTest(profile_root=profile_root):
                 oracle = next(profile_root.glob("wave-oracle.*"), None)
+                acceptance = next(profile_root.glob("acceptance-reviewer.*"), None)
                 self.assertIsNotNone(oracle, f"missing wave-oracle under {profile_root}")
+                self.assertIsNotNone(
+                    acceptance, f"missing acceptance-reviewer under {profile_root}"
+                )
                 self.assertFalse(any(profile_root.glob("wave-reviewer.*")))
+                self.assertFalse(any(profile_root.glob("python-module-reviewer.*")))
 
     def test_shipped_skill_manifests_and_doctors_are_current(self) -> None:
         for skill in (CODEX_SKILL, PI_SKILL):

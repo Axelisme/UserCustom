@@ -29,8 +29,12 @@ Break the work into **tracer bullet** tickets.
 - A completed slice is demoable or verifiable on its own
 - Each slice is sized to fit in a single fresh context window
 - Any prefactoring should be done first
+- Each slice states its observable sentence — *"the user does X at `<entrypoint>` and sees Y"* — and, where it replaces existing behavior, the `file:symbol` it deletes when it lands
+- No slice's value waits on a later slice. A slice that only becomes worth having once a subsequent one lands is half a slice; merge or recut it
 
 </vertical-slice-rules>
+
+**Refuse rather than publish.** A ticket whose observable sentence cannot be written is not ready, and publishing it anyway converts a planning problem into weeks of implementation that no gate downstream can catch: contract tests, types and lint all stay green on work nobody can reach. Before publishing, walk the DAG once and confirm no ticket's value depends on a later one — that check is what keeps a set of tracer bullets from quietly reassembling into a single cutover at the end.
 
 Give each ticket its **blocking edges** — the other tickets that must complete before it can start. A ticket with no blockers can start immediately.
 
@@ -44,6 +48,7 @@ Present the proposed breakdown as a numbered list. For each ticket, show:
 
 - **Title**: short descriptive name
 - **Blocked by**: which other tickets (if any) must complete first
+- **Observable**: the one sentence — *"the user does X at `<entrypoint>` and sees Y"* — plus the `file:symbol` this ticket deletes when it lands, or an explicit note that it establishes a seam and names the ticket that deletes the predecessor
 - **What it delivers**: the end-to-end behaviour this ticket makes work
 - **Acceptance criteria**: the checks that will gate the ticket done — these freeze at publish, so they must be approved here. Any automated gate freezes as a **verbatim command** (exact command line, workdir, environment) — never a described intent like "affected pyright" left for the implementer to interpret
 
@@ -61,7 +66,7 @@ Publish the approved tickets to whichever backend this repo uses. The tickets ar
 
 - **Plan-directory repo** (CLAUDE.md / AGENTS.md documents `planning-with-files` / `.agent_state/plans/` and an `orchestrate` skill) → publish dependency-addressable **Slices** in the task's `task_plan.md` (init via `planning-with-files` if needed). Each Slice flows **Oracle executable Contract → Root exact merge → Implementation**; the Contract and acceptance remain frozen at publish.
   - Root chooses **Waves** from dependency readiness, shared Interface/worktree needs, and queue depth. Independent Slices may share a Wave only when their write scopes and dependencies permit it; a dependent Slice waits for its blocking edges.
-  - Every Slice keeps its "What it delivers / Blocked by / acceptance criteria" fields in the plan. Root groups and queues ready Slices into Waves, and records exact merge evidence in the task plan. Do **not** create per-ticket files or tracker state.
+  - Every Slice keeps its "Observable / Deletes / What it delivers / Blocked by / acceptance criteria" fields in the plan; the Observable sentence is what `dev-flow`'s S1 admits the Slice on and what the user accepts at its landing, so it travels with the Slice rather than being restated later. Root groups and queues ready Slices into Waves, and records exact merge evidence in the task plan. Do **not** create per-ticket files or tracker state.
   - Expand–contract remains approved behavior: publish the expand Slice first, then migration Slices blocked by it, and a contract Slice blocked by every migration Slice. Keep the tracer-bullet acceptance and approved blocking edges intact.
 - **Tracker repo** (an issue tracker is documented, e.g. `docs/agents/issue-tracker.md`) → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. Apply whatever "ready for agent" triage convention the repo documents.
 - **Neither** → write one file per ticket under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` in dependency order (blockers first). Each file's "Blocked by" lists the numbers/titles it depends on. Use the per-ticket file template below — one ticket per file, never a single combined file.
@@ -73,6 +78,10 @@ Do NOT close or modify the original source issue the tickets were derived from. 
 <local-ticket-template>
 
 # <NN> — <Ticket title>
+
+**Observable:** the user does X at `<entrypoint>` and sees Y.
+
+**Deletes:** the `file:symbol` this ticket removes when it lands, or "none — establishes `<seam>`, deleted by <ticket>".
 
 **What to build:** the end-to-end behaviour this ticket makes work, from the user's perspective — not a layer-by-layer implementation list.
 
@@ -90,6 +99,10 @@ Do NOT close or modify the original source issue the tickets were derived from. 
 ## Parent
 
 A reference to the parent issue on the tracker (if the source was an existing issue, otherwise omit this section).
+
+## Observable
+
+The user does X at `<entrypoint>` and sees Y. Deletes: `<file:symbol>`, or "none — establishes `<seam>`, deleted by <ticket>".
 
 ## What to build
 

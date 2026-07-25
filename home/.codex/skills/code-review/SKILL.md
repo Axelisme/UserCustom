@@ -17,7 +17,8 @@ axis. The gate reports both axes separately and never changes the checkout.
    the axes, pass the frozen spec and acceptance record as absolute paths — gitignored plan
    files are invisible from a detached checkout. If either standard is unavailable, say so
    in that axis rather than inventing authority.
-4. Run the Standards and Spec axes in parallel, report separate headings, cite file/hunk
+4. Dispatch two fresh `acceptance-reviewer` instances in parallel against the same exact SHA:
+   one with `Axis: standards`, one with `Axis: spec`. Report separate headings, cite file/hunk
    evidence, and keep each axis under 400 words. Every finding is tagged `blocking` or
    `backlog` and includes `contract_basis` naming the exact frozen-spec clause/item;
    absent `contract_basis` means `backlog` only. If the reviewer believes the Contract is
@@ -29,7 +30,13 @@ axis. The gate reports both axes separately and never changes the checkout.
    Contract-surface slip or a bounded fix: for a mechanical slip, validation is only that the
    applied diff matches the proposal and focused tests are green; a bounded fix is re-reviewed
    as the delta from this SHA. Neither reopens a full two-axis review.
-6. End with finding counts and the worst issue within each axis, plus the baseline debt that
+6. Report the split explicitly: how many findings were raised and how many were tagged
+   `backlog`. If an axis tags every finding `blocking`, add the marker `spec-too-wide` to
+   that axis — a spec broad enough to supply `contract_basis` for every observation has
+   disabled the blocking enum, and the correct response is recutting the spec, not another
+   correction cycle (admission standard S4.3). Report the count even when the split looks
+   ordinary; an unstated ratio cannot be noticed drifting.
+7. End with finding counts and the worst issue within each axis, plus the baseline debt that
    already existed at the base SHA, the residual risks being accepted, and the immutable paths
    collect already verified — cite that result rather than re-deriving it. Naming pre-existing
    debt is what stops it being rescored as a new regression. Do not merge or rerank axes,

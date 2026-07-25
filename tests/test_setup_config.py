@@ -51,7 +51,15 @@ class SetupConfigMigrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             source, home = self.seed_fixture(base)
-            for relative in (".pi/agent/agents/wave-reviewer.md", ".codex/agents/wave-reviewer.toml", ".claude/agents/wave-reviewer.md", ".pi/agent/agents/integration-reviewer.md"):
+            for relative in (
+                ".pi/agent/agents/wave-reviewer.md",
+                ".codex/agents/wave-reviewer.toml",
+                ".claude/agents/wave-reviewer.md",
+                ".pi/agent/agents/integration-reviewer.md",
+                ".pi/agent/agents/python-module-reviewer.md",
+                ".codex/agents/python-module-reviewer.toml",
+                ".claude/agents/python-module-reviewer.md",
+            ):
                 old = home / relative
                 old.parent.mkdir(parents=True, exist_ok=True)
                 old.write_text("legacy\n", encoding="utf-8")
@@ -60,6 +68,16 @@ class SetupConfigMigrationTests(unittest.TestCase):
             self.assertTrue(all((home / relative).is_file() for relative in self.profile_relatives()))
             self.assertFalse((home / ".pi/agent/agents/wave-reviewer.md").exists())
             self.assertFalse((home / ".codex/agents/wave-reviewer.toml").exists())
+            for relative in (
+                ".pi/agent/agents/python-module-reviewer.md",
+                ".codex/agents/python-module-reviewer.toml",
+                ".claude/agents/python-module-reviewer.md",
+            ):
+                retired = home / relative
+                self.assertFalse(retired.exists())
+                self.assertEqual(
+                    retired.with_name(retired.name + ".bak").read_bytes(), b"legacy\n"
+                )
             self.assertTrue((home / ".pi/agent/agents/custom-profile.md").is_file())
 
     def test_foreign_standing_order_links_are_replaced_exactly_before_legacy_retirement(self) -> None:

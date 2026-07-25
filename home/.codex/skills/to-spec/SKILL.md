@@ -7,6 +7,8 @@ This skill takes the current conversation context and codebase understanding and
 
 ## Process
 
+0. **Source conformance.** If the user supplied a source document — a design note, a handoff, a prior plan — walk its normative statements and tag each one `inherited`, `refined`, or `contradicted`. Every `contradicted` item is listed in the spec with the reason, and the spec does not freeze until the user has explicitly overridden it. Silently reversing a constraint the user wrote is the single most expensive failure this station can produce: it is authored at full clarity on day one, reads as good engineering, and survives every later quality gate because those gates check conformance to *this* spec. When there is no source document, say so in the spec rather than leaving the section absent.
+
 1. Explore the repo to understand the current state of the codebase, if you haven't already. Use the project's domain glossary vocabulary throughout the spec, and respect any ADRs in the area you're touching.
 
 2. Sketch out the seams at which you're going to test the feature. Existing seams should be preferred to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. The fewer seams across the codebase, the better - the ideal number is one.
@@ -68,6 +70,16 @@ A list of testing decisions that were made. Include:
 - A description of what makes a good test (only test external behavior, not implementation details)
 - Which modules will be tested
 - Prior art for the tests (i.e. similar types of tests in the codebase)
+
+## Source Conformance
+
+Only when a source document was supplied. A table of its normative statements tagged `inherited` / `refined` / `contradicted`, with the user's explicit override recorded for every `contradicted` row.
+
+## Slice Map
+
+The vertical Slices this spec decomposes into, in landing order. When a `wayfinder` map exists, these rows refine its acceptance staircase — one staircase step becomes one or more Slices, and a Slice that belongs to no step is either missing from the staircase or outside the destination. Each row carries the S1.1 observable sentence — *"the user does X at `<entrypoint>` and sees Y"* — and the `file:symbol` it deletes on completion. The first row is the **first production-reachable increment**, and its landing is days away, not weeks.
+
+A spec that cannot be written as such a table has not been decomposed, and must not be frozen: it will be implemented as one atomic cutover regardless of what the migration section says. A completion definition that only holds when every row is finished is likewise not frozen — each row is independently acceptable by the user, or the decomposition is wrong.
 
 ## Out of Scope
 

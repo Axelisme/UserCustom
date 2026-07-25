@@ -17,39 +17,35 @@ PROFILE_LAYOUTS = {
 }
 PROFILE_NAMES = {
     "codex": (
+        "acceptance-reviewer.toml",
         "contract-planner.toml",
         "impl-detail-planner.toml",
-        "integration-reviewer.toml",
         "mcp-skill-tester.toml",
         "mechanical-implementer.toml",
         "plan-item-implementer.toml",
         "python-bug-investigator.toml",
-        "python-module-reviewer.toml",
         "repo-investigator.toml",
         "wave-implementer.toml",
         "wave-oracle.toml",
-        "wave-reviewer.toml",
         "web-researcher.toml",
     ),
     "claude": (
+        "acceptance-reviewer.md",
         "contract-planner.md",
         "impl-detail-planner.md",
-        "integration-reviewer.md",
         "mcp-skill-tester.md",
         "mechanical-implementer.md",
         "plan-item-implementer.md",
         "python-bug-investigator.md",
-        "python-module-reviewer.md",
         "repo-investigator.md",
         "wave-implementer.md",
         "wave-oracle.md",
-        "wave-reviewer.md",
         "web-researcher.md",
     ),
     "pi": (
+        "acceptance-reviewer.md",
         "contract-planner.md",
         "impl-detail-planner.md",
-        "integration-reviewer.md",
         "mcp-skill-tester.md",
         "mechanical-implementer.md",
         "plan-item-implementer.md",
@@ -57,7 +53,6 @@ PROFILE_NAMES = {
         "repo-investigator.md",
         "wave-implementer.md",
         "wave-oracle.md",
-        "wave-reviewer.md",
         "web-researcher.md",
     ),
 }
@@ -179,7 +174,8 @@ class Final1f8OrdinaryProfileSetupContractTests(unittest.TestCase):
                 "exit 92; fi"
             )
         else:
-            self.assertIsNotNone(prior_link)
+            if prior_link is None:
+                self.fail("link destination must retain its prior target")
             backup_check = (
                 f"if ! [ -L {shlex.quote(str(backup))} ] || "
                 f'[ "$(readlink {shlex.quote(str(backup))})" != {shlex.quote(prior_link)} ]; then '

@@ -1,10 +1,10 @@
 ---
 name: orchestrate
-description: Minimal Git-backed Oracle and Implementation workflow for v123.
-skill_version: 123
+description: Minimal Git-backed Oracle and Implementation workflow for v124.
+skill_version: 124
 ---
 
-# Orchestrate v123
+# Orchestrate v124
 
 Orchestrate provides one small workflow surface: two role worktrees, exact Contract merge,
 and a read-only Git profile. Git commits, refs, SHAs, trailers, and worktree state are the
@@ -20,6 +20,7 @@ Installed in the matching always-resident runtime context (`~/.codex/AGENTS.md` 
 2. Any handoff binds to an exact clean commit SHA inspected from Git, never to a summary.
 3. Mutation of a persistence branch requires current user authority.
 4. After compaction, re-read this skill and the durable task plan before dispatch.
+5. Report reachable behavior to the user at every landing. Silence between landings is only safe because landings are frequent; an effort that has not landed is an effort the user cannot see.
 
 ## Workflow
 
@@ -45,8 +46,8 @@ after restart.
 ## CLI surface
 
 The JSON-only workflow commands are `worktree create|status|remove`, `contract merge`,
-`integration create|status|collect|remove`, and `profile report`. Retained administration is
-`doctor`, `diff`, `pin status|set|migrate`, and `release`. Creation refuses an existing path
+`integration create|status|collect|remove`, `profile report`, and `admission`. Retained
+administration is `doctor`, `diff`, `pin status|set|migrate`, and `release`. Creation refuses an existing path
 or branch. Removal requires a clean worktree and leaves its branch. Contract merge leaves
 ordinary conflicts visible. Integration collect merges one exact implementation SHA into the
 task integration branch with `Role: collect` trailers, after proving every declared immutable
@@ -62,19 +63,26 @@ unattributed rather than silently dropped.
 ## Acceptance and migration
 
 Simplify, canonical full suite, and the one clean-detached two-axis review run at an
-integration milestone — by default once per task, before landing, over the whole
+integration milestone — by default once per Slice, before that Slice lands, over the whole
 base..integration-tip diff. Root may insert an earlier milestone after a high-risk Wave (new
-seam, cross-authority change); never per-Wave formal review by default. A behavior
-correction returns through Oracle and Implementation in the same Wave; a quality correction
-stays with Implementation. Landing publishes the integration tip to the persistence branch
-under current user authority, once per task. For an older pin, `pin migrate` preserves the
+seam, cross-authority change); never per-Wave formal review by default. A collected Wave is
+closed: a behavior correction starts a new Wave through Oracle and Implementation from the
+integration tip; a quality correction starts a new Wave with Implementation. `admission`
+projects the dev-flow S3 milestone checks from Git —
+deletion, Slice loop, Slice size, file mass, focus — and reports `undetermined` for the
+questions Git cannot answer rather than passing them; run it before spending acceptance on a
+candidate that cannot land. Landing publishes the integration tip to the persistence branch
+under current user authority, once per Slice; dev-flow sizes a task so admission happens early
+and repeatedly, never as one final cutover of several surfaces at the end. For an older pin, `pin migrate` preserves the
 existing JSON shape and reports the manual requirements for every boundary it crosses: from
 v118, stop old dispatch, preserve read-only evidence, select an exact base and continue as a
 new Wave; from v119, adopt the integration CLI, per-Wave machine gates, milestone acceptance,
 declared runtime pipelines, and the blocked reason enum; from v120, declare `Immutable:` paths
 on every Contract; from v121, simplify reads only the increment since the last reviewed SHA;
 from v122, a timing, locking, retention, or replay mechanism needs a test that is red without
-it before it may enter. Nothing converts automatically.
+it before it may enter; from v123, adopt the dev-flow admission standard — landing per Slice,
+S2 observability before an invariant enters a Contract, and the S4 cap on correction Waves per
+Slice. Nothing converts automatically.
 
 ## Runtime bindings
 

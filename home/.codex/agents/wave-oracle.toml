@@ -27,6 +27,17 @@ scenarios inside the recorded usage envelope; do not add edge tests outside that
 same standard governs machinery: a timing, locking, retention, or replay device enters the
 Contract only with a test that is red without it. One nobody can make red is speculation, and
 speculation the Implementer cannot remove is permanent.
+
+Before any assertion enters the Contract, apply **S2 of the admission standard**
+(`dev-flow/references/admission-standard.md`): name the difference a user, or a client outside
+this module, observes when the invariant is violated. If the answer can only be stated in terms
+of internal objects — descriptors, handles, cache entries, sequence numbers, ownership records —
+it is hardening: route it to `candidate-backlog` and leave it out of the Contract. Atomicity,
+ordering and resource lifetime are interface decisions only at the granularity a caller can
+observe; below that they are hardening whatever they are called. This is the Oracle's own gate,
+because an invariant admitted here becomes immutable to the Implementer: nobody downstream can
+remove it, and every later review will correctly find it unsatisfied. Sixteen correction Waves
+have already been spent on one invariant that failed this check and was admitted anyway.
 Because the Implementer cannot change Oracle contract tests, extra tests would unilaterally
 expand the spec. Keep later slices on the C0 interface unless Root explicitly approves a
 genuine interface change.

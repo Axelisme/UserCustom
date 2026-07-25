@@ -486,7 +486,7 @@ class StatusGitTests(unittest.TestCase):
 class SkillContractTests(unittest.TestCase):
     def test_skill_declares_version_and_mental_model(self) -> None:
         text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("skill_version: 12", text)
+        self.assertIn("skill_version: 13", text)
         for phrase in ("refs vs object log", "只讀 `INDEX.md`", "指標不抄本"):
             self.assertIn(phrase, text)
         for retired in ("migrate", "inventory", "check <id>"):
@@ -505,6 +505,18 @@ class SkillContractTests(unittest.TestCase):
     def test_templates_are_the_new_set(self) -> None:
         names = {p.name for p in (SKILL / "templates").glob("*.md")}
         self.assertEqual(names, {"INDEX.md", "phase.md", "findings.md"})
+
+    def test_phase_template_carries_deferred_acceptance_queue(self) -> None:
+        template = (SKILL / "templates" / "phase.md").read_text(encoding="utf-8")
+        for phrase in (
+            "Deferred user acceptance",
+            "speculative dependency depth",
+            "hard max 10",
+            "exact SHA",
+            "observable sentence",
+            "reviewed_awaiting_user",
+        ):
+            self.assertIn(phrase, template)
 
     def test_runtime_script_mirrors_are_identical(self) -> None:
         pi_script = ROOT / "home" / ".pi" / "agent" / "skills" / "planning-with-files" / "scripts" / "plan.py"

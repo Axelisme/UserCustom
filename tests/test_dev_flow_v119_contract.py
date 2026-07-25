@@ -45,6 +45,31 @@ class DevFlowV119ContractTests(unittest.TestCase):
         self.assertIn("exact SHA", document)
         self.assertIn("post-simplify", document)
 
+        day = document[document.index("### Day Mode"):document.index("### Night Mode")]
+        night = document[document.index("### Night Mode"):document.index("## Finding provenance")]
+        day_labels = ("user acceptance", "simplify", "canonical tests", "code-review")
+        night_labels = ("simplify", "canonical tests", "code-review", "reviewed_awaiting_user")
+        self.assertEqual(
+            [day.index(label) for label in day_labels],
+            sorted(day.index(label) for label in day_labels),
+            day,
+        )
+        self.assertEqual(
+            [night.index(label) for label in night_labels],
+            sorted(night.index(label) for label in night_labels),
+            night,
+        )
+        for phrase in (
+            "mode_override = day | night | auto",
+            "max_speculative_depth: 10",
+            "machine_rework_cycles",
+            "user_acceptance",
+            "does not consume",
+            "oldest-first",
+            "stale",
+        ):
+            self.assertIn(phrase, document)
+
         # A material contract finding goes back through both role streams in
         # this Wave; quality-only cleanup never reopens Oracle.
         self.assertRegex(document, r"needs_fix")
@@ -75,6 +100,24 @@ class DevFlowV119ContractTests(unittest.TestCase):
         self.assertRegex(document, r"identit(?:y|ies).{0,160}worktree")
         self.assertRegex(document, r"landing.{0,240}outside orchestrate")
         self.assertRegex(document, r"current user authority")
+
+    def test_admission_standard_separates_human_and_machine_rework(self) -> None:
+        standard = (
+            HOME
+            / ".codex"
+            / "skills"
+            / "dev-flow"
+            / "references"
+            / "admission-standard.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("machine_rework_cycles", standard)
+        self.assertRegex(
+            " ".join(standard.lower().split()),
+            r"user acceptance.{0,240}(?:does not|never).{0,120}machine_rework_cycles",
+        )
+        self.assertIn("max speculative dependency depth is 10", standard)
+        self.assertIn("reviewed_awaiting_user", standard)
+        self.assertIn("oldest-first", standard)
 
 if __name__ == "__main__":
     unittest.main()

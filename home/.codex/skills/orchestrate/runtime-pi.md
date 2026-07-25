@@ -1,7 +1,7 @@
 # Orchestrate — Pi runtime binding
 
 Pi's native `subagent` tool and the generic [pi-subagents pipeline lifecycle](https://github.com/badlogic/pi-subagents#pipeline-lifecycle)
-are authoritative for attach, restore, resume, and close. This binding maps v124 role
+are authoritative for attach, restore, resume, and close. This binding maps v125 role
 streams and keeps Git/task contracts at Root. The role stream identity is exactly
 `<task-id>.<wave-id>.<role>`, and the stable runtime item identity is `slice-<slice-id>`;
 it has no attempt detail. After a restart or compaction, native continuation coexists with
@@ -21,10 +21,11 @@ makes no further worktree changes. The handoff carries Slice and the full exact 
 
 Interactive Pi Root should not call `subagent_wait` or `wait_subagent` merely to wait for
 role pipeline completion. When no independent local work remains, Root should end its turn
-and let Pi's subagent completion notification wake the session. In an active goal-mode
-session, use `yield_goal` with a reason naming pending pipeline or role completion when
-available. Reserve explicit wait calls only for noninteractive, headless run-to-completion
-cases.
+and let Pi's subagent completion notification wake the session. In `auto`, a user-authored task
+turn enters Day Mode; an autonomous continuation with an active goal and no live user turn
+enters Night Mode. An explicit mode override wins. In an active goal mode session, use `yield_goal` with a
+reason naming pending pipeline or role completion when available. Reserve explicit wait calls
+only for noninteractive, headless run-to-completion cases.
 
 ## Profile routing
 
@@ -55,6 +56,6 @@ process safety and requires inspection on expiry, not a delivery verdict.
 
 The role commit is the durable milestone. Root consumes only a clean exact SHA and checks
 contract-surface immutability. Native hold/message is the blocker path. A collected Wave is
-closed: a behavior correction starts a new Wave through Oracle then Implementation from the
-integration tip, while a quality correction starts a new Wave with Implementation. No runtime
-state file substitutes for Git.
+closed: role routing follows the shared dev-flow S4 contract. Root follows shared dev-flow
+S5/S6 for scheduling and deferred acceptance; the active-goal mapping above is only a runtime
+trigger, not acceptance authority. No runtime state file substitutes for Git.

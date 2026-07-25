@@ -578,6 +578,23 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
                 "automatic_conversion": False,
             }
         )
+    # v125 separates user availability from the Slice lifecycle. Night Mode may
+    # gather machine evidence and continue bounded provisional work, but S5 stays
+    # a per-Slice landing gate and human rework is not a machine correction loop.
+    if old_version < 125 <= new_version:
+        requirements.append(
+            {
+                "reason": "v124-to-v125-deferred-user-acceptance",
+                "day_mode_accepts_before_quality_gates": True,
+                "night_mode_defers_user_acceptance_only": True,
+                "deferred_acceptance_lives_in_phase_record": True,
+                "speculative_dependency_depth_is_ten": True,
+                "user_rework_does_not_consume_machine_cycles": True,
+                "machine_rework_tracks_finding_provenance": True,
+                "landing_still_requires_user_acceptance": True,
+                "automatic_conversion": False,
+            }
+        )
     write_version_pin(root, new_version, result["orchestrate_compat"])
     return {
         "ok": True,

@@ -13,6 +13,7 @@ SHARED_DOCUMENTS = (
     Path("code-review/SKILL.md"),
     Path("planning-with-files/SKILL.md"),
     Path("planning-with-files/templates/INDEX.md"),
+    Path("planning-with-files/templates/phase.md"),
     Path("to-spec/SKILL.md"),
     Path("to-tickets/SKILL.md"),
 )

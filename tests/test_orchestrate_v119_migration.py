@@ -154,6 +154,21 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
             ):
                 self.assertTrue(symmetric[surface], surface)
             self.assertFalse(symmetric["automatic_conversion"])
+            admission = requirements["v123-to-v124-slice-admission"]
+            self.assertTrue(admission["land_once_per_slice_not_once_per_task"])
+            self.assertFalse(admission["automatic_conversion"])
+            scheduling = requirements["v124-to-v125-deferred-user-acceptance"]
+            for surface in (
+                "day_mode_accepts_before_quality_gates",
+                "night_mode_defers_user_acceptance_only",
+                "deferred_acceptance_lives_in_phase_record",
+                "speculative_dependency_depth_is_ten",
+                "user_rework_does_not_consume_machine_cycles",
+                "machine_rework_tracks_finding_provenance",
+                "landing_still_requires_user_acceptance",
+            ):
+                self.assertTrue(scheduling[surface], surface)
+            self.assertFalse(scheduling["automatic_conversion"])
             self.assertEqual(
                 json.loads(pin.read_text(encoding="utf-8"))["skill_version"], version
             )

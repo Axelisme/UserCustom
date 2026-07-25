@@ -2,7 +2,7 @@
 name: planning-with-files
 description: 以 explicit task-id 管理 repo-local durable task narrative；只在跨回合、critical或資訊量確有需要時使用。
 user-invocable: true
-skill_version: 12
+skill_version: 13
 ---
 
 # Planning with Files
@@ -62,6 +62,18 @@ investigation findings；其他審查或回饋證據留在本 task 的 artifacts
 decision 被取代:在 Decisions ledger 把舊項標 `superseded` 指向 replacement,不新增相反文字。
 Current State 整段覆寫、只留當下為真的;stale 假設在 boundary 清除。
 **當前 SHA/tree/branch 不手抄進 INDEX** —— 由 `status` 從 git live 推導(重複來源必漂)。`status --worktree` 會回報 projection source；不存在、非 worktree 或 symlink path 一律拒絕且不寫入。
+
+## Deferred user acceptance
+
+Day/Night 是 runtime scheduling policy，不另建 mode/state 檔。明確的 task-level override
+作為 user-authorized Decision 記在 INDEX；當前 inferred mode 不寫入。Night Mode 延後的 S5
+義務寫在 **current release phase record**，以 `templates/phase.md` 的
+`Deferred user acceptance` 表為唯一 storage schema，update-in-place；`INDEX.md` Current
+State 只指向該 phase、記 pending count 與 oldest next item，不抄 queue。
+
+接受只對 exact SHA 有效。Day Mode oldest-first；前置 rejection 將 descendants 標 `stale`。
+Phase seal 前 queue 必須全為 `accepted` 或有明確移交到下一個 active release phase，archive
+不得吞掉 pending S5。
 
 ## Compaction:只壓入口
 

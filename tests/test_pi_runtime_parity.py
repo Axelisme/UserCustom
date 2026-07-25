@@ -104,6 +104,23 @@ class PiRuntimeParityTests(unittest.TestCase):
         self.assertNotIn("pipeline lazily", pi)
         self.assertNotIn("pipeline from the first real Implementation task", pi)
 
+    def test_runtime_bindings_share_v125_acceptance_scheduling(self) -> None:
+        for runtime in ("codex", "claude", "pi"):
+            text = " ".join(
+                (CODEX_SKILL / f"runtime-{runtime}.md").read_text(encoding="utf-8").split()
+            )
+            with self.subTest(runtime=runtime):
+                self.assertIn("v125", text)
+                self.assertIn("dev-flow S5/S6", text)
+                if runtime != "pi":
+                    self.assertNotIn("reviewed_awaiting_user", text)
+                    self.assertNotIn("speculative dependency depth 10", text)
+        pi = " ".join(
+            (CODEX_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split()
+        )
+        self.assertRegex(pi, r"active goal.{0,240}Night Mode")
+        self.assertRegex(pi, r"user-authored.{0,240}Day Mode")
+
     def test_runtime_core_has_no_binding_authority(self) -> None:
         source = (CODEX_SKILL / "scripts" / "_orchestrate" / "v119_core.py").read_text(encoding="utf-8")
         self.assertNotRegex(source, r"(?i)pi-subagents|queue.{0,80}(write|persist|file)")
@@ -129,6 +146,8 @@ class PiRuntimeParityTests(unittest.TestCase):
         skill = (CODEX_SKILL / "SKILL.md").read_text(encoding="utf-8")
         source = (HOME / ".pi" / "agent" / "APPEND_SYSTEM.md").read_text(encoding="utf-8")
         self.assertEqual(" ".join(skill[skill.index("\n1."):skill.index("\n## Workflow")].split()), " ".join(source[source.index("\n1."):].split()))
+        self.assertIn("Night Mode may defer S5 but never landing", source)
+        self.assertIn("speculative dependency depth is 10", source)
         self.assertTrue(all(path.stat().st_size <= 16_384 for path in CODEX_SKILL.rglob("*.md")))
 
 

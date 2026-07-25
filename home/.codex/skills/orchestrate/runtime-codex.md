@@ -1,6 +1,6 @@
 # Orchestrate — Codex runtime binding
 
-Codex uses the native tools exposed by the current session. This document maps v124 roles
+Codex uses the native tools exposed by the current session. This document maps v125 roles
 without emulating runtime state.
 
 ## Dual-role native agents and terminal handoff
@@ -38,9 +38,7 @@ clean Git state before consuming a handoff.
 
 ## Acceptance
 
-Dev-flow runs simplify, canonical tests, and one clean-detached exact-SHA code-review. Dispatch
-one fresh `acceptance-reviewer` per `Axis: standards | spec`; both are read-only and review the
-same SHA. A collected Wave is closed: behavior correction starts a new Wave through Oracle then
-Implementation from the integration tip, while quality correction starts a new Wave with
-Implementation. Repository integration requires current user authority and is outside the
-workflow CLI.
+Root follows the shared dev-flow S5/S6 scheduling and machine-rework contract; this runtime
+binding adds no mode or acceptance authority. At the required final gate, dispatch one fresh
+`acceptance-reviewer` per `Axis: standards | spec`; both are read-only and review the same exact
+SHA. Repository integration requires current user authority and is outside the workflow CLI.

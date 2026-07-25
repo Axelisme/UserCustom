@@ -1,6 +1,6 @@
 # Orchestrate — Claude runtime binding
 
-Claude role agents start fresh. Each prompt carries the frozen objective, exact workdir,
+Claude v125 role agents start fresh. Each prompt carries the frozen objective, exact workdir,
 base SHA, write scope, acceptance commands with the environment they require, the
 Oracle-declared immutable paths, authority, stop conditions, and artifact paths.
 
@@ -16,6 +16,6 @@ handoff in the final response rather than inventing continuity. A blocked role r
 Git merges, and repository authority. Dev-flow runs simplify, canonical tests, and one
 clean-detached exact-SHA code-review before any repository-policy integration. Dispatch two
 fresh read-only `acceptance-reviewer` agents against that SHA, one per
-`Axis: standards | spec`; neither continues into implementation. A collected Wave is closed:
-a behavior correction starts a new Wave through Oracle then Implementation from the integration
-tip, while a quality correction starts a new Wave with Implementation.
+`Axis: standards | spec`; neither continues into implementation. Root follows the shared
+dev-flow S5/S6 scheduling and machine-rework contract; this runtime binding adds no mode or
+acceptance authority.

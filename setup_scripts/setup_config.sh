@@ -43,7 +43,7 @@ retire_directory_destination() {
 # A source that is not a git repository answers only the first two and backs up the
 # rest, so a tarball install keeps today's conservative behaviour.
 destination_is_recoverable() {
-  local src=$1 dst=$2 target blob
+  local src=$1 dst=$2 target blob top
   if [ -L "$dst" ]; then
     target=$(readlink -m -- "$dst")
     case "$target" in
@@ -53,7 +53,12 @@ destination_is_recoverable() {
   fi
   [ -f "$dst" ] || return 1
   [ -f "$src" ] && cmp -s -- "$src" "$dst" && return 0
-  git -C "$UserCustom" rev-parse --git-dir >/dev/null 2>&1 || return 1
+  # Only this repository may authorise a deletion.  `rev-parse --git-dir` would climb
+  # to an enclosing one — an ordinary shape when $HOME itself is dotfile-managed — and
+  # that repository knows nothing about this fleet: a hand-edited destination whose
+  # bytes happen to match any unrelated blob in it would be deleted unpreserved.
+  top=$(git -C "$UserCustom" rev-parse --show-toplevel 2>/dev/null) || return 1
+  [ "$(realpath -- "$top")" = "$UserCustom" ] || return 1
   blob=$(git -C "$UserCustom" hash-object -- "$dst" 2>/dev/null) || return 1
   [ -n "$blob" ] && git -C "$UserCustom" cat-file -e "$blob" 2>/dev/null
 }
@@ -77,7 +82,7 @@ backup_cp() {
           continue
         fi
         if destination_is_recoverable "$src" "$dst"; then
-          rm -rf -- "$dst"
+          rm -f -- "$dst"
         elif [ -d "$dst" ]; then
           retire_directory_destination "$dst"
         else
@@ -143,7 +148,7 @@ replace_orchestrate_destination() {
   mkdir -p "$(dirname "$dst")"
   if [ -e "$dst" ] || [ -L "$dst" ]; then
     if destination_is_recoverable "$src" "$dst"; then
-      rm -rf -- "$dst"
+      rm -f -- "$dst"
     # A skill destination lives inside a skills directory, whether it is a real
     # directory or a link to one; either way its backup must not stay there.
     elif [ -d "$src" ]; then

@@ -428,6 +428,29 @@ class SetupConfigMigrationTests(unittest.TestCase):
             self.assertEqual(backup.read_text(encoding="utf-8"), "my own rules\n")
             self.assertTrue(os.path.samefile(destination, source / "home/.codex/AGENTS.md"))
 
+    def test_an_enclosing_repository_never_authorises_deleting_user_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            # The source is not a repository, but it sits inside one — an ordinary
+            # shape when $HOME itself is dotfile-managed.  That repository knows
+            # nothing about this fleet and must not authorise any deletion.
+            unrelated = base / "unrelated.md"
+            unrelated.write_text("my own rules\n", encoding="utf-8")
+            self.commit_source(base)
+            self.assertFalse((source / ".git").exists())
+            destination = home / ".codex/AGENTS.md"
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text("my own rules\n", encoding="utf-8")
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                destination.with_name("AGENTS.md.bak").read_text(encoding="utf-8"),
+                "my own rules\n",
+            )
+
     def test_a_stale_install_link_into_the_source_is_replaced_without_a_backup(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

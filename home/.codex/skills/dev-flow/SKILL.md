@@ -96,9 +96,8 @@ single finding while others are already known is a defect, not diligence.
 
 ```text
 exit: full canonical suite green ∧ review has no blocking finding
-      → Day Mode: S5 on that exact SHA, then land it
-        Night Mode: queue it as reviewed_awaiting_user
-        either way: add nothing
+      → the machine gates are done; hand that exact SHA to S5 under the
+        current mode, and add nothing
 
 for each review finding:
   not blocking (closed enum + contract_basis)   → backlog, continue

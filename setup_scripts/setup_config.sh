@@ -3,6 +3,36 @@ set -e
 
 UserCustom=$(dirname $(dirname $(realpath "$0")))
 
+# Installation resolves its source from this script's own path, so running it from a
+# linked worktree would point every installed link at that worktree and leave the
+# primary checkout's own tree littered with links back into it.  Refuse instead: the
+# installed fleet must follow the persistence branch, not a task branch.
+if git_dir=$(git -C "$UserCustom" rev-parse --git-dir 2>/dev/null); then
+  common_dir=$(git -C "$UserCustom" rev-parse --git-common-dir)
+  git_dir=$(realpath "$UserCustom/$git_dir" 2>/dev/null || realpath "$git_dir")
+  common_dir=$(realpath "$UserCustom/$common_dir" 2>/dev/null || realpath "$common_dir")
+  if [ "$git_dir" != "$common_dir" ]; then
+    echo "error: setup must run from the primary checkout, not a linked worktree" >&2
+    echo "       current: $UserCustom" >&2
+    echo "       primary: $(dirname "$common_dir")" >&2
+    exit 1
+  fi
+fi
+
+# Old destinations are kept, never deleted.  Directory destinations cannot keep a
+# `<name>.bak` sibling: the runtimes enumerate every entry of a skills directory, so
+# the backup would be listed as a second, stale skill.  Retire those out of the tree.
+BACKUP_ROOT="${USERCUSTOM_BACKUP_ROOT:-$HOME/.usercustom-backups}"
+
+retire_directory_destination() {
+  local dst=$1 relative target
+  relative=${dst#"$HOME/"}
+  target="$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)/$relative"
+  mkdir -p "$(dirname "$target")"
+  echo "backup $dst -> $target"
+  mv -T --backup=numbered -- "$dst" "$target"
+}
+
 # setup config files
 backup_cp() {
   src_dir=$1
@@ -21,8 +51,12 @@ backup_cp() {
           echo "skip $dst"
           continue
         fi
-        echo "backup $dst"
-        mv -b -- "$dst" "$dst.bak"
+        if [ -d "$dst" ]; then
+          retire_directory_destination "$dst"
+        else
+          echo "backup $dst"
+          mv -b -- "$dst" "$dst.bak"
+        fi
       else
         echo "skip $dst"
         continue
@@ -77,8 +111,14 @@ replace_orchestrate_destination() {
   fi
   mkdir -p "$(dirname "$dst")"
   if [ -e "$dst" ] || [ -L "$dst" ]; then
-    echo "backup $dst"
-    mv -b -- "$dst" "$dst.bak"
+    # A skill destination lives inside a skills directory, whether it is a real
+    # directory or a link to one; either way its backup must not stay there.
+    if [ -d "$src" ]; then
+      retire_directory_destination "$dst"
+    else
+      echo "backup $dst"
+      mv -b -- "$dst" "$dst.bak"
+    fi
   fi
   if [ -d "$src" ]; then
     ln -s "$src" "$dst"
@@ -164,6 +204,20 @@ backup_cp "$UserCustom/home/.local/include" "$HOME/.local/include"
 
 replace_current_orchestrate_destinations
 
+# Backups written by earlier versions of this script are still sitting inside the
+# skills directories, where every runtime lists them as extra skills.  They are the
+# user's data, so report them and let the user decide; never delete them here.
+report_stale_skill_backups() {
+  local layout entry
+  for layout in "${V119_SKILL_LAYOUTS[@]}" .claude/skills; do
+    [ -d "$HOME/$layout" ] || continue
+    for entry in "$HOME/$layout"/*.bak*; do
+      { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
+      echo "notice: $entry is listed as a stale skill; remove it once the backup is no longer needed" >&2
+    done
+  done
+}
+
 validate_orchestrate_skill_destinations() {
   local layout skill source destination
   for layout in "${V119_SKILL_LAYOUTS[@]}"; do
@@ -196,3 +250,4 @@ validate_orchestrate_profile_destinations() {
 validate_orchestrate_skill_destinations
 validate_orchestrate_profile_destinations
 remove_obsolete_orchestrate_profiles
+report_stale_skill_backups

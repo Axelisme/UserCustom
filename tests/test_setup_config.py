@@ -290,6 +290,82 @@ class SetupConfigMigrationTests(unittest.TestCase):
 
             self.assertTrue(all(not legacy.exists() for legacy in legacy_profiles))
 
+    def test_setup_refuses_to_run_from_a_linked_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            git = ("git", "-C", str(source))
+            env = {
+                **os.environ,
+                "GIT_AUTHOR_NAME": "t",
+                "GIT_AUTHOR_EMAIL": "t@example.com",
+                "GIT_COMMITTER_NAME": "t",
+                "GIT_COMMITTER_EMAIL": "t@example.com",
+            }
+            subprocess.run([*git, "init", "-q"], check=True, env=env)
+            subprocess.run([*git, "add", "-A"], check=True, env=env)
+            subprocess.run([*git, "commit", "-qm", "seed"], check=True, env=env)
+            worktree = base / "linked-worktree"
+            subprocess.run(
+                [*git, "worktree", "add", "-q", "--detach", str(worktree)],
+                check=True,
+                env=env,
+            )
+
+            result = self.run_setup(worktree / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("primary checkout", result.stderr)
+            self.assertIn(str(source), result.stderr)
+            # It must refuse before touching anything under HOME.
+            self.assertFalse((home / ".codex/skills/orchestrate").exists())
+
+            primary = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+            self.assertEqual(primary.returncode, 0, primary.stderr)
+            self.assertTrue((home / ".codex/skills/orchestrate/SKILL.md").is_file())
+
+    def test_replaced_skill_directories_are_retired_outside_the_skill_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            stale = home / ".claude/skills/orchestrate"
+            stale.mkdir(parents=True)
+            (stale / "SKILL.md").write_text("stale\n", encoding="utf-8")
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            # A `.bak` sibling inside a skills directory is enumerated as a
+            # phantom skill by the runtimes, so the old copy moves out of it.
+            phantoms = sorted(
+                path.name
+                for layout in (".claude/skills", ".codex/skills", ".pi/agent/skills")
+                for path in (home / layout).glob("*.bak*")
+            )
+            self.assertEqual(phantoms, [])
+            retired = sorted(
+                path
+                for path in (home / ".usercustom-backups").rglob("SKILL.md")
+                if path.read_text(encoding="utf-8") == "stale\n"
+            )
+            self.assertEqual(len(retired), 1, retired)
+
+    def test_backups_left_in_a_skill_tree_by_older_runs_are_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            phantom = home / ".claude/skills/orchestrate.bak"
+            phantom.parent.mkdir(parents=True, exist_ok=True)
+            phantom.symlink_to(source / "home/.codex/skills/orchestrate")
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(str(phantom), result.stderr)
+            self.assertIn("stale skill", result.stderr)
+            # Reported, never deleted: it is the user's data.
+            self.assertTrue(phantom.is_symlink())
+
 
 if __name__ == "__main__":
     unittest.main()

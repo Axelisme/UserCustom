@@ -65,6 +65,23 @@ class LifecycleTests(unittest.TestCase):
         self.assertNotIn("stores(phase 檔、progress)只增不改", text)
         self.assertEqual(SCRIPT.read_bytes(), PI_SCRIPT.read_bytes())
 
+    def test_acceptance_checkpoint_is_not_a_landing_ledger(self) -> None:
+        skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        template = (SKILL / "templates" / "phase.md").read_text(encoding="utf-8")
+        skill_normalized = " ".join(skill.split())
+        template_normalized = " ".join(template.lower().split())
+        for phrase in ("templates/phase.md", "dev-flow S5–S7", "progress.jsonl"):
+            self.assertIn(phrase, skill_normalized)
+        for phrase in (
+            "accepted checkpoint does not mean landed",
+            "accepted row is frozen",
+            "partial landing",
+            "final landing",
+            "progress.jsonl",
+        ):
+            self.assertIn(phrase, template_normalized)
+        self.assertNotIn("| landed |", template)
+
     def test_init_refuses_second_time(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

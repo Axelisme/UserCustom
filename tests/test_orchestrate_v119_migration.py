@@ -155,7 +155,8 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
                 self.assertTrue(symmetric[surface], surface)
             self.assertFalse(symmetric["automatic_conversion"])
             admission = requirements["v123-to-v124-slice-admission"]
-            self.assertTrue(admission["land_once_per_slice_not_once_per_task"])
+            self.assertNotIn("land_once_per_slice_not_once_per_task", admission)
+            self.assertNotIn("report_reachable_behavior_at_every_landing", admission)
             self.assertFalse(admission["automatic_conversion"])
             scheduling = requirements["v124-to-v125-deferred-user-acceptance"]
             for surface in (
@@ -179,6 +180,21 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
             ):
                 self.assertTrue(gated[surface], surface)
             self.assertFalse(gated["automatic_conversion"])
+            checkpoint = requirements["v126-to-v127-accepted-checkpoint-landing"]
+            for surface in (
+                "every_slice_keeps_machine_gates_and_s5",
+                "accepted_sha_remains_on_append_only_integration",
+                "next_slice_bases_on_integration_tip",
+                "persistence_is_not_mutated_per_slice",
+                "final_landing_requires_current_user_request",
+                "partial_landing_requires_explicit_accepted_target",
+                "landing_is_fast_forward_only",
+                "partial_landing_keeps_task_state",
+                "final_landing_then_cleanup_and_close_out",
+                "never_push",
+            ):
+                self.assertTrue(checkpoint[surface], surface)
+            self.assertFalse(checkpoint["automatic_conversion"])
             self.assertEqual(
                 json.loads(pin.read_text(encoding="utf-8"))["skill_version"], version
             )

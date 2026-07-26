@@ -5,7 +5,8 @@ sentence that exists or does not, a number, a git query — never from argument.
 needs persuasion has already failed.** A well-argued exception is the strongest evidence that
 the check is doing its job.
 
-Each role reads only its own section. The sections share one file so they cannot drift apart.
+Each role reads only its own section. Root reads S1/S3/S4/S5/S6/S7, Oracle reads S2, and
+reviewer reads S4.3. The sections share one file so they cannot drift apart.
 
 Incident of record: a 3-week effort produced 504 commits and +128,805 lines with zero
 production-reachable behavior, then spent its last 3 days on 16 correction Waves of one
@@ -18,7 +19,7 @@ non-observable invariant. Every individual rule was obeyed. These checks are wha
 - **S1.1 Observable sentence.** Write one sentence: *"the user does X at `<production entrypoint>` and sees Y."* If it cannot be written without naming internal objects, **refuse the Slice**.
 - **S1.2 Named deletion.** The Slice names at least one existing path it deletes on completion, as `file:symbol`. Pure addition accumulates unreachable code. **Once per task**, a seam-establishing first Slice may declare `deletes: none`, and must name the Slice that deletes its predecessor.
 - **S1.3 Size.** Estimated non-test production diff ≤ 1500 lines. Over → split before dispatch, not after.
-- **S1.4 Independently landable.** The Slice carries user-visible value without any later Slice. If its value only appears after a future cutover, it is not a Slice; it is half of one.
+- **S1.4 Independently landable.** The Slice carries user-visible value without any later Slice. If its value only appears after a future cutover or final landing, it is not a Slice; it is half of one.
 
 A Slice failing any check is recut. Recutting is cheap; the cheapest moment is now.
 
@@ -71,11 +72,11 @@ and report to the user. Do not dispatch the next Wave first.
 
 ---
 
-## S5 — User acceptance (Root, before landing a Slice)
+## S5 — User acceptance (Root, before accepting a checkpoint)
 
-- **S5.1 Gated candidate.** S5 opens only on a candidate that already passed `simplify`, the canonical tests, and the clean-detached review; the evidence binds to that exact reviewed SHA. A defect a machine gate can find must never be paid for with a person's attention.
-- **S5.2** The user exercises the S1.1 sentence against the real entrypoint and accepts or rejects it. This happens **per Slice**, not once per effort.
-- **S5.3** Rejection returns the Slice to S1. User acceptance does not increment `machine_rework_cycles`: a person may discover incomplete feedback across several attempts, so attempts have no hard numerical cap. The next candidate is a new exact SHA and reopens the gates S5.1 requires.
+- **S5.1 Gated checkpoint.** S5 opens only on a candidate that already passed `simplify`, the canonical tests, and the clean-detached review; the evidence binds to that exact reviewed SHA. A defect a machine gate can find must never be paid for with a person's attention. Acceptance records the exact SHA as an accepted checkpoint. That checkpoint reports the user-visible behavior and explicitly says it is not persistence-landed.
+- **S5.2** The user exercises the S1.1 sentence against the real entrypoint and accepts or rejects it. This happens **per Slice**; acceptance does not mutate persistence.
+- **S5.3** Rejection returns the Slice to S1. User acceptance does not increment `machine_rework_cycles`: a person may discover incomplete feedback across several attempts, so attempts have no hard numerical cap. The next candidate is a new exact SHA and reopens the gates S5.1 requires. Later commits reopen the gates for that new tip, while historical exact-SHA evidence stays valid unless marked stale.
 - **S5.4** Feedback outside the frozen usage envelope is a spec amendment or a new Slice, not unbounded rework hidden under acceptance. A rejection makes dependent provisional checkpoints `stale` until rebuilt from a valid base.
 
 ---
@@ -83,7 +84,19 @@ and report to the user. Do not dispatch the next Wave first.
 ## S6 — Deferred user acceptance (Root, at mode selection and Night checkpoints)
 
 - **S6.1 Mode.** `mode_override = day | night | auto`; explicit wins. In `auto`, a user-authored task turn is Day Mode and an autonomous continuation with an active goal and no live user turn is Night Mode. Inferred mode is recomputed, not durable state.
-- **S6.2 Queue.** Night Mode records each deferred S5 item in the current release phase record using planning-with-files' phase template as the storage schema. `reviewed_awaiting_user` is provisional and never means accepted or landed.
-- **S6.3 Depth.** The max speculative dependency depth is 10 from the last accepted landing. Independent pending Slices do not add chain depth. A later Slice must not overwrite a pending acceptance surface or make its scenario independently untestable.
-- **S6.4 Drain.** Day Mode processes the queue oldest-first in dependency order. Same-SHA acceptance preserves machine evidence and permits immediate per-Slice landing; rejection returns to S1 and marks descendants stale.
-- **S6.5 Landing.** Night Mode may defer S5 and continue bounded minimal Slices, but it never defers the requirement itself and never lands without user acceptance.
+- **S6.2 Queue.** Night Mode records each deferred S5 item in the current release phase record using planning-with-files' phase template as the storage schema. `reviewed_awaiting_user` is provisional and never means accepted or landed. The queue is ordered from the latest accepted checkpoint.
+- **S6.3 Depth.** The max speculative dependency depth is 10 from the latest accepted checkpoint. Independent pending Slices do not add chain depth. A later Slice must not overwrite a pending acceptance surface or make its scenario independently untestable.
+- **S6.4 Drain.** Day Mode processes the queue oldest-first in dependency order. Same-SHA acceptance preserves machine evidence and continues from the integration tip without persistence mutation; rejection returns to S1 and marks descendants stale.
+- **S6.5 Landing.** Night Mode may defer S5 and continue bounded minimal Slices, but it never lands because landing requires a live explicit user request.
+- **S6.6 Append-only integration.** The task integration branch is append-only: never reset, rebase, or force-update it. Rejected or stale work is repaired by forward commits; historical exact-SHA evidence remains valid unless stale.
+
+---
+
+## S7 — Landing and close-out (Root, only on explicit user request)
+
+- **S7.1 Authority.** Landing is only permitted with current user authority.
+- **S7.2 Exact target.** The landing target is the exact SHA recorded as accepted.
+- **S7.3 Topology.** The target is an ancestor of the integration tip; the persistence tip is an ancestor of the target.
+- **S7.4 Method.** Landing is fast-forward-only; no squash, cherry-pick, rebase, or merge commit, and no push.
+- **S7.5 Partial landing.** An explicitly requested partial landing never performs task cleanup or close-out; it leaves the task integration worktree, refs, and phase records open. Closed Waves need not retain role worktrees.
+- **S7.6 Final landing.** Final landing requires every item accepted, no stale or unresolved items, and target equal to the current clean integration tip. Then clean up and close out.

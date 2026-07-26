@@ -65,14 +65,11 @@ Current State 整段覆寫、只留當下為真的;stale 假設在 boundary 清�
 
 ## Deferred user acceptance
 
-Day/Night 是 runtime scheduling policy，不另建 mode/state 檔。明確的 task-level override
-作為 user-authorized Decision 記在 INDEX；當前 inferred mode 不寫入。Night Mode 延後的 S5
-義務寫在 **current release phase record**，以 `templates/phase.md` 的
-`Deferred user acceptance` 表為唯一 storage schema，update-in-place；`INDEX.md` Current
-State 只指向該 phase、記 pending count 與 oldest next item，不抄 queue。
+Day/Night 是 runtime scheduling policy，不另建 mode/state 檔。明確的 task-level override 作為 user-authorized Decision 記在 INDEX；當前 inferred mode 不寫入。Night Mode 延後的 S5 義務寫在 **current release phase record**，以 `templates/phase.md` 的 `Deferred user acceptance` 表為唯一 storage schema，update-in-place；`INDEX.md` Current State 只指向該 phase、記 pending count 與 oldest next item，不抄 queue。
 
-接受只對 exact SHA 有效。Day Mode oldest-first；前置 rejection 將 descendants 標 `stale`。
-Phase seal 前 queue 必須全為 `accepted`；archive 不得吞掉 pending S5。
+`templates/phase.md` 擁有欄位、status enum 與 completion constraints；本 skill 只映射 dev-flow S5–S7：acceptance 前更新同一 row，accepted 後凍結，landing evidence append 到既有 `progress.jsonl`，不新增 `landed` status 或第二份 ledger。
+
+接受只對 exact SHA 有效。Day Mode oldest-first；前置 rejection 將 descendants 標 `stale`。Root 依 phase template 的 constraints 決定何時 seal/archive。
 
 ## Compaction:只壓入口
 

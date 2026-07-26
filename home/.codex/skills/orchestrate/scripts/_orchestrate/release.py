@@ -569,18 +569,15 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
             {
                 "reason": "v123-to-v124-slice-admission",
                 "read_dev_flow_admission_standard": True,
-                "land_once_per_slice_not_once_per_task": True,
                 "recut_any_planned_atomic_cutover": True,
                 "observability_gate_before_invariant_enters_contract": True,
                 "correction_waves_per_slice_capped": True,
                 "run_admission_before_acceptance": True,
-                "report_reachable_behavior_at_every_landing": True,
                 "automatic_conversion": False,
             }
         )
-    # v125 separates user availability from the Slice lifecycle. Night Mode may
-    # gather machine evidence and continue bounded provisional work, but S5 stays
-    # a per-Slice landing gate and human rework is not a machine correction loop.
+    # v125 is the per-Slice user-acceptance gate: Night Mode may gather machine
+    # evidence, but human acceptance still lands one Slice at a time.
     if old_version < 125 <= new_version:
         requirements.append(
             {
@@ -603,6 +600,25 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
                 "user_tests_only_reviewed_shas": True,
                 "day_and_night_share_one_gate_order": True,
                 "rejection_reopens_gates_on_the_next_sha": True,
+                "automatic_conversion": False,
+            }
+        )
+    # v127 turns accepted checkpoints into append-only task integration landing:
+    # land only on an accepted SHA, keep the integration tip append-only, and never push.
+    if old_version < 127 <= new_version:
+        requirements.append(
+            {
+                "reason": "v126-to-v127-accepted-checkpoint-landing",
+                "every_slice_keeps_machine_gates_and_s5": True,
+                "accepted_sha_remains_on_append_only_integration": True,
+                "next_slice_bases_on_integration_tip": True,
+                "persistence_is_not_mutated_per_slice": True,
+                "final_landing_requires_current_user_request": True,
+                "partial_landing_requires_explicit_accepted_target": True,
+                "landing_is_fast_forward_only": True,
+                "partial_landing_keeps_task_state": True,
+                "final_landing_then_cleanup_and_close_out": True,
+                "never_push": True,
                 "automatic_conversion": False,
             }
         )

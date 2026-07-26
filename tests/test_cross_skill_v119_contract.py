@@ -87,6 +87,20 @@ class CrossSkillV119ContractTests(unittest.TestCase):
             r"|(?:reviews?|checks?).{0,100}orchestrat(?:e|or|ion)",
         )
 
+    def test_slice_acceptance_is_separate_from_persistence_landing(self) -> None:
+        to_spec = self.normalized(self.document(CODEX_SKILLS, "to-spec/SKILL.md"))
+        to_tickets = self.normalized(self.document(CODEX_SKILLS, "to-tickets/SKILL.md"))
+        for phrase in (
+            "acceptance checkpoint order",
+            "independently landable",
+            "first accepted checkpoint",
+        ):
+            self.assertIn(phrase, to_spec)
+        for phrase in ("dev-flow S5–S7", "acceptance criteria"):
+            self.assertIn(phrase, to_tickets)
+        self.assertNotIn("task integration branch", to_tickets)
+        self.assertNotIn("persistence branch", to_tickets)
+
     def test_planning_documents_do_not_restore_removed_findings_authority(self) -> None:
         documents = {
             relative: self.normalized(self.document(CODEX_SKILLS, relative))

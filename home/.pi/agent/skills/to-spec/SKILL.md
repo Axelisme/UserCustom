@@ -77,7 +77,7 @@ Only when a source document was supplied. A table of its normative statements ta
 
 ## Slice Map
 
-The vertical Slices this spec decomposes into, in landing order. When a `wayfinder` map exists, these rows refine its acceptance staircase — one staircase step becomes one or more Slices, and a Slice that belongs to no step is either missing from the staircase or outside the destination. Each row carries the S1.1 observable sentence — *"the user does X at `<entrypoint>` and sees Y"* — and the `file:symbol` it deletes on completion. The first row is the **first production-reachable increment**, and its landing is days away, not weeks.
+The vertical Slices this spec decomposes into form the acceptance checkpoint order. When a `wayfinder` map exists, these rows refine its acceptance staircase — one staircase step becomes one or more Slices, and a Slice that belongs to no step is either missing from the staircase or outside the destination. Each row carries the S1.1 observable sentence — *"the user does X at `<entrypoint>` and sees Y"* — and the `file:symbol` it deletes on completion. The first row is the **first production-reachable increment**, and its first accepted checkpoint is days, not weeks, away. Each Slice is independently landable, and a final task landing may batch already accepted checkpoints, but never batch user acceptance.
 
 A spec that cannot be written as such a table has not been decomposed, and must not be frozen: it will be implemented as one atomic cutover regardless of what the migration section says. A completion definition that only holds when every row is finished is likewise not frozen — each row is independently acceptable by the user, or the decomposition is wrong.
 

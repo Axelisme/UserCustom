@@ -70,8 +70,23 @@ class DevFlowV119ContractTests(unittest.TestCase):
             "does not consume",
             "oldest-first",
             "stale",
+            "accepted checkpoint",
+            "task integration branch",
+            "append-only",
+            "partial landing",
+            "final landing",
+            "fast-forward-only",
+            "does not mutate the persistence branch",
+            "no push",
         ):
             self.assertIn(phrase, document)
+        for retired in (
+            "Landing cadence is per Slice",
+            "immediate per-Slice landing",
+            "newly landed tip",
+            "last user-accepted landing",
+        ):
+            self.assertNotIn(retired, document)
 
         # A material contract finding goes back through both role streams in
         # this Wave; quality-only cleanup never reopens Oracle.
@@ -123,9 +138,24 @@ class DevFlowV119ContractTests(unittest.TestCase):
         self.assertIn("oldest-first", standard)
         # S5 opens on a candidate the machine gates already cleared, so a
         # reviewable defect never reaches the user in the first place.
+        normalized = " ".join(standard.split())
         self.assertRegex(
-            " ".join(standard.split()),
+            normalized,
             r"S5\.1.{0,400}simplify.{0,120}canonical tests.{0,160}review",
+        )
+        self.assertIn("## S7 — Landing and close-out", standard)
+        for phrase in (
+            "accepted checkpoint",
+            "current user authority",
+            "fast-forward-only",
+            "partial landing",
+            "final landing",
+            "no push",
+        ):
+            self.assertIn(phrase, normalized)
+        self.assertRegex(
+            normalized,
+            r"partial landing.{0,500}(?:does not|never).{0,200}(?:cleanup|close-out)",
         )
 
 if __name__ == "__main__":

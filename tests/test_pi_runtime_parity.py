@@ -104,14 +104,15 @@ class PiRuntimeParityTests(unittest.TestCase):
         self.assertNotIn("pipeline lazily", pi)
         self.assertNotIn("pipeline from the first real Implementation task", pi)
 
-    def test_runtime_bindings_share_v126_acceptance_scheduling(self) -> None:
+    def test_runtime_bindings_share_v127_checkpoint_scheduling(self) -> None:
         for runtime in ("codex", "claude", "pi"):
             text = " ".join(
                 (CODEX_SKILL / f"runtime-{runtime}.md").read_text(encoding="utf-8").split()
             )
             with self.subTest(runtime=runtime):
-                self.assertIn("v126", text)
-                self.assertIn("dev-flow S5/S6", text)
+                self.assertIn("v127", text)
+                self.assertIn("dev-flow S5/S6/S7", text)
+                self.assertIn("no landing or acceptance authority", text)
                 if runtime != "pi":
                     self.assertNotIn("reviewed_awaiting_user", text)
                     self.assertNotIn("speculative dependency depth 10", text)
@@ -146,8 +147,15 @@ class PiRuntimeParityTests(unittest.TestCase):
         skill = (CODEX_SKILL / "SKILL.md").read_text(encoding="utf-8")
         source = (HOME / ".pi" / "agent" / "APPEND_SYSTEM.md").read_text(encoding="utf-8")
         self.assertEqual(" ".join(skill[skill.index("\n1."):skill.index("\n## Workflow")].split()), " ".join(source[source.index("\n1."):].split()))
-        self.assertIn("Night Mode may defer S5 but never landing", source)
-        self.assertIn("speculative dependency depth is 10", source)
+        for phrase in (
+            "accepted checkpoint",
+            "append-only task integration branch",
+            "explicit partial or final landing",
+            "partial landing never cleans up",
+            "speculative dependency depth is 10",
+        ):
+            self.assertIn(phrase, source)
+        self.assertNotIn("Night Mode may defer S5 but never landing", source)
         # Must survive compaction: an ungated candidate must never be handed to
         # the user, whatever the mode.
         self.assertRegex(

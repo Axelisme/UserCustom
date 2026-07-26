@@ -1,35 +1,35 @@
 ---
 name: dev-flow
-description: Route a heavy effort through frozen planning, v126 orchestrate implementation, and availability-aware acceptance.
+description: Route a heavy effort through frozen planning, v127 orchestrate implementation, checkpoint acceptance, and explicit persistence landing.
 ---
 
 # Dev Flow
 
 Use this skill for work that needs a frozen contract and more than one session. It navigates the outer pipeline; each station owns its own contract and runtime details.
 
-Every role reads its own section of the [admission standard](references/admission-standard.md) before acting: Root S1/S3/S4/S5/S6, Oracle S2, reviewer S4.3. Those checks are decidable from artifacts and are not subject to argument.
+Every role reads its own section of the [admission standard](references/admission-standard.md) before acting: Root S1/S3/S4/S5/S6/S7, Oracle S2, reviewer S4.3. Those checks are decidable from artifacts and are not subject to argument.
 
 ## Pipeline
 
 ```text
-wayfinder → to-spec → to-tickets → ( orchestrate → acceptance → landing )* → close-out
+wayfinder → to-spec → to-tickets → ( orchestrate → acceptance → accepted checkpoint )* → explicit final landing → close-out
 ```
 
-The bracketed segment repeats **once per vertical Slice**. The orchestrate station publishes an exact Implementation candidate. Acceptance does not create another workflow ledger and does not replace Git as durable truth. Workflow evolution reads [design principles](references/design-principles.md).
+The bracketed segment repeats **once per vertical Slice** on one append-only task integration branch. The orchestrate station publishes an exact Implementation candidate; S5 records the reviewed, user-accepted exact SHA as an accepted checkpoint without mutating persistence. An explicit partial landing is a user-authorized side action, not another station or ledger. Workflow evolution reads [design principles](references/design-principles.md).
 
 ## Task sizing
 
-A dev-flow task is sized so that its **first landing is days away, not weeks**. If the effort cannot reach a landing within that budget, it is not one task: split it into several dev-flow tasks, each with its own frozen spec and its own landing, and let `wayfinder` hold the map across them.
+A dev-flow task is sized so that its **first accepted checkpoint is days away, not weeks**. If the effort cannot reach one within that budget, it is not one task: split it into several dev-flow tasks, each with its own frozen spec, and let `wayfinder` hold the map across them.
 
-This is a hard constraint, not a preference. A task whose production admission happens once, at the end, has no feedback, no partial value, and concentrates all risk on a single day — and every quality mechanism below operates inside that one landing, so none of them can catch a wrong route. An effort that plans a single atomic cutover of several surfaces has already failed this check; recut it into Slices that each admit one surface and delete its predecessor.
+This is a hard constraint, not a preference. A task whose review and user acceptance happen only once at the end has no feedback and concentrates all risk on one day. Persistence may land once at task end only because each preceding Slice was already production-reachable in its candidate, independently landable, machine-gated, and user-accepted. A plan that batches those acceptance decisions into one final cutover has failed this check; recut it into Slices that each admit one surface and delete its predecessor.
 
-## v126 acceptance scheduling
+## v127 acceptance scheduling
 
 Acceptance opens only when the milestone passes **S3** of the admission standard. S3 is seven
 git-derived checks costing seconds; running expensive judgement over an increment that is
 unreachable, deletes nothing, or has looped on one Slice spends the review budget on a candidate
-that cannot land. S3.8 — two consecutive milestones failing reachability or deletion — stops
-implementation and reports to the user instead of dispatching the next Wave.
+that cannot be accepted. S3.8 — two consecutive milestones failing reachability or deletion —
+stops implementation and reports to the user instead of dispatching the next Wave.
 
 Mode is a task-scoped scheduling policy, not durable workflow truth:
 `mode_override = day | night | auto`. An explicit override wins. In `auto`, a user-authored turn
@@ -44,33 +44,39 @@ against the reviewed SHA.
 
 After focused gates and S3, run **simplify**, the **canonical tests**, and one **clean-detached
 code-review** of the **post-simplify exact SHA**. Only then make that reviewed SHA runnable and
-obtain **user acceptance** against its S1.1 sentence, and land exactly it. A user's attention is
-the scarcest input in this loop, so anything simplify or either review axis can find must be
-found before the candidate reaches them; what returns is then product direction rather than a
-defect a machine gate would have caught. Rejection returns the Slice to S1, and the next
-candidate is a new exact SHA whose gates reopen before the next user test.
+obtain **user acceptance** against its S1.1 sentence. Record the accepted checkpoint in the
+current phase row and continue from the task integration tip; S5 does not mutate the persistence
+branch. A user's attention is the scarcest input in this loop, so anything simplify or either
+review axis can find must be found before the candidate reaches them. Rejection returns the Slice
+to S1, and the next candidate is a new exact SHA whose gates reopen before the next user test.
 
 ### Night Mode
 
 When the user is unavailable, record the Slice's deferred S5 obligation, then run the same
 **simplify**, **canonical tests**, and **clean-detached code-review** sequence. Update the queue
 item to the final reviewed exact SHA and state `reviewed_awaiting_user`; this is a provisional
-checkpoint, never an acceptance or landing. The next minimal Slice may base on that provisional
-tip. The default hard ceiling is `max_speculative_depth: 10`, the longest dependency chain since
-the last user-accepted landing; independent pending Slices do not add chain depth. Stop earlier if
-a later Slice would overwrite a pending acceptance surface, requires a missing product decision,
+checkpoint, never acceptance or landing. The next minimal Slice may base on that provisional tip.
+The default hard ceiling is `max_speculative_depth: 10`, the longest dependency chain since the
+latest accepted checkpoint; independent pending Slices do not add chain depth. Stop earlier if a
+later Slice would overwrite a pending acceptance surface, requires a missing product decision,
 or makes an earlier scenario independently untestable.
 
 On the next Day Mode, process deferred items oldest-first in dependency order. Acceptance of the
-same reviewed SHA preserves its machine evidence and permits immediate per-Slice landing. A
-rejection returns that Slice to S1 and marks dependent provisional items `stale`; they cannot be
-accepted or landed until rebuilt from a valid base. Night Mode may defer S5 but never landing.
+same reviewed SHA preserves its machine evidence and records an accepted checkpoint without
+persistence mutation. A rejection returns that Slice to S1 and marks dependent provisional items
+`stale`; they cannot be accepted or landed until repaired by forward commits. Night Mode never
+lands because every partial or final landing requires a live explicit user request.
 
 At either mode's machine stage, the review reads the whole committed `base..integration-tip`
 range, because cross-authority composition defects are only visible in the assembled picture;
 simplify reads only the increment since the last reviewed SHA. Between milestones each Wave
-passes only machine gates before collect. A later commit invalidates evidence bound to the prior
-SHA and reopens the applicable gates.
+passes only machine gates before collect. A later commit invalidates evidence for the later tip
+and reopens its gates; historical evidence remains valid for its exact accepted SHA unless that
+checkpoint is marked `stale`.
+
+The task integration branch is append-only: never reset, rebase, force-update, or recreate it.
+Rejected or stale descendants remain historical evidence and are repaired by new forward commits
+from the current integration tip.
 
 ## Finding provenance
 
@@ -86,8 +92,8 @@ finding even when a user later authorizes its fix.
 Blocking is closed to spec violation, data loss, security, or reproducible behavior failure
 within the frozen spec's usage envelope. The final review must not expand the frozen spec; a
 finding without a contract basis in the frozen spec is backlog, never a blocker. Robustness,
-quality, and out-of-envelope findings go through `candidate-backlog` and do not block landing.
-Do not implement features the frozen spec does not require.
+quality, and out-of-envelope findings go through `candidate-backlog` and do not block an accepted
+checkpoint or landing. Do not implement features the frozen spec does not require.
 
 Routing is fixed below; cost judgement stays with Root. Minimize Wave round trips: batch
 everything known at the same moment into one cycle — one Oracle correction carries all
@@ -144,26 +150,25 @@ A collected Wave is closed: a milestone finding is routed to the Wave owning the
 Maintain one update-in-place acceptance record per release. In Night Mode the same phase record
 uses planning-with-files' `templates/phase.md` deferred-acceptance table as its storage schema;
 INDEX points to it and may state only the pending count and next item. It is never a new state
-file and never a second findings ledger.
+file and never a second findings or landing ledger. Once a row is accepted, its SHA, status, and
+machine evidence are frozen.
 
-The contract tests and fixtures are immutable during simplify and throughout Implementation. Role identities and each role worktree are retained through acceptance and landing; close runtime identities before removing clean worktrees.
+The contract tests and fixtures are immutable during simplify and throughout Implementation. A collected Wave is closed: close its runtime identities and remove its clean Oracle/Implementation worktrees, while retaining its Git branches and commits until final cleanup. Keep the single task integration worktree through accepted checkpoints and any partial landing.
 
 ## Minimal handoff
 
 The orchestrate handoff is a small exact-SHA tuple containing the exact base SHA, Implementation SHA, frozen spec, task plan, canonical test results, and Git profile JSON. It is handed off without a receipt and without a finding bundle; those are not dev-flow state.
 
-The landing action is outside orchestrate and requires current user authority under repository policy. After authorized landing, close the role identities, remove clean worktrees including the integration worktree, delete integrated role and integration branches, and delete the task's `refs/orchestrate/<task-id>/` namespace directly according to that policy.
+Persistence landing remains outside orchestrate and follows **S7**. It requires current user authority and two ancestry proofs: the accepted target is an ancestor of the task integration tip, and the observed persistence tip is an ancestor of that target. Apply it fast-forward-only: no squash, cherry-pick, rebase, merge commit, or push.
 
-**Landing cadence is per Slice.** dev-flow owns landing, and a task with several Slices lands
-several times. Day Mode bases the next Slice on the newly landed tip. Night Mode may build a
-bounded provisional chain from reviewed tips, but every Slice retains its own exact checkpoint,
-acceptance item, and later landing; it is not one combined cutover. Before each landing, **S5**:
-the user exercises that Slice's S1.1 sentence against the real entrypoint. A rejected sentence
-returns to S1, may be retried without a hard attempt cap, and does not increment
-`machine_rework_cycles`.
+## Accepted checkpoints and landing
 
-At every landing, report to the user in three lines: what is now reachable, what remains, and the largest current risk. This is a milestone-triggered report of delivered behavior, not routine status, and it is the only thing standing between the user and a multi-week silence whose first signal is a missed destination.
+**Checkpoint cadence is per Slice.** Every Slice retains its reviewed and user-accepted exact SHA in the phase row and as an ancestor of the append-only task integration branch. The next Slice bases on the current integration tip. This preserves frequent feedback without per-Slice persistence mutation.
+
+At every accepted checkpoint, report in three lines: what behavior was accepted, what remains, and the largest current risk. Say explicitly that the checkpoint is not yet persistence-landed. A partial landing additionally reports what became persistence-reachable, but never cleans up, seals the phase, archives the plan, or closes the task.
+
+The default is one **final landing** after a current explicit user request. It requires all applicable items accepted, no stale or unresolved item, and the latest accepted SHA equal to the clean integration tip. Only after that exact SHA is fast-forwarded to the persistence branch may Root remove the clean integration worktree, delete integrated role and integration branches, and delete the task's `refs/orchestrate/<task-id>/` namespace according to repository policy. There is no automatic landing and no push.
 
 ## Effort close-out
 
-After landing, close the wayfinder map, record durable decisions, move out-of-scope ideas to the candidate backlog, archive the task plan, and report the final destination and residual risks. Do not invent state files to represent this navigation.
+After final landing and cleanup evidence are recorded, close the wayfinder map, record durable decisions, move out-of-scope ideas to the candidate backlog, seal and archive the task plan, and report the final persistence-reachable destination and residual risks. Do not invent state files to represent this navigation.

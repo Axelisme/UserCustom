@@ -1,16 +1,28 @@
 #!/usr/bin/env bash
 set -e
 
-UserCustom=$(dirname $(dirname $(realpath "$0")))
+UserCustom=$(dirname "$(dirname "$(realpath "$0")")")
+
+# Every question this script asks git is about *this* fleet, so only the repository
+# whose toplevel is this source root may answer it.  `rev-parse --git-dir` alone would
+# climb into an enclosing repository — an ordinary shape when $HOME is dotfile-managed
+# or when the fleet is unpacked inside someone else's checkout — and that repository
+# knows nothing about the fleet.  Resolve the answer once: it cannot change mid-run.
+SOURCE_REPO=""
+if source_toplevel=$(git -C "$UserCustom" rev-parse --show-toplevel 2>/dev/null) \
+  && [ "$(realpath -- "$source_toplevel" 2>/dev/null)" = "$UserCustom" ]; then
+  SOURCE_REPO=$UserCustom
+fi
 
 # Installation resolves its source from this script's own path, so running it from a
 # linked worktree would point every installed link at that worktree and leave the
 # primary checkout's own tree littered with links back into it.  Refuse instead: the
 # installed fleet must follow the persistence branch, not a task branch.
-if git_dir=$(git -C "$UserCustom" rev-parse --git-dir 2>/dev/null); then
-  common_dir=$(git -C "$UserCustom" rev-parse --git-common-dir)
-  git_dir=$(realpath "$UserCustom/$git_dir" 2>/dev/null || realpath "$git_dir")
-  common_dir=$(realpath "$UserCustom/$common_dir" 2>/dev/null || realpath "$common_dir")
+if [ -n "$SOURCE_REPO" ]; then
+  git_dir=$(git -C "$SOURCE_REPO" rev-parse --git-dir)
+  common_dir=$(git -C "$SOURCE_REPO" rev-parse --git-common-dir)
+  git_dir=$(realpath "$SOURCE_REPO/$git_dir" 2>/dev/null || realpath "$git_dir")
+  common_dir=$(realpath "$SOURCE_REPO/$common_dir" 2>/dev/null || realpath "$common_dir")
   if [ "$git_dir" != "$common_dir" ]; then
     echo "error: setup must run from the primary checkout, not a linked worktree" >&2
     echo "       current: $UserCustom" >&2
@@ -23,11 +35,13 @@ fi
 # `<name>.bak` sibling: the runtimes enumerate every entry of a skills directory, so
 # the backup would be listed as a second, stale skill.  Retire those out of the tree.
 BACKUP_ROOT="${USERCUSTOM_BACKUP_ROOT:-$HOME/.usercustom-backups}"
+# One run is one restore point, so every backup it writes shares one stamp.
+BACKUP_STAMP=$(date +%Y%m%d-%H%M%S)
 
 retire_directory_destination() {
   local dst=$1 relative target
   relative=${dst#"$HOME/"}
-  target="$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)/$relative"
+  target="$BACKUP_ROOT/$BACKUP_STAMP/$relative"
   mkdir -p "$(dirname "$target")"
   echo "backup $dst -> $target"
   mv -T --backup=numbered -- "$dst" "$target"
@@ -42,8 +56,28 @@ retire_directory_destination() {
 # has (a version we shipped before).  Anything else is the user's, and is backed up.
 # A source that is not a git repository answers only the first two and backs up the
 # rest, so a tarball install keeps today's conservative behaviour.
+#
+# "The repository still has it" means reachable from a ref: an object that is merely
+# staged, or left over from a discarded commit, is what `git gc --prune` deletes, and
+# an object git may delete tomorrow is not a backup today.  The reachable set is read
+# once per run — a few milliseconds — and answers every destination.
+SOURCE_REACHABLE_BLOBS=""
+
+source_blob_is_reachable() {
+  local blob=$1
+  [ -n "$SOURCE_REPO" ] || return 1
+  if [ -z "$SOURCE_REACHABLE_BLOBS" ]; then
+    SOURCE_REACHABLE_BLOBS=$(
+      git -C "$SOURCE_REPO" rev-list --objects --all --no-object-names 2>/dev/null || true
+    )
+    # An empty repository has no reachable objects; remember that, do not re-ask.
+    SOURCE_REACHABLE_BLOBS=${SOURCE_REACHABLE_BLOBS:-none}
+  fi
+  printf '%s\n' "$SOURCE_REACHABLE_BLOBS" | grep -qxF -- "$blob"
+}
+
 destination_is_recoverable() {
-  local src=$1 dst=$2 target blob top
+  local src=$1 dst=$2 target blob
   if [ -L "$dst" ]; then
     target=$(readlink -m -- "$dst")
     case "$target" in
@@ -53,14 +87,9 @@ destination_is_recoverable() {
   fi
   [ -f "$dst" ] || return 1
   [ -f "$src" ] && cmp -s -- "$src" "$dst" && return 0
-  # Only this repository may authorise a deletion.  `rev-parse --git-dir` would climb
-  # to an enclosing one — an ordinary shape when $HOME itself is dotfile-managed — and
-  # that repository knows nothing about this fleet: a hand-edited destination whose
-  # bytes happen to match any unrelated blob in it would be deleted unpreserved.
-  top=$(git -C "$UserCustom" rev-parse --show-toplevel 2>/dev/null) || return 1
-  [ "$(realpath -- "$top")" = "$UserCustom" ] || return 1
-  blob=$(git -C "$UserCustom" hash-object -- "$dst" 2>/dev/null) || return 1
-  [ -n "$blob" ] && git -C "$UserCustom" cat-file -e "$blob" 2>/dev/null
+  [ -n "$SOURCE_REPO" ] || return 1
+  blob=$(git -C "$SOURCE_REPO" hash-object -- "$dst" 2>/dev/null) || return 1
+  [ -n "$blob" ] && source_blob_is_reachable "$blob"
 }
 
 # setup config files
@@ -83,7 +112,9 @@ backup_cp() {
         fi
         if destination_is_recoverable "$src" "$dst"; then
           rm -f -- "$dst"
-        elif [ -d "$dst" ]; then
+        # Only a skills directory is enumerated entry by entry, so only there does a
+        # sibling backup become a second, stale skill.  Everything else keeps it.
+        elif [ -d "$dst" ] && [ "$(basename "$dst_dir")" = "skills" ]; then
           retire_directory_destination "$dst"
         else
           echo "backup $dst"

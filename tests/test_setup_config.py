@@ -469,6 +469,112 @@ class SetupConfigMigrationTests(unittest.TestCase):
                 stale.resolve(), (source / "home/.claude/skills/orchestrate").resolve()
             )
 
+    def test_a_source_nested_in_someone_elses_worktree_still_installs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            outer = base / "outer"
+            outer.mkdir()
+            (outer / "unrelated.md").write_text("unrelated\n", encoding="utf-8")
+            self.commit_source(outer)
+            linked = base / "outer-worktree"
+            subprocess.run(
+                ["git", "-C", str(outer), "worktree", "add", "-q", "--detach", str(linked)],
+                check=True,
+            )
+            # The fleet is not that repository's worktree; it merely sits inside one.
+            source, home = self.seed_fixture(linked)
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((home / ".codex/skills/orchestrate/SKILL.md").is_file())
+
+    def test_a_source_path_containing_a_space_installs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary) / "path with space"
+            base.mkdir()
+            source, home = self.seed_fixture(base)
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((home / ".codex/skills/orchestrate/SKILL.md").is_file())
+
+    def test_one_run_writes_its_backups_under_one_timestamp(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            for layout in (".codex/skills", ".pi/agent/skills"):
+                stale = home / layout / "orchestrate"
+                stale.mkdir(parents=True)
+                (stale / "SKILL.md").write_text("stale\n", encoding="utf-8")
+            # A stub clock that moves on every call: one run must read it once.
+            stub_bin = base / "stub-bin"
+            stub_bin.mkdir()
+            counter = base / "clock"
+            counter.write_text("0", encoding="utf-8")
+            clock = stub_bin / "date"
+            clock.write_text(
+                "#!/usr/bin/env bash\n"
+                f"n=$(cat {counter})\n"
+                f"printf '%s' $((n + 1)) > {counter}\n"
+                "printf 'stamp-%s\\n' \"$n\"\n",
+                encoding="utf-8",
+            )
+            clock.chmod(0o755)
+
+            result = self.run_setup(
+                source / "setup_scripts/setup_config.sh",
+                home,
+                env={"PATH": f"{stub_bin}{os.pathsep}{os.environ['PATH']}"},
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            stamps = sorted(path.name for path in (home / ".usercustom-backups").iterdir())
+            self.assertEqual(stamps, ["stamp-0"], stamps)
+
+    def test_an_ordinary_config_directory_keeps_its_sibling_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            shipped = source / "home/.config/nvim/init.lua"
+            shipped.parent.mkdir(parents=True, exist_ok=True)
+            shipped.write_text("shipped\n", encoding="utf-8")
+            existing = home / ".config/nvim"
+            existing.mkdir(parents=True)
+            (existing / "init.lua").write_text("mine\n", encoding="utf-8")
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            # Only skills directories are enumerated as skills; everything else
+            # keeps the sibling backup it has always had.
+            self.assertEqual(
+                (home / ".config/nvim.bak/init.lua").read_text(encoding="utf-8"), "mine\n"
+            )
+            self.assertFalse((home / ".usercustom-backups").exists())
+
+    def test_a_staged_but_uncommitted_blob_does_not_authorise_deletion(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            self.commit_source(source)
+            staged = source / "staged-only.md"
+            staged.write_text("only staged\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(source), "add", "staged-only.md"], check=True)
+            destination = home / ".codex/AGENTS.md"
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text("only staged\n", encoding="utf-8")
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            # `git gc --prune` can drop an unreachable object, so it is no backup.
+            self.assertEqual(
+                destination.with_name("AGENTS.md.bak").read_text(encoding="utf-8"),
+                "only staged\n",
+            )
+
     def test_backups_left_in_a_skill_tree_by_older_runs_are_reported(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

@@ -650,6 +650,51 @@ class SetupConfigMigrationTests(unittest.TestCase):
             self.assertIn(str(rotated), result.stderr)
             self.assertNotIn(f"{older} is", result.stderr)
 
+    def test_a_fresh_hard_link_alias_is_not_reported_as_leftover(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            older = home / ".codex/agents/wave-oracle.toml.bak"
+            older.parent.mkdir(parents=True, exist_ok=True)
+            older.write_text("shared user profile\n", encoding="utf-8")
+            hand_edited = home / ".codex/agents/wave-implementer.toml"
+            os.link(older, hand_edited)
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            fresh = hand_edited.with_name("wave-implementer.toml.bak")
+            self.assertTrue(os.path.samefile(older, fresh))
+            self.assertIn(f"notice: {older} is", result.stderr)
+            self.assertNotIn(f"notice: {fresh} is", result.stderr)
+
+    def test_an_unidentifiable_existing_backup_fails_setup(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            backup = home / ".codex/agents/wave-oracle.toml.bak"
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            backup.write_text("older profile\n", encoding="utf-8")
+            stub_bin = base / "stub-bin"
+            stub_bin.mkdir()
+            stat = stub_bin / "stat"
+            stat.write_text(
+                "#!/usr/bin/env bash\n"
+                f"if [[ \"$*\" == *{backup}* ]]; then exit 1; fi\n"
+                "exec /usr/bin/stat \"$@\"\n",
+                encoding="utf-8",
+            )
+            stat.chmod(0o755)
+
+            result = self.run_setup(
+                source / "setup_scripts/setup_config.sh",
+                home,
+                env={"PATH": f"{stub_bin}{os.pathsep}{os.environ['PATH']}"},
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(f"cannot identify installed backup: {backup}", result.stderr)
+
     def test_backups_left_in_an_agents_directory_are_reported(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

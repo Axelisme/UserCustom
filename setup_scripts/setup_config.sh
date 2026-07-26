@@ -37,6 +37,19 @@ fi
 BACKUP_ROOT="${USERCUSTOM_BACKUP_ROOT:-$HOME/.usercustom-backups}"
 # One run is one restore point, so every backup it writes shares one stamp.
 BACKUP_STAMP=$(date +%Y%m%d-%H%M%S)
+CURRENT_RUN_BACKUPS=()
+
+record_current_backup() {
+  CURRENT_RUN_BACKUPS+=("$1")
+}
+
+backup_was_created_this_run() {
+  local candidate path=$1
+  for candidate in "${CURRENT_RUN_BACKUPS[@]}"; do
+    [ "$candidate" = "$path" ] && return 0
+  done
+  return 1
+}
 
 retire_directory_destination() {
   local dst=$1 relative target
@@ -129,6 +142,7 @@ backup_cp() {
           else
             mv -b -- "$dst" "$dst.bak"
           fi
+          record_current_backup "$dst.bak"
         fi
       else
         echo "skip $dst"
@@ -160,6 +174,7 @@ backup_cp_one() {
       else
         echo "backup $dst"
         mv -b -- "$dst" "$dst.bak"
+        record_current_backup "$dst.bak"
       fi
     else
       echo "skip $dst"
@@ -197,6 +212,7 @@ replace_orchestrate_destination() {
     else
       echo "backup $dst"
       mv -b -- "$dst" "$dst.bak"
+      record_current_backup "$dst.bak"
     fi
   fi
   if [ -d "$src" ]; then
@@ -264,6 +280,7 @@ remove_obsolete_orchestrate_profiles() {
         destination="$HOME/$source_relative"
         if [ -e "$destination" ] || [ -L "$destination" ]; then
           cp -a --backup=numbered -- "$destination" "$destination.bak"
+          record_current_backup "$destination.bak"
         fi
         rm -f "$destination"
       fi
@@ -272,7 +289,7 @@ remove_obsolete_orchestrate_profiles() {
 }
 
 list_installed_backups() {
-  local root entry
+  local root entry identity
   for root in "${V119_SKILL_LAYOUTS[@]}" .claude/skills "${V119_PROFILE_ROOTS[@]}"; do
     [ -d "$HOME/$root" ] || continue
     for entry in "$HOME/$root"/*.bak*; do
@@ -280,7 +297,12 @@ list_installed_backups() {
       # Identity, not path: `mv -b` renames a pre-existing `<name>.bak` aside to
       # `<name>.bak~` and puts this run's backup at the name just vacated, so a path
       # denotes different data before and after.  A rename carries the inode along.
-      stat -c '%d:%i' -- "$entry" 2>/dev/null || true
+      if ! identity=$(stat -c '%d:%i' -- "$entry" 2>/dev/null); then
+        { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
+        echo "error: cannot identify installed backup: $entry" >&2
+        return 1
+      fi
+      printf '%s\n' "$identity"
     done
   done
 }
@@ -311,8 +333,14 @@ report_backups_in() {
   for entry in "$HOME/$root"/*.bak*; do
     { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
     # A backup this run just wrote is this run's own doing, already announced on
-    # stdout; calling it something an earlier run left behind would be a lie.
-    identity=$(stat -c '%d:%i' -- "$entry" 2>/dev/null) || continue
+    # stdout; calling it something an earlier run left behind would be a lie.  Paths
+    # disambiguate hard-linked entries that intentionally share one inode.
+    backup_was_created_this_run "$entry" && continue
+    if ! identity=$(stat -c '%d:%i' -- "$entry" 2>/dev/null); then
+      { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
+      echo "error: cannot identify installed backup: $entry" >&2
+      return 1
+    fi
     printf '%s\n' "$PREEXISTING_BACKUPS" | grep -qxF -- "$identity" || continue
     echo "notice: $entry $message" >&2
   done

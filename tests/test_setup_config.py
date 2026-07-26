@@ -575,6 +575,52 @@ class SetupConfigMigrationTests(unittest.TestCase):
                 "only staged\n",
             )
 
+    def test_a_second_directory_backup_rotates_instead_of_nesting(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            shipped = source / "home/.config/nvim/init.lua"
+            shipped.parent.mkdir(parents=True, exist_ok=True)
+            shipped.write_text("shipped\n", encoding="utf-8")
+            existing = home / ".config/nvim"
+            existing.mkdir(parents=True)
+            (existing / "init.lua").write_text("mine\n", encoding="utf-8")
+            older = home / ".config/nvim.bak"
+            older.mkdir()
+            (older / "init.lua").write_text("older\n", encoding="utf-8")
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            # `mv -b` moves a directory *into* an existing `<name>.bak`; the backup
+            # must replace it and rotate the older one aside instead.
+            self.assertFalse((home / ".config/nvim.bak/nvim").exists())
+            self.assertEqual(
+                (home / ".config/nvim.bak/init.lua").read_text(encoding="utf-8"), "mine\n"
+            )
+            rotated = sorted(
+                path for path in (home / ".config").glob("nvim.bak.~*~") if path.is_dir()
+            )
+            self.assertEqual(len(rotated), 1, rotated)
+            self.assertEqual(
+                (rotated[0] / "init.lua").read_text(encoding="utf-8"), "older\n"
+            )
+
+    def test_backups_left_in_an_agents_directory_are_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            leftover = home / ".codex/agents/wave-oracle.toml.bak"
+            leftover.parent.mkdir(parents=True, exist_ok=True)
+            leftover.write_text("older profile\n", encoding="utf-8")
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(str(leftover), result.stderr)
+            self.assertIn("leftover backup", result.stderr)
+            self.assertTrue(leftover.is_file())
+
     def test_backups_left_in_a_skill_tree_by_older_runs_are_reported(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

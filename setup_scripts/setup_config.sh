@@ -65,6 +65,10 @@ SOURCE_REACHABLE_BLOBS=""
 
 source_blob_is_reachable() {
   local blob=$1
+  # An empty id would make the `grep` below match any line at all, turning "I cannot
+  # identify this content" into "delete it".  Nothing may reach the deletion path by
+  # default, whatever a future caller forgets to check.
+  [ -n "$blob" ] || return 1
   [ -n "$SOURCE_REPO" ] || return 1
   if [ -z "$SOURCE_REACHABLE_BLOBS" ]; then
     SOURCE_REACHABLE_BLOBS=$(
@@ -118,7 +122,13 @@ backup_cp() {
           retire_directory_destination "$dst"
         else
           echo "backup $dst"
-          mv -b -- "$dst" "$dst.bak"
+          if [ -d "$dst" ]; then
+            # `mv -b` would move this directory *into* an existing `<name>.bak`
+            # rather than replacing it, burying the older backup one level down.
+            mv -T --backup=numbered -- "$dst" "$dst.bak"
+          else
+            mv -b -- "$dst" "$dst.bak"
+          fi
         fi
       else
         echo "skip $dst"
@@ -273,16 +283,24 @@ backup_cp "$UserCustom/home/.local/include" "$HOME/.local/include"
 
 replace_current_orchestrate_destinations
 
-# Backups written by earlier versions of this script are still sitting inside the
-# skills directories, where every runtime lists them as extra skills.  They are the
-# user's data, so report them and let the user decide; never delete them here.
-report_stale_skill_backups() {
-  local layout entry
-  for layout in "${V119_SKILL_LAYOUTS[@]}" .claude/skills; do
-    [ -d "$HOME/$layout" ] || continue
-    for entry in "$HOME/$layout"/*.bak*; do
+# Backups written by earlier versions of this script are still sitting in the installed
+# trees.  In a skills directory that is an active harm — every runtime enumerates the
+# directory and lists the backup as a second, stale skill — while elsewhere it is only
+# clutter, so say which it is.  They are the user's data: report, never delete.
+report_stale_backups() {
+  local root entry
+  for root in "${V119_SKILL_LAYOUTS[@]}" .claude/skills; do
+    [ -d "$HOME/$root" ] || continue
+    for entry in "$HOME/$root"/*.bak*; do
       { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
       echo "notice: $entry is listed as a stale skill; remove it once the backup is no longer needed" >&2
+    done
+  done
+  for root in "${V119_PROFILE_ROOTS[@]}"; do
+    [ -d "$HOME/$root" ] || continue
+    for entry in "$HOME/$root"/*.bak*; do
+      { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
+      echo "notice: $entry is a leftover backup; remove it once it is no longer needed" >&2
     done
   done
 }
@@ -319,4 +337,4 @@ validate_orchestrate_profile_destinations() {
 validate_orchestrate_skill_destinations
 validate_orchestrate_profile_destinations
 remove_obsolete_orchestrate_profiles
-report_stale_skill_backups
+report_stale_backups

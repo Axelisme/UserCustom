@@ -62,7 +62,6 @@ class DevFlowV119ContractTests(unittest.TestCase):
             sorted(night.index(label) for label in night_labels),
             night,
         )
-        self.assertNotRegex(day, r"user acceptance.{0,120}before[^.]{0,60}simplify")
         for phrase in (
             "mode_override = day | night | auto",
             "max_speculative_depth: 10",

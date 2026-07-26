@@ -238,9 +238,9 @@
     },
     ".pi/agent/APPEND_SYSTEM.md": {
       "bytes": 845,
-      "profile_contract_sha256": "144a396b5eab09dc3a0ed457b0313c1c5cf72233804d56eee5c44a9f8fabb6bd",
-      "sha256": "91b57cdf567402a0b4bc21f4fee8ed4b986b7495ab477130fdfdef3755265a28",
-      "standing_orders_sha256": "144a396b5eab09dc3a0ed457b0313c1c5cf72233804d56eee5c44a9f8fabb6bd"
+      "profile_contract_sha256": "4377d72929f3421c902f5b758388d848988f92a3791d0383345c6c90d17937aa",
+      "sha256": "2c0cf3184c51b88e3b8dac1d5f43fe8bf2cdc7bedbffd86433f551ac38059649",
+      "standing_orders_sha256": "4377d72929f3421c902f5b758388d848988f92a3791d0383345c6c90d17937aa"
     },
     ".pi/agent/agents/acceptance-reviewer.md": {
       "bytes": 4722,

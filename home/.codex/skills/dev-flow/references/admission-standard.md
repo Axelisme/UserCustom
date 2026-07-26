@@ -73,9 +73,10 @@ and report to the user. Do not dispatch the next Wave first.
 
 ## S5 — User acceptance (Root, before landing a Slice)
 
-- **S5.1** The user exercises the S1.1 sentence against the real entrypoint and accepts or rejects it. This happens **per Slice**, not once per effort, and the evidence binds to the exact candidate SHA.
-- **S5.2** Rejection returns the Slice to S1. User acceptance does not increment `machine_rework_cycles`: a person may discover incomplete feedback across several attempts, so attempts have no hard numerical cap.
-- **S5.3** Feedback outside the frozen usage envelope is a spec amendment or a new Slice, not unbounded rework hidden under acceptance. A rejection makes dependent provisional checkpoints `stale` until rebuilt from a valid base.
+- **S5.1 Gated candidate.** S5 opens only on a candidate that already passed `simplify`, the canonical tests, and the clean-detached review; the evidence binds to that exact reviewed SHA. A defect a machine gate can find must never be paid for with a person's attention.
+- **S5.2** The user exercises the S1.1 sentence against the real entrypoint and accepts or rejects it. This happens **per Slice**, not once per effort.
+- **S5.3** Rejection returns the Slice to S1. User acceptance does not increment `machine_rework_cycles`: a person may discover incomplete feedback across several attempts, so attempts have no hard numerical cap. The next candidate is a new exact SHA and reopens the gates S5.1 requires.
+- **S5.4** Feedback outside the frozen usage envelope is a spec amendment or a new Slice, not unbounded rework hidden under acceptance. A rejection makes dependent provisional checkpoints `stale` until rebuilt from a valid base.
 
 ---
 

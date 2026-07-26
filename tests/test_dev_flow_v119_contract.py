@@ -45,9 +45,12 @@ class DevFlowV119ContractTests(unittest.TestCase):
         self.assertIn("exact SHA", document)
         self.assertIn("post-simplify", document)
 
+        # Both modes run one machine gate order; they differ only in when S5
+        # runs against the reviewed SHA.  A defect a gate can find must never
+        # be spent on the user's attention, so user acceptance comes last.
         day = document[document.index("### Day Mode"):document.index("### Night Mode")]
         night = document[document.index("### Night Mode"):document.index("## Finding provenance")]
-        day_labels = ("user acceptance", "simplify", "canonical tests", "code-review")
+        day_labels = ("simplify", "canonical tests", "code-review", "user acceptance")
         night_labels = ("simplify", "canonical tests", "code-review", "reviewed_awaiting_user")
         self.assertEqual(
             [day.index(label) for label in day_labels],
@@ -59,6 +62,7 @@ class DevFlowV119ContractTests(unittest.TestCase):
             sorted(night.index(label) for label in night_labels),
             night,
         )
+        self.assertNotRegex(day, r"user acceptance.{0,120}before[^.]{0,60}simplify")
         for phrase in (
             "mode_override = day | night | auto",
             "max_speculative_depth: 10",
@@ -118,6 +122,12 @@ class DevFlowV119ContractTests(unittest.TestCase):
         self.assertIn("max speculative dependency depth is 10", standard)
         self.assertIn("reviewed_awaiting_user", standard)
         self.assertIn("oldest-first", standard)
+        # S5 opens on a candidate the machine gates already cleared, so a
+        # reviewable defect never reaches the user in the first place.
+        self.assertRegex(
+            " ".join(standard.split()),
+            r"S5\.1.{0,400}simplify.{0,120}canonical tests.{0,160}review",
+        )
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 # Orchestrate — Claude runtime binding
 
-Claude v125 role agents start fresh. Each prompt carries the frozen objective, exact workdir,
+Claude v126 role agents start fresh. Each prompt carries the frozen objective, exact workdir,
 base SHA, write scope, acceptance commands with the environment they require, the
 Oracle-declared immutable paths, authority, stop conditions, and artifact paths.
 

@@ -159,7 +159,6 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
             self.assertFalse(admission["automatic_conversion"])
             scheduling = requirements["v124-to-v125-deferred-user-acceptance"]
             for surface in (
-                "day_mode_accepts_before_quality_gates",
                 "night_mode_defers_user_acceptance_only",
                 "deferred_acceptance_lives_in_phase_record",
                 "speculative_dependency_depth_is_ten",
@@ -169,6 +168,17 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
             ):
                 self.assertTrue(scheduling[surface], surface)
             self.assertFalse(scheduling["automatic_conversion"])
+            # v125 briefly put S5 before the quality gates; v126 supersedes it,
+            # so the older requirement must not still instruct that ordering.
+            self.assertNotIn("day_mode_accepts_before_quality_gates", scheduling)
+            gated = requirements["v125-to-v126-machine-gates-before-user-test"]
+            for surface in (
+                "user_tests_only_reviewed_shas",
+                "day_and_night_share_one_gate_order",
+                "rejection_reopens_gates_on_the_next_sha",
+            ):
+                self.assertTrue(gated[surface], surface)
+            self.assertFalse(gated["automatic_conversion"])
             self.assertEqual(
                 json.loads(pin.read_text(encoding="utf-8"))["skill_version"], version
             )

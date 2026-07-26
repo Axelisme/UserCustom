@@ -104,13 +104,13 @@ class PiRuntimeParityTests(unittest.TestCase):
         self.assertNotIn("pipeline lazily", pi)
         self.assertNotIn("pipeline from the first real Implementation task", pi)
 
-    def test_runtime_bindings_share_v125_acceptance_scheduling(self) -> None:
+    def test_runtime_bindings_share_v126_acceptance_scheduling(self) -> None:
         for runtime in ("codex", "claude", "pi"):
             text = " ".join(
                 (CODEX_SKILL / f"runtime-{runtime}.md").read_text(encoding="utf-8").split()
             )
             with self.subTest(runtime=runtime):
-                self.assertIn("v125", text)
+                self.assertIn("v126", text)
                 self.assertIn("dev-flow S5/S6", text)
                 if runtime != "pi":
                     self.assertNotIn("reviewed_awaiting_user", text)
@@ -148,6 +148,12 @@ class PiRuntimeParityTests(unittest.TestCase):
         self.assertEqual(" ".join(skill[skill.index("\n1."):skill.index("\n## Workflow")].split()), " ".join(source[source.index("\n1."):].split()))
         self.assertIn("Night Mode may defer S5 but never landing", source)
         self.assertIn("speculative dependency depth is 10", source)
+        # Must survive compaction: an ungated candidate must never be handed to
+        # the user, whatever the mode.
+        self.assertRegex(
+            " ".join(source.split()),
+            r"user only after simplify, the canonical tests, and code-review",
+        )
         self.assertTrue(all(path.stat().st_size <= 16_384 for path in CODEX_SKILL.rglob("*.md")))
 
 

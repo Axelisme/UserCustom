@@ -5,4 +5,4 @@
 3. Mutation of a persistence branch requires current user authority.
 4. After compaction, re-read this skill and the durable task plan before dispatch.
 5. Report reachable behavior to the user at every landing. Silence between landings is only safe because landings are frequent; an effort that has not landed is an effort the user cannot see.
-6. Night Mode may defer S5 but never landing; every provisional Slice keeps an exact acceptance item, and max speculative dependency depth is 10.
+6. A candidate reaches the user only after simplify, the canonical tests, and code-review; Night Mode may defer S5 but never landing, every provisional Slice keeps an exact acceptance item, and max speculative dependency depth is 10.

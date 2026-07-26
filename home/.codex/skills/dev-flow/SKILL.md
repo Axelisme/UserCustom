@@ -1,6 +1,6 @@
 ---
 name: dev-flow
-description: Route a heavy effort through frozen planning, v125 orchestrate implementation, and availability-aware acceptance.
+description: Route a heavy effort through frozen planning, v126 orchestrate implementation, and availability-aware acceptance.
 ---
 
 # Dev Flow
@@ -23,7 +23,7 @@ A dev-flow task is sized so that its **first landing is days away, not weeks**. 
 
 This is a hard constraint, not a preference. A task whose production admission happens once, at the end, has no feedback, no partial value, and concentrates all risk on a single day — and every quality mechanism below operates inside that one landing, so none of them can catch a wrong route. An effort that plans a single atomic cutover of several surfaces has already failed this check; recut it into Slices that each admit one surface and delete its predecessor.
 
-## v125 acceptance scheduling
+## v126 acceptance scheduling
 
 Acceptance opens only when the milestone passes **S3** of the admission standard. S3 is seven
 git-derived checks costing seconds; running expensive judgement over an increment that is
@@ -37,22 +37,27 @@ that resumes this task is Day Mode; an autonomous continuation with an active go
 user turn is Night Mode. The inferred mode is recomputed each turn. Only the deferred acceptance
 obligations are durable, in the current release phase record.
 
+Both modes run the same machine gates in the same order, and differ only in when **S5** runs
+against the reviewed SHA.
+
 ### Day Mode
 
-After focused gates and S3, make the candidate runnable and obtain **user acceptance** against its
-S1.1 sentence before **simplify**. An accepted candidate then runs the **canonical tests** and one
-**clean-detached code-review** of the **post-simplify exact SHA**, and lands that exact SHA. Human
-feedback can change the product direction, so do not spend the expensive quality context first
-when the user is available.
+After focused gates and S3, run **simplify**, the **canonical tests**, and one **clean-detached
+code-review** of the **post-simplify exact SHA**. Only then make that reviewed SHA runnable and
+obtain **user acceptance** against its S1.1 sentence, and land exactly it. A user's attention is
+the scarcest input in this loop, so anything simplify or either review axis can find must be
+found before the candidate reaches them; what returns is then product direction rather than a
+defect a machine gate would have caught. Rejection returns the Slice to S1, and the next
+candidate is a new exact SHA whose gates reopen before the next user test.
 
 ### Night Mode
 
-When the user is unavailable, record the Slice's deferred S5 obligation, then run **simplify**,
-the **canonical tests**, and one **clean-detached code-review**. Update the queue item to the final
-reviewed exact SHA and state `reviewed_awaiting_user`; this is a provisional checkpoint, never an
-acceptance or landing. The next minimal Slice may base on that provisional tip. The default hard
-ceiling is `max_speculative_depth: 10`, measured as the longest dependency chain since the last
-user-accepted landing; independent pending Slices do not add chain depth. Stop a chain earlier if
+When the user is unavailable, record the Slice's deferred S5 obligation, then run the same
+**simplify**, **canonical tests**, and **clean-detached code-review** sequence. Update the queue
+item to the final reviewed exact SHA and state `reviewed_awaiting_user`; this is a provisional
+checkpoint, never an acceptance or landing. The next minimal Slice may base on that provisional
+tip. The default hard ceiling is `max_speculative_depth: 10`, the longest dependency chain since
+the last user-accepted landing; independent pending Slices do not add chain depth. Stop earlier if
 a later Slice would overwrite a pending acceptance surface, requires a missing product decision,
 or makes an earlier scenario independently untestable.
 

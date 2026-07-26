@@ -585,13 +585,24 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
         requirements.append(
             {
                 "reason": "v124-to-v125-deferred-user-acceptance",
-                "day_mode_accepts_before_quality_gates": True,
                 "night_mode_defers_user_acceptance_only": True,
                 "deferred_acceptance_lives_in_phase_record": True,
                 "speculative_dependency_depth_is_ten": True,
                 "user_rework_does_not_consume_machine_cycles": True,
                 "machine_rework_tracks_finding_provenance": True,
                 "landing_still_requires_user_acceptance": True,
+                "automatic_conversion": False,
+            }
+        )
+    # v126 moves S5 behind the machine gates: v125 showed the user a candidate no
+    # reviewer had seen, so people paid attention for defects a gate would catch.
+    if old_version < 126 <= new_version:
+        requirements.append(
+            {
+                "reason": "v125-to-v126-machine-gates-before-user-test",
+                "user_tests_only_reviewed_shas": True,
+                "day_and_night_share_one_gate_order": True,
+                "rejection_reopens_gates_on_the_next_sha": True,
                 "automatic_conversion": False,
             }
         )

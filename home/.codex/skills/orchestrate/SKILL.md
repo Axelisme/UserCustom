@@ -1,10 +1,10 @@
 ---
 name: orchestrate
-description: Minimal Git-backed Oracle and Implementation workflow for v125.
-skill_version: 125
+description: Minimal Git-backed Oracle and Implementation workflow for v126.
+skill_version: 126
 ---
 
-# Orchestrate v125
+# Orchestrate v126
 
 Orchestrate provides one small workflow surface: two role worktrees, exact Contract merge,
 and a read-only Git profile. Git commits, refs, SHAs, trailers, and worktree state are the
@@ -21,7 +21,7 @@ Installed in the matching always-resident runtime context (`~/.codex/AGENTS.md` 
 3. Mutation of a persistence branch requires current user authority.
 4. After compaction, re-read this skill and the durable task plan before dispatch.
 5. Report reachable behavior to the user at every landing. Silence between landings is only safe because landings are frequent; an effort that has not landed is an effort the user cannot see.
-6. Night Mode may defer S5 but never landing; every provisional Slice keeps an exact acceptance item, and max speculative dependency depth is 10.
+6. A candidate reaches the user only after simplify, the canonical tests, and code-review; Night Mode may defer S5 but never landing, every provisional Slice keeps an exact acceptance item, and max speculative dependency depth is 10.
 
 ## Workflow
 
@@ -79,7 +79,8 @@ from v122, a timing, locking, retention, or replay mechanism needs a test that i
 it before it may enter; from v123, adopt the dev-flow admission standard — landing per Slice,
 S2 observability before an invariant enters a Contract, and the S4 cap on machine rework; from
 v124, adopt Day/Night scheduling, the phase-record deferred acceptance queue, and speculative
-depth 10 without weakening S5. Nothing converts automatically.
+depth 10 without weakening S5; from v125, run the same machine gates in both modes and present
+only a reviewed exact SHA for user testing. Nothing converts automatically.
 
 ## Runtime bindings
 

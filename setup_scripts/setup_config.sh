@@ -277,7 +277,10 @@ list_installed_backups() {
     [ -d "$HOME/$root" ] || continue
     for entry in "$HOME/$root"/*.bak*; do
       { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
-      printf '%s\n' "$entry"
+      # Identity, not path: `mv -b` renames a pre-existing `<name>.bak` aside to
+      # `<name>.bak~` and puts this run's backup at the name just vacated, so a path
+      # denotes different data before and after.  A rename carries the inode along.
+      stat -c '%d:%i' -- "$entry" 2>/dev/null || true
     done
   done
 }
@@ -303,13 +306,14 @@ replace_current_orchestrate_destinations
 # directory and lists the backup as a second, stale skill — while elsewhere it is only
 # clutter, so say which it is.  They are the user's data: report, never delete.
 report_backups_in() {
-  local root=$1 message=$2 entry
+  local root=$1 message=$2 entry identity
   [ -d "$HOME/$root" ] || return 0
   for entry in "$HOME/$root"/*.bak*; do
     { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
     # A backup this run just wrote is this run's own doing, already announced on
     # stdout; calling it something an earlier run left behind would be a lie.
-    printf '%s\n' "$PREEXISTING_BACKUPS" | grep -qxF -- "$entry" || continue
+    identity=$(stat -c '%d:%i' -- "$entry" 2>/dev/null) || continue
+    printf '%s\n' "$PREEXISTING_BACKUPS" | grep -qxF -- "$identity" || continue
     echo "notice: $entry $message" >&2
   done
 }

@@ -626,6 +626,30 @@ class SetupConfigMigrationTests(unittest.TestCase):
             # Calling a backup this run just made "leftover" is misleading.
             self.assertNotIn(str(fresh), result.stderr)
 
+    def test_a_backup_rotated_aside_during_the_run_is_still_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            profile = home / ".codex/agents/wave-oracle.toml"
+            profile.parent.mkdir(parents=True, exist_ok=True)
+            older = profile.with_name("wave-oracle.toml.bak")
+            older.write_text("left by an earlier run\n", encoding="utf-8")
+            profile.write_text("my edit\n", encoding="utf-8")
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            # `mv -b` renames the pre-existing backup to `<name>.bak~` and puts this
+            # run's backup at `<name>.bak`, so a path is not a stable name for a
+            # backup across the run: the old data must keep being reported.
+            rotated = profile.with_name("wave-oracle.toml.bak~")
+            self.assertEqual(
+                rotated.read_text(encoding="utf-8"), "left by an earlier run\n"
+            )
+            self.assertEqual(older.read_text(encoding="utf-8"), "my edit\n")
+            self.assertIn(str(rotated), result.stderr)
+            self.assertNotIn(f"{older} is", result.stderr)
+
     def test_backups_left_in_an_agents_directory_are_reported(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

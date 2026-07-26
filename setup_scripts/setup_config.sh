@@ -33,6 +33,31 @@ retire_directory_destination() {
   mv -T --backup=numbered -- "$dst" "$target"
 }
 
+# A backup is only worth keeping when the destination holds something this repository
+# cannot produce again.  Deciding that per destination, from artifacts, is what keeps
+# first-install semantics for the paths that need them without asking the caller to
+# declare a mode it cannot reliably know.  Three dispositions are recoverable:
+# identical content (a checkout only broke the hard link), a link into this source
+# tree (an earlier install artifact), and content whose blob this repository still
+# has (a version we shipped before).  Anything else is the user's, and is backed up.
+# A source that is not a git repository answers only the first two and backs up the
+# rest, so a tarball install keeps today's conservative behaviour.
+destination_is_recoverable() {
+  local src=$1 dst=$2 target blob
+  if [ -L "$dst" ]; then
+    target=$(readlink -m -- "$dst")
+    case "$target" in
+      "$UserCustom"/*) return 0 ;;
+      *) return 1 ;;
+    esac
+  fi
+  [ -f "$dst" ] || return 1
+  [ -f "$src" ] && cmp -s -- "$src" "$dst" && return 0
+  git -C "$UserCustom" rev-parse --git-dir >/dev/null 2>&1 || return 1
+  blob=$(git -C "$UserCustom" hash-object -- "$dst" 2>/dev/null) || return 1
+  [ -n "$blob" ] && git -C "$UserCustom" cat-file -e "$blob" 2>/dev/null
+}
+
 # setup config files
 backup_cp() {
   src_dir=$1
@@ -51,7 +76,9 @@ backup_cp() {
           echo "skip $dst"
           continue
         fi
-        if [ -d "$dst" ]; then
+        if destination_is_recoverable "$src" "$dst"; then
+          rm -rf -- "$dst"
+        elif [ -d "$dst" ]; then
           retire_directory_destination "$dst"
         else
           echo "backup $dst"
@@ -82,8 +109,12 @@ backup_cp_one() {
         echo "skip $dst"
         return
       fi
-      echo "backup $dst"
-      mv -b -- "$dst" "$dst.bak"
+      if destination_is_recoverable "$src" "$dst"; then
+        rm -f -- "$dst"
+      else
+        echo "backup $dst"
+        mv -b -- "$dst" "$dst.bak"
+      fi
     else
       echo "skip $dst"
       return
@@ -111,9 +142,11 @@ replace_orchestrate_destination() {
   fi
   mkdir -p "$(dirname "$dst")"
   if [ -e "$dst" ] || [ -L "$dst" ]; then
+    if destination_is_recoverable "$src" "$dst"; then
+      rm -rf -- "$dst"
     # A skill destination lives inside a skills directory, whether it is a real
     # directory or a link to one; either way its backup must not stay there.
-    if [ -d "$src" ]; then
+    elif [ -d "$src" ]; then
       retire_directory_destination "$dst"
     else
       echo "backup $dst"

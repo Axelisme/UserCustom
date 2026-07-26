@@ -36,6 +36,28 @@ class SetupConfigMigrationTests(unittest.TestCase):
         custom.write_text("user profile\n", encoding="utf-8")
         return source, home
 
+    def commit_source(self, source: Path) -> None:
+        env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@example.com",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@example.com",
+        }
+        git = ("git", "-C", str(source))
+        if not (source / ".git").exists():
+            subprocess.run([*git, "init", "-q"], check=True, env=env)
+        subprocess.run([*git, "add", "-A"], check=True, env=env)
+        subprocess.run([*git, "commit", "-qm", "shipped"], check=True, env=env)
+
+    def backups_under(self, home: Path) -> list[Path]:
+        found = [path for path in home.rglob("*.bak")]
+        found += [path for path in home.rglob("*.bak~")]
+        backup_root = home / ".usercustom-backups"
+        if backup_root.is_dir():
+            found += [path for path in backup_root.iterdir()]
+        return sorted(found)
+
     def run_setup(
         self, script: Path, home: Path, env: dict[str, str] | None = None
     ) -> subprocess.CompletedProcess[str]:
@@ -349,6 +371,80 @@ class SetupConfigMigrationTests(unittest.TestCase):
                 if path.read_text(encoding="utf-8") == "stale\n"
             )
             self.assertEqual(len(retired), 1, retired)
+
+    def test_a_checkout_that_only_broke_the_hard_link_refreshes_without_a_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            script = source / "setup_scripts/setup_config.sh"
+            self.assertEqual(self.run_setup(script, home).returncode, 0)
+            standing_order = source / "home/.codex/AGENTS.md"
+            content = standing_order.read_bytes()
+            # A checkout or rebase rewrites the file: same content, new inode, so
+            # the installed hard link no longer resolves to it.
+            standing_order.unlink()
+            standing_order.write_bytes(content)
+            self.assertFalse(os.path.samefile(standing_order, home / ".codex/AGENTS.md"))
+
+            result = self.run_setup(script, home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self.backups_under(home), [])
+            self.assertTrue(os.path.samefile(standing_order, home / ".codex/AGENTS.md"))
+
+    def test_a_previously_shipped_destination_is_overwritten_without_a_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            shipped = source / "home/.codex/AGENTS.md"
+            shipped.write_text("v1 rules\n", encoding="utf-8")
+            self.commit_source(source)
+            destination = home / ".codex/AGENTS.md"
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text("v1 rules\n", encoding="utf-8")
+            shipped.write_text("v2 rules\n", encoding="utf-8")
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            # The old content is a blob this repository still has; git is the backup.
+            self.assertEqual(self.backups_under(home), [])
+            self.assertEqual(destination.read_text(encoding="utf-8"), "v2 rules\n")
+            self.assertTrue(os.path.samefile(destination, shipped))
+
+    def test_a_hand_edited_destination_is_still_backed_up(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            self.commit_source(source)
+            destination = home / ".codex/AGENTS.md"
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text("my own rules\n", encoding="utf-8")
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            backup = destination.with_name("AGENTS.md.bak")
+            self.assertEqual(backup.read_text(encoding="utf-8"), "my own rules\n")
+            self.assertTrue(os.path.samefile(destination, source / "home/.codex/AGENTS.md"))
+
+    def test_a_stale_install_link_into_the_source_is_replaced_without_a_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            self.commit_source(source)
+            stale = home / ".claude/skills/orchestrate"
+            stale.parent.mkdir(parents=True, exist_ok=True)
+            # What earlier runs left behind: a link into this same source tree.
+            stale.symlink_to(source / "home/.codex/skills/orchestrate")
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self.backups_under(home), [])
+            self.assertEqual(
+                stale.resolve(), (source / "home/.claude/skills/orchestrate").resolve()
+            )
 
     def test_backups_left_in_a_skill_tree_by_older_runs_are_reported(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

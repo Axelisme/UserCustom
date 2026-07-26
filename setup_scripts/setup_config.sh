@@ -65,9 +65,9 @@ SOURCE_REACHABLE_BLOBS=""
 
 source_blob_is_reachable() {
   local blob=$1
-  # An empty id would make the `grep` below match any line at all, turning "I cannot
-  # identify this content" into "delete it".  Nothing may reach the deletion path by
-  # default, whatever a future caller forgets to check.
+  # Refuse an unidentified object structurally rather than leaving the answer to how
+  # some `grep` treats an empty pattern.  "I cannot identify this content" must never
+  # be able to become "delete it", whatever a future caller forgets to check.
   [ -n "$blob" ] || return 1
   [ -n "$SOURCE_REPO" ] || return 1
   if [ -z "$SOURCE_REACHABLE_BLOBS" ]; then
@@ -271,6 +271,21 @@ remove_obsolete_orchestrate_profiles() {
   done
 }
 
+list_installed_backups() {
+  local root entry
+  for root in "${V119_SKILL_LAYOUTS[@]}" .claude/skills "${V119_PROFILE_ROOTS[@]}"; do
+    [ -d "$HOME/$root" ] || continue
+    for entry in "$HOME/$root"/*.bak*; do
+      { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
+      printf '%s\n' "$entry"
+    done
+  done
+}
+
+# Taken before the first installation writes anything, so "left behind by an earlier
+# run" stays a fact about the world this run found rather than one it created.
+PREEXISTING_BACKUPS=$(list_installed_backups)
+
 backup_cp "$UserCustom/home/.config" "$HOME/.config"
 backup_cp "$UserCustom/home/.codex/skills" "$HOME/.codex/skills"
 backup_cp "$UserCustom/home/.codex/agents" "$HOME/.codex/agents"
@@ -287,21 +302,26 @@ replace_current_orchestrate_destinations
 # trees.  In a skills directory that is an active harm — every runtime enumerates the
 # directory and lists the backup as a second, stale skill — while elsewhere it is only
 # clutter, so say which it is.  They are the user's data: report, never delete.
+report_backups_in() {
+  local root=$1 message=$2 entry
+  [ -d "$HOME/$root" ] || return 0
+  for entry in "$HOME/$root"/*.bak*; do
+    { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
+    # A backup this run just wrote is this run's own doing, already announced on
+    # stdout; calling it something an earlier run left behind would be a lie.
+    printf '%s\n' "$PREEXISTING_BACKUPS" | grep -qxF -- "$entry" || continue
+    echo "notice: $entry $message" >&2
+  done
+}
+
 report_stale_backups() {
-  local root entry
+  local root
   for root in "${V119_SKILL_LAYOUTS[@]}" .claude/skills; do
-    [ -d "$HOME/$root" ] || continue
-    for entry in "$HOME/$root"/*.bak*; do
-      { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
-      echo "notice: $entry is listed as a stale skill; remove it once the backup is no longer needed" >&2
-    done
+    report_backups_in "$root" \
+      "is listed as a stale skill; remove it once the backup is no longer needed"
   done
   for root in "${V119_PROFILE_ROOTS[@]}"; do
-    [ -d "$HOME/$root" ] || continue
-    for entry in "$HOME/$root"/*.bak*; do
-      { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
-      echo "notice: $entry is a leftover backup; remove it once it is no longer needed" >&2
-    done
+    report_backups_in "$root" "is a leftover backup; remove it once it is no longer needed"
   done
 }
 

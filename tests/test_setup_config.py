@@ -606,6 +606,26 @@ class SetupConfigMigrationTests(unittest.TestCase):
                 (rotated[0] / "init.lua").read_text(encoding="utf-8"), "older\n"
             )
 
+    def test_a_backup_this_run_created_is_not_reported_as_leftover(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = self.seed_fixture(base)
+            older = home / ".codex/agents/wave-oracle.toml.bak"
+            older.parent.mkdir(parents=True, exist_ok=True)
+            older.write_text("older profile\n", encoding="utf-8")
+            # This one has no backup yet; the run is about to make one.
+            hand_edited = home / ".codex/agents/wave-implementer.toml"
+            hand_edited.write_text("my own profile\n", encoding="utf-8")
+
+            result = self.run_setup(source / "setup_scripts/setup_config.sh", home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            fresh = hand_edited.with_name("wave-implementer.toml.bak")
+            self.assertEqual(fresh.read_text(encoding="utf-8"), "my own profile\n")
+            self.assertIn(str(older), result.stderr)
+            # Calling a backup this run just made "leftover" is misleading.
+            self.assertNotIn(str(fresh), result.stderr)
+
     def test_backups_left_in_an_agents_directory_are_reported(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

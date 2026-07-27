@@ -1,52 +1,20 @@
-# Orchestrate v127 — Codex runtime binding
+# Orchestrate — Codex runtime binding
 
-Codex uses the native tools exposed by the current session. This document maps v127 roles
-without emulating runtime state.
+Codex uses native role agents and native continuation. This adapter does not emulate another
+runtime. The role stream identity is exactly `<task-id>.<wave-id>.<role>` and the stable runtime
+item identity is `slice-<slice-id>` with no attempt detail. After restart or compaction, recover
+position from the Git/task plan; consume a ready SHA only after the runtime task is completed.
 
-## Dual-role native agents and terminal handoff
+Use native messaging, follow-up, continuation, and wake when exposed. A successor keeps the role
+identity but starts fresh when the Contract SHA, frozen spec, base, provider, or liveness state has
+changed. One writer owns each role stream. A blocked role reports through the native hold/message
+path with evidence.
 
-Run two persistent native role agents per Wave: `wave-oracle` authors the public Interface,
-contract tests, fixtures, and intended red Contract; `wave-implementer` fills shared
-production paths after Root merges the exact Contract SHA. Native messaging, follow-up, and
-continuation are used when available in v1 and v2. The role stream identity is exactly
-`<task-id>.<wave-id>.<role>`, and the stable runtime item identity is `slice-<slice-id>`;
-it has no attempt detail. After a restart or compaction, native continuation coexists with
-Git/task-plan recovery: recover position from the task plan and Git refs/history. Root consumes a
-ready SHA only after the corresponding runtime task has completed. Once Root collects that SHA,
-close both role agents and remove their clean worktrees; a later correction is a new Wave.
+A full review may use the integration worktree when the reviewer has a provable read-only
+capability. Otherwise the shared detached fallback is the source. In either case the reviewer
+verifies exact SHA, path, branch, HEAD, and clean state before and after the review bracket.
 
-A terminal `slice-ready` message carries Slice and a full exact SHA; the role then
-immediately ends its turn. In degraded v1 transport, the terminal response carries the exact
-commit SHA while the commit uses Git trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and
-`Role: <role>` (oracle or implementation).
-
-Codex has no simulated queue. Root owns dependency depth and placement. A blocked role reports
-through the native hold/message path with its reason and evidence, not a ceremony commit.
-
-## Native generations
-
-In v1, `spawn_agent` loads the named profile and `send_input` is notification; use
-`resume_agent` for same-identity continuation. In v2, `spawn_agent` is generic and native
-`send_message`/`followup_task` provide messaging and continuation. A successor in the same role
-stream keeps the identity but not necessarily the context: continue the session while the frozen
-input is unchanged, and start a fresh one — same identity, optionally a different model — once
-the Contract SHA, frozen spec, or base has moved, or after a provider or liveness failure. A stale
-session replays conclusions it drew about an input that no longer exists. One writer per role
-stream either way. `wait_agent` is the event wait in either generation. Identify the observed
-tool generation at session start and do not invent a missing capability.
-
-## Profile bootstrap and safety
-
-At first use, verify the role profile instructions are active. Every dispatch names exact cwd,
-frozen base or subject SHA, write scope, pre-existing dirt, required evidence, and stop
-conditions. A dispatch also names the exact gate commands with the environment they require, the
-Oracle-declared immutable paths, and the production paths this role may write. Workers do not
-create child workers or claim repository authority. Root proves clean Git state before consuming
-a handoff.
-
-## Acceptance
-
-Root follows the shared dev-flow S5/S6/S7 scheduling and machine-rework contract; this binding
-adds no landing or acceptance authority. At the required final gate, dispatch one fresh
-`acceptance-reviewer` per `Axis: standards | spec`; both are read-only and review the same exact
-SHA. Repository integration requires current user authority and is outside the workflow CLI.
+Every dispatch names the exact cwd, base or subject SHA, write scope, immutable paths, user dirt,
+and focused commands. The terminal output carries exact focused test command(s), observed role
+result(s), Slice, and exact SHA. A terminal `slice-ready` with the full SHA ends the role turn
+immediately. Git/task-plan recovery is the only durable position; runtime state is not.

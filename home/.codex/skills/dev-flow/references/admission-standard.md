@@ -1,102 +1,63 @@
 # Admission standard
 
-Decidable admission checks for dev-flow work. Every check is answered from artifacts — a
-sentence that exists or does not, a number, a git query — never from argument. **A check that
-needs persuasion has already failed.** A well-argued exception is the strongest evidence that
-the check is doing its job.
+These are the sole normative S1–S7 checks for dev-flow. Every check is decided from
+artifacts, not persuasion. Routing skills, runtime bindings, planners, and reviewers reference
+this file and do not restate its policy.
 
-Each role reads only its own section. Root reads S1/S3/S4/S5/S6/S7, Oracle reads S2, and
-reviewer reads S4.3. The sections share one file so they cannot drift apart.
+## S1 — Slice admission
 
-Incident of record: a 3-week effort produced 504 commits and +128,805 lines with zero
-production-reachable behavior, then spent its last 3 days on 16 correction Waves of one
-non-observable invariant. Every individual rule was obeyed. These checks are what was missing.
+- **Observable:** record one sentence: “the user does X at `<production entrypoint>` and sees Y.”
+- **Deletion:** name at least one existing production `file:symbol` deleted by the Slice; a first
+  seam may say `deletes: none` only once and must name its predecessor's deleting Slice.
+- **Size:** estimated non-test production diff is at most 1500 lines; otherwise recut first.
+- **Independence:** the Slice is useful and testable without a later Slice.
+- The first accepted checkpoint is **days, not weeks** away.
 
----
+## S2 — Invariant admission
 
-## S1 — Slice admission (Root, before cutting a Slice)
+An invariant enters the Contract only when its violation has an observable user/client effect,
+a focused test is red for that specific missing behavior, and the scenario is inside the frozen
+usage envelope. Internal-only hardening belongs in candidate-backlog. Timing, locking, retention,
+and replay devices need a test that fails without the device.
 
-- **S1.1 Observable sentence.** Write one sentence: *"the user does X at `<production entrypoint>` and sees Y."* If it cannot be written without naming internal objects, **refuse the Slice**.
-- **S1.2 Named deletion.** The Slice names at least one existing path it deletes on completion, as `file:symbol`. Pure addition accumulates unreachable code. **Once per task**, a seam-establishing first Slice may declare `deletes: none`, and must name the Slice that deletes its predecessor.
-- **S1.3 Size.** Estimated non-test production diff ≤ 1500 lines. Over → split before dispatch, not after.
-- **S1.4 Independently landable.** The Slice carries user-visible value without any later Slice. If its value only appears after a future cutover or final landing, it is not a Slice; it is half of one.
+## S3 — Milestone admission
 
-A Slice failing any check is recut. Recutting is cheap; the cheapest moment is now.
+Before acceptance, run the artifact checks for production reachability, declared deletion,
+correction-loop count, file mass/reachability, Slice focus, changed plan digest, and backlog
+downgrade. Two consecutive reachability or deletion refusals stop implementation and report to
+the user.
 
----
+## S4 — Machine rework admission
 
-## S2 — Invariant admission (Oracle, before an assertion enters the Contract)
+- Machine rework for one Slice is at most two cycles; a third is a scope event.
+- Blocking is a **closed enum**: `spec_violation | data_loss | security |
+  reproducible_behavior_failure` within the frozen envelope.
+- Every blocker carries `contract_basis`. Without a contract basis, classify it as backlog.
+- A missing product or policy decision is `blocked_on_decision`, not `needs_fix`.
+- A bounded delta is reviewed by **one reviewer on the originating axis**; do not reopen both axes
+  for a local delta. Cost alarms recut the Slice or report to the user.
 
-- **S2.1 Observability.** Name the difference a user, or a client outside this module, observes when this invariant is violated. If the answer can only be stated in terms of internal objects — descriptors, handles, cache entries, sequence numbers, ownership records — it is **hardening**: send it to `candidate-backlog` and do not put it in the Contract.
-- **S2.2 Red evidence.** A test that is red without the device, red for its own specific reason.
-- **S2.3 Envelope.** The violating scenario lies inside the frozen spec's recorded usage envelope.
+## S5 — Day acceptance
 
-```
-admitted  "if this is violated, the user's save reports success and the file is absent"
-refused   "if this is violated, a reused fd may observe a stale tombstone descriptor"
-```
+Day runs the shared machine order **simplify → canonical tests → ReviewGate**, then presents the
+reviewed exact SHA for user acceptance. ReviewGate is integration-first: its review bracket records
+pre and post status for the same path, branch, HEAD, and clean tree; no `collect` or `mutate` is
+allowed inside the bracket, and any mismatch invalidates evidence. Two fresh axes use the same
+exact SHA and same source. A bounded delta uses one reviewer on the originating axis.
 
-S2.1 governs `design-principles.md` #13: atomicity, ordering, resource lifetime, and
-idempotency are interface decisions **only at the granularity a caller can observe**. Below
-that granularity they are hardening, whatever they are called. The refused example above is a
-real one; it consumed eleven acceptance cycles.
+## S6 — Night deferral
 
----
+Night runs the same **simplify → canonical tests → ReviewGate** order but defers S5 user
+acceptance. Record the reviewed exact SHA as `reviewed_awaiting_user` in the phase deferred-row
+schema; it is provisional, never accepted or landed. Day drains deferred rows oldest-first.
+Night never lands and integration remains append-only.
 
-## S3 — Milestone admission (Root, machine-run before acceptance)
+## S7 — Final landing and cleanup
 
-Run these. They are cheap, and unlike prose they cannot be reasoned with.
-
-| # | Check | Query | Refuse when |
-|---|---|---|---|
-| 1 | Reachability | production entrypoint import graph reaches the milestone's new modules | not reached |
-| 2 | Deletion | `git diff --numstat <base>..<tip> -- <declared production paths>` deletions in non-test production files | 0 or production paths undeclared |
-| 3 | Loop | `git log --grep="Collect Wave" <base>..<tip>` — count per Slice prefix | any Slice ≥ 3 |
-| 4 | Mass | `git diff --numstat` top-10 single files plus a per-file reachability probe | any file proven not yet reachable > 2000 lines; missing per-file evidence is undetermined |
-| 5 | Focus | Slice-attributed commit subjects over the last 3 days | every attributed commit is on one Slice |
-| 6 | Burn-down | the task plan's Slice × status table exists and its current and previous digests differ | either digest missing or unchanged |
-| 7 | Downgrade | backlog items created ÷ review findings raised | ≈ 0 (see S4.3) |
-
-**S3.8 Stall.** Two consecutive milestones with check 1 or 2 refusing → stop implementation
-and report to the user. Do not dispatch the next Wave first.
-
----
-
-## S4 — Machine rework admission (Root, when a machine finding sends work back)
-
-- **S4.1** `machine_rework_cycles` for one Slice: **≤ 2**. Increment once when a batched `simplify`, Standards review, or Spec review finding sends the candidate back to an implementation pass; never once per finding.
-- **S4.2** The third machine rework is not an implementation event, it is a **scope event**. Exactly three actions are legal: shrink the Slice (return to S1), downgrade the remaining findings to backlog, or report to the user. Opening another machine-finding correction Wave on the same Slice is not among them.
-- **S4.3** If a review round produces 100% blocking findings, mark the spec `spec-too-wide` and return to S1. A spec broad enough to give every finding a contract basis has disabled the blocking enum.
-- **S4.4** A `cost-alarm` is a scope signal. The first response is to shrink the Slice or report. Assigning a cheaper writer to the same Slice is legal only after the Slice has passed S1.3 again.
-- **S4.5 Provenance.** Every rework records `origin: user_acceptance | simplify | standards_review | spec_review`. Initial simplify, backlog, `blocked_on_decision`, and user acceptance do not increment `machine_rework_cycles`. Provenance follows the finding even when the user later authorizes its fix.
-
----
-
-## S5 — User acceptance (Root, before accepting a checkpoint)
-
-- **S5.1 Gated checkpoint.** S5 opens only on a candidate that already passed `simplify`, the canonical tests, and the clean-detached review; the evidence binds to that exact reviewed SHA. A defect a machine gate can find must never be paid for with a person's attention. Acceptance records the exact SHA as an accepted checkpoint. That checkpoint reports the user-visible behavior and explicitly says it is not persistence-landed.
-- **S5.2** The user exercises the S1.1 sentence against the real entrypoint and accepts or rejects it. This happens **per Slice**; acceptance does not mutate persistence.
-- **S5.3** Rejection returns the Slice to S1. User acceptance does not increment `machine_rework_cycles`: a person may discover incomplete feedback across several attempts, so attempts have no hard numerical cap. The next candidate is a new exact SHA and reopens the gates S5.1 requires. Later commits reopen the gates for that new tip, while historical exact-SHA evidence stays valid unless marked stale.
-- **S5.4** Feedback outside the frozen usage envelope is a spec amendment or a new Slice, not unbounded rework hidden under acceptance. A rejection makes dependent provisional checkpoints `stale` until rebuilt from a valid base.
-
----
-
-## S6 — Deferred user acceptance (Root, at mode selection and Night checkpoints)
-
-- **S6.1 Mode.** `mode_override = day | night | auto`; explicit wins. In `auto`, a user-authored task turn is Day Mode and an autonomous continuation with an active goal and no live user turn is Night Mode. Inferred mode is recomputed, not durable state.
-- **S6.2 Queue.** Night Mode records each deferred S5 item in the current release phase record using planning-with-files' phase template as the storage schema. `reviewed_awaiting_user` is provisional and never means accepted or landed. The queue is ordered from the latest accepted checkpoint.
-- **S6.3 Depth.** The max speculative dependency depth is 10 from the latest accepted checkpoint. Independent pending Slices do not add chain depth. A later Slice must not overwrite a pending acceptance surface or make its scenario independently untestable.
-- **S6.4 Drain.** Day Mode processes the queue oldest-first in dependency order. Same-SHA acceptance preserves machine evidence and continues from the integration tip without persistence mutation; rejection returns to S1 and marks descendants stale.
-- **S6.5 Landing.** Night Mode may defer S5 and continue bounded minimal Slices, but it never lands because landing requires a live explicit user request.
-- **S6.6 Append-only integration.** The task integration branch is append-only: never reset, rebase, or force-update it. Rejected or stale work is repaired by forward commits; historical exact-SHA evidence remains valid unless stale.
-
----
-
-## S7 — Landing and close-out (Root, only on explicit user request)
-
-- **S7.1 Authority.** Landing is only permitted with current user authority.
-- **S7.2 Exact target.** The landing target is the exact SHA recorded as accepted.
-- **S7.3 Topology.** The target is an ancestor of the integration tip; the persistence tip is an ancestor of the target.
-- **S7.4 Method.** Landing is fast-forward-only; no squash, cherry-pick, rebase, or merge commit, and no push.
-- **S7.5 Partial landing.** An explicitly requested partial landing never performs task cleanup or close-out; it leaves the task integration worktree, refs, and phase records open. Closed Waves need not retain role worktrees.
-- **S7.6 Final landing.** Final landing requires every item accepted, no stale or unresolved items, and target equal to the current clean integration tip. Then clean up and close out.
+Landing requires current user authority, the exact accepted SHA, ancestor topology, and
+fast-forward-only application: no squash, cherry-pick, rebase, merge commit, reset, or push.
+Final close-out requires every item accepted, no stale or unresolved row, and the target equal to
+the current clean integration tip. Then remove the task integration worktree, role worktrees,
+integration branches, `refs/orchestrate/<task-id>`, and task phase records. Protect pre-existing
+user dirt and non-task evidence: inspect and prove they are unchanged before and after cleanup;
+never delete, stash, reset, overwrite, or include them in the task.

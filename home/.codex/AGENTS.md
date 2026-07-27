@@ -1,12 +1,8 @@
-# Always-resident orchestrate v127 rules
+# Always-resident authority index
 
-1. Root contacts a running role only for a cost-growing Contract correction, user stop, or liveness failure; never for routine status.
-2. Any handoff binds to an exact clean commit SHA inspected from Git, never to a summary.
-3. Mutation of a persistence branch requires current user authority.
-4. After compaction, re-read this skill and the durable task plan before dispatch.
-5. Report reachable behavior to the user at every accepted checkpoint.
-6. Keep one append-only task integration branch/worktree per task; it survives Slice checkpoints and partial landing.
-7. A candidate reaches the user only after simplify, the canonical tests, and code-review.
-8. Night may defer S5, but no Slice can be in landing until accepted.
-9. An explicit partial or final landing is required; partial landing never cleans up.
-10. Final landing is outside orchestrate and fast-forward-only; speculative dependency depth is 10, and no push.
+1. Root contacts a role only for a cost-growing Contract correction, user stop, or liveness failure.
+2. Handoffs bind to an exact clean commit SHA inspected from Git.
+3. Persistence mutation requires current user authority.
+4. After compaction, reread the active skill, frozen spec, task plan, and the shared admission standard.
+5. The admission standard is the sole normative S1–S7 authority; this index is not a policy copy.
+6. Protect pre-existing user dirt and non-task evidence; never stash, reset, overwrite, or delete it.

@@ -522,6 +522,68 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("cannot mix accepted and unresolved", result.stdout)
 
+    def test_checkpoint_rejects_cross_phase_accepted_and_failed_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "first")
+            first = plan_dir(root) / "phases" / "01-first.md"
+            set_deferred_acceptance(first, "accepted")
+            fill_plan_slots(root)
+            completed = run_plan(
+                root,
+                "phase-set",
+                "demo",
+                "--phase",
+                "1",
+                "--status",
+                "completed",
+                "--commit",
+                SHA_A,
+                "--conclusion",
+                "done",
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout)
+
+            run_plan(root, "phase-start", "demo", "--topic", "second")
+            second = plan_dir(root) / "phases" / "02-second.md"
+            set_deferred_acceptance(second, "rejected")
+            fill_plan_slots(root)
+
+            result = run_plan(root, "checkpoint", "demo")
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("cannot mix accepted and unresolved", result.stdout)
+
+    def test_seal_rejects_cross_phase_known_bad_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "first")
+            first = plan_dir(root) / "phases" / "01-first.md"
+            set_deferred_acceptance(first, "rejected")
+            run_plan(root, "phase-start", "demo", "--topic", "second")
+            second = plan_dir(root) / "phases" / "02-second.md"
+            set_deferred_acceptance(second, "accepted")
+            fill_plan_slots(root)
+
+            result = run_plan(
+                root,
+                "phase-set",
+                "demo",
+                "--phase",
+                "2",
+                "--status",
+                "completed",
+                "--commit",
+                SHA_A,
+                "--conclusion",
+                "done",
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("cannot mix accepted and unresolved", result.stdout)
+
     def test_active_legacy_v13_rows_require_explicit_migration(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

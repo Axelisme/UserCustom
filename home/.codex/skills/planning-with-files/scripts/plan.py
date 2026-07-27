@@ -337,7 +337,9 @@ def is_none_cell(cell: str) -> bool:
     return normalized_cell(cell).casefold() == "none"
 
 
-def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
+def deferred_acceptance_state(
+    text: str,
+) -> tuple[list[str], list[str], list[dict[str, str]]]:
     """Return schema issues and unresolved rows for one phase record."""
     lines = text.splitlines()
     headings = [
@@ -346,14 +348,14 @@ def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
         if line.strip() == DEFERRED_ACCEPTANCE_HEADING
     ]
     if not headings:
-        return [], []
+        return [], [], []
     if len(headings) != 1:
-        return [f"'{DEFERRED_ACCEPTANCE_HEADING}' must appear exactly once"], []
+        return [f"'{DEFERRED_ACCEPTANCE_HEADING}' must appear exactly once"], [], []
 
     start, end = section_span(lines, DEFERRED_ACCEPTANCE_HEADING)
     table = [line for line in lines[start:end] if line.lstrip().startswith("|")]
     if len(table) < 3:
-        return ["deferred user acceptance requires a header, separator, and data row"], []
+        return ["deferred user acceptance requires a header, separator, and data row"], [], []
 
     header = tuple(row_cells(table[0]))
     if header == DEFERRED_COLUMNS:
@@ -364,7 +366,7 @@ def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
         return [
             "deferred user acceptance header must match the current 14 columns "
             "or the legacy 9 columns"
-        ], []
+        ], [], []
 
     issues: list[str] = []
     separator = row_cells(table[1])
@@ -386,7 +388,7 @@ def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
 
     if not parsed_rows:
         issues.append("deferred table requires a placeholder or real data row")
-        return issues, []
+        return issues, [], []
 
     placeholder_rows = [row for row in parsed_rows if is_none_cell(row[0])]
     real_rows = [row for row in parsed_rows if not is_none_cell(row[0])]
@@ -398,7 +400,7 @@ def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
     if len(placeholder_rows) > 1:
         issues.append("deferred table may contain only one placeholder row")
     if not real_rows:
-        return issues, []
+        return issues, [], []
 
     if header == LEGACY_DEFERRED_COLUMNS:
         if read_phase_field(text, "Status") != "completed":
@@ -412,7 +414,7 @@ def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
             status = status_text.split(maxsplit=1)[0] if status_text else ""
             if status != "accepted":
                 unresolved.append(f"{slice_id}:{status or 'missing'}")
-        return issues, unresolved
+        return issues, unresolved, []
 
     records: list[dict[str, str]] = [
         {
@@ -423,7 +425,6 @@ def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
     ]
     unresolved: list[str] = []
     seen_slices: set[str] = set()
-    by_sha: dict[str, list[dict[str, str]]] = {}
 
     for record in records:
         slice_id = record["Slice"]
@@ -479,9 +480,17 @@ def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
         if result == "failed" and status not in {"rejected", "stale"}:
             issues.append(f"{slice_id} failed observation requires rejected or stale status")
 
-        if exact_sha_valid:
+    return issues, unresolved, records
+
+
+def deferred_candidate_issues(records: list[dict[str, str]]) -> list[str]:
+    by_sha: dict[str, list[dict[str, str]]] = {}
+    for record in records:
+        exact_sha = record["exact SHA"]
+        if FULL_SHA_PATTERN.fullmatch(exact_sha):
             by_sha.setdefault(exact_sha, []).append(record)
 
+    issues: list[str] = []
     for exact_sha, group in by_sha.items():
         statuses = {record["status"] for record in group}
         if "accepted" in statuses and statuses != {"accepted"}:
@@ -490,8 +499,22 @@ def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
             )
         if any(record["exercise result"] == "failed" for record in group) and "accepted" in statuses:
             issues.append(f"known-bad candidate {exact_sha} cannot be accepted")
+    return issues
 
-    return issues, unresolved
+
+def deferred_plan_state(
+    phase_texts: list[tuple[str, str]],
+) -> tuple[list[str], dict[str, list[str]]]:
+    issues: list[str] = []
+    unresolved_by_phase: dict[str, list[str]] = {}
+    records: list[dict[str, str]] = []
+    for name, text in phase_texts:
+        phase_issues, unresolved, phase_records = deferred_acceptance_state(text)
+        issues.extend(f"{name}: {issue}" for issue in phase_issues)
+        unresolved_by_phase[name] = unresolved
+        records.extend(phase_records)
+    issues.extend(deferred_candidate_issues(records))
+    return issues, unresolved_by_phase
 
 
 def read_board(text: str) -> list[dict[str, str]]:
@@ -695,11 +718,19 @@ def command_phase_set(args: argparse.Namespace) -> dict[str, Any]:
                 raise PlanError(
                     "completing a phase requires a Commit SHA and a Conclusion"
                 )
-            deferred_issues, unresolved = deferred_acceptance_state(text)
+            phase_texts = [
+                (
+                    other.name,
+                    text if other == path else other.read_text(encoding="utf-8"),
+                )
+                for _, _, other in existing_phase_files(plan)
+            ]
+            deferred_issues, unresolved_by_phase = deferred_plan_state(phase_texts)
             if deferred_issues:
                 raise PlanError(
                     "invalid deferred user acceptance: " + "; ".join(deferred_issues)
                 )
+            unresolved = unresolved_by_phase.get(path.name, [])
             if unresolved:
                 raise PlanError(
                     "completing a phase requires all deferred user acceptance items "
@@ -847,16 +878,22 @@ def validate_plan(plan: Path) -> list[str]:
         if row["status"] not in PHASE_STATUSES:
             issues.append(f"INDEX phase board has invalid status for phase '{phase}'")
     phase_files = {f"{num:02d}": path for num, _, path in existing_phase_files(plan)}
+    phase_texts = {
+        num: path.read_text(encoding="utf-8") for num, path in phase_files.items()
+    }
+    deferred_issues, unresolved_by_phase = deferred_plan_state(
+        [(phase_files[num].name, text) for num, text in phase_texts.items()]
+    )
+    issues.extend(deferred_issues)
     for num, path in phase_files.items():
-        text = path.read_text(encoding="utf-8")
+        text = phase_texts[num]
         record_status = read_phase_field(text, "Status")
         for field in PHASE_FIELDS:
             if not re.search(rf"^- \*\*{re.escape(field)}:\*\*", text, re.MULTILINE):
                 issues.append(f"{path.name} has no '{field}' field")
         if record_status not in PHASE_STATUSES:
             issues.append(f"{path.name} has invalid Status")
-        deferred_issues, unresolved = deferred_acceptance_state(text)
-        issues.extend(f"{path.name}: {issue}" for issue in deferred_issues)
+        unresolved = unresolved_by_phase.get(path.name, [])
         if record_status == "completed" and unresolved:
             issues.append(
                 f"{path.name} has unresolved deferred user acceptance: "

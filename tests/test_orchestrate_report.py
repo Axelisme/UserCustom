@@ -60,6 +60,18 @@ class ReportContractTests(unittest.TestCase):
         self.assertTrue(value.get("ok"), value)
         return value
 
+    def error_payload(self, result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "", result.stdout)
+        try:
+            value = json.loads(result.stderr)
+        except json.JSONDecodeError as exc:
+            self.fail(f"failure was not one JSON error object: {result.stderr!r}: {exc}")
+        self.assertIsInstance(value, dict)
+        self.assertFalse(value.get("ok"), value)
+        self.assertIsInstance(value.get("error"), dict)
+        return value
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
@@ -306,6 +318,38 @@ class ReportContractTests(unittest.TestCase):
         self.assertEqual(lane_ids, {"lane-a"})
         self.assertNotIn("legacy-wave", lane_ids)
         self.assertNotIn("legacy-slice", lane_ids)
+
+    # 8. a collect-shaped commit carrying two Lane: trailers is ambiguous
+    #    lane attribution -- report must refuse to silently pick one, not
+    #    guess. This is the same duplicate-workflow-trailer guard the
+    #    retired `profile report` exercised for Wave/Slice/Role; it is still
+    #    live for Task/Lane and needs its own coverage now that the old
+    #    vocabulary's test is gone.
+    def test_duplicate_lane_trailer_on_a_collect_commit_is_rejected(self) -> None:
+        created = self.integration_create()
+        integration_path = Path(str(created["worktree"]))
+
+        # Directly append a collect-shaped commit straight onto the
+        # integration branch, bypassing `integration collect` entirely, so
+        # it can carry two Lane: trailers -- something the real collect
+        # command's own single Lane: message would never produce.
+        (integration_path / "ambiguous.txt").write_text("ambiguous\n", encoding="utf-8")
+        self.git(integration_path, "add", "ambiguous.txt")
+        self.git(
+            integration_path, "commit", "-q", "-m",
+            "Collect lane ambiguous\n\nTask: report-task\nLane: lane-a\nLane: lane-b",
+            env={
+                "GIT_AUTHOR_DATE": "2025-01-01T00:01:00+0000",
+                "GIT_COMMITTER_DATE": "2025-01-01T00:01:00+0000",
+            },
+        )
+
+        error = self.error_payload(self.cli(
+            self.root, "report", "--root", str(self.root),
+            "--task-id", self.task_id, "--base", self.base,
+        ))
+        self.assertIn("ambiguous", str(error["error"]).lower())
+        self.assertIn("lane", str(error["error"]).lower())
 
     # 7. the candidate section is exactly the same projection integration
     #    status already exposes -- report introduces no second read path.

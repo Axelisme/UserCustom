@@ -14,7 +14,7 @@
 - none — deferred rows use the table below and update in place; acceptance前 exact SHA 改變即更新該列。
 
 | Slice | exact SHA | observable sentence | entrypoint | user steps | expected | status | Depends on | machine evidence |
-|---|---|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|---|
 | none | none | none | none | none | none | none (`pending_machine | reviewed_awaiting_user | accepted | rejected | stale`) | none | none |
 
 - An accepted checkpoint freezes the exact SHA, status, and machine evidence in its row.

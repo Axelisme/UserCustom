@@ -127,8 +127,9 @@ ReviewGate interface, not by duplicating policy in this standard.
   the task integration worktree, refs, and phase records open; closed Waves need not retain role
   worktrees.
 - **S7.6 Final landing.** Final landing requires every item accepted, no stale or unresolved row,
-  and the target equal to the current clean integration tip. Then, and only then, remove the task
-  integration worktree, role worktrees, integration branches, `refs/orchestrate/<task-id>`, and
-  task phase records. Protect pre-existing user dirt and non-task evidence: inspect and prove that
+  and the target equal to the current clean integration tip. Then, and only then, archive task
+  phase records through planning-with-files and remove their active task directory, task integration
+  worktree, role worktrees, integration branches, and `refs/orchestrate/<task-id>`. Protect
+  pre-existing user dirt and non-task evidence: inspect and prove that
   they are unchanged before and after cleanup. Never delete, stash, reset, overwrite, or include
   them in the task; include them in neither cleanup nor the landing target.

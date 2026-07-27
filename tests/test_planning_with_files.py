@@ -81,6 +81,10 @@ class LifecycleTests(unittest.TestCase):
         for phrase in ("deferred user acceptance", "status", "exact sha"):
             self.assertIn(phrase, lowered)
         self.assertNotIn("| landed |", template)
+        rows = [line for line in template.splitlines() if line.startswith("|")]
+        self.assertEqual(len(rows), 3)
+        structural_counts = [re.sub(r"`[^`]*`", "state", row).count("|") for row in rows]
+        self.assertEqual(structural_counts, [10, 10, 10])
 
     def test_init_refuses_second_time(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

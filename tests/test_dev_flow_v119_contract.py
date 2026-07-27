@@ -137,6 +137,17 @@ class DevFlowV128ContractTests(unittest.TestCase):
                 self.assertIn(operation, s7)
         self.assertIn("fast-forward-only", s7)
         self.assertIn("user dirt", s7)
+        self.assertIn("archive", s7)
+        self.assertIn("planning-with-files", s7)
+
+    def test_generic_dev_flow_metadata_does_not_advertise_pipeline(self) -> None:
+        paths = (
+            HOME / ".codex" / "skills" / "dev-flow" / "agents" / "openai.yaml",
+            HOME / ".pi" / "agent" / "skills" / "dev-flow" / "agents" / "openai.yaml",
+        )
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertNotIn("pipeline", self.read(path).casefold())
 
 
 if __name__ == "__main__":

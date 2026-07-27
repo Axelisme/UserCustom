@@ -101,9 +101,9 @@ ReviewGate interface, not by duplicating policy in this standard.
 - **S6.2 Queue.** Night Mode records each deferred S5 item in the current release phase record,
   using the planning-with-files phase template as the queue schema. `reviewed_awaiting_user` is
   provisional and never means accepted or landed. The queue is ordered from the latest accepted checkpoint.
-- **S6.3 Depth.** Validate speculative dependency depth against this admission standard's S6.3.
-  Independent pending Slices do not add chain depth. A later Slice must not overwrite a pending
-  acceptance surface or make its scenario independently untestable.
+- **S6.3 Depth.** The max speculative dependency depth is **10** from the latest accepted
+  checkpoint. Independent pending Slices do not add chain depth. A later Slice must not overwrite
+  a pending acceptance surface or make its scenario independently untestable.
 - **S6.4 Drain.** Day Mode drains the queue oldest-first in dependency order. Same-SHA acceptance
   preserves machine evidence and continues from the integration tip without persistence mutation.
   Rejection returns to S1 and marks descendants stale.

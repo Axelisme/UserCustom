@@ -200,6 +200,14 @@ def _integration_base_ref(task: str) -> str:
     return f"refs/orchestrate/{task}/integration/base"
 
 
+def _candidate_ref(task: str) -> str:
+    return f"refs/orchestrate/{task}/candidate"
+
+
+def _acceptance_worktree_path(root: Path, task: str) -> Path:
+    return managed_worktree_root(root) / f"{task}-acceptance"
+
+
 def command_integration_create(args: argparse.Namespace) -> dict[str, Any]:
     task, path, branch = _integration_identity(args)
     root = Path(args.root).resolve()
@@ -207,12 +215,20 @@ def command_integration_create(args: argparse.Namespace) -> dict[str, Any]:
         base = exact_commit(root, str(args.base), label="base")
     except OrchestrateError as exc:
         raise OrchestrateError(f"invalid base: {exc}") from exc
-    if _branch_exists(root, branch) or os.path.lexists(path):
-        raise OrchestrateError(f"derived worktree path or branch already exists: {path} / {branch}")
+    acceptance_path = _acceptance_worktree_path(root, task)
+    if _branch_exists(root, branch) or os.path.lexists(path) or os.path.lexists(acceptance_path):
+        raise OrchestrateError(
+            f"derived worktree path or branch already exists: {path} / {branch} / {acceptance_path}"
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     run_git(root, "worktree", "add", "-b", branch, str(path), base)
     run_git(root, "update-ref", _integration_base_ref(task), base)
+    # Detached HEAD, not a branch: the acceptance worktree is pinned to
+    # whatever exact SHA `publish` last checked out, not to any branch tip.
+    acceptance_path.parent.mkdir(parents=True, exist_ok=True)
+    run_git(root, "worktree", "add", "--detach", str(acceptance_path), base)
     evidence = _status(root, path, branch)
+    acceptance_evidence = _status(root, acceptance_path, "", identity_label="acceptance worktree")
     return {
         "ok": True,
         "operation": "integration-create",
@@ -224,6 +240,8 @@ def command_integration_create(args: argparse.Namespace) -> dict[str, Any]:
         "head": evidence["head"],
         "tree": evidence["tree"],
         "clean": evidence["clean"],
+        "acceptance_worktree": str(acceptance_path),
+        "acceptance_head": acceptance_evidence["head"],
     }
 
 
@@ -269,6 +287,30 @@ def _collected_integrations(root: Path, task: str, branch: str) -> list[dict[str
     return collected
 
 
+def _candidate_projection(root: Path, task: str, integration_branch: str) -> dict[str, Any] | None:
+    """Project the ready candidate purely from Git: no persisted format beyond the ref.
+
+    ``worktree_ready`` and ``behind_tip`` are re-derived on every call rather
+    than cached anywhere, so they can never drift from what Git actually
+    holds.  No candidate ref yet is not an error -- it is the normal state
+    before the first ``publish``.
+    """
+    ref = _candidate_ref(task)
+    probe = run_git(root, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}", check=False)
+    sha = probe.stdout.strip()
+    if probe.returncode or not sha:
+        return None
+    acceptance_path = _acceptance_worktree_path(root, task)
+    acceptance_state = _status(root, acceptance_path, "", identity_label="acceptance worktree")
+    behind = run_git(root, "rev-list", "--count", f"{ref}..{integration_branch}")
+    return {
+        "sha": sha,
+        "worktree_ready": acceptance_state["exists"] and acceptance_state["head"] == sha,
+        "behind_tip": int(behind.stdout.strip()),
+        "acceptance_worktree": str(acceptance_path),
+    }
+
+
 def command_integration_status(args: argparse.Namespace) -> dict[str, Any]:
     task, path, branch = _integration_identity(args)
     root = Path(args.root).resolve()
@@ -280,9 +322,47 @@ def command_integration_status(args: argparse.Namespace) -> dict[str, Any]:
             "worktree": str(path),
             "base_ref": _integration_base_ref(task),
             "collected": _collected_integrations(root, task, branch),
+            "candidate": _candidate_projection(root, task, branch),
         }
     )
     return state
+
+
+def command_integration_publish(args: argparse.Namespace) -> dict[str, Any]:
+    """Publish a gated exact SHA as the ready candidate.
+
+    Order matters for safety: check the acceptance worktree is clean *before*
+    doing anything else, then checkout, and only then move the ref.  If the
+    worktree is dirty (the user's own leftover test artifacts), nothing below
+    this check ever runs -- the ref keeps its old value and the worktree is
+    never touched.  If checkout itself fails, the ref still has not moved.
+    Only once the worktree genuinely holds --sha does the ref follow it, so
+    the ref can never point past what the worktree actually holds.
+    """
+    task = require_identifier(str(args.task_id), label="task id")
+    root = Path(args.root).resolve()
+    sha = exact_commit(root, str(args.sha), label="sha")
+    acceptance_path = _acceptance_worktree_path(root, task)
+    state = _status(root, acceptance_path, "", identity_label="acceptance worktree")
+    if not state["exists"]:
+        raise OrchestrateError(f"managed acceptance worktree does not exist: {acceptance_path}")
+    if not state["clean"]:
+        raise OrchestrateError(
+            f"acceptance worktree must be clean before publish, candidate left unchanged: {acceptance_path}"
+        )
+    checkout = run_git(acceptance_path, "checkout", "--detach", sha, check=False)
+    if checkout.returncode:
+        detail = checkout.stderr.strip() or checkout.stdout.strip()
+        raise OrchestrateError(f"git checkout failed while publishing candidate: {detail}")
+    run_git(root, "update-ref", _candidate_ref(task), sha)
+    return {
+        "ok": True,
+        "operation": "integration-publish",
+        "task_id": task,
+        "sha": sha,
+        "candidate_ref": _candidate_ref(task),
+        "acceptance_worktree": str(acceptance_path),
+    }
 
 
 def _immutable_paths(root: Path, sha: str) -> list[str]:
@@ -423,12 +503,22 @@ def command_integration_remove(args: argparse.Namespace) -> dict[str, Any]:
         raise OrchestrateError(f"managed integration worktree does not exist: {path}")
     if not state["clean"]:
         raise OrchestrateError(f"cannot remove worktree because it is not clean: {path}")
+    acceptance_path = _acceptance_worktree_path(root, task)
+    acceptance_state = _status(root, acceptance_path, "", identity_label="acceptance worktree")
+    if acceptance_state["exists"] and not acceptance_state["clean"]:
+        raise OrchestrateError(f"cannot remove worktree because it is not clean: {acceptance_path}")
     run_git(root, "worktree", "remove", str(path))
+    if acceptance_state["exists"]:
+        run_git(root, "worktree", "remove", str(acceptance_path))
+    candidate_ref = _candidate_ref(task)
+    if run_git(root, "rev-parse", "--verify", "--quiet", candidate_ref, check=False).returncode == 0:
+        run_git(root, "update-ref", "-d", candidate_ref)
     return {
         "ok": True,
         "operation": "integration-remove",
         "task_id": task,
         "worktree": str(path),
+        "acceptance_worktree": str(acceptance_path),
         "branch": branch,
         "removed": True,
     }

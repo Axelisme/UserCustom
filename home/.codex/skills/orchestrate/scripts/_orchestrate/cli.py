@@ -26,6 +26,7 @@ from .release import (
 from .v119_core import (
     command_integration_collect,
     command_integration_create,
+    command_integration_publish,
     command_integration_remove,
     command_integration_status,
     command_lane_create,
@@ -77,6 +78,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("create", command_integration_create),
         ("status", command_integration_status),
         ("collect", command_integration_collect),
+        ("publish", command_integration_publish),
         ("remove", command_integration_remove),
     ):
         operation_parser = integration_commands.add_parser(operation)
@@ -86,6 +88,8 @@ def build_parser() -> argparse.ArgumentParser:
             operation_parser.add_argument("--base", required=True)
         elif operation == "collect":
             operation_parser.add_argument("--lane-id", required=True)
+            operation_parser.add_argument("--sha", required=True)
+        elif operation == "publish":
             operation_parser.add_argument("--sha", required=True)
         operation_parser.set_defaults(handler=handler)
 

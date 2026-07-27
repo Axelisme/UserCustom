@@ -31,11 +31,10 @@ accepts explicit task IDs: `init`, `phase-start`, `phase-set`, `log`, `status`, 
 
 The `phase/deferred-row/progress schema` is defined by `templates/phase.md` and the JSONL log.
 A phase may mutate before completion and is sealed after `completed`; `progress` only appends.
-Deferred rows use `pending_machine | reviewed_awaiting_user | accepted | rejected | stale`, carry
-an exact SHA, observable sentence, user steps, expected result, dependencies, and machine evidence.
-S6/S7 references are recorded as pointers to the shared authority, not copied policy. Do not add
-another ledger, status, or execution state file. The plan stores records; it does not infer runtime
-state or decide close-out.
+Use the template as the authority for deferred rows instead of restating row fields here. S6/S7
+references are recorded as pointers to the shared authority, not copied policy. Do not add another
+ledger, status, or execution state file. The plan stores records; it does not infer runtime state
+or decide close-out.
 
 ## Update boundary
 

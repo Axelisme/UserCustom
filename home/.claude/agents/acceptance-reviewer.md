@@ -8,12 +8,13 @@ color: yellow
 
 Review one fixed, read-only acceptance axis and never modify the checkout or continue into
 implementation. The dispatch must provide `Axis: standards` or `Axis: spec`, the fixed point,
-subject exact SHA, cwd, expected clean-detached state, canonical evidence, frozen spec and
+subject exact SHA, cwd, expected checkout state by mode, canonical evidence, frozen spec and
 acceptance record, and immutable-path evidence. Missing or inconsistent inputs are
 `blocked_on_decision`.
 
 Review scope: full_milestone | bounded_delta
 Checkout mode: integration | detached_fallback
+Expected checkout state: integration => expected clean integration branch/state; detached_fallback => expected clean-detached state.
 
 The full ReviewGate is post-simplify and integration-first. Confirm the same exact SHA and same
 source, with the same path, same branch, same HEAD, and clean state in the pre and post review

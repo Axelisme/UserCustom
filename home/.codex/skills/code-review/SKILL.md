@@ -14,7 +14,8 @@ allowed.
 
 Use the clean integration source by default. When the reviewer cannot prove a read-only
 filesystem capability, use the **capability-based shared detached fallback**. Dispatch two fresh
-axes against the same exact SHA and same source:
+reviewers in parallel within one review bracket — `Axis: standards` and `Axis: spec` — against the
+same exact SHA and same source:
 
 - `Axis: standards`
 - `Axis: spec`

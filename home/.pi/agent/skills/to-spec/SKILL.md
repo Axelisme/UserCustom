@@ -19,8 +19,8 @@ spec unless a prototype's state/schema shape is load-bearing.
 
 The first Slice must have an observable sentence and a named deletion; it is independently
 reachable and its first accepted checkpoint is days, not weeks away. The frozen Contract is an
-artifact consumed by Oracle and Implementation. Admissibility references **S1/S2** of the shared
-admission standard: observable user value, red evidence, and an in-envelope scenario.
+artifact consumed by Oracle and Implementation. The Slice Map records the evidence required by
+**S1/S2**; the shared admission standard decides or refuses admissibility.
 
 ## Publish
 

@@ -7,8 +7,8 @@ description: Break a spec into dependency-addressable tracer-bullet ticket artif
 
 This skill produces **artifacts only**: tracer-bullet tickets with explicit blocking edges. Work
 from the conversation or a supplied spec, use the repository glossary, and preserve the recorded
-usage envelope. Each ticket is a complete, observable Slice with a named deletion or a seam whose
-predecessor is named; refuse a ticket whose value waits on a later ticket.
+usage envelope. Each ticket records S1 evidence and dependency-addressable DAG artifacts; named
+deletions or seam predecessors remain the ticket shape.
 
 ## Draft
 
@@ -25,7 +25,7 @@ owning surfaces.
 
 ## Publish
 
-In a plan-directory repo, publish Slices in the task plan and let Root dispatch each ready Slice
-through Oracle, exact Contract merge, and Implementation. Do not create per-ticket state. In a
+In a plan-directory repo, publish Slices in the task plan. Do not create per-ticket state. In a
 tracker, publish issues with native blocking edges. Otherwise write numbered local ticket files
-under `.scratch/<feature-slug>/issues/`. Never modify the source issue.
+under `.scratch/<feature-slug>/issues/`. Use the owning authority pointers for Oracle, merge, and
+Implementation coordination. Never modify the source issue.

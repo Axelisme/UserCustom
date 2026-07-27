@@ -12,8 +12,8 @@ merges, placement, and repository authority; Git/task-plan evidence recovers pos
 restart.
 
 Reviewers use the integration source when a read-only capability is verifiable; otherwise use the
-shared detached fallback. The reviewer verifies exact SHA, same path, branch, HEAD, and clean state
-before and after the review bracket. This binding adds no acceptance or close-out authority.
+shared detached fallback. See the shared ReviewGate for exact SHA, same path, branch, HEAD, and
+clean-state bracket checks. This binding adds no acceptance or close-out authority.
 
 Terminal task output carries exact focused test command(s), observed role result(s), Slice, and
 exact SHA. One terminal `slice-ready` handoff with the full SHA ends the role turn immediately.

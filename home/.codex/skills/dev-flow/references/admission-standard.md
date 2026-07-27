@@ -78,10 +78,10 @@ the same path, branch, HEAD, and clean tree; no collect; no mutate is allowed in
 bracket, and any mismatch invalidates evidence. Any capability fallback is handled by the
 ReviewGate interface, not by duplicating policy in this standard.
 
-- **S5.1 Gated checkpoint.** Open S5 only after simplify, canonical tests, and the clean-detached
-  ReviewGate pass. Bind all evidence to the exact reviewed SHA. Two fresh axes use the same exact SHA
-  and same source. A bounded delta uses one reviewer on the originating axis. Present the
-  reviewed exact SHA for user acceptance and record that checkpoint as not persistence-landed.
+- **S5.1 Gated checkpoint.** Open S5 only after simplify, canonical tests, and the ReviewGate
+  pass. Bind all evidence to the exact reviewed SHA. Two fresh axes use the same exact SHA and
+  same source. A bounded delta uses one reviewer on the originating axis. Present the reviewed
+  exact SHA for user acceptance and record that checkpoint as not persistence-landed.
 - **S5.2 Per-Slice exercise.** The user exercises the S1.1 sentence against the real entrypoint
   per Slice and accepts or rejects it. Acceptance does not mutate persistence and is not
   persistence-landed.
@@ -101,9 +101,9 @@ ReviewGate interface, not by duplicating policy in this standard.
 - **S6.2 Queue.** Night Mode records each deferred S5 item in the current release phase record,
   using the planning-with-files phase template as the queue schema. `reviewed_awaiting_user` is
   provisional and never means accepted or landed. The queue is ordered from the latest accepted checkpoint.
-- **S6.3 Depth.** The max speculative dependency depth is **10** from the latest accepted
-  checkpoint. Independent pending Slices do not add chain depth. A later Slice must not overwrite a
-  pending acceptance surface or make its scenario independently untestable.
+- **S6.3 Depth.** Validate speculative dependency depth against this admission standard's S6.3.
+  Independent pending Slices do not add chain depth. A later Slice must not overwrite a pending
+  acceptance surface or make its scenario independently untestable.
 - **S6.4 Drain.** Day Mode drains the queue oldest-first in dependency order. Same-SHA acceptance
   preserves machine evidence and continues from the integration tip without persistence mutation.
   Rejection returns to S1 and marks descendants stale.

@@ -10,7 +10,7 @@
 ## Deferred user acceptance
 
 - **S6/S7:** shared admission-standard references govern acceptance and close-out.
-- speculative dependency depth: derive from pending dependency edges; maximum 10.
+- speculative dependency depth: validate against admission-standard S6.3.
 - none — deferred rows use the table below and update in place; acceptance前 exact SHA 改變即更新該列。
 
 | Slice | exact SHA | observable sentence | entrypoint | user steps | expected | status | Depends on | machine evidence |

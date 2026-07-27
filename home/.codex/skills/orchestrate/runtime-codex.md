@@ -11,8 +11,8 @@ changed. One writer owns each role stream. A blocked role reports through the na
 path with evidence.
 
 A full review may use the integration worktree when the reviewer has a provable read-only
-capability. Otherwise the shared detached fallback is the source. In either case the reviewer
-verifies exact SHA, path, branch, HEAD, and clean state before and after the review bracket.
+capability. Otherwise the shared detached fallback is the source. See the shared ReviewGate for
+exact SHA, path, branch, HEAD, and clean-state bracket checks.
 
 Every dispatch names the exact cwd, base or subject SHA, write scope, immutable paths, user dirt,
 and focused commands. The terminal output carries exact focused test command(s), observed role

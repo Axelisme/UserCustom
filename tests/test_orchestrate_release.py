@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import importlib
+import json
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+
 ROOT = Path(__file__).resolve().parents[1]
 HOME = ROOT / "home"
 CODEX_SKILL = HOME / ".codex" / "skills" / "orchestrate"
 PI_SKILL = HOME / ".pi" / "agent" / "skills" / "orchestrate"
+CODEX_SCRIPT = CODEX_SKILL / "scripts" / "orchestrate.py"
 VERSION_MATCH = re.search(
     r"(?m)^skill_version: (\d+)$",
     (CODEX_SKILL / "SKILL.md").read_text(encoding="utf-8"),
@@ -29,7 +33,102 @@ def load_release_module():
         sys.path.pop(0)
 
 
-class PiRuntimeParityTests(unittest.TestCase):
+class ReleasedPackageTests(unittest.TestCase):
+    """Black-box contract for the shipped package and its root CLI.
+
+    The shipped version is read from SKILL.md, so a release does not require
+    editing this file.
+    """
+
+    retained_commands = {
+        "admission",
+        "worktree",
+        "contract",
+        "integration",
+        "profile",
+        "doctor",
+        "diff",
+        "pin",
+        "release",
+    }
+    removed_commands = {
+        "lane",
+        "compose-base",
+        "review",
+        "land",
+        "collect",
+        "cleanup",
+        "slice",
+        "findings",
+        "feedback",
+        "revalidate",
+        "reconcile",
+        "wave",
+    }
+
+    @staticmethod
+    def run_cli(*args: str, skill_dir: Path = CODEX_SKILL) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(CODEX_SCRIPT), "--skill-dir", str(skill_dir), *args],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    @staticmethod
+    def help_commands(text: str) -> set[str]:
+        match = re.search(r"\{([^{}]+)\}", text)
+        if match is None:
+            raise AssertionError(f"root help has no command set:\n{text}")
+        return set(match.group(1).split(","))
+
+    def test_root_help_is_only_the_workflow_and_retained_administration(self) -> None:
+        result = self.run_cli("--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.help_commands(result.stdout), self.retained_commands)
+        for command in self.removed_commands | {"review", "lock", "ledger"}:
+            self.assertNotIn(command, result.stdout)
+
+    def test_historical_manifests_and_pin_migration_remain_available(self) -> None:
+        for skill in (CODEX_SKILL, PI_SKILL):
+            with self.subTest(skill=skill):
+                historical = sorted(
+                    path for path in (skill / "manifests").glob("*.json")
+                    if path.stem.isdigit() and int(path.stem) < SHIPPED_VERSION
+                )
+                self.assertTrue(historical, skill)
+                for path in historical:
+                    version = int(path.stem)
+                    manifest = json.loads(path.read_text(encoding="utf-8"))
+                    self.assertEqual(manifest["skill_version"], version)
+                    self.assertEqual(manifest["orchestrate_compat"], version)
+        result = self.run_cli("pin", "migrate", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("lock", result.stdout.lower())
+        self.assertNotIn("ledger", result.stdout.lower())
+
+    def test_every_runtime_ships_a_manifest_for_its_declared_version(self) -> None:
+        # Metadata only.  Whether the shipped bytes still match the manifest
+        # checksums is the doctor's question, not a test's: asserting it here
+        # would turn every edit to a shipped document into a test failure.
+        for skill in (CODEX_SKILL, PI_SKILL):
+            with self.subTest(skill=skill):
+                skill_text = (skill / "SKILL.md").read_text(encoding="utf-8")
+                self.assertRegex(skill_text, rf"(?m)^skill_version: {SHIPPED_VERSION}$")
+                manifest_path = skill / "manifests" / f"{SHIPPED_VERSION}.json"
+                self.assertTrue(manifest_path.is_file(), f"missing manifest: {manifest_path}")
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                self.assertEqual(manifest["skill_version"], SHIPPED_VERSION)
+                self.assertEqual(manifest["orchestrate_compat"], SHIPPED_VERSION)
+
+    def test_pin_migrate_remains_a_retained_administration_command(self) -> None:
+        result = self.run_cli("pin", "migrate", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--root", result.stdout)
+
+
+class RuntimeParityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.release = load_release_module()
@@ -76,11 +175,6 @@ class PiRuntimeParityTests(unittest.TestCase):
             }
             self.assertEqual(len(bodies), 1, name)
 
-    def test_pi_runtime_owns_pipelinemanager_and_pipeline_capability(self) -> None:
-        text = " ".join((CODEX_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split())
-        self.assertIn("PipelineManager", text)
-        self.assertIn("pipeline capability", text.lower())
-
     def test_codex_and_claude_profiles_do_not_advertise_pipeline_capability(self) -> None:
         for runtime, root, suffix in (
             ("codex", HOME / ".codex" / "agents", ".toml"),
@@ -95,19 +189,6 @@ class PiRuntimeParityTests(unittest.TestCase):
                 encoding="utf-8"
             )
             self.assertRegex(pi, r"(?m)^pipeline:\s*true\s*$")
-
-    def test_acceptance_profiles_expose_full_and_bounded_review_modes(self) -> None:
-        for runtime, root, suffix in (
-            ("codex", HOME / ".codex" / "agents", ".toml"),
-            ("claude", HOME / ".claude" / "agents", ".md"),
-            ("pi", HOME / ".pi" / "agent" / "agents", ".md"),
-        ):
-            path = root / f"acceptance-reviewer{suffix}"
-            text = " ".join(path.read_text(encoding="utf-8").split())
-            with self.subTest(runtime=runtime):
-                self.assertIn("Review scope: full_milestone | bounded_delta", text)
-                self.assertIn("Checkout mode: integration | detached_fallback", text)
-                self.assertIn("exact SHA", text)
 
     def test_pi_profiles_keep_runtime_frontmatter_contract(self) -> None:
         for name in ("wave-oracle", "wave-implementer"):

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import tempfile
 import unittest
+
+import _setup_support as support
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -69,7 +72,7 @@ class SetupConfigMigrationTests(unittest.TestCase):
             check=False,
         )
 
-    def test_upgrade_installs_v119_roles_and_retires_legacy_roles(self) -> None:
+    def test_upgrade_installs_shipped_roles_and_retires_legacy_roles(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             source, home = self.seed_fixture(base)
@@ -725,6 +728,191 @@ class SetupConfigMigrationTests(unittest.TestCase):
             self.assertIn("stale skill", result.stderr)
             # Reported, never deleted: it is the user's data.
             self.assertTrue(phantom.is_symlink())
+
+
+class RefreshBeforeLegacyRetirementTests(unittest.TestCase):
+    """Retirement is destructive, so replacements must be installed and validated first.
+
+    Each test shadows ``rm`` to run its assertions at the exact moment legacy
+    retirement begins, then re-asserts the end state after setup returns.
+    """
+
+    private_profiles = {
+        ".codex/agents/user-private.toml": b"private Codex profile\n",
+        ".claude/agents/user-private.md": b"private Claude profile\n",
+        ".pi/agent/agents/user-private.md": b"private Pi profile\n",
+    }
+
+    def seed_untouchables(self, home: Path) -> dict[Path, bytes]:
+        """User-owned files setup must carry through without editing or deleting."""
+        untouchable = {home / name: content for name, content in self.private_profiles.items()}
+        untouchable[home / ".codex/skills/user-private/SKILL.md"] = b"private skill\n"
+        untouchable[home / ".config/user-private.conf"] = b"private config\n"
+        for path, content in untouchable.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        return untouchable
+
+    def seed_legacy(self, home: Path) -> Path:
+        legacy = home / ".codex/agents/implementer.toml"
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text("legacy identity\n", encoding="utf-8")
+        return legacy
+
+    def test_every_shipped_profile_is_exact_before_legacy_retirement(self) -> None:
+        for runtime, layout in support.PROFILE_LAYOUTS.items():
+            suffix = ".toml" if runtime == "codex" else ".md"
+            relative = layout / f"repo-investigator{suffix}"
+            for state in ("stale", "foreign", "dangling"):
+                with (
+                    self.subTest(runtime=runtime, state=state),
+                    tempfile.TemporaryDirectory() as temporary,
+                ):
+                    base = Path(temporary)
+                    source, home = support.seed_source(base)
+                    destination = home / relative
+                    prior_bytes, prior_link = support.seed_destination(
+                        base, destination, state
+                    )
+                    untouchable = self.seed_untouchables(home)
+                    legacy = self.seed_legacy(home)
+
+                    shipped = support.shipped_profile_relatives()
+                    checks = [
+                        f"if ! [ -f {shlex.quote(str(home / each))} ] || "
+                        f"! [ {shlex.quote(str(home / each))} -ef "
+                        f"{shlex.quote(str(source / 'home' / each))} ]; then "
+                        f"printf '%s\\n' 'profile not exact before retirement: {each}' >&2; "
+                        "exit 91; fi"
+                        for each in shipped
+                    ]
+                    checks.append(
+                        support.backup_check(base, destination, prior_bytes, prior_link)
+                    )
+                    guard_bin, marker = support.guard_rm(base, checks)
+
+                    result = support.run_setup(
+                        source, home, support.guarded_path(guard_bin)
+                    )
+
+                    self.assertEqual(
+                        result.returncode,
+                        0,
+                        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+                    )
+                    self.assertTrue(marker.is_file(), "legacy retirement never ran")
+                    self.assertFalse(legacy.exists())
+                    for each in shipped:
+                        installed = home / each
+                        self.assertTrue(installed.is_file(), installed)
+                        self.assertTrue(
+                            os.path.samefile(installed, source / "home" / each),
+                            f"{installed} must exact-link to its shipped source",
+                        )
+
+                    backup = destination.with_name(destination.name + ".bak")
+                    if prior_bytes is not None:
+                        self.assertEqual(backup.read_bytes(), prior_bytes)
+                    else:
+                        self.assertTrue(backup.is_symlink())
+                        self.assertEqual(os.readlink(backup), prior_link)
+                    for path, content in untouchable.items():
+                        self.assertEqual(path.read_bytes(), content, path)
+
+    def test_every_shipped_skill_link_is_exact_before_legacy_retirement(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = support.seed_source(base)
+            installed = [
+                layout / skill
+                for layout in support.managed_skill_layouts()
+                for skill in support.managed_skill_names()
+            ]
+
+            # Alternate the two ways an installed skill link goes wrong.
+            for index, relative in enumerate(installed):
+                destination = home / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                if index % 2:
+                    target = base / f"missing-skill-{index}"
+                else:
+                    target = base / f"stale-skill-{index}"
+                    target.mkdir()
+                    (target / "SKILL.md").write_text("stale foreign skill\n", encoding="utf-8")
+                destination.symlink_to(target, target_is_directory=True)
+
+            untouchable = self.seed_untouchables(home)
+            legacy = self.seed_legacy(home)
+            settings = home / ".pi/agent/settings.json"
+            settings.parent.mkdir(parents=True, exist_ok=True)
+            settings.write_bytes(b'{"private": true}\n')
+
+            checks = []
+            for relative in installed:
+                destination = home / relative
+                checks.append(
+                    f'test {shlex.quote(str(destination))} -ef '
+                    f'{shlex.quote(str(source / "home" / relative))}'
+                )
+                checks.append(f'test -f {shlex.quote(str(destination / "SKILL.md"))}')
+            guard_bin, marker = support.guard_rm(base, checks)
+
+            result = support.run_setup(source, home, support.guarded_path(guard_bin))
+
+            self.assertEqual(
+                result.returncode, 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+            )
+            self.assertTrue(marker.is_file(), "legacy retirement never ran")
+            self.assertFalse(legacy.exists())
+            for relative in installed:
+                with self.subTest(relative=relative.as_posix()):
+                    destination = home / relative
+                    shipped = source / "home" / relative
+                    self.assertTrue(destination.is_symlink())
+                    self.assertTrue(os.path.samefile(destination, shipped))
+                    self.assertEqual(
+                        (destination / "SKILL.md").read_bytes(),
+                        (shipped / "SKILL.md").read_bytes(),
+                    )
+            for path, content in untouchable.items():
+                self.assertEqual(path.read_bytes(), content, path)
+            self.assertEqual(
+                settings.with_name("settings.json.bak").read_bytes(), b'{"private": true}\n'
+            )
+
+    def test_a_destination_that_drifts_after_install_fails_before_retirement(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = support.seed_source(base)
+            script = source / "setup_scripts/setup_config.sh"
+            original = script.read_text(encoding="utf-8")
+            boundary = (
+                "validate_orchestrate_profile_destinations\n"
+                "remove_obsolete_orchestrate_profiles"
+            )
+            self.assertEqual(original.count(boundary), 1, "setup lost its validation boundary")
+
+            drifted = home / ".codex/agents/contract-planner.toml"
+            missing = base / "missing-after-install"
+            script.write_text(
+                original.replace(
+                    boundary,
+                    f"rm -f {shlex.quote(str(drifted))}\n"
+                    f"ln -s {shlex.quote(str(missing))} {shlex.quote(str(drifted))}\n" + boundary,
+                ),
+                encoding="utf-8",
+            )
+            legacy = self.seed_legacy(home)
+
+            result = support.run_setup(source, home)
+
+            self.assertNotEqual(
+                result.returncode,
+                0,
+                "setup accepted a drifted destination and retired legacy anyway",
+            )
+            self.assertIn("contract-planner", result.stderr)
+            self.assertTrue(legacy.is_file(), "validation must fail before retirement")
 
 
 if __name__ == "__main__":

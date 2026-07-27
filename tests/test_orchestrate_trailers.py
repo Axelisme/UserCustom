@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,7 +53,7 @@ class StrictGitTrailerContractTests(unittest.TestCase):
 
     def success_payload(
         self, result: subprocess.CompletedProcess[str]
-    ) -> dict[str, object]:
+    ) -> dict[str, Any]:
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, "", result.stderr)
         try:
@@ -65,7 +66,7 @@ class StrictGitTrailerContractTests(unittest.TestCase):
 
     def error_payload(
         self, result: subprocess.CompletedProcess[str]
-    ) -> dict[str, object]:
+    ) -> dict[str, Any]:
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(result.stdout, "", result.stdout)
         try:

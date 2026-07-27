@@ -22,7 +22,7 @@ def load_admission_module():
         sys.path.pop(0)
 
 
-class OrchestrateV124AdmissionTests(unittest.TestCase):
+class AdmissionCheckTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.admission = load_admission_module()

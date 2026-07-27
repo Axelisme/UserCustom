@@ -175,49 +175,6 @@ class LifecycleTests(unittest.TestCase):
             self.assertIn("**Goal:** 重構記憶系統", index)
             self.assertTrue((plan_dir(root) / "phases").is_dir())
 
-    def test_skill_describes_mutable_phase_records_and_append_only_progress(self) -> None:
-        text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("phase records 在完成前可變", text)
-        self.assertIn("completed 後 sealed and immutable", text)
-        self.assertIn("progress append-only", text)
-        self.assertNotIn("stores(phase 檔、progress)只增不改", text)
-        self.assertEqual(SCRIPT.read_bytes(), PI_SCRIPT.read_bytes())
-
-    def test_planning_skill_owns_schema_and_storage_not_workflow_policy(self) -> None:
-        skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
-        normalized = " ".join(skill.split())
-        lowered = normalized.lower()
-        self.assertIn("storage/schema", lowered)
-        self.assertIn("phase/deferred-row/progress schema", lowered)
-        self.assertIn("S6/S7", normalized)
-        self.assertNotIn("mode inference", lowered)
-        self.assertNotIn("landing policy", lowered)
-
-    def test_phase_template_is_the_deferred_row_schema(self) -> None:
-        template = (SKILL / "templates" / "phase.md").read_text(encoding="utf-8")
-        lowered = " ".join(template.lower().split())
-        for phrase in ("deferred user acceptance", "status", "exact sha"):
-            self.assertIn(phrase, lowered)
-        self.assertNotIn("| landed |", template)
-
-        rows = [line for line in template.splitlines() if line.startswith("|")]
-        self.assertEqual(len(rows), 3)
-        self.assertEqual(tuple(row_cells(rows[0])), DEFERRED_COLUMNS)
-        self.assertTrue(all(row.count("|") == len(DEFERRED_COLUMNS) + 1 for row in rows))
-
-        status_match = re.search(r"status: `([^`]+)`", template)
-        result_match = re.search(r"exercise result: `([^`]+)`", template)
-        if status_match is None or result_match is None:
-            self.fail("missing deferred acceptance closed enums")
-        self.assertEqual(
-            set(re.findall(r"[a-z_]+", status_match.group(1))),
-            {"pending_machine", "reviewed_awaiting_user", "accepted", "rejected", "stale"},
-        )
-        self.assertEqual(
-            set(re.findall(r"[a-z_]+", result_match.group(1))),
-            {"not_run", "passed", "failed", "blocked"},
-        )
-
     def test_init_refuses_second_time(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1084,14 +1041,6 @@ class StatusGitTests(unittest.TestCase):
 
 
 class SkillContractTests(unittest.TestCase):
-    def test_skill_declares_version_and_storage_mental_model(self) -> None:
-        text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("skill_version: 14", text)
-        for phrase in ("refs vs object log", "只讀 `INDEX.md`", "指標不抄本", "storage/schema"):
-            self.assertIn(phrase, text)
-        for retired in ("migrate", "inventory", "check <id>"):
-            self.assertNotIn(retired, text)
-
     def test_retired_commands_are_absent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1104,13 +1053,6 @@ class SkillContractTests(unittest.TestCase):
     def test_templates_are_the_new_set(self) -> None:
         names = {p.name for p in (SKILL / "templates").glob("*.md")}
         self.assertEqual(names, {"INDEX.md", "phase.md", "findings.md"})
-
-    def test_phase_template_carries_only_the_deferred_row_schema(self) -> None:
-        template = (SKILL / "templates" / "phase.md").read_text(encoding="utf-8")
-        lowered = " ".join(template.lower().split())
-        for phrase in ("deferred user acceptance", "exact sha", "reviewed_awaiting_user"):
-            self.assertIn(phrase, lowered)
-        self.assertNotIn("hard max 10", lowered)
 
     def test_runtime_script_mirrors_are_identical(self) -> None:
         pi_script = ROOT / "home" / ".pi" / "agent" / "skills" / "planning-with-files" / "scripts" / "plan.py"

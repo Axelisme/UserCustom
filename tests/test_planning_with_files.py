@@ -33,23 +33,22 @@ def plan_dir(root: Path, task_id: str = "demo") -> Path:
 
 SHA_A = "a" * 40
 SHA_B = "b" * 40
-def row_cells(line: str) -> list[str]:
-    row = line.strip().strip("|")
-    return [cell.replace(r"\|", "|").strip() for cell in re.split(r"(?<!\\)\|", row)]
 
-
-LEGACY_DEFERRED_COLUMNS = (
-    "Slice",
-    "exact SHA",
-    "observable sentence",
-    "entrypoint",
-    "user steps",
-    "expected",
-    "status",
-    "Depends on",
-    "machine evidence",
-)
+# Mirrors plan.py's current 8-column deferred schema (DEFERRED_COLUMNS).
 DEFERRED_COLUMNS = (
+    "Slice",
+    "observable",
+    "entrypoint",
+    "steps",
+    "expected",
+    "verifier",
+    "state",
+    "accepted SHA",
+)
+
+# The 14-column header this schema replaced. Kept only to exercise the
+# migration-required rejection path; plan.py must not parse it.
+RETIRED_14_COLUMN_HEADER = (
     "Slice",
     "exact SHA",
     "observable sentence",
@@ -68,41 +67,24 @@ DEFERRED_COLUMNS = (
 
 
 def deferred_row(
-    status: str,
+    state: str,
     *,
     slice_id: str = "slice-1",
-    exact_sha: str = SHA_A,
-    result: str | None = None,
-    observed_sha: str | None = None,
-    user_steps: str = "run x",
-    user_evidence: str | None = None,
-    impact_basis: str = "none",
-    acceptance_evidence: str | None = None,
-    machine_evidence: str = "canonical tests pass",
+    verifier: str = "user",
+    accepted_sha: str | None = None,
+    steps: str = "run x",
 ) -> list[str]:
-    if result is None:
-        result = {"accepted": "passed", "rejected": "failed"}.get(status, "not_run")
-    if observed_sha is None:
-        observed_sha = exact_sha if result != "not_run" else "none"
-    if user_evidence is None:
-        user_evidence = "user observed result" if result != "not_run" else "none"
-    if acceptance_evidence is None:
-        acceptance_evidence = "user confirmed candidate" if status == "accepted" else "none"
+    if accepted_sha is None:
+        accepted_sha = SHA_A if state == "accepted" else "none"
     return [
         slice_id,
-        exact_sha,
         "user runs x and sees y",
         "cli",
-        user_steps,
+        steps,
         "y",
-        status,
-        result,
-        observed_sha,
-        "none",
-        user_evidence,
-        impact_basis,
-        acceptance_evidence,
-        machine_evidence,
+        verifier,
+        state,
+        accepted_sha,
     ]
 
 
@@ -117,11 +99,7 @@ def write_deferred_rows(path: Path, rows: list[list[str]]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def write_legacy_deferred_row(
-    path: Path,
-    status: str,
-    exact_sha: str = "abc1234",
-) -> None:
+def write_retired_14_column_table(path: Path, exact_sha: str = "abc1234") -> None:
     lines = path.read_text(encoding="utf-8").splitlines()
     header_index = next(
         index for index, line in enumerate(lines) if line.startswith("| Slice |")
@@ -133,24 +111,29 @@ def write_legacy_deferred_row(
         "cli",
         "run x",
         "y",
-        status,
+        "accepted",
+        "passed",
+        exact_sha,
         "none",
+        "user observed result",
+        "none",
+        "user confirmed candidate",
         "canonical tests pass",
     ]
     lines[header_index : header_index + 3] = [
-        "| " + " | ".join(LEGACY_DEFERRED_COLUMNS) + " |",
-        "|" + "|".join("---" for _ in LEGACY_DEFERRED_COLUMNS) + "|",
+        "| " + " | ".join(RETIRED_14_COLUMN_HEADER) + " |",
+        "|" + "|".join("---" for _ in RETIRED_14_COLUMN_HEADER) + "|",
         "| " + " | ".join(row) + " |",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def set_deferred_acceptance(
-    path: Path, status: str, user_steps: str = "run x", **overrides: str
+    path: Path, state: str, steps: str = "run x", **overrides: str
 ) -> None:
     write_deferred_rows(
         path,
-        [deferred_row(status, user_steps=user_steps, **overrides)],
+        [deferred_row(state, steps=steps, **overrides)],
     )
 
 
@@ -230,7 +213,7 @@ class LifecycleTests(unittest.TestCase):
             run_plan(root, "init", "demo", "--goal", "g")
             run_plan(root, "phase-start", "demo", "--topic", "x")
             phase = plan_dir(root) / "phases" / "01-x.md"
-            set_deferred_acceptance(phase, "reviewed_awaiting_user")
+            set_deferred_acceptance(phase, "blocked")
 
             result = run_plan(
                 root,
@@ -248,7 +231,7 @@ class LifecycleTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 1)
             self.assertIn("deferred user acceptance", result.stdout)
-            self.assertIn("slice-1:reviewed_awaiting_user", result.stdout)
+            self.assertIn("slice-1:blocked", result.stdout)
 
     def test_seal_allows_accepted_deferred_user_acceptance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -256,7 +239,7 @@ class LifecycleTests(unittest.TestCase):
             run_plan(root, "init", "demo", "--goal", "g")
             run_plan(root, "phase-start", "demo", "--topic", "x")
             phase = plan_dir(root) / "phases" / "01-x.md"
-            set_deferred_acceptance(phase, "accepted", r"run x \| jq .ok")
+            set_deferred_acceptance(phase, "accepted", r"run x \| jq .ok", accepted_sha=SHA_A)
 
             result = run_plan(
                 root,
@@ -285,70 +268,7 @@ class LifecycleTests(unittest.TestCase):
             archived = run_plan(root, "archive", "demo")
             self.assertEqual(archived.returncode, 0, archived.stdout)
 
-    def test_seal_rejects_accepted_row_with_failed_observation(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            run_plan(root, "init", "demo", "--goal", "g")
-            run_plan(root, "phase-start", "demo", "--topic", "x")
-            phase = plan_dir(root) / "phases" / "01-x.md"
-            set_deferred_acceptance(
-                phase,
-                "accepted",
-                result="failed",
-                user_evidence="user found a defect",
-            )
-
-            result = run_plan(
-                root,
-                "phase-set",
-                "demo",
-                "--phase",
-                "1",
-                "--status",
-                "completed",
-                "--commit",
-                SHA_A,
-                "--conclusion",
-                "done",
-            )
-
-            self.assertEqual(result.returncode, 1)
-            self.assertIn("accepted", result.stdout)
-            self.assertIn("passed", result.stdout)
-
-    def test_carry_forward_requires_impact_basis(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            run_plan(root, "init", "demo", "--goal", "g")
-            run_plan(root, "phase-start", "demo", "--topic", "x")
-            phase = plan_dir(root) / "phases" / "01-x.md"
-            set_deferred_acceptance(
-                phase,
-                "accepted",
-                exact_sha=SHA_B,
-                result="passed",
-                observed_sha=SHA_A,
-                impact_basis="none",
-            )
-
-            result = run_plan(
-                root,
-                "phase-set",
-                "demo",
-                "--phase",
-                "1",
-                "--status",
-                "completed",
-                "--commit",
-                SHA_B,
-                "--conclusion",
-                "done",
-            )
-
-            self.assertEqual(result.returncode, 1)
-            self.assertIn("impact/retest basis", result.stdout)
-
-    def test_seal_allows_coordinated_rows_on_one_repaired_sha(self) -> None:
+    def test_checkpoint_preserves_pending_failed_and_blocked_feedback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             run_plan(root, "init", "demo", "--goal", "g")
@@ -357,54 +277,8 @@ class LifecycleTests(unittest.TestCase):
             write_deferred_rows(
                 phase,
                 [
-                    deferred_row(
-                        "accepted",
-                        slice_id="slice-1",
-                        exact_sha=SHA_B,
-                        observed_sha=SHA_A,
-                        impact_basis="repair did not touch this scenario",
-                    ),
-                    deferred_row(
-                        "accepted",
-                        slice_id="slice-2",
-                        exact_sha=SHA_B,
-                        observed_sha=SHA_B,
-                    ),
-                ],
-            )
-
-            result = run_plan(
-                root,
-                "phase-set",
-                "demo",
-                "--phase",
-                "1",
-                "--status",
-                "completed",
-                "--commit",
-                SHA_B,
-                "--conclusion",
-                "done",
-            )
-
-            self.assertEqual(result.returncode, 0, result.stdout)
-
-    def test_checkpoint_preserves_failed_and_blocked_feedback(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            run_plan(root, "init", "demo", "--goal", "g")
-            run_plan(root, "phase-start", "demo", "--topic", "x")
-            phase = plan_dir(root) / "phases" / "01-x.md"
-            write_deferred_rows(
-                phase,
-                [
-                    deferred_row("rejected", slice_id="slice-1"),
-                    deferred_row(
-                        "reviewed_awaiting_user",
-                        slice_id="slice-2",
-                        result="blocked",
-                        user_evidence="dependency path is unavailable",
-                    ),
+                    deferred_row("failed", slice_id="slice-1"),
+                    deferred_row("blocked", slice_id="slice-2"),
                 ],
             )
             fill_plan_slots(root)
@@ -425,28 +299,62 @@ class LifecycleTests(unittest.TestCase):
                 "done",
             )
             self.assertEqual(complete.returncode, 1)
-            self.assertIn("slice-1:rejected", complete.stdout)
-            self.assertIn("slice-2:reviewed_awaiting_user", complete.stdout)
+            self.assertIn("slice-1:failed", complete.stdout)
+            self.assertIn("slice-2:blocked", complete.stdout)
 
-    def test_checkpoint_rejects_malformed_deferred_row(self) -> None:
+    def test_checkpoint_accepts_valid_eight_column_deferred_table(self) -> None:
+        # Red test 1: a legal 8-column table passes checkpoint.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             run_plan(root, "init", "demo", "--goal", "g")
             run_plan(root, "phase-start", "demo", "--topic", "x")
             phase = plan_dir(root) / "phases" / "01-x.md"
-            row = deferred_row("reviewed_awaiting_user")
-            write_deferred_rows(phase, [row[:-1]])
+            set_deferred_acceptance(phase, "pending")
+            fill_plan_slots(root)
+
+            result = run_plan(root, "checkpoint", "demo")
+
+            self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_checkpoint_rejects_accepted_state_without_accepted_sha(self) -> None:
+        # Red test 2: state=accepted with accepted SHA=none is rejected.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            set_deferred_acceptance(phase, "accepted", accepted_sha="none")
             fill_plan_slots(root)
 
             result = run_plan(root, "checkpoint", "demo")
 
             self.assertEqual(result.returncode, 1)
-            self.assertIn("14 columns", result.stdout)
+            self.assertIn("accepted", result.stdout)
+            self.assertIn("accepted SHA", result.stdout)
 
-    def test_checkpoint_rejects_invalid_deferred_enums(self) -> None:
+    def test_checkpoint_rejects_non_accepted_state_with_accepted_sha(self) -> None:
+        # Red test 3: state=pending with a non-none accepted SHA is rejected.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            set_deferred_acceptance(phase, "pending", accepted_sha=SHA_A)
+            fill_plan_slots(root)
+
+            result = run_plan(root, "checkpoint", "demo")
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("pending", result.stdout)
+            self.assertIn("accepted SHA", result.stdout)
+            self.assertIn("none", result.stdout)
+
+    def test_checkpoint_rejects_invalid_state_and_verifier(self) -> None:
+        # Red test 4: an illegal state value and an illegal verifier value are
+        # each rejected independently.
         cases = (
-            ({"status": "mystery"}, "invalid deferred status"),
-            ({"status": "reviewed_awaiting_user", "result": "maybe"}, "invalid exercise result"),
+            ({"state": "mystery"}, "invalid deferred state"),
+            ({"state": "pending", "verifier": "robot"}, "invalid deferred verifier"),
         )
         for overrides, expected in cases:
             with self.subTest(overrides=overrides), tempfile.TemporaryDirectory() as tmp:
@@ -454,8 +362,8 @@ class LifecycleTests(unittest.TestCase):
                 run_plan(root, "init", "demo", "--goal", "g")
                 run_plan(root, "phase-start", "demo", "--topic", "x")
                 phase = plan_dir(root) / "phases" / "01-x.md"
-                status = overrides.pop("status")
-                write_deferred_rows(phase, [deferred_row(status, **overrides)])
+                state = overrides.pop("state")
+                write_deferred_rows(phase, [deferred_row(state, **overrides)])
                 fill_plan_slots(root)
 
                 result = run_plan(root, "checkpoint", "demo")
@@ -463,35 +371,62 @@ class LifecycleTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 1)
                 self.assertIn(expected, result.stdout)
 
-    def test_checkpoint_rejects_mixed_acceptance_on_same_candidate(self) -> None:
+    def test_checkpoint_rejects_deferred_row_with_wrong_column_count(self) -> None:
+        # Red test 5: a short row and a long row are both rejected.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             run_plan(root, "init", "demo", "--goal", "g")
             run_plan(root, "phase-start", "demo", "--topic", "x")
             phase = plan_dir(root) / "phases" / "01-x.md"
-            write_deferred_rows(
-                phase,
-                [
-                    deferred_row("accepted", slice_id="slice-1"),
-                    deferred_row("reviewed_awaiting_user", slice_id="slice-2"),
-                ],
-            )
+            short_row = deferred_row("pending")[:-1]
+            write_deferred_rows(phase, [short_row])
+            fill_plan_slots(root)
+
+            short = run_plan(root, "checkpoint", "demo")
+            self.assertEqual(short.returncode, 1)
+            self.assertIn("8 columns", short.stdout)
+
+            long_row = deferred_row("pending") + ["extra"]
+            write_deferred_rows(phase, [long_row])
+
+            long_result = run_plan(root, "checkpoint", "demo")
+            self.assertEqual(long_result.returncode, 1)
+            self.assertIn("8 columns", long_result.stdout)
+
+    def test_checkpoint_reports_migration_required_for_retired_fourteen_column_table(self) -> None:
+        # Red test 6: the old 14-column table is rejected and told to migrate,
+        # never auto-converted.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            write_retired_14_column_table(phase, SHA_A)
             fill_plan_slots(root)
 
             result = run_plan(root, "checkpoint", "demo")
 
             self.assertEqual(result.returncode, 1)
-            self.assertIn("cannot mix accepted and unresolved", result.stdout)
+            self.assertIn("migration required", result.stdout)
+            self.assertIn("14-column", result.stdout)
+            # Never auto-converted: the source row is untouched.
+            self.assertIn(SHA_A, phase.read_text(encoding="utf-8"))
 
-    def test_checkpoint_rejects_cross_phase_accepted_and_failed_candidate(self) -> None:
+    def test_agent_verified_passed_row_passes_checkpoint_and_archive(self) -> None:
+        # Red test 7: a verifier=agent, state=passed row clears both checkpoint
+        # and archive without ever reaching state=accepted.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             run_plan(root, "init", "demo", "--goal", "g")
-            run_plan(root, "phase-start", "demo", "--topic", "first")
-            first = plan_dir(root) / "phases" / "01-first.md"
-            set_deferred_acceptance(first, "accepted")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            set_deferred_acceptance(phase, "passed", verifier="agent")
             fill_plan_slots(root)
-            completed = run_plan(
+
+            checkpoint = run_plan(root, "checkpoint", "demo")
+            self.assertEqual(checkpoint.returncode, 0, checkpoint.stdout)
+
+            complete = run_plan(
                 root,
                 "phase-set",
                 "demo",
@@ -504,121 +439,10 @@ class LifecycleTests(unittest.TestCase):
                 "--conclusion",
                 "done",
             )
-            self.assertEqual(completed.returncode, 0, completed.stdout)
+            self.assertEqual(complete.returncode, 0, complete.stdout)
 
-            run_plan(root, "phase-start", "demo", "--topic", "second")
-            second = plan_dir(root) / "phases" / "02-second.md"
-            set_deferred_acceptance(second, "rejected")
-            fill_plan_slots(root)
-
-            result = run_plan(root, "checkpoint", "demo")
-
-            self.assertEqual(result.returncode, 1)
-            self.assertIn("cannot mix accepted and unresolved", result.stdout)
-
-    def test_checkpoint_projects_completed_legacy_acceptance_across_phases(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            run_plan(root, "init", "demo", "--goal", "g")
-            run_plan(root, "phase-start", "demo", "--topic", "legacy")
-            plan = plan_dir(root)
-            legacy = plan / "phases" / "01-legacy.md"
-            write_legacy_deferred_row(legacy, "accepted", SHA_A)
-            fill_plan_slots(root)
-            legacy.write_text(
-                legacy.read_text(encoding="utf-8").replace(
-                    "- **Status:** in_progress", "- **Status:** completed"
-                ),
-                encoding="utf-8",
-            )
-            index = plan / "INDEX.md"
-            index.write_text(
-                index.read_text(encoding="utf-8").replace(
-                    "| 01 | in_progress |", "| 01 | completed |"
-                ),
-                encoding="utf-8",
-            )
-
-            run_plan(root, "phase-start", "demo", "--topic", "current")
-            current = plan / "phases" / "02-current.md"
-            set_deferred_acceptance(current, "rejected")
-            fill_plan_slots(root)
-
-            result = run_plan(root, "checkpoint", "demo")
-
-            self.assertEqual(result.returncode, 1)
-            self.assertIn("cannot mix accepted and unresolved", result.stdout)
-
-    def test_seal_rejects_cross_phase_known_bad_candidate(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            run_plan(root, "init", "demo", "--goal", "g")
-            run_plan(root, "phase-start", "demo", "--topic", "first")
-            first = plan_dir(root) / "phases" / "01-first.md"
-            set_deferred_acceptance(first, "rejected")
-            run_plan(root, "phase-start", "demo", "--topic", "second")
-            second = plan_dir(root) / "phases" / "02-second.md"
-            set_deferred_acceptance(second, "accepted")
-            fill_plan_slots(root)
-
-            result = run_plan(
-                root,
-                "phase-set",
-                "demo",
-                "--phase",
-                "2",
-                "--status",
-                "completed",
-                "--commit",
-                SHA_A,
-                "--conclusion",
-                "done",
-            )
-
-            self.assertEqual(result.returncode, 1)
-            self.assertIn("cannot mix accepted and unresolved", result.stdout)
-
-    def test_active_legacy_v13_rows_require_explicit_migration(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            run_plan(root, "init", "demo", "--goal", "g")
-            run_plan(root, "phase-start", "demo", "--topic", "x")
-            phase = plan_dir(root) / "phases" / "01-x.md"
-            write_legacy_deferred_row(phase, "accepted")
-            fill_plan_slots(root)
-
-            result = run_plan(root, "checkpoint", "demo")
-
-            self.assertEqual(result.returncode, 1)
-            self.assertIn("active v13 deferred rows", result.stdout)
-            self.assertIn("explicit migration", result.stdout)
-
-    def test_completed_legacy_v13_accepted_rows_remain_archivable(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            run_plan(root, "init", "demo", "--goal", "g")
-            run_plan(root, "phase-start", "demo", "--topic", "x")
-            plan = plan_dir(root)
-            phase = plan / "phases" / "01-x.md"
-            write_legacy_deferred_row(phase, "accepted")
-            fill_plan_slots(root)
-            phase.write_text(
-                phase.read_text(encoding="utf-8").replace(
-                    "- **Status:** in_progress", "- **Status:** completed"
-                ),
-                encoding="utf-8",
-            )
-            index = plan / "INDEX.md"
-            index.write_text(
-                index.read_text(encoding="utf-8").replace(
-                    "| 01 | in_progress |", "| 01 | completed |"
-                ),
-                encoding="utf-8",
-            )
-
-            result = run_plan(root, "archive", "demo")
-
-            self.assertEqual(result.returncode, 0, result.stdout)
+            archived = run_plan(root, "archive", "demo")
+            self.assertEqual(archived.returncode, 0, archived.stdout)
 
     def test_completed_phase_is_sealed_against_every_phase_set_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -711,7 +535,7 @@ class LifecycleTests(unittest.TestCase):
                 encoding="utf-8",
             )
             phase = plan_dir(root) / "phases" / "01-x.md"
-            set_deferred_acceptance(phase, "reviewed_awaiting_user")
+            set_deferred_acceptance(phase, "blocked")
             phase.write_text(
                 re.sub(
                     r"<[^<>\n]+>",
@@ -733,7 +557,7 @@ class LifecycleTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 1)
             self.assertIn("unresolved deferred user acceptance", result.stdout)
-            self.assertIn("slice-1:reviewed_awaiting_user", result.stdout)
+            self.assertIn("slice-1:blocked", result.stdout)
             self.assertTrue(phase.is_file())
 
     def test_archive_moves_and_refuses_overwrite(self) -> None:

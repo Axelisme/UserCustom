@@ -117,14 +117,18 @@ def write_deferred_rows(path: Path, rows: list[list[str]]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def write_legacy_deferred_row(path: Path, status: str) -> None:
+def write_legacy_deferred_row(
+    path: Path,
+    status: str,
+    exact_sha: str = "abc1234",
+) -> None:
     lines = path.read_text(encoding="utf-8").splitlines()
     header_index = next(
         index for index, line in enumerate(lines) if line.startswith("| Slice |")
     )
     row = [
         "slice-1",
-        "abc1234",
+        exact_sha,
         "user runs x and sees y",
         "cli",
         "run x",
@@ -548,6 +552,39 @@ class LifecycleTests(unittest.TestCase):
             run_plan(root, "phase-start", "demo", "--topic", "second")
             second = plan_dir(root) / "phases" / "02-second.md"
             set_deferred_acceptance(second, "rejected")
+            fill_plan_slots(root)
+
+            result = run_plan(root, "checkpoint", "demo")
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("cannot mix accepted and unresolved", result.stdout)
+
+    def test_checkpoint_projects_completed_legacy_acceptance_across_phases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "legacy")
+            plan = plan_dir(root)
+            legacy = plan / "phases" / "01-legacy.md"
+            write_legacy_deferred_row(legacy, "accepted", SHA_A)
+            fill_plan_slots(root)
+            legacy.write_text(
+                legacy.read_text(encoding="utf-8").replace(
+                    "- **Status:** in_progress", "- **Status:** completed"
+                ),
+                encoding="utf-8",
+            )
+            index = plan / "INDEX.md"
+            index.write_text(
+                index.read_text(encoding="utf-8").replace(
+                    "| 01 | in_progress |", "| 01 | completed |"
+                ),
+                encoding="utf-8",
+            )
+
+            run_plan(root, "phase-start", "demo", "--topic", "current")
+            current = plan / "phases" / "02-current.md"
+            set_deferred_acceptance(current, "rejected")
             fill_plan_slots(root)
 
             result = run_plan(root, "checkpoint", "demo")

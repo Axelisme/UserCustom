@@ -339,7 +339,7 @@ def is_none_cell(cell: str) -> bool:
 
 def deferred_acceptance_state(
     text: str,
-) -> tuple[list[str], list[str], list[dict[str, str]]]:
+) -> tuple[list[str], list[str], list[tuple[str, str, bool]]]:
     """Return schema issues and unresolved rows for one phase record."""
     lines = text.splitlines()
     headings = [
@@ -408,13 +408,17 @@ def deferred_acceptance_state(
                 "active v13 deferred rows require explicit migration to the v14 14-column schema"
             )
         unresolved = []
+        projections: list[tuple[str, str, bool]] = []
         for row in real_rows:
             slice_id = normalized_cell(row[0]) or "missing"
+            exact_sha = normalized_cell(row[1])
             status_text = normalized_cell(row[6])
             status = status_text.split(maxsplit=1)[0] if status_text else ""
             if status != "accepted":
                 unresolved.append(f"{slice_id}:{status or 'missing'}")
-        return issues, unresolved, []
+            if FULL_SHA_PATTERN.fullmatch(exact_sha):
+                projections.append((exact_sha, status, status == "rejected"))
+        return issues, unresolved, projections
 
     records: list[dict[str, str]] = [
         {
@@ -424,6 +428,7 @@ def deferred_acceptance_state(
         for row in real_rows
     ]
     unresolved: list[str] = []
+    projections: list[tuple[str, str, bool]] = []
     seen_slices: set[str] = set()
 
     for record in records:
@@ -480,24 +485,27 @@ def deferred_acceptance_state(
         if result == "failed" and status not in {"rejected", "stale"}:
             issues.append(f"{slice_id} failed observation requires rejected or stale status")
 
-    return issues, unresolved, records
+        if exact_sha_valid:
+            projections.append((exact_sha, status, result == "failed"))
+
+    return issues, unresolved, projections
 
 
-def deferred_candidate_issues(records: list[dict[str, str]]) -> list[str]:
-    by_sha: dict[str, list[dict[str, str]]] = {}
-    for record in records:
-        exact_sha = record["exact SHA"]
-        if FULL_SHA_PATTERN.fullmatch(exact_sha):
-            by_sha.setdefault(exact_sha, []).append(record)
+def deferred_candidate_issues(
+    projections: list[tuple[str, str, bool]],
+) -> list[str]:
+    by_sha: dict[str, list[tuple[str, bool]]] = {}
+    for exact_sha, status, failed in projections:
+        by_sha.setdefault(exact_sha, []).append((status, failed))
 
     issues: list[str] = []
     for exact_sha, group in by_sha.items():
-        statuses = {record["status"] for record in group}
+        statuses = {status for status, _ in group}
         if "accepted" in statuses and statuses != {"accepted"}:
             issues.append(
                 f"candidate {exact_sha} cannot mix accepted and unresolved deferred rows"
             )
-        if any(record["exercise result"] == "failed" for record in group) and "accepted" in statuses:
+        if any(failed for _, failed in group) and "accepted" in statuses:
             issues.append(f"known-bad candidate {exact_sha} cannot be accepted")
     return issues
 
@@ -507,13 +515,13 @@ def deferred_plan_state(
 ) -> tuple[list[str], dict[str, list[str]]]:
     issues: list[str] = []
     unresolved_by_phase: dict[str, list[str]] = {}
-    records: list[dict[str, str]] = []
+    projections: list[tuple[str, str, bool]] = []
     for name, text in phase_texts:
-        phase_issues, unresolved, phase_records = deferred_acceptance_state(text)
+        phase_issues, unresolved, phase_projections = deferred_acceptance_state(text)
         issues.extend(f"{name}: {issue}" for issue in phase_issues)
         unresolved_by_phase[name] = unresolved
-        records.extend(phase_records)
-    issues.extend(deferred_candidate_issues(records))
+        projections.extend(phase_projections)
+    issues.extend(deferred_candidate_issues(projections))
     return issues, unresolved_by_phase
 
 

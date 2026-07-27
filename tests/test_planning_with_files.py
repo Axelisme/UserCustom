@@ -65,21 +65,21 @@ class LifecycleTests(unittest.TestCase):
         self.assertNotIn("stores(phase 檔、progress)只增不改", text)
         self.assertEqual(SCRIPT.read_bytes(), PI_SCRIPT.read_bytes())
 
-    def test_acceptance_checkpoint_is_not_a_landing_ledger(self) -> None:
+    def test_planning_skill_owns_schema_and_storage_not_workflow_policy(self) -> None:
         skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        normalized = " ".join(skill.split())
+        lowered = normalized.lower()
+        self.assertIn("storage/schema", lowered)
+        self.assertIn("phase/deferred-row/progress schema", lowered)
+        self.assertIn("S6/S7", normalized)
+        self.assertNotIn("mode inference", lowered)
+        self.assertNotIn("landing policy", lowered)
+
+    def test_phase_template_is_the_deferred_row_schema(self) -> None:
         template = (SKILL / "templates" / "phase.md").read_text(encoding="utf-8")
-        skill_normalized = " ".join(skill.split())
-        template_normalized = " ".join(template.lower().split())
-        for phrase in ("templates/phase.md", "dev-flow S5–S7", "progress.jsonl"):
-            self.assertIn(phrase, skill_normalized)
-        for phrase in (
-            "accepted checkpoint does not mean landed",
-            "accepted row is frozen",
-            "partial landing",
-            "final landing",
-            "progress.jsonl",
-        ):
-            self.assertIn(phrase, template_normalized)
+        lowered = " ".join(template.lower().split())
+        for phrase in ("deferred user acceptance", "status", "exact sha"):
+            self.assertIn(phrase, lowered)
         self.assertNotIn("| landed |", template)
 
     def test_init_refuses_second_time(self) -> None:
@@ -613,14 +613,13 @@ class StatusGitTests(unittest.TestCase):
 
 
 class SkillContractTests(unittest.TestCase):
-    def test_skill_declares_version_and_mental_model(self) -> None:
+    def test_skill_declares_version_and_storage_mental_model(self) -> None:
         text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("skill_version: 13", text)
-        for phrase in ("refs vs object log", "只讀 `INDEX.md`", "指標不抄本"):
+        for phrase in ("refs vs object log", "只讀 `INDEX.md`", "指標不抄本", "storage/schema"):
             self.assertIn(phrase, text)
         for retired in ("migrate", "inventory", "check <id>"):
             self.assertNotIn(retired, text)
-
 
     def test_retired_commands_are_absent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -635,17 +634,12 @@ class SkillContractTests(unittest.TestCase):
         names = {p.name for p in (SKILL / "templates").glob("*.md")}
         self.assertEqual(names, {"INDEX.md", "phase.md", "findings.md"})
 
-    def test_phase_template_carries_deferred_acceptance_queue(self) -> None:
+    def test_phase_template_carries_only_the_deferred_row_schema(self) -> None:
         template = (SKILL / "templates" / "phase.md").read_text(encoding="utf-8")
-        for phrase in (
-            "Deferred user acceptance",
-            "speculative dependency depth",
-            "hard max 10",
-            "exact SHA",
-            "observable sentence",
-            "reviewed_awaiting_user",
-        ):
-            self.assertIn(phrase, template)
+        lowered = " ".join(template.lower().split())
+        for phrase in ("deferred user acceptance", "exact sha", "reviewed_awaiting_user"):
+            self.assertIn(phrase, lowered)
+        self.assertNotIn("hard max 10", lowered)
 
     def test_runtime_script_mirrors_are_identical(self) -> None:
         pi_script = ROOT / "home" / ".pi" / "agent" / "skills" / "planning-with-files" / "scripts" / "plan.py"

@@ -1,162 +1,119 @@
 from __future__ import annotations
 
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 HOME = ROOT / "home"
-DEV_FLOW_PATHS = (
+ADMISSION_PATHS = (
+    HOME / ".codex" / "skills" / "dev-flow" / "references" / "admission-standard.md",
+    HOME / ".pi" / "agent" / "skills" / "dev-flow" / "references" / "admission-standard.md",
+    HOME / ".claude" / "skills" / "dev-flow" / "references" / "admission-standard.md",
+)
+ROUTING_DOCUMENTS = (
     HOME / ".codex" / "skills" / "dev-flow" / "SKILL.md",
-    HOME / ".pi" / "agent" / "skills" / "dev-flow" / "SKILL.md",
-    HOME / ".claude" / "skills" / "dev-flow" / "SKILL.md",
+    HOME / ".codex" / "skills" / "orchestrate" / "SKILL.md",
+    HOME / ".codex" / "AGENTS.md",
+    HOME / ".pi" / "agent" / "APPEND_SYSTEM.md",
 )
 
 
-class DevFlowV119ContractTests(unittest.TestCase):
-    """Oracle-owned package contract for the v119 acceptance handoff.
+class DevFlowV128ContractTests(unittest.TestCase):
+    """Contract for the v128 admission authority and routing seam."""
 
-    This intentionally checks the installed documentation seam rather than a
-    private implementation.  The three runtime overlays are one shared skill
-    contract and must not quietly describe different acceptance workflows.
-    """
+    @staticmethod
+    def read(path: Path) -> str:
+        if not path.is_file():
+            raise AssertionError(f"missing shipped document: {path}")
+        return path.read_text(encoding="utf-8")
 
-    def docs(self) -> tuple[str, ...]:
-        return tuple(path.read_text(encoding="utf-8") for path in DEV_FLOW_PATHS)
+    @staticmethod
+    def headings(text: str) -> list[str]:
+        return [line.lstrip("#").strip() for line in text.splitlines() if line.startswith("#")]
 
-    def test_runtime_overlays_are_one_v119_acceptance_contract(self) -> None:
-        documents = self.docs()
-        normalized = {" ".join(document.split()) for document in documents}
-        self.assertEqual(len(normalized), 1)
-        document = next(iter(normalized))
-
-        # The reviewed candidate is the post-simplify SHA.  Use the complete
-        # labels so an old "code-review + simplify" summary cannot satisfy this.
-        sequence = (
-            "simplify",
-            "canonical tests",
-            "clean-detached",
-            "code-review",
+    @classmethod
+    def section(cls, text: str, prefix: str, next_prefix: str | None = None) -> str:
+        lines = text.splitlines()
+        start = next(i for i, line in enumerate(lines) if line.startswith(prefix))
+        end = next(
+            (
+                i
+                for i in range(start + 1, len(lines))
+                if next_prefix and lines[i].startswith(next_prefix)
+            ),
+            len(lines),
         )
-        for label in sequence:
-            self.assertIn(label, document)
-        positions = [document.index(label) for label in sequence]
-        self.assertEqual(positions, sorted(positions), document)
-        self.assertIn("exact SHA", document)
-        self.assertIn("post-simplify", document)
+        return "\n".join(lines[start:end])
 
-        # Both modes run one machine gate order; they differ only in when S5
-        # runs against the reviewed SHA.  A defect a gate can find must never
-        # be spent on the user's attention, so user acceptance comes last.
-        day = document[document.index("### Day Mode"):document.index("### Night Mode")]
-        night = document[document.index("### Night Mode"):document.index("## Finding provenance")]
-        day_labels = ("simplify", "canonical tests", "code-review", "user acceptance")
-        night_labels = ("simplify", "canonical tests", "code-review", "reviewed_awaiting_user")
-        self.assertEqual(
-            [day.index(label) for label in day_labels],
-            sorted(day.index(label) for label in day_labels),
-            day,
-        )
-        self.assertEqual(
-            [night.index(label) for label in night_labels],
-            sorted(night.index(label) for label in night_labels),
-            night,
-        )
-        for phrase in (
-            "mode_override = day | night | auto",
-            "max_speculative_depth: 10",
-            "machine_rework_cycles",
-            "user_acceptance",
-            "does not consume",
-            "oldest-first",
-            "stale",
-            "accepted checkpoint",
-            "task integration branch",
-            "append-only",
-            "partial landing",
-            "final landing",
-            "fast-forward-only",
-            "does not mutate the persistence branch",
-            "no push",
-        ):
-            self.assertIn(phrase, document)
-        for retired in (
-            "Landing cadence is per Slice",
-            "immediate per-Slice landing",
-            "newly landed tip",
-            "last user-accepted landing",
-        ):
-            self.assertNotIn(retired, document)
+    def test_admission_standard_is_one_mirrored_s1_to_s7_authority(self) -> None:
+        documents = [self.read(path) for path in ADMISSION_PATHS]
+        self.assertEqual(len({document.encode() for document in documents}), 1)
+        headings = self.headings(documents[0])
+        for number in range(1, 8):
+            with self.subTest(section=f"S{number}"):
+                self.assertTrue(any(heading.startswith(f"S{number} ") for heading in headings))
 
-        # A material contract finding goes back through both role streams in
-        # this Wave; quality-only cleanup never reopens Oracle.
-        self.assertRegex(document, r"needs_fix")
-        self.assertRegex(document, r"needs_fix.{0,240}new Wave")
-        self.assertRegex(document, r"Spec.{0,240}Oracle.{0,240}Implementation")
-        self.assertRegex(document, r"quality.{0,240}Implementation")
-        self.assertRegex(
-            document,
-            r"(?:After a fix|correction).{0,260}regenerate.{0,120}Git profile"
-            r".{0,260}simplify.{0,160}canonical tests.{0,200}clean-detached"
-            r".{0,80}code-review",
-        )
+        for path in ROUTING_DOCUMENTS:
+            text = self.read(path)
+            with self.subTest(path=path):
+                self.assertNotRegex(text, r"(?m)^#{1,6} S[1-7]\b")
+                self.assertIn("admission standard", text.lower())
+                self.assertTrue("S1–S7" in text or "S1-S7" in text)
 
-        # Handoff is deliberately a small exact-SHA tuple, not a second ledger.
-        for term in (
-            "exact base SHA",
-            "Implementation SHA",
-            "frozen spec",
-            "task plan",
-            "canonical test results",
-            "Git profile JSON",
-            "without a receipt",
-            "without a finding",
-        ):
-            self.assertIn(term, document)
+    def test_admission_s1_requires_first_checkpoint_days_not_weeks(self) -> None:
+        standard = self.read(ADMISSION_PATHS[0])
+        s1 = self.section(standard, "## S1 ", "## S2 ")
+        normalized = " ".join(s1.lower().split())
+        self.assertTrue("days, not weeks" in normalized or "days-not-weeks" in normalized)
 
-        self.assertRegex(document, r"contract tests.{0,160}immutable")
-        self.assertRegex(document, r"identit(?:y|ies).{0,160}worktree")
-        self.assertRegex(document, r"landing.{0,240}outside orchestrate")
-        self.assertRegex(document, r"current user authority")
+    def test_admission_s4_defines_blocking_as_a_closed_enum(self) -> None:
+        standard = self.read(ADMISSION_PATHS[0])
+        s4 = self.section(standard, "## S4 ", "## S5 ").lower()
+        self.assertIn("closed enum", s4)
 
-    def test_admission_standard_separates_human_and_machine_rework(self) -> None:
-        standard = (
-            HOME
-            / ".codex"
-            / "skills"
-            / "dev-flow"
-            / "references"
-            / "admission-standard.md"
-        ).read_text(encoding="utf-8")
-        self.assertIn("machine_rework_cycles", standard)
-        self.assertRegex(
-            " ".join(standard.lower().split()),
-            r"user acceptance.{0,240}(?:does not|never).{0,120}machine_rework_cycles",
-        )
-        self.assertIn("max speculative dependency depth is 10", standard)
-        self.assertIn("reviewed_awaiting_user", standard)
-        self.assertIn("oldest-first", standard)
-        # S5 opens on a candidate the machine gates already cleared, so a
-        # reviewable defect never reaches the user in the first place.
-        normalized = " ".join(standard.split())
-        self.assertRegex(
-            normalized,
-            r"S5\.1.{0,400}simplify.{0,120}canonical tests.{0,160}review",
-        )
-        self.assertIn("## S7 — Landing and close-out", standard)
-        for phrase in (
-            "accepted checkpoint",
-            "current user authority",
-            "fast-forward-only",
-            "partial landing",
-            "final landing",
-            "no push",
-        ):
-            self.assertIn(phrase, normalized)
-        self.assertRegex(
-            normalized,
-            r"partial landing.{0,500}(?:does not|never).{0,200}(?:cleanup|close-out)",
-        )
+    def test_admission_s4_requires_contract_basis_for_blockers(self) -> None:
+        standard = self.read(ADMISSION_PATHS[0])
+        s4 = self.section(standard, "## S4 ", "## S5 ").lower()
+        self.assertIn("contract_basis", s4)
+
+    def test_admission_s4_routes_missing_decisions_to_blocked_on_decision(self) -> None:
+        standard = self.read(ADMISSION_PATHS[0])
+        s4 = self.section(standard, "## S4 ", "## S5 ").lower()
+        self.assertIn("blocked_on_decision", s4)
+
+    def test_admission_s5_and_s6_share_reviewgate_machine_order(self) -> None:
+        standard = self.read(ADMISSION_PATHS[0])
+        s5 = self.section(standard, "## S5 ", "## S6 ")
+        s6 = self.section(standard, "## S6 ", "## S7 ")
+        for name, section in (("S5", s5), ("S6", s6)):
+            with self.subTest(section=name):
+                normalized = " ".join(section.split())
+                for term in ("simplify", "canonical tests", "ReviewGate"):
+                    self.assertIn(term, normalized)
+                positions = [
+                    normalized.index(term)
+                    for term in ("simplify", "canonical tests", "ReviewGate")
+                ]
+                self.assertEqual(positions, sorted(positions), normalized)
+
+    def test_admission_s7_names_the_task_integration_worktree_cleanup(self) -> None:
+        standard = self.read(ADMISSION_PATHS[0])
+        s7 = self.section(standard, "## S7 ").lower()
+        self.assertIn("task integration worktree", s7)
+
+    def test_admission_s7_names_role_and_integration_branch_cleanup(self) -> None:
+        standard = self.read(ADMISSION_PATHS[0])
+        s7 = self.section(standard, "## S7 ").lower()
+        self.assertIn("role", s7)
+        self.assertIn("integration branches", s7)
+
+    def test_admission_s7_names_task_ref_and_phase_cleanup(self) -> None:
+        standard = self.read(ADMISSION_PATHS[0])
+        s7 = self.section(standard, "## S7 ").lower()
+        self.assertIn("refs/orchestrate", s7)
+        self.assertIn("phase", s7)
+
 
 if __name__ == "__main__":
     unittest.main()

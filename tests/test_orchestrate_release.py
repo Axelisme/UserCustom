@@ -41,10 +41,9 @@ class ReleasedPackageTests(unittest.TestCase):
     """
 
     retained_commands = {
-        "admission",
         "lane",
         "integration",
-        "profile",
+        "report",
         "doctor",
         "diff",
         "pin",
@@ -64,6 +63,8 @@ class ReleasedPackageTests(unittest.TestCase):
         "revalidate",
         "reconcile",
         "wave",
+        "admission",
+        "profile",
     }
 
     @staticmethod

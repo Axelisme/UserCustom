@@ -38,10 +38,12 @@ class CoreCliRegressionTests(unittest.TestCase):
 
     The worktree/role/Contract-merge lifecycle these tests once exercised was
     replaced by the lane model; that Contract now lives in
-    ``test_orchestrate_lane.py`` and ``test_orchestrate_integration.py``.
-    What remains here are properties of commands the lane Slice does not
-    touch (``profile report``) or of primitives shared by every command that
-    accepts a ``--base``/``--sha`` (exact full-length object ids).
+    ``test_orchestrate_lane.py`` and ``test_orchestrate_integration.py``. The
+    Oracle/Implementation ``profile report`` these tests used to cover was
+    retired along with the role vocabulary it read; its replacement,
+    ``report``, has its own Contract in ``test_orchestrate_report.py``. What
+    remains here is a primitive shared by every command that accepts a
+    ``--base``/``--sha`` (exact full-length object ids).
     """
 
     def git(self, root: Path, *args: str, check: bool = True) -> str:
@@ -78,31 +80,6 @@ class CoreCliRegressionTests(unittest.TestCase):
     def payload(self, result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
-
-    def test_profile_exposes_only_read_only_report(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.git(root, "init", "-q", "-b", "main")
-            result = self.cli(root, "profile", "--help")
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("report", result.stdout)
-            self.assertNotIn("recommend", result.stdout)
-
-    def test_profile_report_is_scoped_to_task_role_refs(self) -> None:
-        temporary, root, base = self.init()
-        try:
-            for task, suffix in (("task-a", "a"), ("task-b", "b")):
-                self.git(root, "checkout", "-qb", f"wave/{task}/wave-1/oracle", base)
-                self.commit(root, f"oracle-{suffix}.txt", suffix, f"oracle {suffix}\n\nWave: wave-1\nSlice: slice-{suffix}\nRole: oracle\n")
-                self.git(root, "checkout", "-qb", f"wave/{task}/wave-1/implementation", base)
-                self.commit(root, f"implementation-{suffix}.txt", suffix, f"implementation {suffix}\n\nWave: wave-1\nSlice: slice-{suffix}\nRole: implementation\n")
-                self.git(root, "checkout", "main")
-            report = self.payload(self.cli(root, "profile", "report", "--root", str(root), "--task-id", "task-a", "--wave-id", "wave-1", "--base", base))
-            self.assertEqual(set(report["slices"]), {"slice-a"})
-            empty = self.payload(self.cli(root, "profile", "report", "--root", str(root), "--task-id", "missing", "--wave-id", "wave-1", "--base", base))
-            self.assertEqual(empty["slices"], {})
-        finally:
-            temporary.cleanup()
 
     def test_sha256_lane_and_integration_use_full_exact_sha(self) -> None:
         temporary, root, base = self.init(sha256=True)

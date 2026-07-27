@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from .admission import compute_checks, is_test_path, numstat
 from .git_ops import exact_commit, managed_worktree_root, run_git, worktree_records
 from .primitives import OrchestrateError, require_identifier
 
@@ -263,28 +264,46 @@ def _integration_base(root: Path, task: str) -> str:
     return base
 
 
-def _collected_integrations(root: Path, task: str, branch: str) -> list[dict[str, Any]]:
+def _lane_collect_walk(root: Path, task: str, branch: str, base: str) -> list[dict[str, Any]]:
+    """Walk one branch's first-parent history for lane-collect merge commits.
+
+    A collect commit carries ``Task:``/``Lane:`` trailers verbatim (see
+    ``command_integration_collect``). A commit that instead carries only the
+    retired ``Wave:``/``Role:``/``Slice:`` trailers has no ``Lane:`` trailer
+    and is skipped here -- it belongs to no lane under the new trailer
+    vocabulary by construction, not by a second read path for the old one.
+    """
     if not _branch_exists(root, branch):
         return []
-    base = _integration_base(root, task)
     raw = run_git(root, "rev-list", "--first-parent", "--reverse", f"{base}..{branch}").stdout
-    collected: list[dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
     for sha in raw.splitlines():
         if not sha:
             continue
-        _commit_sha, _timestamp, _subject, trailers = _commit_metadata(root, sha)
+        _commit_sha, timestamp, _subject, trailers = _commit_metadata(root, sha)
         lane = trailers.get("Lane")
         if not lane or trailers.get("Task") != task:
             continue
         parents = run_git(root, "rev-list", "--parents", "-n", "1", sha).stdout.split()
-        collected.append(
+        records.append(
             {
                 "lane": lane,
                 "collect_sha": sha,
                 "sha": parents[2] if len(parents) >= 3 else None,
+                "timestamp": int(timestamp),
             }
         )
-    return collected
+    return records
+
+
+def _collected_integrations(root: Path, task: str, branch: str) -> list[dict[str, Any]]:
+    if not _branch_exists(root, branch):
+        return []
+    base = _integration_base(root, task)
+    return [
+        {"lane": record["lane"], "collect_sha": record["collect_sha"], "sha": record["sha"]}
+        for record in _lane_collect_walk(root, task, branch, base)
+    ]
 
 
 def _candidate_projection(root: Path, task: str, integration_branch: str) -> dict[str, Any] | None:
@@ -365,16 +384,39 @@ def command_integration_publish(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def _immutable_paths(root: Path, sha: str) -> list[str]:
-    """Read the paths one commit declares frozen with a repeatable ``Immutable:`` trailer.
+def _trailer_values(root: Path, sha: str, key: str) -> list[str]:
+    """Read one repeatable trailer's values straight off one commit object.
 
-    The declaration lives in the commit object itself, so it cannot be edited
-    afterwards without changing the SHA.
+    The declaration lives in the commit object itself, so it cannot be
+    edited afterwards without changing the SHA.
     """
     raw = run_git(
-        root, "show", "-s", "--format=%(trailers:key=Immutable,valueonly,unfold)", sha
+        root, "show", "-s", f"--format=%(trailers:key={key},valueonly,unfold)", sha
     ).stdout
     return [line.strip() for line in raw.splitlines() if line.strip()]
+
+
+def _immutable_paths(root: Path, sha: str) -> list[str]:
+    """Read the paths one commit declares frozen with a repeatable ``Immutable:`` trailer."""
+    return _trailer_values(root, sha, "Immutable")
+
+
+def _lane_origin(root: Path, base: str, tip: str) -> str | None:
+    """The first ``Origin:`` trailer declared by any commit in a lane's own range.
+
+    ``base..tip`` here is the lane's own base ref to its own tip, not the
+    task-wide report range: a repair lane declares this on one of its own
+    commits to mark itself as user-initiated repair work, which does not
+    consume the machine rework budget.
+    """
+    raw = run_git(root, "rev-list", "--reverse", f"{base}..{tip}").stdout
+    for sha in raw.splitlines():
+        if not sha:
+            continue
+        values = _trailer_values(root, sha, "Origin")
+        if values:
+            return values[0]
+    return None
 
 
 def _first_declaring_commits(root: Path, base: str, tip: str) -> dict[str, str]:
@@ -524,7 +566,7 @@ def command_integration_remove(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-_WORKFLOW_TRAILER_KEYS = frozenset({"Wave", "Slice", "Role", "Task", "Lane"})
+_WORKFLOW_TRAILER_KEYS = frozenset({"Task", "Lane"})
 
 
 def _trailers(text: str) -> dict[str, str]:
@@ -569,279 +611,122 @@ def _commit_metadata(root: Path, sha: str) -> tuple[str, str, str, dict[str, str
     return commit_sha, timestamp, subject, _trailers(trailer_text)
 
 
-def _commit_info(root: Path, sha: str) -> dict[str, Any]:
-    commit_sha, timestamp, subject, trailers = _commit_metadata(root, sha)
-    return {
-        "sha": commit_sha,
-        "timestamp": int(timestamp),
-        "wave": trailers.get("Wave", ""),
-        "slice": trailers.get("Slice", ""),
-        "role": trailers.get("Role", ""),
-        "subject": subject,
-    }
+def _oldest_and_commit_count(root: Path, base: str, tip: str) -> tuple[int, int]:
+    """The committer timestamp of the oldest commit in ``base..tip``, and its count.
 
-
-def _range_numstat(
-    root: Path, start: str | None, end: str
-) -> list[tuple[str, int, int]]:
-    """Return the net numstat for one topology range.
-
-    Ready trailers identify boundaries, not the only commits to count.  Using a
-    range diff includes untrailed work between those boundaries and, unlike
-    summing each commit, counts the whole merge-to-ready range exactly once.
+    One Git call serves both: ``commits`` is how many rework rounds the lane
+    took before its collect; the oldest entry's timestamp anchors
+    ``span_seconds``. An empty range (a lane collected with no commits of
+    its own) falls back to the base commit's own timestamp so span_seconds
+    is still well-defined.
     """
-    revisions = [end] if start is None else [start, end]
-    output = run_git(root, "diff", "--numstat", *revisions).stdout
-    result: list[tuple[str, int, int]] = []
-    for line in output.splitlines():
-        parts = line.split("\t", 2)
-        if len(parts) != 3 or parts[0] == "-" or parts[1] == "-":
-            continue
-        try:
-            result.append((parts[2], int(parts[0]), int(parts[1])))
-        except ValueError:
-            continue
-    return result
+    lines = run_git(root, "log", "--format=%ct", "--reverse", f"{base}..{tip}").stdout.splitlines()
+    if not lines:
+        return int(run_git(root, "show", "-s", "--format=%ct", base).stdout.strip()), 0
+    return int(lines[0]), len(lines)
 
 
-def command_profile_report(args: argparse.Namespace) -> dict[str, Any]:
-    """Report profile accounting from one global, slice-partitioned topology walk."""
+def _report_lane(root: Path, task: str, record: dict[str, Any]) -> tuple[dict[str, Any], int, int]:
+    """Build one lane's report entry, plus its (first_commit, collect) timestamps."""
+    lane = record["lane"]
+    lane_tip = record["sha"]
+    collect_ts = record["timestamp"]
+    lane_base = _lane_base(root, task, lane)
+    if lane_tip is None:
+        # A collect merge with no recorded lane-tip parent: nothing to walk.
+        first_ts = collect_ts
+        commits = 0
+        production = {"added": 0, "deleted": 0}
+        test = {"added": 0, "deleted": 0}
+        origin = None
+    else:
+        first_ts, commits = _oldest_and_commit_count(root, lane_base, lane_tip)
+        production = {"added": 0, "deleted": 0}
+        test = {"added": 0, "deleted": 0}
+        for added, deleted, path in numstat(root, f"{lane_base}..{lane_tip}"):
+            bucket = test if is_test_path(path) else production
+            bucket["added"] += added
+            bucket["deleted"] += deleted
+        origin = _lane_origin(root, lane_base, lane_tip)
+    entry: dict[str, Any] = {
+        "lane": lane,
+        "span_seconds": collect_ts - first_ts,
+        "commits": commits,
+        "production": production,
+        "test": test,
+    }
+    if origin:
+        entry["origin"] = origin
+    return entry, first_ts, collect_ts
+
+
+def _max_concurrent(intervals: list[tuple[int, int]]) -> int:
+    """The largest number of lane spans overlapping at any point in time.
+
+    Actual parallelism, not the count of lanes: two lanes whose spans never
+    touch never count as more than 1 running at once. Endpoints are
+    inclusive -- a lane starting exactly when another collects still counts
+    as sharing that instant.
+    """
+    if not intervals:
+        return 0
+    best = 0
+    for start, end in intervals:
+        overlapping = sum(
+            1 for other_start, other_end in intervals if start <= other_end and other_start <= end
+        )
+        best = max(best, overlapping)
+    return best
+
+
+def command_report(args: argparse.Namespace) -> dict[str, Any]:
+    """Report everything Git can prove about one task: lanes, checks, and candidate.
+
+    This merges the retired ``profile report`` (per-lane span/output, now
+    keyed by lane instead of Oracle/Implementation role), the four cheap
+    Git checks that used to gate the retired ``admission`` command, and the
+    ready-candidate projection ``integration status`` already exposes. It
+    is entirely read-only: nothing here is ever refused, only presented.
+    """
+    task = require_identifier(str(args.task_id), label="task id")
     root = Path(args.root).resolve()
     try:
         base = exact_commit(root, str(args.base), label="base")
     except OrchestrateError as exc:
         raise OrchestrateError(f"invalid base: {exc}") from exc
-    task = require_identifier(str(args.task_id), label="task id")
-    wave = require_identifier(str(args.wave_id), label="wave id")
-    refs = [f"refs/heads/wave/{task}/{wave}/{role}" for role in ("oracle", "implementation")]
-    refs = [
-        ref for ref in refs
-        if run_git(root, "show-ref", "--verify", "--quiet", ref, check=False).returncode == 0
-    ]
-    raw = (
-        run_git(
-            root,
-            "rev-list",
-            "--ancestry-path",
-            "--topo-order",
-            "--reverse",
-            *[f"{base}..{ref}" for ref in refs],
-        ).stdout
-        if refs
-        else ""
+    _task_id, _integration_path, integration_branch = _integration_identity(args)
+    tip = (
+        run_git(root, "rev-parse", "--verify", "--quiet", integration_branch, check=False).stdout.strip()
+        or base
     )
-    infos: list[dict[str, Any]] = []
-    for sha in raw.splitlines():
-        info = _commit_info(root, sha)
-        if (
-            info["wave"] == wave
-            and info["slice"]
-            and info["role"] in {"oracle", "merge", "implementation"}
-        ):
-            infos.append(info)
 
-    warnings: list[str] = []
+    records = _lane_collect_walk(root, task, integration_branch, base)
+    lanes: list[dict[str, Any]] = []
+    intervals: list[tuple[int, int]] = []
+    for record in records:
+        entry, first_ts, collect_ts = _report_lane(root, task, record)
+        lanes.append(entry)
+        intervals.append((first_ts, collect_ts))
 
-    def interval(after: dict[str, Any], before: dict[str, Any], label: str) -> int | None:
-        delta = after["timestamp"] - before["timestamp"]
-        if delta < 0:
-            warnings.append(
-                f"non-monotonic {label} timestamps: {before['sha']} ({before['timestamp']}) "
-                f"before {after['sha']} ({after['timestamp']})"
-            )
-            return None
-        return delta
-
-    for before, after in zip(infos, infos[1:]):
-        if after["timestamp"] < before["timestamp"]:
-            warnings.append(
-                f"non-monotonic committer timestamps: {before['sha']} ({before['timestamp']}) "
-                f"after {after['sha']} ({after['timestamp']})"
-            )
-
-    oracle_intervals: dict[str, int | None] = {}
-    previous_oracle: dict[str, Any] | None = None
-    for info in infos:
-        if info["role"] == "oracle":
-            oracle_intervals[info["sha"]] = (
-                None if previous_oracle is None else interval(info, previous_oracle, "Oracle-ready")
-            )
-            previous_oracle = info
-
-    def new_slice() -> dict[str, Any]:
-        return {
-            "attempts": [],
-            "oracle_interval_seconds": None,
-            "handoff_interval_seconds": None,
-            "implementation_interval_seconds": None,
-            "contract_numstat": {"files": 0, "insertions": 0, "deletions": 0},
-            "implementation_numstat": {"files": 0, "insertions": 0, "deletions": 0},
-        }
-
-    slices: dict[str, dict[str, Any]] = {}
-    oracle_records: list[tuple[int, dict[str, Any]]] = []
-    merge_records: list[tuple[int, dict[str, Any]]] = []
-    endpoint_records: list[tuple[int, dict[str, Any]]] = []
-    for position, info in enumerate(infos):
-        entry = slices.setdefault(info["slice"], new_slice())
-        if info["role"] == "oracle":
-            oracle_records.append((position, info))
-        elif info["role"] == "merge":
-            merge_records.append((position, info))
-        else:
-            endpoint_records.append((position, info))
-
-    # Every Oracle range is diffed once in global readiness order.  The cached
-    # result is partitioned by endpoint Slice and also supplies Wave totals.
-    wave_contract_stats = {"files": 0, "insertions": 0, "deletions": 0}
-    previous_oracle_sha = base
-    for _position, oracle in oracle_records:
-        stats = _range_numstat(root, previous_oracle_sha, oracle["sha"])
-        slices[oracle["slice"]].setdefault("_contract_stats", []).extend(stats)
-        wave_contract_stats["files"] += len(stats)
-        wave_contract_stats["insertions"] += sum(item[1] for item in stats)
-        wave_contract_stats["deletions"] += sum(item[2] for item in stats)
-        previous_oracle_sha = oracle["sha"]
-
-    # Merge windows are traversed per Slice with one monotone endpoint cursor
-    # each, so another Slice's later merge can never consume this Slice's
-    # endpoint.
-    merge_ready_endpoints: dict[int, dict[str, Any]] = {}
-    endpoints_by_slice: dict[str, list[tuple[int, dict[str, Any]]]] = {}
-    for endpoint_position, endpoint in endpoint_records:
-        endpoints_by_slice.setdefault(endpoint["slice"], []).append(
-            (endpoint_position, endpoint)
-        )
-    merges_by_slice: dict[str, list[tuple[int, int, dict[str, Any]]]] = {}
-    for merge_index, (merge_position, merge) in enumerate(merge_records):
-        merges_by_slice.setdefault(merge["slice"], []).append(
-            (merge_index, merge_position, merge)
-        )
-    for slice_id, slice_merges in merges_by_slice.items():
-        slice_endpoints = endpoints_by_slice.get(slice_id, [])
-        endpoint_cursor = 0
-        for order, (merge_index, merge_position, merge) in enumerate(slice_merges):
-            next_merge_position = (
-                slice_merges[order + 1][1]
-                if order + 1 < len(slice_merges)
-                else len(infos)
-            )
-            latest_ready: dict[str, Any] | None = None
-            while endpoint_cursor < len(slice_endpoints):
-                endpoint_position, endpoint = slice_endpoints[endpoint_cursor]
-                if endpoint_position >= next_merge_position:
-                    break
-                endpoint_cursor += 1
-                if endpoint_position <= merge_position:
-                    continue
-                latest_ready = endpoint
-            if latest_ready is None:
-                continue
-            merge_ready_endpoints[merge_index] = latest_ready
-            stats = _range_numstat(root, merge["sha"], latest_ready["sha"])
-            slices[merge["slice"]].setdefault("_implementation_stats", []).extend(stats)
-
-    # An endpoint that precedes every Contract merge of its Slice belongs to no
-    # attempt window.  Reporting it keeps a misplaced handoff visible instead of
-    # leaving the attempt's implementation_sha silently null.
-    for slice_id, slice_endpoints in endpoints_by_slice.items():
-        slice_merges = merges_by_slice.get(slice_id, [])
-        first_merge_position = slice_merges[0][1] if slice_merges else len(infos)
-        for endpoint_position, endpoint in slice_endpoints:
-            if endpoint_position <= first_merge_position:
-                warnings.append(
-                    f"unattributed implementation endpoint {endpoint['sha']} in Slice "
-                    f"{slice_id}: it precedes every Contract merge of that Slice"
-                )
-
-    # Pair attempts within each Slice as before, but consume the endpoint
-    # selected by the global merge window above.
-    merge_indices_by_slice: dict[str, list[int]] = {}
-    for merge_index, (_position, merge) in enumerate(merge_records):
-        merge_indices_by_slice.setdefault(merge["slice"], []).append(merge_index)
-    oracle_by_slice: dict[str, list[dict[str, Any]]] = {}
-    for _position, oracle in oracle_records:
-        oracle_by_slice.setdefault(oracle["slice"], []).append(oracle)
-
-    for slice_id, entry in slices.items():
-        oracle_list = oracle_by_slice.get(slice_id, [])
-        merge_indices = merge_indices_by_slice.get(slice_id, [])
-        attempts: list[dict[str, Any]] = []
-        for index, oracle in enumerate(oracle_list):
-            merge_index = merge_indices[index] if index < len(merge_indices) else None
-            merge = merge_records[merge_index][1] if merge_index is not None else None
-            implementation = (
-                merge_ready_endpoints.get(merge_index)
-                if merge_index is not None
-                else None
-            )
-            attempts.append(
-                {
-                    "attempt": index + 1,
-                    "oracle_sha": oracle["sha"],
-                    "contract_merge_sha": merge["sha"] if merge else None,
-                    "implementation_sha": implementation["sha"] if implementation else None,
-                    "oracle_interval_seconds": oracle_intervals.get(oracle["sha"]),
-                    "handoff_interval_seconds": (
-                        None if merge is None else interval(merge, oracle, "Contract handoff")
-                    ),
-                    "implementation_interval_seconds": (
-                        None
-                        if merge is None or implementation is None
-                        else interval(implementation, merge, "Implementation")
-                    ),
-                }
-            )
-        entry["attempts"] = attempts
-        if attempts:
-            latest = attempts[-1]
-            for key in (
-                "oracle_interval_seconds",
-                "handoff_interval_seconds",
-                "implementation_interval_seconds",
-            ):
-                entry[key] = latest[key]
-        contract_stats = entry.pop("_contract_stats", [])
-        entry["contract_numstat"] = {
-            "files": len(contract_stats),
-            "insertions": sum(item[1] for item in contract_stats),
-            "deletions": sum(item[2] for item in contract_stats),
-        }
-        implementation_stats = entry.pop("_implementation_stats", [])
-        if implementation_stats:
-            entry["implementation_numstat"] = {
-                "files": len({item[0] for item in implementation_stats}),
-                "insertions": sum(item[1] for item in implementation_stats),
-                "deletions": sum(item[2] for item in implementation_stats),
-            }
-
-    wave_impl_stats = {"files": 0, "insertions": 0, "deletions": 0}
-    for entry in slices.values():
-        current = entry["implementation_numstat"]
-        wave_impl_stats["files"] += current["files"]
-        wave_impl_stats["insertions"] += current["insertions"]
-        wave_impl_stats["deletions"] += current["deletions"]
-    first_oracle = oracle_records[0][1] if oracle_records else None
-    final_impl = next(
-        (item for item in reversed(infos) if item["role"] == "implementation"), None
+    task_span = (
+        max(end for _, end in intervals) - min(start for start, _ in intervals)
+        if intervals
+        else 0
+    )
+    checks = compute_checks(
+        root, base, tip,
+        [{"lane": record["lane"], "timestamp": record["timestamp"]} for record in records],
     )
     return {
         "ok": True,
-        "operation": "profile-report",
-        "task_id": task,
-        "wave_id": wave,
-        "base": base,
-        "warnings": sorted(set(warnings)),
-        "slices": slices,
-        "wave": {
-            "elapsed_seconds": (
-                final_impl["timestamp"] - first_oracle["timestamp"]
-                if first_oracle
-                and final_impl
-                and final_impl["timestamp"] >= first_oracle["timestamp"]
-                else None
-            ),
-            "contract_numstat": wave_contract_stats,
-            "implementation_numstat": wave_impl_stats,
+        "operation": "report",
+        "read_only": True,
+        "lanes": lanes,
+        "task": {
+            "lanes": len(lanes),
+            "max_concurrent": _max_concurrent(intervals),
+            "span_seconds": task_span,
         },
+        "checks": checks,
+        "candidate": _candidate_projection(root, task, integration_branch),
     }

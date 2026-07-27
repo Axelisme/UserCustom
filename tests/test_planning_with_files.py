@@ -444,6 +444,110 @@ class LifecycleTests(unittest.TestCase):
             archived = run_plan(root, "archive", "demo")
             self.assertEqual(archived.returncode, 0, archived.stdout)
 
+    def test_superseded_row_blocks_archive(self) -> None:
+        # Acceptance regression: a later lane invalidating a prior pass must
+        # force a retest, not silently count as settled.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            index_path = plan_dir(root) / "INDEX.md"
+            index_path.write_text(
+                re.sub(r"<[^<>\n]+>", "filled", index_path.read_text(encoding="utf-8")),
+                encoding="utf-8",
+            )
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            set_deferred_acceptance(phase, "superseded")
+            phase.write_text(
+                re.sub(
+                    r"<[^<>\n]+>",
+                    "filled",
+                    phase.read_text(encoding="utf-8").replace(
+                        "- **Status:** in_progress", "- **Status:** completed"
+                    ),
+                ),
+                encoding="utf-8",
+            )
+            index_path.write_text(
+                index_path.read_text(encoding="utf-8").replace(
+                    "| 01 | in_progress |", "| 01 | completed |"
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_plan(root, "archive", "demo")
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("unresolved deferred user acceptance", result.stdout)
+            self.assertIn("slice-1:superseded", result.stdout)
+
+    def test_user_verified_passed_row_blocks_archive_until_accepted(self) -> None:
+        # Acceptance regression: settled requires either state=accepted, or
+        # verifier=agent with state=passed. A user-verified `passed` row has
+        # not yet been confirmed against a repaired SHA and must stay
+        # unresolved until it reaches `accepted`.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            index_path = plan_dir(root) / "INDEX.md"
+            index_path.write_text(
+                re.sub(r"<[^<>\n]+>", "filled", index_path.read_text(encoding="utf-8")),
+                encoding="utf-8",
+            )
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            set_deferred_acceptance(phase, "passed", verifier="user")
+            phase.write_text(
+                re.sub(
+                    r"<[^<>\n]+>",
+                    "filled",
+                    phase.read_text(encoding="utf-8").replace(
+                        "- **Status:** in_progress", "- **Status:** completed"
+                    ),
+                ),
+                encoding="utf-8",
+            )
+            index_path.write_text(
+                index_path.read_text(encoding="utf-8").replace(
+                    "| 01 | in_progress |", "| 01 | completed |"
+                ),
+                encoding="utf-8",
+            )
+
+            blocked = run_plan(root, "archive", "demo")
+            self.assertEqual(blocked.returncode, 1)
+            self.assertIn("unresolved deferred user acceptance", blocked.stdout)
+            self.assertIn("slice-1:passed", blocked.stdout)
+
+            set_deferred_acceptance(phase, "accepted", verifier="user", accepted_sha=SHA_A)
+
+            accepted = run_plan(root, "archive", "demo")
+            self.assertEqual(accepted.returncode, 0, accepted.stdout)
+
+    def test_checkpoint_rejects_duplicate_slice_id(self) -> None:
+        # Acceptance regression: cross-row Slice uniqueness is schema
+        # structural integrity, not the retired per-row combination rules,
+        # and must not be silently dropped.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            write_deferred_rows(
+                phase,
+                [
+                    deferred_row("pending", slice_id="slice-1"),
+                    deferred_row("pending", slice_id="slice-1"),
+                ],
+            )
+            fill_plan_slots(root)
+
+            result = run_plan(root, "checkpoint", "demo")
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("duplicate deferred Slice", result.stdout)
+            self.assertIn("slice-1", result.stdout)
+
     def test_completed_phase_is_sealed_against_every_phase_set_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

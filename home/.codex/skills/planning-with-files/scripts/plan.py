@@ -52,9 +52,6 @@ DEFERRED_COLUMNS = (
 )
 DEFERRED_VERIFIERS = ("user", "agent")
 DEFERRED_STATES = ("pending", "passed", "failed", "blocked", "accepted", "superseded")
-# States that still require a user or repair action; anything else is settled
-# for the purpose of sealing a phase.
-DEFERRED_BLOCKING_STATES = frozenset({"pending", "failed", "blocked"})
 # The retired 14-column header this schema replaces. Detected only to report a
 # migration requirement — never parsed, converted, or otherwise accommodated.
 RETIRED_14_COLUMN_HEADER_LENGTH = 14
@@ -320,6 +317,18 @@ def is_none_cell(cell: str) -> bool:
     return normalized_cell(cell).casefold() == "none"
 
 
+def deferred_row_settled(verifier: str, state: str) -> bool:
+    """True when a deferred row needs no further user or repair action.
+
+    `accepted` is always settled. An agent-verified `passed` row is also
+    settled: no user ever needs to confirm a repaired SHA for it. Everything
+    else — including a user-verified `passed` (not yet reconciled against an
+    accepted SHA) and `superseded` (a later lane invalidated the prior pass
+    and it must be retested) — is unresolved.
+    """
+    return state == "accepted" or (verifier == "agent" and state == "passed")
+
+
 def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
     """Return schema issues and unresolved Slice ids for one phase record.
 
@@ -391,6 +400,7 @@ def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
         return issues, []
 
     unresolved: list[str] = []
+    seen_slices: set[str] = set()
     for row in real_rows:
         record = {
             str(column): normalized_cell(cell)
@@ -400,6 +410,10 @@ def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
         verifier = record["verifier"]
         state = record["state"]
         accepted_sha = record["accepted SHA"]
+
+        if slice_id in seen_slices:
+            issues.append(f"duplicate deferred Slice '{slice_id}'")
+        seen_slices.add(slice_id)
 
         if verifier not in DEFERRED_VERIFIERS:
             issues.append(f"{slice_id} has invalid deferred verifier '{verifier}'")
@@ -415,7 +429,7 @@ def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
         elif not is_none_cell(accepted_sha):
             issues.append(f"{slice_id} state '{state}' requires accepted SHA to be none")
 
-        if state in DEFERRED_BLOCKING_STATES:
+        if not deferred_row_settled(verifier, state):
             unresolved.append(f"{slice_id}:{state}")
 
     return issues, unresolved

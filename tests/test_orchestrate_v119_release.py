@@ -108,8 +108,31 @@ class OrchestrateV119ReleaseContractTests(unittest.TestCase):
         result = self.run_cli("--help")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.help_commands(result.stdout), self.retained_commands)
-        for command in self.removed_commands:
+        for command in self.removed_commands | {"review", "lock", "ledger"}:
             self.assertNotIn(command, result.stdout)
+
+    def test_stale_orchestrate_readmes_are_absent(self) -> None:
+        for skill in (CODEX_SKILL, PI_SKILL):
+            with self.subTest(skill=skill):
+                self.assertFalse((skill / "README.md").exists())
+
+    def test_historical_manifests_and_pin_migration_remain_available(self) -> None:
+        for skill in (CODEX_SKILL, PI_SKILL):
+            with self.subTest(skill=skill):
+                historical = sorted(
+                    path for path in (skill / "manifests").glob("*.json")
+                    if path.stem.isdigit() and int(path.stem) < SHIPPED_VERSION
+                )
+                self.assertTrue(historical, skill)
+                for path in historical:
+                    version = int(path.stem)
+                    manifest = json.loads(path.read_text(encoding="utf-8"))
+                    self.assertEqual(manifest["skill_version"], version)
+                    self.assertEqual(manifest["orchestrate_compat"], version)
+        result = self.run_cli("pin", "migrate", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("lock", result.stdout.lower())
+        self.assertNotIn("ledger", result.stdout.lower())
 
     def test_v118_modules_tests_documents_and_role_references_are_gone(self) -> None:
         for skill in (CODEX_SKILL, PI_SKILL):

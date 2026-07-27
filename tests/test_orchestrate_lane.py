@@ -284,6 +284,24 @@ class LaneLifecycleContractTests(unittest.TestCase):
         collected = self.payload(self.collect("lane-a", tip))
         self.assertEqual(set(collected["immutable_paths_verified"]), {"x.py", "y.py"})
 
+    # regression: a path is only protected starting at the commit that first
+    # declares it.  Ordinary creation before that declaration -- and the
+    # declaring commit itself, which may legitimately also edit the content
+    # it is freezing -- must never count as an undeclared change.
+    def test_collect_succeeds_when_the_path_predates_its_own_declaration(self) -> None:
+        self.integration_create()
+        lane = self.lane_create("lane-a")
+        lane_path = Path(str(lane["worktree"]))
+        self.commit(lane_path, "tests/c.py", "DRAFT = True\n", "create contract draft")
+        self.commit(
+            lane_path, "tests/c.py", "FROZEN = True\n",
+            "declare contract\n\nImmutable: tests/c.py",
+        )
+        tip = self.commit(lane_path, "impl.py", "IMPL = 1\n", "implement, never touching tests/c.py")
+
+        collected = self.payload(self.collect("lane-a", tip))
+        self.assertEqual(collected["immutable_paths_verified"], ["tests/c.py"])
+
     # 7. a dirty lane tree refuses collect.
     def test_collect_rejects_dirty_lane_tree(self) -> None:
         self.integration_create()

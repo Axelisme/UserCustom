@@ -297,37 +297,43 @@ def _immutable_paths(root: Path, sha: str) -> list[str]:
     return [line.strip() for line in raw.splitlines() if line.strip()]
 
 
-def _all_declared_immutable_paths(root: Path, base: str, tip: str) -> set[str]:
-    """Union of every path any ``base..tip`` commit ever declared Immutable.
+def _first_declaring_commits(root: Path, base: str, tip: str) -> dict[str, str]:
+    """Map each ``Immutable:`` path to the earliest ``base..tip`` commit that declared it.
 
-    A path enters the frozen surface the moment any commit in the lane
-    declares it; which commit declared it first does not matter here, only
-    that it was declared at all.
+    A path is only protected starting at the commit that first freezes it:
+    commits before that -- including the ordinary commit that first created
+    the path -- cannot be "quietly widening an already-frozen contract",
+    because the contract did not exist yet at that point in the lane.
     """
-    raw = run_git(root, "rev-list", f"{base}..{tip}").stdout
-    declared: set[str] = set()
+    raw = run_git(root, "rev-list", "--reverse", f"{base}..{tip}").stdout
+    declarations: dict[str, str] = {}
     for sha in raw.splitlines():
-        if sha:
-            declared.update(_immutable_paths(root, sha))
-    return declared
+        if not sha:
+            continue
+        for path in _immutable_paths(root, sha):
+            declarations.setdefault(path, sha)
+    return declarations
 
 
 def _verify_immutable_surface(root: Path, base: str, tip: str) -> tuple[list[str], list[str]]:
-    """Reject any commit that changes a once-declared path without redeclaring it.
+    """Reject any commit, after a path's first declaration, that changes it without redeclaring.
 
     Multiple oracle rounds inside one lane are normal, so a Contract path may
     legitimately be rewritten more than once -- the rule this enforces is not
-    "never touch it again" but "never touch it quietly".  Once any commit
-    declares ``Immutable: <path>``, every later commit that changes that path
-    must carry the same declaration on itself.  A commit that redeclares it
-    (an oracle rework round) is exempt; a commit that changes it without
+    "never touch it again" but "never touch it quietly, once frozen".  Only
+    commits strictly after each path's earliest declaring commit are checked
+    (the declaring commit itself, and anything before it, predate the freeze
+    and cannot violate it).  Of those, a commit that redeclares the path (an
+    oracle rework round) is exempt; a commit that changes it without
     redeclaring (an implementer widening the surface) is a violation.  A path
     never declared anywhere in the range is not tracked at all.
     """
-    declared = sorted(_all_declared_immutable_paths(root, base, tip))
+    declarations = _first_declaring_commits(root, base, tip)
+    declared = sorted(declarations)
     violations: list[str] = []
     for path in declared:
-        raw = run_git(root, "log", "--reverse", "--format=%H", f"{base}..{tip}", "--", path).stdout
+        declaring_commit = declarations[path]
+        raw = run_git(root, "log", "--reverse", "--format=%H", f"{declaring_commit}..{tip}", "--", path).stdout
         for sha in raw.splitlines():
             if not sha:
                 continue

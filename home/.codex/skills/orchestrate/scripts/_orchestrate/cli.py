@@ -6,14 +6,6 @@ import sys
 from pathlib import Path
 from typing import NoReturn, Sequence
 
-from .admission import (
-    DEFAULT_FAMILY_TOKENS,
-    DEFAULT_FILE_ADDED,
-    DEFAULT_FOCUS_DAYS,
-    DEFAULT_SLICE_ADDED,
-    DEFAULT_SLICE_WAVES,
-    command_admission,
-)
 from .primitives import OrchestrateError
 from .release import (
     command_diff,
@@ -32,7 +24,7 @@ from .v119_core import (
     command_lane_create,
     command_lane_drop,
     command_lane_status,
-    command_profile_report,
+    command_report,
 )
 
 
@@ -93,32 +85,11 @@ def build_parser() -> argparse.ArgumentParser:
             operation_parser.add_argument("--sha", required=True)
         operation_parser.set_defaults(handler=handler)
 
-    profile = commands.add_parser("profile", help="read-only Git profile projections")
-    profile_commands = profile.add_subparsers(dest="profile_command", required=True, parser_class=JsonArgumentParser)
-    report = profile_commands.add_parser("report")
+    report = commands.add_parser("report", help="read-only unified lane, task, checks, and candidate report")
     add_root(report)
     report.add_argument("--task-id", required=True)
-    report.add_argument("--wave-id", required=True)
     report.add_argument("--base", required=True)
-    report.set_defaults(handler=command_profile_report)
-
-    admission = commands.add_parser("admission", help="dev-flow S3 milestone admission projection")
-    add_root(admission)
-    admission.add_argument("--base", required=True)
-    admission.add_argument("--tip", required=True)
-    admission.add_argument("--max-slice-waves", type=int, default=DEFAULT_SLICE_WAVES)
-    admission.add_argument("--max-slice-added", type=int, default=DEFAULT_SLICE_ADDED)
-    admission.add_argument("--max-file-added", type=int, default=DEFAULT_FILE_ADDED)
-    admission.add_argument("--focus-days", type=int, default=DEFAULT_FOCUS_DAYS)
-    admission.add_argument("--slice-family-tokens", type=int, default=DEFAULT_FAMILY_TOKENS, help="leading Slice-id tokens that identify one Slice family across renamed correction Waves")
-    admission.add_argument("--production-path", action="append", help="production source root; repeat for multiple roots")
-    admission.add_argument("--reachability-cmd", help="shell command; exit 0 means a production entrypoint reaches the new modules")
-    admission.add_argument("--file-reachability-cmd", help="shell command run per oversized file; reads ORCHESTRATE_PRODUCTION_PATH and exits 0 when that file is reachable")
-    admission.add_argument("--burndown", help="path to the Slice x status projection")
-    admission.add_argument("--burndown-previous", help="its sha256 at the previous milestone")
-    admission.add_argument("--findings", type=int, help="review findings raised this round")
-    admission.add_argument("--backlog", type=int, help="of those, how many were downgraded")
-    admission.set_defaults(handler=command_admission)
+    report.set_defaults(handler=command_report)
 
     doctor = commands.add_parser("doctor", help="verify shipped manifest, hashes, and read budgets")
     doctor.set_defaults(handler=command_doctor)

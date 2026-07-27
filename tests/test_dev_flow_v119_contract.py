@@ -162,8 +162,9 @@ class DevFlowV129ContractTests(unittest.TestCase):
 
         self.assertIn("all runnable", s6)
         self.assertIn("same reviewed exact sha", s6)
-        self.assertIn("one coordinated", s6)
-        self.assertIn("failed, blocked, and named impacted", s6)
+        self.assertRegex(s6, r"s5\.2\S+s5\.4")
+        self.assertIn("preserves machine evidence", s6)
+        self.assertIn("without persistence mutation", s6)
 
     def test_review_and_landing_interfaces_keep_safety_constraints(self) -> None:
         standard = self.read(ADMISSION_PATHS[0])

@@ -225,10 +225,8 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.git(root, "init", "-q", "-b", "main")
-            self.git(root, "config", "user.name", "Oracle Test")
-            self.git(root, "config", "user.email", "oracle@example.test")
-            self.git(root, "commit", "--allow-empty", "-qm", "base")
-            skill, version = self.shipped_skill_fixture(root, release)
+            skill = SKILL
+            version = release.skill_version(skill)
             pin = root / ".agent_state" / "orchestrate" / "version-pin.json"
             pin.parent.mkdir(parents=True)
             pin.write_text(

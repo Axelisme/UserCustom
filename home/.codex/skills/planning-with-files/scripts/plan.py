@@ -337,11 +337,7 @@ def is_none_cell(cell: str) -> bool:
     return normalized_cell(cell).casefold() == "none"
 
 
-def deferred_acceptance_state(
-    text: str,
-    *,
-    allow_legacy_completed: bool,
-) -> tuple[list[str], list[str]]:
+def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
     """Return schema issues and unresolved rows for one phase record."""
     lines = text.splitlines()
     headings = [
@@ -362,10 +358,8 @@ def deferred_acceptance_state(
     header = tuple(row_cells(table[0]))
     if header == DEFERRED_COLUMNS:
         columns = DEFERRED_COLUMNS
-        schema = "v14"
     elif header == LEGACY_DEFERRED_COLUMNS:
         columns = LEGACY_DEFERRED_COLUMNS
-        schema = "v13"
     else:
         return [
             "deferred user acceptance header must match the current 14 columns "
@@ -406,8 +400,8 @@ def deferred_acceptance_state(
     if not real_rows:
         return issues, []
 
-    if schema == "v13":
-        if not allow_legacy_completed:
+    if header == LEGACY_DEFERRED_COLUMNS:
+        if read_phase_field(text, "Status") != "completed":
             issues.append(
                 "active v13 deferred rows require explicit migration to the v14 14-column schema"
             )
@@ -437,6 +431,7 @@ def deferred_acceptance_state(
         result = record["exercise result"]
         exact_sha = record["exact SHA"]
         observed_sha = record["observed SHA"]
+        exact_sha_valid = FULL_SHA_PATTERN.fullmatch(exact_sha) is not None
 
         if slice_id in seen_slices:
             issues.append(f"duplicate deferred Slice '{slice_id}'")
@@ -449,11 +444,8 @@ def deferred_acceptance_state(
         if status != "accepted":
             unresolved.append(f"{slice_id}:{status or 'missing'}")
 
-        if status == "pending_machine":
-            if result != "not_run":
-                issues.append(f"{slice_id} pending_machine requires exercise result not_run")
-        elif FULL_SHA_PATTERN.fullmatch(exact_sha) is None:
-            issues.append(f"{slice_id} exact SHA must be a full 40- or 64-hex SHA")
+        if status == "pending_machine" and result != "not_run":
+            issues.append(f"{slice_id} pending_machine requires exercise result not_run")
 
         if result == "not_run":
             if not is_none_cell(observed_sha) or not is_none_cell(record["user evidence"]):
@@ -465,7 +457,7 @@ def deferred_acceptance_state(
                 issues.append(f"{slice_id} {result} requires user evidence")
 
         if status in {"reviewed_awaiting_user", "accepted", "rejected", "stale"}:
-            if FULL_SHA_PATTERN.fullmatch(exact_sha) is None:
+            if not exact_sha_valid:
                 issues.append(f"{slice_id} exact SHA must be a full 40- or 64-hex SHA")
             if is_none_cell(record["machine evidence"]):
                 issues.append(f"{slice_id} {status} requires machine evidence")
@@ -487,7 +479,7 @@ def deferred_acceptance_state(
         if result == "failed" and status not in {"rejected", "stale"}:
             issues.append(f"{slice_id} failed observation requires rejected or stale status")
 
-        if FULL_SHA_PATTERN.fullmatch(exact_sha):
+        if exact_sha_valid:
             by_sha.setdefault(exact_sha, []).append(record)
 
     for exact_sha, group in by_sha.items():
@@ -703,10 +695,7 @@ def command_phase_set(args: argparse.Namespace) -> dict[str, Any]:
                 raise PlanError(
                     "completing a phase requires a Commit SHA and a Conclusion"
                 )
-            deferred_issues, unresolved = deferred_acceptance_state(
-                text,
-                allow_legacy_completed=False,
-            )
+            deferred_issues, unresolved = deferred_acceptance_state(text)
             if deferred_issues:
                 raise PlanError(
                     "invalid deferred user acceptance: " + "; ".join(deferred_issues)
@@ -866,10 +855,7 @@ def validate_plan(plan: Path) -> list[str]:
                 issues.append(f"{path.name} has no '{field}' field")
         if record_status not in PHASE_STATUSES:
             issues.append(f"{path.name} has invalid Status")
-        deferred_issues, unresolved = deferred_acceptance_state(
-            text,
-            allow_legacy_completed=record_status == "completed",
-        )
+        deferred_issues, unresolved = deferred_acceptance_state(text)
         issues.extend(f"{path.name}: {issue}" for issue in deferred_issues)
         if record_status == "completed" and unresolved:
             issues.append(

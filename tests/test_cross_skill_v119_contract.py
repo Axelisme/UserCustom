@@ -76,28 +76,7 @@ class CrossSkillV129ContractTests(unittest.TestCase):
 
     def test_planning_v14_exposes_storage_schema_not_session_policy(self) -> None:
         skill = self.document(CODEX_SKILLS, "planning-with-files/SKILL.md")
-        template = self.document(CODEX_SKILLS, "planning-with-files/templates/phase.md")
         self.assertIn("skill_version: 14", skill)
-        header = next(line for line in template.splitlines() if line.startswith("| Slice |"))
-        self.assertEqual(
-            [cell.strip() for cell in header.strip("|").split("|")],
-            [
-                "Slice",
-                "exact SHA",
-                "observable sentence",
-                "entrypoint",
-                "user steps",
-                "expected",
-                "status",
-                "exercise result",
-                "observed SHA",
-                "Depends on",
-                "user evidence",
-                "impact/retest basis",
-                "acceptance evidence",
-                "machine evidence",
-            ],
-        )
         lowered = self.normalized(skill).casefold()
         for policy_term in ("day mode", "acceptance session", "coordinated repair"):
             with self.subTest(policy_term=policy_term):

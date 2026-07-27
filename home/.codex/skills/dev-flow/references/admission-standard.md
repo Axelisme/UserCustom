@@ -115,10 +115,9 @@ ReviewGate interface, not by duplicating policy in this standard.
   checkpoint. Independent pending Slices do not add chain depth. A later Slice must not overwrite
   a pending acceptance surface or make its scenario independently untestable.
 - **S6.4 Drain.** Day Mode drains all runnable queue scenarios in dependency order against the
-  same reviewed exact SHA. A failure pauses acceptance, not the session; collect the remaining safe,
-  interpretable observations before routing one coordinated user-feedback repair. After the repaired
-  tip passes the shared machine order, retest only the failed, blocked, and named impacted scenarios;
-  coordinated acceptance preserves machine evidence and continues without persistence mutation.
+  same reviewed exact SHA. Follow S5.2–S5.4 for observations, coordinated repair, and selective
+  retest. Coordinated acceptance preserves machine evidence and continues without persistence
+  mutation.
 - **S6.5 Landing.** Night Mode may defer S5 and continue bounded minimal Slices, but never lands;
   landing requires a live explicit user request.
 - **S6.6 Append-only integration.** The task integration branch is append-only: never reset,

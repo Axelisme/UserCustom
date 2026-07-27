@@ -1,11 +1,19 @@
-# Orchestrate v127 — Claude runtime binding
+# Orchestrate — Claude runtime binding
 
-Claude v127 role agents start fresh. Each prompt carries the frozen objective, exact workdir, base SHA, write scope, acceptance commands with the environment they require, the Oracle-declared immutable paths, authority, stop conditions, and artifact paths.
+Claude roles use a fresh native lifecycle. Each dispatch carries the frozen objective, exact cwd,
+base or subject SHA, write scope, immutable paths, user dirt, focused commands, evidence, and stop
+conditions. The role stream identity is exactly `<task-id>.<wave-id>.<role>` and the stable runtime
+item identity is `slice-<slice-id>` with no attempt detail.
 
-## Dual-role handoff
+Use native continuation only while the frozen input is unchanged and the provider is live. When
+the Contract SHA, frozen spec, base, provider, or liveness state changes, start a fresh context
+with the same role identity. A blocked role uses the terminal hold/message path. Root owns Git
+merges, placement, and repository authority; Git/task-plan evidence recovers position after a
+restart.
 
-Run `wave-oracle` for public Interface, contract tests, fixtures, adapters, and red Contract; run `wave-implementer` after Root merges that Contract to fill production behavior. Ready commits use Git trailers `Wave: <wave-id>`, `Slice: <slice-id>`, and the role-specific `Role: oracle` or `Role: implementation`; both roles emit one terminal `slice-ready` handoff with Slice and the full exact SHA, then immediately end this turn. Once Root collects that SHA, close both role identities and remove their clean worktrees; a later correction is a new Wave. Workers do not create child agents.
+Reviewers use the integration source when a read-only capability is verifiable; otherwise use the
+shared detached fallback. The reviewer verifies exact SHA, same path, branch, HEAD, and clean state
+before and after the review bracket. This binding adds no acceptance or close-out authority.
 
-## Continuation and acceptance
-
-Use native messaging and continuation only when exposed; otherwise return the terminal handoff in the final response rather than inventing continuity. A blocked role reports through the same terminal path with its reason and evidence, not a ceremony commit. A successor in the same role stream keeps the identity but not necessarily the context: continue the session while the frozen input is unchanged, and start a fresh one — same identity, optionally a different model — once the Contract SHA, frozen spec, or base has moved, or after a provider or liveness failure. A stale session replays conclusions it drew about an input that no longer exists. One writer per role stream either way. Root owns dependency depth, Git merges, and repository authority. Dev-flow runs simplify, canonical tests, and one clean-detached exact-SHA code-review before any repository-policy integration. Dispatch two fresh read-only `acceptance-reviewer` agents against that SHA, one per `Axis: standards | spec`; neither continues into implementation. Root follows the shared dev-flow S5/S6/S7 scheduling and machine-rework contract; this binding adds no landing or acceptance authority, and no runtime state file substitutes for Git.
+Terminal task output carries exact focused test command(s), observed role result(s), Slice, and
+exact SHA. One terminal `slice-ready` handoff with the full SHA ends the role turn immediately.

@@ -1,24 +1,21 @@
 # Dev-flow design principles
 
-Read at evolution time when changing the workflow; this file is not an acceptance step. Rules
-1-4 are axioms; every later rule cites the failure it prevents, and one that cannot name an
-incident goes on the retirement watchlist.
+Read this file when evolving the workflow. The admission standard is the normative S1–S7
+authority; these principles explain altitude and evidence without duplicating its checks.
 
-1. Git is the only durable workflow truth; project state is projected from commits, refs, and trailers.
-2. Every handoff and gate binds to an exact clean SHA, never a summary.
-3. The acceptance surface has one owner; contract tests are immutable to the implementer.
-4. The spec freezes with a closed usage envelope; findings without contract basis become backlog.
-5. Rigor scales with change risk, not with the number of available mechanisms. Incident: skill_feedback4 root cause.
-6. Batch everything known at the same moment into one cycle. Incident: skill_feedback4 root cause.
-7. Cheap machine gates run early and often; expensive judgement runs late, once, over the accumulated diff — **provided the increment is bounded**. The rule presumes small Slices; over an unbounded increment "late and once" becomes a correction loop, because each late review finds composition defects whose fix returns through Oracle and Implementation. Admission standard S1.3 and S3 are the precondition, not an addition. Incident: 2026-07-24 two-level gate decision; boundary added after a milestone review over +128,805 lines produced eleven cycles, 2026-07-25.
-8. Gates migrate upstream: when a late gate catches the same defect class twice, the check moves earlier or becomes automated. Incident: skill_feedback.md §4.1/§13 candidate-specific RED.
-9. The cost function is risk removed per token, not process executed. Incident: skill_feedback4 root cause.
-10. Judgement stays with Root; agents get closed enums, decision flows, and hard conditions. Incident: blocking enum, mechanical enum, and checkpoint hard-condition fixes.
-11. Task-level meta belongs in a ref, per-commit identity belongs in a trailer, and nothing durable lives in a reflog or a state file. Incident: the reflog-derived integration base reported another task's collects, 2026-07-24.
-12. Overlap independent work; start dependent work at the intermediate artifact. Non-overlapping write scopes may run as parallel Waves from the same integration base; a downstream Wave needing only the upstream interface starts at the exact Contract merge, not implementation completion. Incident: 2026-07-24 pipeline/slice motivation.
-13. Build in order: freeze the envelope, design the interface including its failure contract, implement the minimal behavior, harden last. Failure modes, idempotency, ordering guarantees, resource lifetime, and atomicity are interface decisions and cannot be deferred; input validation, retries, caches, and cases outside the envelope are hardening and must be. **The split is decided by observability, not by category name** (admission standard S2.1): these are interface decisions only at the granularity a caller can observe, and below it they are hardening whatever they are called. Without that predicate this principle authorizes exactly the work it means to defer. Incident: roles hedged with edge cases before requirements settled, 2026-07-25; predicate added after "atomicity is an interface decision" justified sixteen Waves on descriptor-level ownership no caller could observe, 2026-07-25.
-14. Production reachability is a gate, not a milestone. Contract suites, focused tests, lint and type gates all stay green forever on code no entrypoint reaches, so a pipeline made only of them cannot detect that it is producing nothing. At least one gate per milestone must be a fact about the shipped program. Incident: 504 commits and +128,805 lines passed every gate with zero production imports, 2026-07-25.
-15. A bounded resource needs a global cap, not only a per-round cap. A budget that resets each round bounds the round and licenses the loop; the count of rounds is itself the resource. Incident: eleven acceptance cycles on one Slice, each individually within its per-cycle budget, 2026-07-25.
-16. The accepted checkpoint cadence bounds every mechanism inside it. Blocking enums, correction budgets and backlog routing all operate within one accepted checkpoint, so they can only improve a route already chosen; if feedback waits for the final persistence landing, a wrong route survives to the end at full quality. Size tasks so the first accepted checkpoint is days away, not weeks, and the cheap mechanisms start working. Incident: single-cutover plan authored on day 1 and undetected for three weeks, 2026-07-25.
-17. Independence beats freshness. A reviewer that shares the author's objective will rationalize; a clean context that reads only the narrative will be persuaded by it, because a well-argued dispatch is exactly what a failing effort produces. Give the independent role artifacts to measure before prose to read. Incident: a 40,991-byte dispatch argued its own admission coherently under principle 13, 2026-07-25.
-18. A mechanism enters on the same evidence that removes it: a timing, locking, retention, or replay device needs a test that is red without it, in both directions. Requiring evidence only on removal ratchets complexity upward. Incident: the v122 simplify guard, which asked for a reproduction to delete machinery that entered for free.
+1. Git commits, refs, and trailers are durable workflow truth; prose is a pointer.
+2. Every handoff and gate binds to one exact clean SHA, never to a summary.
+3. The acceptance surface has one owner, and Contract tests are immutable to Implementation.
+4. Freeze the usage envelope first; findings without a Contract basis are backlog.
+5. Scale rigor with change risk and remove risk per token, not mechanisms per se.
+6. Batch findings known at the same moment into one bounded correction cycle.
+7. Run cheap machine evidence early; reserve independent judgement for the assembled exact
+   candidate after the increment is bounded.
+8. Keep judgement with Root and give every role closed decisions, scopes, and stop conditions.
+9. Design the observable interface and failure contract first, implement the smallest behavior,
+   and harden only when the envelope or a red Contract test requires it.
+10. A timing, locking, retention, or replay device enters only with a test that is red without
+    it; otherwise it is speculative complexity.
+11. Production reachability is evidence, not an assumption: a green test suite cannot validate
+    code no shipped entrypoint reaches.
+12. Independence beats persuasive dispatch prose; reviewers receive artifacts and a fixed point.

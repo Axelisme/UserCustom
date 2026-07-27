@@ -1,122 +1,31 @@
 ---
 name: to-tickets
-description: Break a plan, spec, or the current conversation into tracer-bullet tickets with explicit blocking edges, published to the configured plan, tracker, or local-file backend.
+description: Break a spec into dependency-addressable tracer-bullet ticket artifacts.
 ---
 
 # To Tickets
 
-Break a plan, spec, or conversation into a set of **tickets** — tracer-bullet vertical slices, each declaring the tickets that **block** it.
+This skill produces **artifacts only**: tracer-bullet tickets with explicit blocking edges. Work
+from the conversation or a supplied spec, use the repository glossary, and preserve the recorded
+usage envelope. Each ticket is a complete, observable Slice with a named deletion or a seam whose
+predecessor is named; refuse a ticket whose value waits on a later ticket.
 
-## Process
+## Draft
 
-### 1. Gather context
+For every ticket record title, blockers, observable sentence, deleted predecessor, delivered
+behavior, and verbatim acceptance commands with cwd/environment. Keep the DAG dependency-addressable
+and fit each Slice in one fresh context. Wide mechanical refactors may use expand–contract, with
+migration tickets blocked by expand and contraction blocked by all migrations.
 
-Work from whatever is already in the conversation context. If the user passes a reference (a spec path, an issue number or URL) as an argument, fetch it and read its full body and comments.
+Present the proposed list for approval before publishing. After approval, publish dependency-
+addressable Slices to the plan-directory, tracker, or local backend documented by the repository.
+Across backends each Slice keeps Observable, Deletes, delivery, blockers, and acceptance criteria.
+This skill owns **artifacts only**; execution and checkpoint/close-out authority remain with their
+owning surfaces.
 
-### 2. Explore the codebase (optional)
+## Publish
 
-If you have not already explored the codebase, do so to understand the current state of the code. Ticket titles and descriptions should use the project's domain glossary vocabulary, and respect ADRs in the area you're touching.
-
-Look for opportunities to prefactor the code to make the implementation easier. "Make the change easy, then make the easy change."
-
-### 3. Draft vertical slices
-
-Break the work into **tracer bullet** tickets.
-
-<vertical-slice-rules>
-
-- Each slice cuts a narrow but COMPLETE path through every layer (schema, API, UI, tests) — vertical, NOT a horizontal slice of one layer
-- A completed slice is demoable or verifiable on its own
-- Each slice is sized to fit in a single fresh context window
-- Any prefactoring should be done first
-- Each slice states its observable sentence — *"the user does X at `<entrypoint>` and sees Y"* — and, where it replaces existing behavior, the `file:symbol` it deletes when it lands
-- No slice's value waits on a later slice. A slice that only becomes worth having once a subsequent one lands is half a slice; merge or recut it
-
-</vertical-slice-rules>
-
-**Refuse rather than publish.** A ticket whose observable sentence cannot be written is not ready, and publishing it anyway converts a planning problem into weeks of implementation that no gate downstream can catch: contract tests, types and lint all stay green on work nobody can reach. Before publishing, walk the DAG once and confirm no ticket's value depends on a later one — that check is what keeps a set of tracer bullets from quietly reassembling into a single cutover at the end.
-
-Give each ticket its **blocking edges** — the other tickets that must complete before it can start. A ticket with no blockers can start immediately.
-
-**Mutability**: what freezes at publish is each ticket's contract and acceptance criteria. The ticket boundaries themselves — how the work is cut, the DAG shape — are revisable execution tactics: when implementation reveals a ticket exceeds a single fresh context window, split it and continue — update the DAG in whatever backend holds it (task plan, tracker issues and their blocking edges, or renumbered local files), keeping the original acceptance as an umbrella gate. Splitting needs no spec reopen and no user approval; merging or broader re-cuts still get a word with the user unless broader discretion was delegated.
-
-**Wide refactors are the exception to vertical slicing.** A **wide refactor** is one mechanical change — rename a column, retype a shared symbol — whose **blast radius** fans across the whole codebase, so a single edit breaks thousands of call sites at once and no vertical slice can land green. Don't force it into a tracer bullet; sequence it as **expand–contract**. First expand: add the new form beside the old so nothing breaks. Then migrate the call sites over in batches sized by blast radius (per package, per directory), each batch its own ticket blocked by the expand, keeping CI green batch to batch because the old form still exists. Finally contract: delete the old form once no caller remains, in a ticket blocked by every migrate batch. When even the batches can't stay green alone, keep the sequence but let them share an integration branch that all block a final integrate-and-verify ticket — green is promised only there.
-
-### 4. Quiz the user
-
-Present the proposed breakdown as a numbered list. For each ticket, show:
-
-- **Title**: short descriptive name
-- **Blocked by**: which other tickets (if any) must complete first
-- **Observable**: the one sentence — *"the user does X at `<entrypoint>` and sees Y"* — plus the `file:symbol` this ticket deletes when it lands, or an explicit note that it establishes a seam and names the ticket that deletes the predecessor
-- **What it delivers**: the end-to-end behaviour this ticket makes work
-- **Acceptance criteria**: the checks that will gate the ticket done — these freeze at publish, so they must be approved here. Any automated gate freezes as a **verbatim command** (exact command line, workdir, environment) — never a described intent like "affected pyright" left for the implementer to interpret
-
-Ask the user:
-
-- Does the granularity feel right? (too coarse / too fine)
-- Are the blocking edges correct — does each ticket only depend on tickets that genuinely gate it?
-- Should any tickets be merged or split further?
-
-Iterate until the user approves the breakdown. This approval sets the starting shape: contract and acceptance freeze at publish, while the boundaries stay revisable per Mutability above.
-
-### 5. Publish the tickets
-
-Publish the approved tickets to whichever backend this repo uses. The tickets are the same either way; only the shape of the blocking edges changes. Across backends, every Slice keeps its Observable, Deletes, delivery, blockers, and acceptance criteria; dev-flow S5–S7 owns checkpoint acceptance and persistence landing.
-
-- **Plan-directory repo** (CLAUDE.md / AGENTS.md documents `planning-with-files` / `.agent_state/plans/` and an `orchestrate` skill) → publish dependency-addressable **Slices** in the task's `task_plan.md` (init via `planning-with-files` if needed). Each Slice flows **Oracle executable Contract → Root exact merge → Implementation**; the Contract and acceptance remain frozen at publish.
-  - Root chooses **Waves** from dependency readiness, shared Interface/worktree needs, and queue depth. Independent Slices may share a Wave only when their write scopes and dependencies permit it; a dependent Slice waits for its blocking edges.
-  - Root groups and queues ready Slices into Waves, records exact merge evidence in the task plan, and never batches user acceptance. Do **not** create per-ticket files or tracker state.
-  - Expand–contract remains approved behavior: publish the expand Slice first, then migration Slices blocked by it, and a contract Slice blocked by every migration Slice. Keep the tracer-bullet acceptance and approved blocking edges intact.
-- **Tracker repo** (an issue tracker is documented, e.g. `docs/agents/issue-tracker.md`) → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. Apply whatever "ready for agent" triage convention the repo documents.
-- **Neither** → write one file per ticket under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` in dependency order (blockers first). Each file's "Blocked by" lists the numbers/titles it depends on. Use the per-ticket file template below — one ticket per file, never a single combined file.
-
-Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom. In a plan-directory repo, Root dispatches each ready Slice through its Oracle Contract, exact merge, and Implementation roles; elsewhere, use one fresh session per ticket.
-
-Do NOT close or modify the original source issue the tickets were derived from. (A published ticket that later becomes a parent through a runtime split is not covered by this rule.)
-
-<local-ticket-template>
-
-# <NN> — <Ticket title>
-
-**Observable:** the user does X at `<entrypoint>` and sees Y.
-
-**Deletes:** the `file:symbol` this ticket removes in its accepted checkpoint, or "none — establishes `<seam>`, deleted by <ticket>".
-
-**What to build:** the end-to-end behaviour this ticket makes work, from the user's perspective — not a layer-by-layer implementation list.
-
-**Blocked by:** the numbers/titles of the tickets that gate this one, or "None — can start immediately".
-
-**Status:** ready-for-agent
-
-- [ ] Acceptance criterion 1
-- [ ] Acceptance criterion 2
-
-</local-ticket-template>
-
-<issue-template>
-
-## Parent
-
-A reference to the parent issue on the tracker (if the source was an existing issue, otherwise omit this section).
-
-## Observable
-
-The user does X at `<entrypoint>` and sees Y. Deletes: `<file:symbol>`, or "none — establishes `<seam>`, deleted by <ticket>".
-
-## What to build
-
-The end-to-end behaviour this ticket makes work, from the user's perspective — not layer-by-layer implementation.
-
-## Acceptance criteria
-
-- [ ] Criterion 1
-- [ ] Criterion 2
-
-## Blocked by
-
-- A reference to each blocking ticket, or "None — can start immediately".
-
-</issue-template>
-
-In either form, avoid specific file paths or code snippets — they go stale fast. Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo, just the important bits.
+In a plan-directory repo, publish Slices in the task plan and let Root dispatch each ready Slice
+through Oracle, exact Contract merge, and Implementation. Do not create per-ticket state. In a
+tracker, publish issues with native blocking edges. Otherwise write numbered local ticket files
+under `.scratch/<feature-slug>/issues/`. Never modify the source issue.

@@ -1,46 +1,29 @@
 ---
 name: code-review
-description: Review a fixed-point diff along standards and spec axes as the formal final dev-flow gate.
+description: Run the fixed-point ReviewGate on one exact candidate along standards and spec axes.
 ---
 
-This is the formal two-axis review gate for **dev-flow only**. Run it only
-post-simplify and after the canonical tests have passed, against one clean-detached
-checkout at one exact SHA. This sequence is the final dev-flow gate. It costs two parallel sub-agents: one Standards axis and one Spec
-axis. The gate reports both axes separately and never changes the checkout.
+# ReviewGate
 
-## Process
+Run only after simplify and canonical tests pass. This is a read-only, integration-first final gate
+over one exact candidate. The **review bracket** records pre and post status for the same path,
+same branch, same HEAD, and clean state. The candidate is post-simplify and no later mutation is
+allowed.
 
-1. Confirm simplify and the canonical test command have passed; otherwise no gate.
-2. Confirm the checkout is clean and detached, resolve the supplied fixed point and
-   `HEAD`, and record the exact SHA plus `git diff <fixed-point>...HEAD`.
-3. Identify the repository standards and originating frozen specification. When dispatching
-   the axes, pass the frozen spec and acceptance record as absolute paths — gitignored plan
-   files are invisible from a detached checkout. If either standard is unavailable, say so
-   in that axis rather than inventing authority.
-4. Dispatch two fresh `acceptance-reviewer` instances in parallel against the same exact SHA:
-   one with `Axis: standards`, one with `Axis: spec`. Report separate headings, cite file/hunk
-   evidence, and keep each axis under 400 words. Every finding is tagged `blocking` or
-   `backlog` and includes `contract_basis` naming the exact frozen-spec clause/item;
-   absent `contract_basis` means `backlog` only. If the reviewer believes the Contract is
-   insufficient or wants stronger semantics than it states, the verdict is
-   `blocked_on_decision`, not `needs_fix`; stronger wishes are not existing norms.
-5. For mechanical small findings (naming, dead code, typo, or ≤30 lines of local logic),
-   include a directly applicable unified diff patch proposal inside the finding. Stay
-   read-only and never modify the checkout. Dev-flow routes the patch as either a mechanical
-   Contract-surface slip or a bounded fix: for a mechanical slip, validation is only that the
-   applied diff matches the proposal and focused tests are green; a bounded fix is re-reviewed
-   as the delta from this SHA. Neither reopens a full two-axis review.
-6. Report the split explicitly: how many findings were raised and how many were tagged
-   `backlog`. If an axis tags every finding `blocking`, add the marker `spec-too-wide` to
-   that axis — a spec broad enough to supply `contract_basis` for every observation has
-   disabled the blocking enum, and the correct response is recutting the spec, not another
-   correction cycle (admission standard S4.3). Report the count even when the split looks
-   ordinary; an unstated ratio cannot be noticed drifting.
-7. End with finding counts and the worst issue within each axis, plus the baseline debt that
-   already existed at the base SHA, the residual risks being accepted, and the immutable paths
-   collect already verified — cite that result rather than re-deriving it. Naming pre-existing
-   debt is what stops it being rescored as a new regression. Do not merge or rerank axes,
-   modify files, or claim a passing gate without clean-detached exact-SHA evidence.
+## Source and axes
 
-The review is a final dev-flow gate after simplify and canonical tests, not a
-workflow, wave, or per-slice control surface.
+Use the clean integration source by default. When the reviewer cannot prove a read-only
+filesystem capability, use the **capability-based shared detached fallback**. Dispatch two fresh
+axes against the same exact SHA and same source:
+
+- `Axis: standards`
+- `Axis: spec`
+
+The bracket has explicit pre and post checks. No `collect` or `mutate` occurs between them; any
+path, branch, HEAD, or clean mismatch invalidates the evidence. Each axis reports only its own
+authority and includes `contract_basis` for a blocker. S4 governs the closed blocker enum and
+`blocked_on_decision` result.
+
+A **bounded delta** is reviewed by **one reviewer** on the **originating axis**; it does not reopen
+two fresh axes. The output is the formal **ReviewGate output**: exact SHA, source and checkout
+proof, axis verdict, blocking/backlog findings, and immutable-path evidence. This skill owns ReviewGate output only; correction routing and close-out belong elsewhere.

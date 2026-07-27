@@ -1,9 +1,10 @@
 """Four zero-parameter Git checks over one task's collected lanes.
 
-These are what remains of the retired dev-flow admission standard's S3: it
-had seven checks, but reachability, burndown, and downgrade never fired in
-three completed tasks' worth of history and three of them required an
-operator to supply data this script cannot derive on its own (a
+These are what remains of the retired dev-flow admission standard's Milestone
+admission section (formerly S3, dissolved when the standard renumbered to
+S1-S5): it had seven checks, but reachability, burndown, and downgrade never
+fired in three completed tasks' worth of history and three of them required
+an operator to supply data this script cannot derive on its own (a
 reachability probe command, a burn-down file, a review-round finding
 count). They are gone, CLI plumbing included.
 

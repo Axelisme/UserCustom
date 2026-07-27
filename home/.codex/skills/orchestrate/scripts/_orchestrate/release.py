@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .primitives import OrchestrateError, normalized_sha256, sha256_bytes
-from .git_ops import common_repo_root
+from .git_ops import common_repo_root, managed_worktree_root, run_git
 
 MANIFEST_SCHEMA = 1
 
@@ -445,6 +445,42 @@ def command_pin_set(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def migration_residue(root: Path) -> dict[str, list[str]]:
+    """Pre-lane-model Git state that ``pin migrate`` must never paper over.
+
+    Each category is a pure Git or filesystem fact, zero-parameter like the
+    checks in ``admission.py``: any ``wave/`` branch (the retired per-Wave
+    branch prefix), any ref under ``refs/orchestrate/`` (lane, integration,
+    and candidate refs the lane model reads differently than the retired
+    Oracle/Implementation model ever did), and any leftover directory under
+    the managed worktree root. None of these is safe to reinterpret
+    automatically: a stale worktree can shadow a path the new model wants to
+    reuse, and a stale ref or branch can make a fresh task look like it is
+    resuming a task the retired model never finished.
+    """
+    residue: dict[str, list[str]] = {}
+    wave_branches = sorted(
+        line
+        for line in run_git(root, "for-each-ref", "--format=%(refname:short)", "refs/heads/wave/").stdout.splitlines()
+        if line
+    )
+    if wave_branches:
+        residue["wave_branches"] = wave_branches
+    orchestrate_refs = sorted(
+        line
+        for line in run_git(root, "for-each-ref", "--format=%(refname)", "refs/orchestrate/").stdout.splitlines()
+        if line
+    )
+    if orchestrate_refs:
+        residue["orchestrate_refs"] = orchestrate_refs
+    worktrees_dir = managed_worktree_root(root)
+    if worktrees_dir.is_dir():
+        leftover = sorted(str(path) for path in worktrees_dir.iterdir() if path.is_dir())
+        if leftover:
+            residue["worktree_directories"] = leftover
+    return residue
+
+
 def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
     skill_dir = Path(args.skill_dir)
@@ -461,6 +497,15 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
             "recovered": "already-current",
             "pinned_version": old_version,
         }
+    residue = migration_residue(root)
+    if residue:
+        detail = "; ".join(
+            f"{category}: {', '.join(names)}" for category, names in sorted(residue.items())
+        )
+        raise OrchestrateError(
+            "pin migrate refused: unresolved task state from an earlier workflow model"
+            f" remains; finish or remove it first: {detail}"
+        )
     delta: dict[str, Any] | None
     requirements: list[dict[str, Any]] = []
     try:
@@ -591,8 +636,9 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
                 "automatic_conversion": False,
             }
         )
-    # v126 moves S5 behind the machine gates: v125 showed the user a candidate no
-    # reviewer had seen, so people paid attention for defects a gate would catch.
+    # v126 moves user acceptance behind the machine gates: v125 showed the user a
+    # candidate no reviewer had seen, so people paid attention for defects a gate
+    # would catch.
     if old_version < 126 <= new_version:
         requirements.append(
             {
@@ -642,6 +688,22 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
                 "carry_forward_requires_final_confirmation": True,
                 "stale_or_known_bad_blocks_acceptance_and_landing": True,
                 "feedback_collection_may_continue": True,
+                "automatic_conversion": False,
+            }
+        )
+    # v130 replaces the Oracle/Implementation Wave model with lanes, retires the
+    # dissolved Milestone admission gates and the Day/Night deferral split, and
+    # renumbers the admission standard to S1-S5. There is no mechanical reading
+    # of a v129 task's Wave branches, refs, or worktrees into the lane model, so
+    # this is a breaking change: an in-flight task must close out on v129 before
+    # its repo adopts v130 (``pin migrate`` itself refuses to advance while any
+    # such residue remains, see ``migration_residue``).
+    if old_version < 130 <= new_version:
+        requirements.append(
+            {
+                "reason": "v129-to-v130-lane-execution-model",
+                "breaking": True,
+                "close_out_legacy_task_before_migrating": True,
                 "automatic_conversion": False,
             }
         )

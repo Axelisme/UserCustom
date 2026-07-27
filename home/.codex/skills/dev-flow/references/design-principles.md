@@ -1,6 +1,6 @@
 # Dev-flow design principles
 
-Read this file when evolving the workflow. The admission standard is the normative S1–S7
+Read this file when evolving the workflow. The admission standard is the normative S1–S5
 authority; these principles explain altitude and evidence without duplicating its checks.
 
 1. Git commits, refs, and trailers are durable workflow truth; prose is a pointer.

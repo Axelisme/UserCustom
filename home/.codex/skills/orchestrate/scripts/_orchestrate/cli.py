@@ -15,7 +15,7 @@ from .release import (
     command_pin_status,
     command_release,
 )
-from .v119_core import (
+from .lane_core import (
     command_integration_collect,
     command_integration_create,
     command_integration_publish,

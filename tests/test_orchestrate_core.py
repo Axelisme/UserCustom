@@ -18,7 +18,7 @@ class CoreRuntimeIndependenceTests(unittest.TestCase):
     """The core tracer must not import or name any runtime adapter."""
 
     def test_core_has_no_runtime_binding_or_pipeline_authority(self) -> None:
-        source = (SKILL / "scripts" / "_orchestrate" / "v119_core.py").read_text(
+        source = (SKILL / "scripts" / "_orchestrate" / "lane_core.py").read_text(
             encoding="utf-8"
         )
         tree = ast.parse(source)

@@ -19,9 +19,12 @@ class LaneLifecycleContractTests(unittest.TestCase):
     lane replaces the Oracle/Implementation Wave model: one lane is one Git
     worktree, one branch, one subagent call.  ``integration collect`` verifies
     three Git-only facts (lane tree clean, exact SHA is the lane branch tip,
-    every declared ``Immutable:`` path is unchanged since the commit that
-    declared it) and, only if all three pass, merges into the integration
-    branch and unconditionally removes the lane worktree.
+    every commit that changes a once-declared ``Immutable:`` path redeclares
+    it on itself) and, only if all three pass, merges into the integration
+    branch and unconditionally removes the lane worktree.  Contract paths may
+    evolve across multiple oracle rounds inside one lane -- what is forbidden
+    is an implementer widening a declared path *quietly*, not the path ever
+    changing again.
     """
 
     task_id = "lane-task"
@@ -192,8 +195,11 @@ class LaneLifecycleContractTests(unittest.TestCase):
         self.assertNotEqual(integration_tip, self.base)
 
     # 5. a lane that changed a declared Immutable path cannot collect, and
-    #    the rejection names the violated path.
-    def test_collect_rejects_a_changed_immutable_path_and_names_it(self) -> None:
+    #    the rejection names the violated path and the offending commit.
+    #    Contract paths may evolve across oracle rework rounds -- what is
+    #    forbidden is an implementer changing a declared path *without*
+    #    redeclaring it on the same commit, not the path ever changing again.
+    def test_collect_rejects_an_undeclared_change_to_a_declared_immutable_path(self) -> None:
         self.integration_create()
         lane = self.lane_create("lane-a")
         lane_path = Path(str(lane["worktree"]))
@@ -207,16 +213,13 @@ class LaneLifecycleContractTests(unittest.TestCase):
 
         error = self.error_payload(self.collect("lane-a", changed))
         self.assertIn("contract_test.py", str(error["error"]))
+        self.assertIn(changed, str(error["error"]))
         # Non-destructive: nothing merged, nothing removed.
         self.assertTrue(lane_path.exists())
 
-    # 6. interleaved declarations: commit A declares x, commit B implements
-    #    (and here illegally regresses x), commit C declares an unrelated y.
-    #    A naive "compare against the most recent declaration commit" would
-    #    anchor x at C -- which never redeclared x -- and see no drift
-    #    between C and the tip, wrongly allowing collect.  The correct
-    #    anchor for x is A, so this regression must still be caught.
-    def test_collect_compares_each_immutable_path_against_its_own_declaring_commit(
+    # 6a. oracle commit A declares x; implementer commit B changes x without
+    #     redeclaring it -- rejected, and the message names commit B and x.
+    def test_collect_rejects_an_implementer_commit_that_changes_x_without_redeclaring(
         self,
     ) -> None:
         self.integration_create()
@@ -226,20 +229,50 @@ class LaneLifecycleContractTests(unittest.TestCase):
             lane_path, "x.py", "ORIGINAL = True\n",
             "declare x\n\nImmutable: x.py",
         )
-        self.commit(
+        undeclared = self.commit(
             lane_path, "x.py", "ORIGINAL = False\n",
-            "implement (illegally regresses x)",
-        )
-        tip = self.commit(
-            lane_path, "y.py", "Y = 1\n", "declare y\n\nImmutable: y.py"
+            "implement (changes x without redeclaring it)",
         )
 
-        error = self.error_payload(self.collect("lane-a", tip))
+        error = self.error_payload(self.collect("lane-a", undeclared))
         self.assertIn("x.py", str(error["error"]))
+        self.assertIn(undeclared, str(error["error"]))
 
-    # 6b. the positive mirror of the above: an Immutable path declared and
-    #     then genuinely left untouched must collect cleanly, proving the
-    #     interleaved-declaration walk does not over-trigger.
+    # 6b. oracle declares x; implementer changes something else; a second
+    #     oracle round changes x again *and* redeclares it -- multiple oracle
+    #     rounds inside one lane are normal, so this must collect cleanly.
+    def test_collect_succeeds_when_a_second_oracle_round_redeclares_x(self) -> None:
+        self.integration_create()
+        lane = self.lane_create("lane-a")
+        lane_path = Path(str(lane["worktree"]))
+        self.commit(lane_path, "x.py", "ORIGINAL = True\n", "declare x\n\nImmutable: x.py")
+        self.commit(lane_path, "other.py", "OTHER = 1\n", "implement something else")
+        tip = self.commit(
+            lane_path, "x.py", "ORIGINAL = False\n",
+            "second oracle round\n\nImmutable: x.py",
+        )
+
+        collected = self.payload(self.collect("lane-a", tip))
+        self.assertEqual(collected["immutable_paths_verified"], ["x.py"])
+
+    # 6c. multi-path interleaving: commit A declares x, commit C declares y;
+    #     a later commit changes y without redeclaring it.  The rejection
+    #     must point at y, not at x (which was never touched again).
+    def test_collect_rejects_undeclared_change_to_y_and_does_not_blame_x(self) -> None:
+        self.integration_create()
+        lane = self.lane_create("lane-a")
+        lane_path = Path(str(lane["worktree"]))
+        self.commit(lane_path, "x.py", "X = 1\n", "declare x\n\nImmutable: x.py")
+        self.commit(lane_path, "y.py", "Y = 1\n", "declare y\n\nImmutable: y.py")
+        undeclared = self.commit(lane_path, "y.py", "Y = 2\n", "change y without redeclaring")
+
+        error = self.error_payload(self.collect("lane-a", undeclared))
+        self.assertIn("y.py", str(error["error"]))
+        self.assertIn(undeclared, str(error["error"]))
+        self.assertNotIn("x.py", str(error["error"]))
+
+    # bonus: paths declared and genuinely left untouched still collect
+    # cleanly, proving the walk does not over-trigger.
     def test_collect_succeeds_when_every_declared_path_is_left_untouched(self) -> None:
         self.integration_create()
         lane = self.lane_create("lane-a")

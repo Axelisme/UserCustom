@@ -403,7 +403,9 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
         collected = self.collect("lane-a", sha)
         self.assertEqual(collected["immutable_paths_verified"], ["contract_test.py"])
 
-    def test_collect_refuses_a_weakened_or_relocated_acceptance_surface(self) -> None:
+    def test_collect_refuses_a_weakened_or_relocated_acceptance_surface_without_redeclaration(
+        self,
+    ) -> None:
         self.integration_create()
         lane, _declaring_sha = self.prepare_declared_lane("lane-a")
 
@@ -416,8 +418,9 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
                 "--task-id", self.task_id, "--lane-id", "lane-a", "--sha", weakened,
             )
         )
-        self.assertIn("declared Immutable", str(weakened_error["error"]))
+        self.assertIn("without redeclaring", str(weakened_error["error"]))
         self.assertIn("contract_test.py", str(weakened_error["error"]))
+        self.assertIn(weakened, str(weakened_error["error"]))
 
         self.git(lane, "mv", "contract_test.py", "moved_contract_test.py")
         relocated = self.commit_lane(lane, "lane a moved\n", "relocate", date="2025-01-01T00:04:00+0000")
@@ -427,7 +430,9 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
                 "--task-id", self.task_id, "--lane-id", "lane-a", "--sha", relocated,
             )
         )
-        self.assertIn("deleted or relocated", str(relocated_error["error"]))
+        self.assertIn("without redeclaring", str(relocated_error["error"]))
+        self.assertIn("contract_test.py", str(relocated_error["error"]))
+        self.assertIn(relocated, str(relocated_error["error"]))
 
     def test_status_fails_closed_without_the_base_ref(self) -> None:
         self.integration_create()

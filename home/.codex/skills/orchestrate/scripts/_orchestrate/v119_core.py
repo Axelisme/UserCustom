@@ -297,48 +297,42 @@ def _immutable_paths(root: Path, sha: str) -> list[str]:
     return [line.strip() for line in raw.splitlines() if line.strip()]
 
 
-def _declared_immutable_paths(root: Path, base: str, tip: str) -> dict[str, str]:
-    """Map each ``Immutable:`` path to the earliest lane commit that declared it.
+def _all_declared_immutable_paths(root: Path, base: str, tip: str) -> set[str]:
+    """Union of every path any ``base..tip`` commit ever declared Immutable.
 
-    A single subagent may interleave declaration and implementation across
-    commits (declare some paths, implement, declare more).  Walking the lane
-    history oldest-first and keeping only the first commit that names each
-    path anchors every path at the commit that actually froze it, not at
-    whichever commit happens to carry the most recent declaration.
+    A path enters the frozen surface the moment any commit in the lane
+    declares it; which commit declared it first does not matter here, only
+    that it was declared at all.
     """
-    raw = run_git(root, "rev-list", "--reverse", f"{base}..{tip}").stdout
-    declarations: dict[str, str] = {}
+    raw = run_git(root, "rev-list", f"{base}..{tip}").stdout
+    declared: set[str] = set()
     for sha in raw.splitlines():
-        if not sha:
-            continue
-        for path in _immutable_paths(root, sha):
-            declarations.setdefault(path, sha)
-    return declarations
+        if sha:
+            declared.update(_immutable_paths(root, sha))
+    return declared
 
 
 def _verify_immutable_surface(root: Path, base: str, tip: str) -> tuple[list[str], list[str]]:
-    """Compare each declared ``Immutable:`` path's blob id, declaring commit vs. lane tip.
+    """Reject any commit that changes a once-declared path without redeclaring it.
 
-    Git is content-addressed, so equal blob ids prove the path is
-    byte-identical without ever reading its content.  A path that stopped
-    resolving counts as a violation too: deleting or relocating a declared
-    path weakens the frozen surface exactly like editing it.
+    Multiple oracle rounds inside one lane are normal, so a Contract path may
+    legitimately be rewritten more than once -- the rule this enforces is not
+    "never touch it again" but "never touch it quietly".  Once any commit
+    declares ``Immutable: <path>``, every later commit that changes that path
+    must carry the same declaration on itself.  A commit that redeclares it
+    (an oracle rework round) is exempt; a commit that changes it without
+    redeclaring (an implementer widening the surface) is a violation.  A path
+    never declared anywhere in the range is not tracked at all.
     """
-    declarations = _declared_immutable_paths(root, base, tip)
-    declared = sorted(declarations)
+    declared = sorted(_all_declared_immutable_paths(root, base, tip))
     violations: list[str] = []
     for path in declared:
-        declaring_commit = declarations[path]
-        objects = []
-        for commit in (declaring_commit, tip):
-            probe = run_git(root, "rev-parse", "--verify", "--quiet", f"{commit}:{path}", check=False)
-            objects.append(probe.stdout.strip() if probe.returncode == 0 else None)
-        if objects[0] is None:
-            violations.append(f"{path} (declared immutable but absent from {declaring_commit})")
-        elif objects[1] is None:
-            violations.append(f"{path} (deleted or relocated after being declared immutable at {declaring_commit})")
-        elif objects[0] != objects[1]:
-            violations.append(f"{path} ({objects[0]} -> {objects[1]})")
+        raw = run_git(root, "log", "--reverse", "--format=%H", f"{base}..{tip}", "--", path).stdout
+        for sha in raw.splitlines():
+            if not sha:
+                continue
+            if path not in _immutable_paths(root, sha):
+                violations.append(f"{path} changed by {sha} without redeclaring Immutable: {path}")
     return declared, violations
 
 
@@ -366,12 +360,12 @@ def command_integration_collect(args: argparse.Namespace) -> dict[str, Any]:
             f"--sha must be the tip of lane branch {lane_branch}: expected {tip}, got {sha}"
         )
 
-    # 3. every Immutable: path is unchanged since the commit that declared it.
+    # 3. every commit that changes a once-declared Immutable: path redeclares it.
     lane_base = _lane_base(root, task, lane)
     declared, violations = _verify_immutable_surface(root, lane_base, tip)
     if violations:
         raise OrchestrateError(
-            "lane changed a path declared Immutable after the commit that declared it: "
+            "lane changed an Immutable-declared path without redeclaring it in the same commit: "
             + "; ".join(violations)
         )
 

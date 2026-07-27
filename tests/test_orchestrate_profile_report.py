@@ -15,7 +15,16 @@ SCRIPT = ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts" / "orch
 
 
 class ProfileReportContractHarness(unittest.TestCase):
-    """Shared Git/CLI helpers for profile report Contract tests."""
+    """Shared Git/CLI helpers for profile report Contract tests.
+
+    ``profile report`` is unaffected by the lane model (it is retired in a
+    later Slice, not this one) and still walks the Oracle/Implementation role
+    branches and Contract-merge commits it always has.  The lane model no
+    longer ships a CLI command that creates a role worktree or merges a
+    Contract, so these fixtures build the identical commit graph with raw Git
+    plumbing instead of the retired ``worktree create --role`` / ``contract
+    merge`` commands.
+    """
 
     task_id = "profile-correction-task"
     wave_id = "profile-correction-wave"
@@ -55,6 +64,42 @@ class ProfileReportContractHarness(unittest.TestCase):
         self.assertIsInstance(payload, dict)
         self.assertTrue(payload.get("ok"), payload)
         return payload
+
+    def create_role_worktree(
+        self, repo: Path, base: str, task_id: str, wave_id: str, role: str
+    ) -> Path:
+        """Stand in for the retired ``worktree create --role`` command.
+
+        Real ``git worktree add`` gives profile report an identical
+        ``wave/<task>/<wave>/<role>`` branch to walk, just without going
+        through the lane-model CLI that no longer creates role worktrees.
+        """
+        branch = f"wave/{task_id}/{wave_id}/{role}"
+        path = repo / ".agent_state" / "worktrees" / f"{task_id}-{wave_id}-{role}"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.git(repo, "worktree", "add", "-b", branch, str(path), base)
+        return path
+
+    def merge_contract_raw(
+        self,
+        implementation_worktree: Path,
+        wave_id: str,
+        slice_id: str,
+        contract_sha: str,
+        date: str,
+    ) -> str:
+        """Stand in for the retired ``contract merge`` command."""
+        self.git(implementation_worktree, "merge", "--no-ff", "--no-commit", contract_sha)
+        message = f"Merge Contract {contract_sha}\n\nWave: {wave_id}\nSlice: {slice_id}\nRole: merge"
+        self.git(
+            implementation_worktree,
+            "commit",
+            "-q",
+            "-m",
+            message,
+            env={"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date},
+        )
+        return self.git(implementation_worktree, "rev-parse", "HEAD")
 
     def commit_file(
         self,
@@ -109,38 +154,12 @@ class ProfileCorrectionAttemptAssignmentContractTests(ProfileReportContractHarne
             )
             base = self.git(repo, "rev-parse", "HEAD")
 
-            implementation = self.cli(
-                repo,
-                "worktree",
-                "create",
-                "--root",
-                str(repo),
-                "--task-id",
-                self.task_id,
-                "--wave-id",
-                self.wave_id,
-                "--role",
-                "implementation",
-                "--base",
-                base,
+            implementation_worktree = self.create_role_worktree(
+                repo, base, self.task_id, self.wave_id, "implementation"
             )
-            oracle = self.cli(
-                repo,
-                "worktree",
-                "create",
-                "--root",
-                str(repo),
-                "--task-id",
-                self.task_id,
-                "--wave-id",
-                self.wave_id,
-                "--role",
-                "oracle",
-                "--base",
-                base,
+            oracle_worktree = self.create_role_worktree(
+                repo, base, self.task_id, self.wave_id, "oracle"
             )
-            implementation_worktree = Path(str(implementation["worktree"]))
-            oracle_worktree = Path(str(oracle["worktree"]))
 
             oracle_1 = self.commit_file(
                 oracle_worktree,
@@ -150,24 +169,13 @@ class ProfileCorrectionAttemptAssignmentContractTests(ProfileReportContractHarne
                 "oracle",
                 "2025-01-01T00:01:00+0000",
             )
-            merge_1_payload = self.cli(
-                repo,
-                "contract",
-                "merge",
-                "--root",
-                str(repo),
-                "--task-id",
-                self.task_id,
-                "--wave-id",
+            merge_1 = self.merge_contract_raw(
+                implementation_worktree,
                 self.wave_id,
-                "--contract-sha",
+                self.slice_id,
                 oracle_1,
-                env={
-                    "GIT_AUTHOR_DATE": "2025-01-01T00:02:00+0000",
-                    "GIT_COMMITTER_DATE": "2025-01-01T00:02:00+0000",
-                },
+                "2025-01-01T00:02:00+0000",
             )
-            merge_1 = str(merge_1_payload["merge_sha"])
 
             retired_checkpoint = self.commit_file(
                 implementation_worktree,
@@ -186,24 +194,13 @@ class ProfileCorrectionAttemptAssignmentContractTests(ProfileReportContractHarne
                 "oracle",
                 "2025-01-01T00:03:00+0000",
             )
-            merge_2_payload = self.cli(
-                repo,
-                "contract",
-                "merge",
-                "--root",
-                str(repo),
-                "--task-id",
-                self.task_id,
-                "--wave-id",
+            merge_2 = self.merge_contract_raw(
+                implementation_worktree,
                 self.wave_id,
-                "--contract-sha",
+                self.slice_id,
                 oracle_2,
-                env={
-                    "GIT_AUTHOR_DATE": "2025-01-01T00:04:00+0000",
-                    "GIT_COMMITTER_DATE": "2025-01-01T00:04:00+0000",
-                },
+                "2025-01-01T00:04:00+0000",
             )
-            merge_2 = str(merge_2_payload["merge_sha"])
 
             implementation_sha = self.commit_file(
                 implementation_worktree,
@@ -311,18 +308,12 @@ class ProfileInterleavedSliceContractTests(ProfileReportContractHarness):
                 },
             )
             base = self.git(repo, "rev-parse", "HEAD")
-            implementation = self.cli(
-                repo, "worktree", "create", "--root", str(repo),
-                "--task-id", self.task_id, "--wave-id", self.wave_id,
-                "--role", "implementation", "--base", base,
+            implementation_worktree = self.create_role_worktree(
+                repo, base, self.task_id, self.wave_id, "implementation"
             )
-            oracle = self.cli(
-                repo, "worktree", "create", "--root", str(repo),
-                "--task-id", self.task_id, "--wave-id", self.wave_id,
-                "--role", "oracle", "--base", base,
+            oracle_worktree = self.create_role_worktree(
+                repo, base, self.task_id, self.wave_id, "oracle"
             )
-            implementation_worktree = Path(str(implementation["worktree"]))
-            oracle_worktree = Path(str(oracle["worktree"]))
 
             # Slice A and Slice B each merge a Contract before either
             # Implementation lands, so Slice A's endpoint sits inside Slice
@@ -332,29 +323,19 @@ class ProfileInterleavedSliceContractTests(ProfileReportContractHarness):
                 oracle_worktree, "tests/a.txt", "contract a\n",
                 "Oracle A", "oracle", "2025-01-01T00:01:00+0000",
             )
-            merge_a = str(self.cli(
-                repo, "contract", "merge", "--root", str(repo),
-                "--task-id", self.task_id, "--wave-id", self.wave_id,
-                "--contract-sha", oracle_a,
-                env={
-                    "GIT_AUTHOR_DATE": "2025-01-01T00:02:00+0000",
-                    "GIT_COMMITTER_DATE": "2025-01-01T00:02:00+0000",
-                },
-            )["merge_sha"])
+            merge_a = self.merge_contract_raw(
+                implementation_worktree, self.wave_id, "slice-a", oracle_a,
+                "2025-01-01T00:02:00+0000",
+            )
             self.slice_id = "slice-b"
             oracle_b = self.commit_file(
                 oracle_worktree, "tests/b.txt", "contract b\n",
                 "Oracle B", "oracle", "2025-01-01T00:03:00+0000",
             )
-            merge_b = str(self.cli(
-                repo, "contract", "merge", "--root", str(repo),
-                "--task-id", self.task_id, "--wave-id", self.wave_id,
-                "--contract-sha", oracle_b,
-                env={
-                    "GIT_AUTHOR_DATE": "2025-01-01T00:04:00+0000",
-                    "GIT_COMMITTER_DATE": "2025-01-01T00:04:00+0000",
-                },
-            )["merge_sha"])
+            merge_b = self.merge_contract_raw(
+                implementation_worktree, self.wave_id, "slice-b", oracle_b,
+                "2025-01-01T00:04:00+0000",
+            )
 
             # Slice A hands off with an --allow-empty commit: a legal exact
             # consumption marker after a non-behavioral Contract correction.
@@ -405,15 +386,7 @@ class ProfileUnattributedEndpointContractTests(ProfileReportContractHarness):
             )
             base = self.git(repo, "rev-parse", "HEAD")
             worktrees = {
-                role: Path(
-                    str(
-                        self.cli(
-                            repo, "worktree", "create", "--root", str(repo),
-                            "--task-id", self.task_id, "--wave-id", self.wave_id,
-                            "--role", role, "--base", base,
-                        )["worktree"]
-                    )
-                )
+                role: self.create_role_worktree(repo, base, self.task_id, self.wave_id, role)
                 for role in ("oracle", "implementation")
             }
 
@@ -433,14 +406,9 @@ class ProfileUnattributedEndpointContractTests(ProfileReportContractHarness):
                 "oracle",
                 "2025-01-01T00:02:00+0000",
             )
-            self.cli(
-                repo, "contract", "merge", "--root", str(repo),
-                "--task-id", self.task_id, "--wave-id", self.wave_id,
-                "--contract-sha", oracle_sha,
-                env={
-                    "GIT_AUTHOR_DATE": "2025-01-01T00:03:00+0000",
-                    "GIT_COMMITTER_DATE": "2025-01-01T00:03:00+0000",
-                },
+            self.merge_contract_raw(
+                worktrees["implementation"], self.wave_id, self.slice_id, oracle_sha,
+                "2025-01-01T00:03:00+0000",
             )
 
             report = self.cli(
@@ -500,6 +468,13 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
         self.assertTrue(payload.get("ok"), payload)
         return payload
 
+    def create_role_worktree(self, repo: Path, base: str, role: str) -> Path:
+        branch = f"wave/{self.task_id}/{self.wave_id}/{role}"
+        path = repo / ".agent_state" / "worktrees" / f"{self.task_id}-{self.wave_id}-{role}"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.git(repo, "worktree", "add", "-b", branch, str(path), base)
+        return path
+
     def commit(
         self,
         worktree: Path,
@@ -531,22 +506,20 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
         )
         return self.git(worktree, "rev-parse", "HEAD")
 
-    def merge_contract(self, repo: Path, oracle_sha: str, date: str) -> str:
-        payload = self.cli(
-            repo,
-            "contract",
-            "merge",
-            "--root",
-            str(repo),
-            "--task-id",
-            self.task_id,
-            "--wave-id",
-            self.wave_id,
-            "--contract-sha",
-            oracle_sha,
+    def merge_contract(
+        self, implementation_worktree: Path, slice_id: str, oracle_sha: str, date: str
+    ) -> str:
+        self.git(implementation_worktree, "merge", "--no-ff", "--no-commit", oracle_sha)
+        message = f"Merge Contract {oracle_sha}\n\nWave: {self.wave_id}\nSlice: {slice_id}\nRole: merge"
+        self.git(
+            implementation_worktree,
+            "commit",
+            "-q",
+            "-m",
+            message,
             env={"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date},
         )
-        return str(payload["merge_sha"])
+        return self.git(implementation_worktree, "rev-parse", "HEAD")
 
     def test_report_counts_each_complete_attempt_range_exactly_once(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -569,38 +542,8 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
             )
             base = self.git(repo, "rev-parse", "HEAD")
 
-            implementation_payload = self.cli(
-                repo,
-                "worktree",
-                "create",
-                "--root",
-                str(repo),
-                "--task-id",
-                self.task_id,
-                "--wave-id",
-                self.wave_id,
-                "--role",
-                "implementation",
-                "--base",
-                base,
-            )
-            oracle_payload = self.cli(
-                repo,
-                "worktree",
-                "create",
-                "--root",
-                str(repo),
-                "--task-id",
-                self.task_id,
-                "--wave-id",
-                self.wave_id,
-                "--role",
-                "oracle",
-                "--base",
-                base,
-            )
-            implementation = Path(str(implementation_payload["worktree"]))
-            oracle = Path(str(oracle_payload["worktree"]))
+            implementation = self.create_role_worktree(repo, base, "implementation")
+            oracle = self.create_role_worktree(repo, base, "oracle")
 
             # Attempt 1: both ready commits have untrailed work immediately before them.
             self.commit(
@@ -618,7 +561,7 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
                 "2025-01-01T00:02:00+0000",
                 "oracle",
             )
-            merge_1 = self.merge_contract(repo, oracle_1, "2025-01-01T00:03:00+0000")
+            merge_1 = self.merge_contract(implementation, self.slice_id, oracle_1, "2025-01-01T00:03:00+0000")
             self.commit(
                 implementation,
                 "src/attempt_1.txt",
@@ -652,7 +595,7 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
                 "2025-01-01T00:07:00+0000",
                 "oracle",
             )
-            merge_2 = self.merge_contract(repo, oracle_2, "2025-01-01T00:08:00+0000")
+            merge_2 = self.merge_contract(implementation, self.slice_id, oracle_2, "2025-01-01T00:08:00+0000")
             self.commit(
                 implementation,
                 "src/attempt_2.txt",
@@ -678,7 +621,7 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
                 "2025-01-01T00:12:00+0000",
                 "oracle",
             )
-            merge_3 = self.merge_contract(repo, oracle_3, "2025-01-01T00:13:00+0000")
+            merge_3 = self.merge_contract(implementation, self.slice_id, oracle_3, "2025-01-01T00:13:00+0000")
             self.commit(
                 implementation,
                 "src/attempt_3.txt",
@@ -775,38 +718,8 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
             )
             base = self.git(repo, "rev-parse", "HEAD")
 
-            implementation_payload = self.cli(
-                repo,
-                "worktree",
-                "create",
-                "--root",
-                str(repo),
-                "--task-id",
-                self.task_id,
-                "--wave-id",
-                self.wave_id,
-                "--role",
-                "implementation",
-                "--base",
-                base,
-            )
-            oracle_payload = self.cli(
-                repo,
-                "worktree",
-                "create",
-                "--root",
-                str(repo),
-                "--task-id",
-                self.task_id,
-                "--wave-id",
-                self.wave_id,
-                "--role",
-                "oracle",
-                "--base",
-                base,
-            )
-            implementation = Path(str(implementation_payload["worktree"]))
-            oracle = Path(str(oracle_payload["worktree"]))
+            implementation = self.create_role_worktree(repo, base, "implementation")
+            oracle = self.create_role_worktree(repo, base, "oracle")
 
             # Slice A publishes a two-commit Contract range and is merged first.
             self.commit(
@@ -825,7 +738,7 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
                 "oracle",
                 slice_id="slice-a",
             )
-            merge_a = self.merge_contract(repo, oracle_a, "2025-02-01T00:03:00+0000")
+            merge_a = self.merge_contract(implementation, "slice-a", oracle_a, "2025-02-01T00:03:00+0000")
 
             # Slice B continues the Oracle topology. Its Contract range starts at
             # Oracle A, never at the report base, and is merged after A.
@@ -845,7 +758,7 @@ class ProfileRangeNumstatContractTests(unittest.TestCase):
                 "oracle",
                 slice_id="slice-b",
             )
-            merge_b = self.merge_contract(repo, oracle_b, "2025-02-01T00:06:00+0000")
+            merge_b = self.merge_contract(implementation, "slice-b", oracle_b, "2025-02-01T00:06:00+0000")
 
             # A deliberately has no endpoint before merge B. Only B owns the
             # complete merge-B-to-ready range, including its untrailed work.

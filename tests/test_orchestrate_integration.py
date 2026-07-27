@@ -14,8 +14,9 @@ SCRIPT = ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts" / "orch
 
 
 class IntegrationWorktreeContractTests(unittest.TestCase):
+    """Black-box Contract for the integration branch's lane-collect lifecycle."""
+
     task_id = "integration-task"
-    base_ref = f"refs/orchestrate/{task_id}/integration/base"
 
     def git(
         self,
@@ -88,6 +89,7 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
             },
         )
         self.base = self.git(self.root, "rev-parse", "HEAD")
+        self.base_ref = f"refs/orchestrate/{self.task_id}/integration/base"
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -107,43 +109,35 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
             )
         )
 
-    def implementation_create(self, wave_id: str, base: str) -> Path:
+    def lane_create(self, lane_id: str, base: str) -> Path:
         payload = self.payload(
             self.cli(
                 self.root,
-                "worktree",
+                "lane",
                 "create",
                 "--root",
                 str(self.root),
                 "--task-id",
                 self.task_id,
-                "--wave-id",
-                wave_id,
-                "--role",
-                "implementation",
+                "--lane-id",
+                lane_id,
                 "--base",
                 base,
             )
         )
         return Path(str(payload["worktree"]))
 
-    def commit_implementation(
+    def commit_lane(
         self,
         worktree: Path,
-        wave_id: str,
-        slice_id: str,
         content: str,
+        message: str = "implement",
         *,
-        role: str = "implementation",
-        include_trailers: bool = True,
         date: str = "2025-01-01T00:01:00+0000",
+        path: str = "app.txt",
     ) -> str:
-        (worktree / "app.txt").write_text(content, encoding="utf-8")
-        self.git(worktree, "add", "app.txt")
-        if include_trailers:
-            message = f"Implementation ready {wave_id}\n\nWave: {wave_id}\nSlice: {slice_id}\nRole: {role}"
-        else:
-            message = f"Implementation ready {wave_id}"
+        (worktree / path).write_text(content, encoding="utf-8")
+        self.git(worktree, "add", path)
         self.git(
             worktree,
             "commit",
@@ -154,7 +148,7 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
         )
         return self.git(worktree, "rev-parse", "HEAD")
 
-    def collect(self, wave_id: str, implementation_sha: str) -> dict[str, object]:
+    def collect(self, lane_id: str, sha: str) -> dict[str, object]:
         return self.payload(
             self.cli(
                 self.root,
@@ -164,10 +158,10 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
                 str(self.root),
                 "--task-id",
                 self.task_id,
-                "--wave-id",
-                wave_id,
-                "--implementation-sha",
-                implementation_sha,
+                "--lane-id",
+                lane_id,
+                "--sha",
+                sha,
                 env={
                     "GIT_AUTHOR_DATE": "2025-01-01T00:10:00+0000",
                     "GIT_COMMITTER_DATE": "2025-01-01T00:10:00+0000",
@@ -188,7 +182,7 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
             )
         )
 
-    def test_create_collect_status_tracks_two_waves_in_git_order(self) -> None:
+    def test_create_collect_status_tracks_two_lanes_in_git_order(self) -> None:
         created = self.integration_create()
         integration_path = Path(str(created["worktree"]))
         self.assertEqual(created["operation"], "integration-create")
@@ -197,22 +191,16 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
         self.assertEqual(created["base"], self.base)
         self.assertTrue(created["clean"])
 
-        wave_a_tree = self.implementation_create("wave-a", self.base)
-        implementation_a = self.commit_implementation(wave_a_tree, "wave-a", "slice-a", "wave a\n")
-        collect_a = self.collect("wave-a", implementation_a)
+        lane_a = self.lane_create("lane-a", self.base)
+        sha_a = self.commit_lane(lane_a, "lane a\n")
+        collect_a = self.collect("lane-a", sha_a)
         self.assertEqual(collect_a["operation"], "integration-collect")
-        self.assertEqual(collect_a["slice"], "slice-a")
+        self.assertEqual(collect_a["lane_id"], "lane-a")
 
         integration_tip = self.git(integration_path, "rev-parse", "HEAD")
-        wave_b_tree = self.implementation_create("wave-b", integration_tip)
-        implementation_b = self.commit_implementation(
-            wave_b_tree,
-            "wave-b",
-            "slice-b",
-            "wave b\n",
-            date="2025-01-01T00:02:00+0000",
-        )
-        collect_b = self.collect("wave-b", implementation_b)
+        lane_b = self.lane_create("lane-b", integration_tip)
+        sha_b = self.commit_lane(lane_b, "lane a\nlane b\n", date="2025-01-01T00:02:00+0000")
+        collect_b = self.collect("lane-b", sha_b)
 
         status = self.status()
         self.assertEqual(status["operation"], "integration-status")
@@ -221,90 +209,17 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
         self.assertEqual(
             status["collected"],
             [
-                {
-                    "wave": "wave-a",
-                    "slice": "slice-a",
-                    "collect_sha": collect_a["collect_sha"],
-                    "implementation_sha": implementation_a,
-                },
-                {
-                    "wave": "wave-b",
-                    "slice": "slice-b",
-                    "collect_sha": collect_b["collect_sha"],
-                    "implementation_sha": implementation_b,
-                },
+                {"lane": "lane-a", "collect_sha": collect_a["collect_sha"], "sha": sha_a},
+                {"lane": "lane-b", "collect_sha": collect_b["collect_sha"], "sha": sha_b},
             ],
         )
 
-    def test_collect_rejects_bad_trailers_dirty_worktree_and_duplicate_wave(self) -> None:
+    def test_collect_rejects_a_dirty_integration_worktree_and_a_re_collected_lane(self) -> None:
         created = self.integration_create()
         integration_path = Path(str(created["worktree"]))
 
-        missing_tree = self.implementation_create("missing", self.base)
-        missing_sha = self.commit_implementation(missing_tree, "missing", "slice", "missing\n", include_trailers=False)
-        error = self.error_payload(
-            self.cli(
-                self.root,
-                "integration",
-                "collect",
-                "--root",
-                str(self.root),
-                "--task-id",
-                self.task_id,
-                "--wave-id",
-                "missing",
-                "--implementation-sha",
-                missing_sha,
-            )
-        )
-        self.assertIn("Role: implementation", str(error["error"]))
-
-        wrong_role_tree = self.implementation_create("wrong-role", self.base)
-        wrong_role_sha = self.commit_implementation(
-            wrong_role_tree,
-            "wrong-role",
-            "slice",
-            "wrong role\n",
-            role="oracle",
-        )
-        error = self.error_payload(
-            self.cli(
-                self.root,
-                "integration",
-                "collect",
-                "--root",
-                str(self.root),
-                "--task-id",
-                self.task_id,
-                "--wave-id",
-                "wrong-role",
-                "--implementation-sha",
-                wrong_role_sha,
-            )
-        )
-        self.assertIn("Role: implementation", str(error["error"]))
-
-        mismatch_tree = self.implementation_create("mismatch", self.base)
-        mismatch_sha = self.commit_implementation(mismatch_tree, "mismatch", "slice", "mismatch\n")
-        error = self.error_payload(
-            self.cli(
-                self.root,
-                "integration",
-                "collect",
-                "--root",
-                str(self.root),
-                "--task-id",
-                self.task_id,
-                "--wave-id",
-                "different-wave",
-                "--implementation-sha",
-                mismatch_sha,
-            )
-        )
-        self.assertIn("matching Wave", str(error["error"]))
-
-        good_tree = self.implementation_create("good", self.base)
-        good_sha = self.commit_implementation(good_tree, "good", "slice", "good\n")
+        lane = self.lane_create("lane-a", self.base)
+        sha = self.commit_lane(lane, "lane a\n")
         (integration_path / "dirty.txt").write_text("dirty\n", encoding="utf-8")
         error = self.error_payload(
             self.cli(
@@ -315,16 +230,18 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
                 str(self.root),
                 "--task-id",
                 self.task_id,
-                "--wave-id",
-                "good",
-                "--implementation-sha",
-                good_sha,
+                "--lane-id",
+                "lane-a",
+                "--sha",
+                sha,
             )
         )
-        self.assertIn("must be clean", str(error["error"]))
+        self.assertIn("integration worktree must be clean", str(error["error"]))
         (integration_path / "dirty.txt").unlink()
-        self.collect("good", good_sha)
+        self.collect("lane-a", sha)
 
+        # The lane worktree is gone after the first collect, so a repeated
+        # collect of the same lane id has nothing left to verify against.
         error = self.error_payload(
             self.cli(
                 self.root,
@@ -334,24 +251,24 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
                 str(self.root),
                 "--task-id",
                 self.task_id,
-                "--wave-id",
-                "good",
-                "--implementation-sha",
-                good_sha,
+                "--lane-id",
+                "lane-a",
+                "--sha",
+                sha,
             )
         )
-        self.assertIn("already collected", str(error["error"]))
+        self.assertIn("does not exist", str(error["error"]))
 
     def test_conflict_stays_visible_in_integration_worktree(self) -> None:
         created = self.integration_create()
         integration_path = Path(str(created["worktree"]))
 
-        wave_a_tree = self.implementation_create("wave-a", self.base)
-        implementation_a = self.commit_implementation(wave_a_tree, "wave-a", "slice-a", "wave a\n")
-        self.collect("wave-a", implementation_a)
+        lane_a = self.lane_create("lane-a", self.base)
+        sha_a = self.commit_lane(lane_a, "lane a\n")
+        self.collect("lane-a", sha_a)
 
-        wave_b_tree = self.implementation_create("wave-b", self.base)
-        implementation_b = self.commit_implementation(wave_b_tree, "wave-b", "slice-b", "wave b\n")
+        lane_b = self.lane_create("lane-b", self.base)
+        sha_b = self.commit_lane(lane_b, "lane b\n")
         error = self.error_payload(
             self.cli(
                 self.root,
@@ -361,16 +278,21 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
                 str(self.root),
                 "--task-id",
                 self.task_id,
-                "--wave-id",
-                "wave-b",
-                "--implementation-sha",
-                implementation_b,
+                "--lane-id",
+                "lane-b",
+                "--sha",
+                sha_b,
             )
         )
         self.assertIn("git integration collect failed", str(error["error"]))
         self.assertIn("UU app.txt", self.git(integration_path, "status", "--porcelain"))
         self.assertTrue((integration_path / ".git").is_file())
-        self.assertEqual(self.git(integration_path, "rev-parse", "--verify", "MERGE_HEAD"), implementation_b)
+        self.assertEqual(self.git(integration_path, "rev-parse", "--verify", "MERGE_HEAD"), sha_b)
+        # A real 3-way conflict carries the shared ancestor at stage 1, unlike
+        # a synthetic add/add conflict which has no common ancestor at all.
+        self.assertEqual(self.git(integration_path, "show", ":1:app.txt"), "base")
+        # Non-destructive: the lane worktree is not removed on a failed collect.
+        self.assertTrue(lane_b.exists())
 
     def test_create_refuses_existing_path_or_branch_and_remove_refuses_dirty(self) -> None:
         self.integration_create()
@@ -431,7 +353,7 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
             "commit",
             "-q",
             "-m",
-            "Collect Wave wave-a\n\nWave: wave-a\nSlice: slice-a\nRole: collect",
+            "Collect lane lane-a\n\nTask: previous-task\nLane: lane-a",
             env={
                 "GIT_AUTHOR_DATE": "2025-01-01T00:00:30+0000",
                 "GIT_COMMITTER_DATE": "2025-01-01T00:00:30+0000",
@@ -444,133 +366,77 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
         self.assertEqual(created["base_ref"], self.base_ref)
         self.assertEqual(self.git(self.root, "rev-parse", "--verify", self.base_ref), landed_base)
 
-        # The reused wave id belongs to the previous task, so it must not be rejected here.
-        wave_tree = self.implementation_create("wave-a", landed_base)
-        implementation = self.commit_implementation(wave_tree, "wave-a", "slice-a", "wave a\n")
-        collected = self.collect("wave-a", implementation)
+        # The reused lane id belonged to a different task, so it must not be rejected here.
+        lane = self.lane_create("lane-a", landed_base)
+        sha = self.commit_lane(lane, "lane a\n")
+        collected = self.collect("lane-a", sha)
         self.assertEqual(
             self.status()["collected"],
-            [
-                {
-                    "wave": "wave-a",
-                    "slice": "slice-a",
-                    "collect_sha": collected["collect_sha"],
-                    "implementation_sha": implementation,
-                }
-            ],
+            [{"lane": "lane-a", "collect_sha": collected["collect_sha"], "sha": sha}],
         )
 
-    def prepare_declared_contract(self, wave_id: str) -> tuple[Path, str]:
-        """Merge a Contract that declares one immutable acceptance-surface path."""
-        oracle = Path(
-            str(
-                self.payload(
-                    self.cli(
-                        self.root, "worktree", "create", "--root", str(self.root),
-                        "--task-id", self.task_id, "--wave-id", wave_id,
-                        "--role", "oracle", "--base", self.base,
-                    )
-                )["worktree"]
-            )
-        )
-        implementation = self.implementation_create(wave_id, self.base)
-        (oracle / "contract_test.py").write_text("assert app == 1\n", encoding="utf-8")
-        self.git(oracle, "add", "contract_test.py")
+    def prepare_declared_lane(self, lane_id: str) -> tuple[Path, str]:
+        """Create a lane that declares one immutable path in its first commit."""
+        lane = self.lane_create(lane_id, self.base)
+        (lane / "contract_test.py").write_text("assert app == 1\n", encoding="utf-8")
+        self.git(lane, "add", "contract_test.py")
         self.git(
-            oracle,
+            lane,
             "commit",
             "-q",
             "-m",
-            f"Contract ready\n\nWave: {wave_id}\nSlice: slice-a\nRole: oracle\nImmutable: contract_test.py",
+            "declare contract\n\nImmutable: contract_test.py",
             env={
                 "GIT_AUTHOR_DATE": "2025-01-01T00:01:00+0000",
                 "GIT_COMMITTER_DATE": "2025-01-01T00:01:00+0000",
             },
         )
-        contract_sha = self.git(oracle, "rev-parse", "HEAD")
-        self.payload(
-            self.cli(
-                self.root, "contract", "merge", "--root", str(self.root),
-                "--task-id", self.task_id, "--wave-id", wave_id,
-                "--contract-sha", contract_sha,
-                env={
-                    "GIT_AUTHOR_DATE": "2025-01-01T00:02:00+0000",
-                    "GIT_COMMITTER_DATE": "2025-01-01T00:02:00+0000",
-                },
-            )
-        )
-        return implementation, contract_sha
+        declaring_sha = self.git(lane, "rev-parse", "HEAD")
+        return lane, declaring_sha
 
     def test_collect_verifies_the_declared_immutable_surface(self) -> None:
         self.integration_create()
-        implementation, _ = self.prepare_declared_contract("wave-a")
+        lane, _declaring_sha = self.prepare_declared_lane("lane-a")
 
         # Filling production behavior leaves the declared surface byte-identical.
-        implementation_sha = self.commit_implementation(
-            implementation, "wave-a", "slice-a", "wave a\n", date="2025-01-01T00:03:00+0000"
-        )
-        collected = self.collect("wave-a", implementation_sha)
+        sha = self.commit_lane(lane, "lane a\n", date="2025-01-01T00:03:00+0000")
+        collected = self.collect("lane-a", sha)
         self.assertEqual(collected["immutable_paths_verified"], ["contract_test.py"])
-        self.assertEqual(
-            collected["contract_merge_sha"],
-            self.git(implementation, "rev-parse", "HEAD~1"),
-        )
 
     def test_collect_refuses_a_weakened_or_relocated_acceptance_surface(self) -> None:
         self.integration_create()
-        implementation, _ = self.prepare_declared_contract("wave-a")
+        lane, _declaring_sha = self.prepare_declared_lane("lane-a")
 
-        (implementation / "contract_test.py").write_text("assert True\n", encoding="utf-8")
-        self.git(implementation, "add", "contract_test.py")
-        weakened = self.commit_implementation(
-            implementation, "wave-a", "slice-a", "wave a\n", date="2025-01-01T00:03:00+0000"
-        )
+        (lane / "contract_test.py").write_text("assert True\n", encoding="utf-8")
+        self.git(lane, "add", "contract_test.py")
+        weakened = self.commit_lane(lane, "lane a\n", "weaken", date="2025-01-01T00:03:00+0000")
         weakened_error = self.error_payload(
             self.cli(
                 self.root, "integration", "collect", "--root", str(self.root),
-                "--task-id", self.task_id, "--wave-id", "wave-a",
-                "--implementation-sha", weakened,
+                "--task-id", self.task_id, "--lane-id", "lane-a", "--sha", weakened,
             )
         )
-        self.assertIn("Oracle-owned acceptance surface", str(weakened_error["error"]))
+        self.assertIn("declared Immutable", str(weakened_error["error"]))
         self.assertIn("contract_test.py", str(weakened_error["error"]))
 
-        self.git(implementation, "mv", "contract_test.py", "moved_contract_test.py")
-        relocated = self.commit_implementation(
-            implementation, "wave-a", "slice-a", "wave a moved\n", date="2025-01-01T00:04:00+0000"
-        )
+        self.git(lane, "mv", "contract_test.py", "moved_contract_test.py")
+        relocated = self.commit_lane(lane, "lane a moved\n", "relocate", date="2025-01-01T00:04:00+0000")
         relocated_error = self.error_payload(
             self.cli(
                 self.root, "integration", "collect", "--root", str(self.root),
-                "--task-id", self.task_id, "--wave-id", "wave-a",
-                "--implementation-sha", relocated,
+                "--task-id", self.task_id, "--lane-id", "lane-a", "--sha", relocated,
             )
         )
         self.assertIn("deleted or relocated", str(relocated_error["error"]))
 
-    def test_status_and_collect_fail_closed_without_the_base_ref(self) -> None:
+    def test_status_fails_closed_without_the_base_ref(self) -> None:
         self.integration_create()
         self.git(self.root, "update-ref", "-d", self.base_ref)
 
-        wave_tree = self.implementation_create("wave-a", self.base)
-        implementation = self.commit_implementation(wave_tree, "wave-a", "slice-a", "wave a\n")
-        for arguments in (
-            ("integration", "status", "--root", str(self.root), "--task-id", self.task_id),
-            (
-                "integration",
-                "collect",
-                "--root",
-                str(self.root),
-                "--task-id",
-                self.task_id,
-                "--wave-id",
-                "wave-a",
-                "--implementation-sha",
-                implementation,
-            ),
-        ):
-            error = self.error_payload(self.cli(self.root, *arguments))
-            self.assertIn("integration base ref is missing", str(error["error"]))
+        error = self.error_payload(
+            self.cli(self.root, "integration", "status", "--root", str(self.root), "--task-id", self.task_id)
+        )
+        self.assertIn("integration base ref is missing", str(error["error"]))
 
 
 if __name__ == "__main__":

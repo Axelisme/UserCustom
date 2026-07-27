@@ -79,20 +79,26 @@ the same path, branch, HEAD, and clean tree; no collect; no mutate is allowed in
 bracket, and any mismatch invalidates evidence. Any capability fallback is handled by the
 ReviewGate interface, not by duplicating policy in this standard.
 
-- **S5.1 Gated checkpoint.** Open S5 only after simplify, canonical tests, and the ReviewGate
-  pass. Bind all evidence to the exact reviewed SHA. Two fresh axes use the same exact SHA and
-  same source. A bounded delta uses one reviewer on the originating axis. Present the reviewed
-  exact SHA for user acceptance and record that checkpoint as not persistence-landed.
-- **S5.2 Per-Slice exercise.** The user exercises the S1.1 sentence against the real entrypoint
-  per Slice and accepts or rejects it. Acceptance does not mutate persistence and is not
-  persistence-landed.
-- **S5.3 Rejection.** Rejection returns the Slice to S1; do not increment
-  `machine_rework_cycles`. The next candidate has a new exact SHA and reopens the required gates;
-  later commits reopen the gates for that new tip, while historical exact-SHA evidence remains
-  valid unless marked stale.
-- **S5.4 Staleness.** Feedback outside the frozen usage envelope requires a spec amendment or a
-  new Slice. It is not unbounded rework hidden under acceptance. Rejection makes dependent provisional checkpoints
-  stale until rebuilt from a valid base.
+- **S5.1 Gated session.** Open S5 only after the latest reviewed integration tip passes simplify,
+  canonical tests, and the ReviewGate. Bind the acceptance session and all active deferred rows
+  to that same exact SHA and source. Two fresh axes review it; a bounded delta uses one reviewer
+  on the originating axis. The candidate is not persistence-landed.
+- **S5.2 Exercise drain.** In dependency order, the user exercises every runnable S1.1 scenario
+  against the real entrypoint. An observation is `pass | fail | blocked`, not acceptance. A fail
+  makes the candidate known-bad and pauses acceptance but does not stop feedback collection.
+  A dependency block skips only that scenario. Whole-session stop reasons are a **closed enum**:
+  `unsafe_path | environment_damaged | uninterpretable`.
+- **S5.3 Coordinated repair.** After feedback collection finishes, batch all current
+  `origin: user_acceptance` findings into one coordinated forward repair from the integration tip;
+  this does not consume `machine_rework_cycles`. Run the repaired exact SHA through the full shared
+  order once: **simplify → canonical tests → ReviewGate**. Retest only the failed, blocked, and
+  named impacted scenarios before coordinated acceptance.
+- **S5.4 Carry-forward and staleness.** An unaffected pass may carry forward only with its observed
+  SHA, a concrete impact basis, and the user's final confirmation of the repaired exact SHA.
+  Multiple rows may share that accepted SHA. Stale rows and known-bad SHAs block acceptance and
+  landing but do not stop feedback collection when another scenario remains safe and interpretable.
+  Feedback outside the frozen usage envelope requires a spec amendment or a new Slice; it is not
+  unbounded rework hidden under acceptance.
 
 ## S6 — Night deferral
 
@@ -103,13 +109,16 @@ ReviewGate interface, not by duplicating policy in this standard.
   using the planning-with-files phase template as the queue schema. It must finish the shared
   machine order and reach `reviewed_awaiting_user` before dispatching a dependent Slice;
   that state is provisional and never means accepted or landed. The queue is ordered from the
-  latest accepted checkpoint.
+  latest accepted checkpoint. When Day Mode opens a session, project all active rows onto the
+  same reviewed exact SHA at the latest integration tip before collecting user observations.
 - **S6.3 Depth.** The max speculative dependency depth is **10** from the latest accepted
   checkpoint. Independent pending Slices do not add chain depth. A later Slice must not overwrite
   a pending acceptance surface or make its scenario independently untestable.
-- **S6.4 Drain.** Day Mode drains the queue oldest-first in dependency order. Same-SHA acceptance
-  preserves machine evidence and continues from the integration tip without persistence mutation.
-  Rejection returns to S1 and marks descendants stale.
+- **S6.4 Drain.** Day Mode drains all runnable queue scenarios in dependency order against the
+  same reviewed exact SHA. A failure pauses acceptance, not the session; collect the remaining safe,
+  interpretable observations before routing one coordinated user-feedback repair. After the repaired
+  tip passes the shared machine order, retest only the failed, blocked, and named impacted scenarios;
+  coordinated acceptance preserves machine evidence and continues without persistence mutation.
 - **S6.5 Landing.** Night Mode may defer S5 and continue bounded minimal Slices, but never lands;
   landing requires a live explicit user request.
 - **S6.6 Append-only integration.** The task integration branch is append-only: never reset,

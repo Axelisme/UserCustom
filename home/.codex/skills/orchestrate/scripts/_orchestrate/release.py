@@ -622,6 +622,29 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
                 "automatic_conversion": False,
             }
         )
+    # v129 drains one coordinated Day acceptance session before batching user
+    # feedback, then revalidates one repaired exact SHA with selective retest.
+    if old_version < 129 <= new_version:
+        requirements.append(
+            {
+                "reason": "v128-to-v129-coordinated-acceptance-session",
+                "adopt_planning_v14_deferred_schema": True,
+                "migrate_active_v13_deferred_rows_manually": True,
+                "preserve_completed_v13_phase_records": True,
+                "exercise_latest_reviewed_tip": True,
+                "continue_feedback_after_failure_when_safe": True,
+                "batch_user_findings_once": True,
+                "user_rework_does_not_consume_machine_cycles": True,
+                "repair_with_forward_commits": True,
+                "run_shared_machine_order_after_repair": True,
+                "retest_failed_blocked_and_named_impacted": True,
+                "carry_forward_requires_impact_basis": True,
+                "carry_forward_requires_final_confirmation": True,
+                "stale_or_known_bad_blocks_acceptance_and_landing": True,
+                "feedback_collection_may_continue": True,
+                "automatic_conversion": False,
+            }
+        )
     write_version_pin(root, new_version, result["orchestrate_compat"])
     return {
         "ok": True,

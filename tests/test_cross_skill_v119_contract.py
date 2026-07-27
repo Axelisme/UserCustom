@@ -19,8 +19,8 @@ SHARED_DOCUMENTS = (
 )
 
 
-class CrossSkillV128ContractTests(unittest.TestCase):
-    """Contract for v128 ownership and the formal ReviewGate interface."""
+class CrossSkillV129ContractTests(unittest.TestCase):
+    """Contract for v129 ownership and the formal ReviewGate interface."""
 
     @staticmethod
     def document(root: Path, relative: str) -> str:
@@ -73,6 +73,35 @@ class CrossSkillV128ContractTests(unittest.TestCase):
         self.assertIn("S6/S7", text)
         self.assertNotIn("mode inference", lowered)
         self.assertNotIn("landing policy", lowered)
+
+    def test_planning_v14_exposes_storage_schema_not_session_policy(self) -> None:
+        skill = self.document(CODEX_SKILLS, "planning-with-files/SKILL.md")
+        template = self.document(CODEX_SKILLS, "planning-with-files/templates/phase.md")
+        self.assertIn("skill_version: 14", skill)
+        header = next(line for line in template.splitlines() if line.startswith("| Slice |"))
+        self.assertEqual(
+            [cell.strip() for cell in header.strip("|").split("|")],
+            [
+                "Slice",
+                "exact SHA",
+                "observable sentence",
+                "entrypoint",
+                "user steps",
+                "expected",
+                "status",
+                "exercise result",
+                "observed SHA",
+                "Depends on",
+                "user evidence",
+                "impact/retest basis",
+                "acceptance evidence",
+                "machine evidence",
+            ],
+        )
+        lowered = self.normalized(skill).casefold()
+        for policy_term in ("day mode", "acceptance session", "coordinated repair"):
+            with self.subTest(policy_term=policy_term):
+                self.assertNotIn(policy_term, lowered)
 
     def test_spec_and_ticket_skills_own_artifacts_only(self) -> None:
         spec = self.normalized(self.document(CODEX_SKILLS, "to-spec/SKILL.md")).lower()

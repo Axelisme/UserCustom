@@ -31,19 +31,133 @@ def plan_dir(root: Path, task_id: str = "demo") -> Path:
     return root / ".agent_state" / "plans" / task_id
 
 
+SHA_A = "a" * 40
+SHA_B = "b" * 40
+def row_cells(line: str) -> list[str]:
+    row = line.strip().strip("|")
+    return [cell.replace(r"\|", "|").strip() for cell in re.split(r"(?<!\\)\|", row)]
+
+
+LEGACY_DEFERRED_COLUMNS = (
+    "Slice",
+    "exact SHA",
+    "observable sentence",
+    "entrypoint",
+    "user steps",
+    "expected",
+    "status",
+    "Depends on",
+    "machine evidence",
+)
+DEFERRED_COLUMNS = (
+    "Slice",
+    "exact SHA",
+    "observable sentence",
+    "entrypoint",
+    "user steps",
+    "expected",
+    "status",
+    "exercise result",
+    "observed SHA",
+    "Depends on",
+    "user evidence",
+    "impact/retest basis",
+    "acceptance evidence",
+    "machine evidence",
+)
+
+
+def deferred_row(
+    status: str,
+    *,
+    slice_id: str = "slice-1",
+    exact_sha: str = SHA_A,
+    result: str | None = None,
+    observed_sha: str | None = None,
+    user_steps: str = "run x",
+    user_evidence: str | None = None,
+    impact_basis: str = "none",
+    acceptance_evidence: str | None = None,
+    machine_evidence: str = "canonical tests pass",
+) -> list[str]:
+    if result is None:
+        result = {"accepted": "passed", "rejected": "failed"}.get(status, "not_run")
+    if observed_sha is None:
+        observed_sha = exact_sha if result != "not_run" else "none"
+    if user_evidence is None:
+        user_evidence = "user observed result" if result != "not_run" else "none"
+    if acceptance_evidence is None:
+        acceptance_evidence = "user confirmed candidate" if status == "accepted" else "none"
+    return [
+        slice_id,
+        exact_sha,
+        "user runs x and sees y",
+        "cli",
+        user_steps,
+        "y",
+        status,
+        result,
+        observed_sha,
+        "none",
+        user_evidence,
+        impact_basis,
+        acceptance_evidence,
+        machine_evidence,
+    ]
+
+
+def write_deferred_rows(path: Path, rows: list[list[str]]) -> None:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    header_index = next(
+        index for index, line in enumerate(lines) if line.startswith("| Slice |")
+    )
+    lines[header_index + 2 : header_index + 3] = [
+        "| " + " | ".join(row) + " |" for row in rows
+    ]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_legacy_deferred_row(path: Path, status: str) -> None:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    header_index = next(
+        index for index, line in enumerate(lines) if line.startswith("| Slice |")
+    )
+    row = [
+        "slice-1",
+        "abc1234",
+        "user runs x and sees y",
+        "cli",
+        "run x",
+        "y",
+        status,
+        "none",
+        "canonical tests pass",
+    ]
+    lines[header_index : header_index + 3] = [
+        "| " + " | ".join(LEGACY_DEFERRED_COLUMNS) + " |",
+        "|" + "|".join("---" for _ in LEGACY_DEFERRED_COLUMNS) + "|",
+        "| " + " | ".join(row) + " |",
+    ]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def set_deferred_acceptance(
-    path: Path, status: str, user_steps: str = "run x"
+    path: Path, status: str, user_steps: str = "run x", **overrides: str
 ) -> None:
-    text = path.read_text(encoding="utf-8")
-    placeholder = (
-        "| none | none | none | none | none | none | "
-        "none (`pending_machine | reviewed_awaiting_user | accepted | rejected | stale`) | none | none |"
+    write_deferred_rows(
+        path,
+        [deferred_row(status, user_steps=user_steps, **overrides)],
     )
-    item = (
-        f"| slice-1 | abc1234 | user runs x and sees y | cli | {user_steps} | y | "
-        f"{status} | none | canonical tests pass |"
-    )
-    path.write_text(text.replace(placeholder, item), encoding="utf-8")
+
+
+def fill_plan_slots(root: Path, task_id: str = "demo") -> None:
+    plan = plan_dir(root, task_id)
+    paths = [plan / "INDEX.md", *(plan / "phases").glob("*.md")]
+    for path in paths:
+        path.write_text(
+            re.sub(r"<[^<>\n]+>", "filled", path.read_text(encoding="utf-8")),
+            encoding="utf-8",
+        )
 
 
 class LifecycleTests(unittest.TestCase):
@@ -81,10 +195,24 @@ class LifecycleTests(unittest.TestCase):
         for phrase in ("deferred user acceptance", "status", "exact sha"):
             self.assertIn(phrase, lowered)
         self.assertNotIn("| landed |", template)
+
         rows = [line for line in template.splitlines() if line.startswith("|")]
         self.assertEqual(len(rows), 3)
-        structural_counts = [re.sub(r"`[^`]*`", "state", row).count("|") for row in rows]
-        self.assertEqual(structural_counts, [10, 10, 10])
+        self.assertEqual(tuple(row_cells(rows[0])), DEFERRED_COLUMNS)
+        self.assertTrue(all(row.count("|") == len(DEFERRED_COLUMNS) + 1 for row in rows))
+
+        status_match = re.search(r"status: `([^`]+)`", template)
+        result_match = re.search(r"exercise result: `([^`]+)`", template)
+        if status_match is None or result_match is None:
+            self.fail("missing deferred acceptance closed enums")
+        self.assertEqual(
+            set(re.findall(r"[a-z_]+", status_match.group(1))),
+            {"pending_machine", "reviewed_awaiting_user", "accepted", "rejected", "stale"},
+        )
+        self.assertEqual(
+            set(re.findall(r"[a-z_]+", result_match.group(1))),
+            {"not_run", "passed", "failed", "blocked"},
+        )
 
     def test_init_refuses_second_time(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -195,6 +323,246 @@ class LifecycleTests(unittest.TestCase):
             )
             archived = run_plan(root, "archive", "demo")
             self.assertEqual(archived.returncode, 0, archived.stdout)
+
+    def test_seal_rejects_accepted_row_with_failed_observation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            set_deferred_acceptance(
+                phase,
+                "accepted",
+                result="failed",
+                user_evidence="user found a defect",
+            )
+
+            result = run_plan(
+                root,
+                "phase-set",
+                "demo",
+                "--phase",
+                "1",
+                "--status",
+                "completed",
+                "--commit",
+                SHA_A,
+                "--conclusion",
+                "done",
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("accepted", result.stdout)
+            self.assertIn("passed", result.stdout)
+
+    def test_carry_forward_requires_impact_basis(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            set_deferred_acceptance(
+                phase,
+                "accepted",
+                exact_sha=SHA_B,
+                result="passed",
+                observed_sha=SHA_A,
+                impact_basis="none",
+            )
+
+            result = run_plan(
+                root,
+                "phase-set",
+                "demo",
+                "--phase",
+                "1",
+                "--status",
+                "completed",
+                "--commit",
+                SHA_B,
+                "--conclusion",
+                "done",
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("impact/retest basis", result.stdout)
+
+    def test_seal_allows_coordinated_rows_on_one_repaired_sha(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            write_deferred_rows(
+                phase,
+                [
+                    deferred_row(
+                        "accepted",
+                        slice_id="slice-1",
+                        exact_sha=SHA_B,
+                        observed_sha=SHA_A,
+                        impact_basis="repair did not touch this scenario",
+                    ),
+                    deferred_row(
+                        "accepted",
+                        slice_id="slice-2",
+                        exact_sha=SHA_B,
+                        observed_sha=SHA_B,
+                    ),
+                ],
+            )
+
+            result = run_plan(
+                root,
+                "phase-set",
+                "demo",
+                "--phase",
+                "1",
+                "--status",
+                "completed",
+                "--commit",
+                SHA_B,
+                "--conclusion",
+                "done",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_checkpoint_preserves_failed_and_blocked_feedback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            write_deferred_rows(
+                phase,
+                [
+                    deferred_row("rejected", slice_id="slice-1"),
+                    deferred_row(
+                        "reviewed_awaiting_user",
+                        slice_id="slice-2",
+                        result="blocked",
+                        user_evidence="dependency path is unavailable",
+                    ),
+                ],
+            )
+            fill_plan_slots(root)
+
+            checkpoint = run_plan(root, "checkpoint", "demo")
+            self.assertEqual(checkpoint.returncode, 0, checkpoint.stdout)
+            complete = run_plan(
+                root,
+                "phase-set",
+                "demo",
+                "--phase",
+                "1",
+                "--status",
+                "completed",
+                "--commit",
+                SHA_A,
+                "--conclusion",
+                "done",
+            )
+            self.assertEqual(complete.returncode, 1)
+            self.assertIn("slice-1:rejected", complete.stdout)
+            self.assertIn("slice-2:reviewed_awaiting_user", complete.stdout)
+
+    def test_checkpoint_rejects_malformed_deferred_row(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            row = deferred_row("reviewed_awaiting_user")
+            write_deferred_rows(phase, [row[:-1]])
+            fill_plan_slots(root)
+
+            result = run_plan(root, "checkpoint", "demo")
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("14 columns", result.stdout)
+
+    def test_checkpoint_rejects_invalid_deferred_enums(self) -> None:
+        cases = (
+            ({"status": "mystery"}, "invalid deferred status"),
+            ({"status": "reviewed_awaiting_user", "result": "maybe"}, "invalid exercise result"),
+        )
+        for overrides, expected in cases:
+            with self.subTest(overrides=overrides), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                run_plan(root, "init", "demo", "--goal", "g")
+                run_plan(root, "phase-start", "demo", "--topic", "x")
+                phase = plan_dir(root) / "phases" / "01-x.md"
+                status = overrides.pop("status")
+                write_deferred_rows(phase, [deferred_row(status, **overrides)])
+                fill_plan_slots(root)
+
+                result = run_plan(root, "checkpoint", "demo")
+
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(expected, result.stdout)
+
+    def test_checkpoint_rejects_mixed_acceptance_on_same_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            write_deferred_rows(
+                phase,
+                [
+                    deferred_row("accepted", slice_id="slice-1"),
+                    deferred_row("reviewed_awaiting_user", slice_id="slice-2"),
+                ],
+            )
+            fill_plan_slots(root)
+
+            result = run_plan(root, "checkpoint", "demo")
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("cannot mix accepted and unresolved", result.stdout)
+
+    def test_active_legacy_v13_rows_require_explicit_migration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            phase = plan_dir(root) / "phases" / "01-x.md"
+            write_legacy_deferred_row(phase, "accepted")
+            fill_plan_slots(root)
+
+            result = run_plan(root, "checkpoint", "demo")
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("active v13 deferred rows", result.stdout)
+            self.assertIn("explicit migration", result.stdout)
+
+    def test_completed_legacy_v13_accepted_rows_remain_archivable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_plan(root, "init", "demo", "--goal", "g")
+            run_plan(root, "phase-start", "demo", "--topic", "x")
+            plan = plan_dir(root)
+            phase = plan / "phases" / "01-x.md"
+            write_legacy_deferred_row(phase, "accepted")
+            fill_plan_slots(root)
+            phase.write_text(
+                phase.read_text(encoding="utf-8").replace(
+                    "- **Status:** in_progress", "- **Status:** completed"
+                ),
+                encoding="utf-8",
+            )
+            index = plan / "INDEX.md"
+            index.write_text(
+                index.read_text(encoding="utf-8").replace(
+                    "| 01 | in_progress |", "| 01 | completed |"
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_plan(root, "archive", "demo")
+
+            self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_completed_phase_is_sealed_against_every_phase_set_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -619,7 +987,7 @@ class StatusGitTests(unittest.TestCase):
 class SkillContractTests(unittest.TestCase):
     def test_skill_declares_version_and_storage_mental_model(self) -> None:
         text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("skill_version: 13", text)
+        self.assertIn("skill_version: 14", text)
         for phrase in ("refs vs object log", "只讀 `INDEX.md`", "指標不抄本", "storage/schema"):
             self.assertIn(phrase, text)
         for retired in ("migrate", "inventory", "check <id>"):

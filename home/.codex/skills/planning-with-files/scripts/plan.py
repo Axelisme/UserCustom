@@ -40,6 +40,42 @@ REQUIRED_HEADINGS = ("## Current State", "## Decisions", "## Phase board", "## S
 BOARD_HEADING = "## Phase board"
 DEFERRED_ACCEPTANCE_HEADING = "## Deferred user acceptance"
 PHASE_FIELDS = ("Status", "Scope", "Decisions made", "Conclusion", "Commit", "Evidence")
+LEGACY_DEFERRED_COLUMNS = (
+    "Slice",
+    "exact SHA",
+    "observable sentence",
+    "entrypoint",
+    "user steps",
+    "expected",
+    "status",
+    "Depends on",
+    "machine evidence",
+)
+DEFERRED_COLUMNS = (
+    "Slice",
+    "exact SHA",
+    "observable sentence",
+    "entrypoint",
+    "user steps",
+    "expected",
+    "status",
+    "exercise result",
+    "observed SHA",
+    "Depends on",
+    "user evidence",
+    "impact/retest basis",
+    "acceptance evidence",
+    "machine evidence",
+)
+DEFERRED_STATUSES = (
+    "pending_machine",
+    "reviewed_awaiting_user",
+    "accepted",
+    "rejected",
+    "stale",
+)
+DEFERRED_RESULTS = ("not_run", "passed", "failed", "blocked")
+FULL_SHA_PATTERN = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 ANGLE_TOKEN_PATTERN = re.compile(r"<(?P<content>[^<>\n]+)>")
 # HTML tags are shipped content, unlike the skill's named/template prompt slots.
 HTML_TAG_NAMES = frozenset({
@@ -293,25 +329,177 @@ def row_cells(line: str) -> list[str]:
     ]
 
 
-def unresolved_deferred_acceptance(text: str) -> list[str]:
+def normalized_cell(cell: str) -> str:
+    return cell.strip().strip("`").strip()
+
+
+def is_none_cell(cell: str) -> bool:
+    return normalized_cell(cell).casefold() == "none"
+
+
+def deferred_acceptance_state(
+    text: str,
+    *,
+    allow_legacy_completed: bool,
+) -> tuple[list[str], list[str]]:
+    """Return schema issues and unresolved rows for one phase record."""
     lines = text.splitlines()
-    if DEFERRED_ACCEPTANCE_HEADING not in (line.strip() for line in lines):
-        return []
+    headings = [
+        index
+        for index, line in enumerate(lines)
+        if line.strip() == DEFERRED_ACCEPTANCE_HEADING
+    ]
+    if not headings:
+        return [], []
+    if len(headings) != 1:
+        return [f"'{DEFERRED_ACCEPTANCE_HEADING}' must appear exactly once"], []
+
     start, end = section_span(lines, DEFERRED_ACCEPTANCE_HEADING)
     table = [line for line in lines[start:end] if line.lstrip().startswith("|")]
-    unresolved: list[str] = []
-    for line in table[2:]:  # skip header + separator
+    if len(table) < 3:
+        return ["deferred user acceptance requires a header, separator, and data row"], []
+
+    header = tuple(row_cells(table[0]))
+    if header == DEFERRED_COLUMNS:
+        columns = DEFERRED_COLUMNS
+        schema = "v14"
+    elif header == LEGACY_DEFERRED_COLUMNS:
+        columns = LEGACY_DEFERRED_COLUMNS
+        schema = "v13"
+    else:
+        return [
+            "deferred user acceptance header must match the current 14 columns "
+            "or the legacy 9 columns"
+        ], []
+
+    issues: list[str] = []
+    separator = row_cells(table[1])
+    if len(separator) != len(columns) or any(
+        re.fullmatch(r":?-{3,}:?", cell) is None for cell in separator
+    ):
+        issues.append(f"deferred table separator must contain {len(columns)} columns")
+
+    parsed_rows: list[list[str]] = []
+    for number, line in enumerate(table[2:], start=1):
         cells = row_cells(line)
-        if len(cells) < 7:
+        if len(cells) != len(columns):
+            issues.append(
+                f"deferred row {number} must contain {len(columns)} columns; "
+                f"found {len(cells)}"
+            )
             continue
-        slice_id = cells[0].strip("`").strip()
-        if not slice_id or slice_id.casefold() == "none":
-            continue
-        status_text = cells[6].strip("`").strip()
-        status = status_text.split(maxsplit=1)[0] if status_text else ""
+        parsed_rows.append(cells)
+
+    if not parsed_rows:
+        issues.append("deferred table requires a placeholder or real data row")
+        return issues, []
+
+    placeholder_rows = [row for row in parsed_rows if is_none_cell(row[0])]
+    real_rows = [row for row in parsed_rows if not is_none_cell(row[0])]
+    for row in placeholder_rows:
+        if not all(is_none_cell(cell) or normalized_cell(cell).startswith("none (") for cell in row):
+            issues.append("deferred placeholder row must contain only none values")
+    if placeholder_rows and real_rows:
+        issues.append("deferred placeholder row cannot coexist with real rows")
+    if len(placeholder_rows) > 1:
+        issues.append("deferred table may contain only one placeholder row")
+    if not real_rows:
+        return issues, []
+
+    if schema == "v13":
+        if not allow_legacy_completed:
+            issues.append(
+                "active v13 deferred rows require explicit migration to the v14 14-column schema"
+            )
+        unresolved = []
+        for row in real_rows:
+            slice_id = normalized_cell(row[0]) or "missing"
+            status_text = normalized_cell(row[6])
+            status = status_text.split(maxsplit=1)[0] if status_text else ""
+            if status != "accepted":
+                unresolved.append(f"{slice_id}:{status or 'missing'}")
+        return issues, unresolved
+
+    records: list[dict[str, str]] = [
+        {
+            str(column): normalized_cell(cell)
+            for column, cell in zip(DEFERRED_COLUMNS, row, strict=True)
+        }
+        for row in real_rows
+    ]
+    unresolved: list[str] = []
+    seen_slices: set[str] = set()
+    by_sha: dict[str, list[dict[str, str]]] = {}
+
+    for record in records:
+        slice_id = record["Slice"]
+        status = record["status"]
+        result = record["exercise result"]
+        exact_sha = record["exact SHA"]
+        observed_sha = record["observed SHA"]
+
+        if slice_id in seen_slices:
+            issues.append(f"duplicate deferred Slice '{slice_id}'")
+        seen_slices.add(slice_id)
+
+        if status not in DEFERRED_STATUSES:
+            issues.append(f"{slice_id} has invalid deferred status '{status}'")
+        if result not in DEFERRED_RESULTS:
+            issues.append(f"{slice_id} has invalid exercise result '{result}'")
         if status != "accepted":
             unresolved.append(f"{slice_id}:{status or 'missing'}")
-    return unresolved
+
+        if status == "pending_machine":
+            if result != "not_run":
+                issues.append(f"{slice_id} pending_machine requires exercise result not_run")
+        elif FULL_SHA_PATTERN.fullmatch(exact_sha) is None:
+            issues.append(f"{slice_id} exact SHA must be a full 40- or 64-hex SHA")
+
+        if result == "not_run":
+            if not is_none_cell(observed_sha) or not is_none_cell(record["user evidence"]):
+                issues.append(f"{slice_id} not_run requires no observed SHA or user evidence")
+        else:
+            if FULL_SHA_PATTERN.fullmatch(observed_sha) is None:
+                issues.append(f"{slice_id} observed SHA must be a full 40- or 64-hex SHA")
+            if is_none_cell(record["user evidence"]):
+                issues.append(f"{slice_id} {result} requires user evidence")
+
+        if status in {"reviewed_awaiting_user", "accepted", "rejected", "stale"}:
+            if FULL_SHA_PATTERN.fullmatch(exact_sha) is None:
+                issues.append(f"{slice_id} exact SHA must be a full 40- or 64-hex SHA")
+            if is_none_cell(record["machine evidence"]):
+                issues.append(f"{slice_id} {status} requires machine evidence")
+
+        if status == "accepted":
+            if result != "passed":
+                issues.append(f"{slice_id} accepted status requires exercise result passed")
+            if is_none_cell(record["acceptance evidence"]):
+                issues.append(f"{slice_id} accepted status requires acceptance evidence")
+            if observed_sha != exact_sha and is_none_cell(record["impact/retest basis"]):
+                issues.append(
+                    f"{slice_id} carry-forward requires a non-none impact/retest basis"
+                )
+        elif not is_none_cell(record["acceptance evidence"]):
+            issues.append(f"{slice_id} non-accepted row cannot contain acceptance evidence")
+
+        if status == "rejected" and result != "failed":
+            issues.append(f"{slice_id} rejected status requires exercise result failed")
+        if result == "failed" and status not in {"rejected", "stale"}:
+            issues.append(f"{slice_id} failed observation requires rejected or stale status")
+
+        if FULL_SHA_PATTERN.fullmatch(exact_sha):
+            by_sha.setdefault(exact_sha, []).append(record)
+
+    for exact_sha, group in by_sha.items():
+        statuses = {record["status"] for record in group}
+        if "accepted" in statuses and statuses != {"accepted"}:
+            issues.append(
+                f"candidate {exact_sha} cannot mix accepted and unresolved deferred rows"
+            )
+        if any(record["exercise result"] == "failed" for record in group) and "accepted" in statuses:
+            issues.append(f"known-bad candidate {exact_sha} cannot be accepted")
+
+    return issues, unresolved
 
 
 def read_board(text: str) -> list[dict[str, str]]:
@@ -515,7 +703,14 @@ def command_phase_set(args: argparse.Namespace) -> dict[str, Any]:
                 raise PlanError(
                     "completing a phase requires a Commit SHA and a Conclusion"
                 )
-            unresolved = unresolved_deferred_acceptance(text)
+            deferred_issues, unresolved = deferred_acceptance_state(
+                text,
+                allow_legacy_completed=False,
+            )
+            if deferred_issues:
+                raise PlanError(
+                    "invalid deferred user acceptance: " + "; ".join(deferred_issues)
+                )
             if unresolved:
                 raise PlanError(
                     "completing a phase requires all deferred user acceptance items "
@@ -671,13 +866,16 @@ def validate_plan(plan: Path) -> list[str]:
                 issues.append(f"{path.name} has no '{field}' field")
         if record_status not in PHASE_STATUSES:
             issues.append(f"{path.name} has invalid Status")
-        if record_status == "completed":
-            unresolved = unresolved_deferred_acceptance(text)
-            if unresolved:
-                issues.append(
-                    f"{path.name} has unresolved deferred user acceptance: "
-                    + ", ".join(unresolved)
-                )
+        deferred_issues, unresolved = deferred_acceptance_state(
+            text,
+            allow_legacy_completed=record_status == "completed",
+        )
+        issues.extend(f"{path.name}: {issue}" for issue in deferred_issues)
+        if record_status == "completed" and unresolved:
+            issues.append(
+                f"{path.name} has unresolved deferred user acceptance: "
+                + ", ".join(unresolved)
+            )
         board = board_by_phase.get(num)
         if board is None:
             issues.append(f"{path.name} is not listed on the INDEX phase board")

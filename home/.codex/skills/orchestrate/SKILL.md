@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Minimal Git-backed Oracle and Implementation workflow for a Git task lane.
-skill_version: 128
+skill_version: 129
 ---
 
 # Orchestrate

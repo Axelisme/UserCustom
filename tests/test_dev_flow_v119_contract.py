@@ -20,8 +20,8 @@ ROUTING_DOCUMENTS = (
 )
 
 
-class DevFlowV128ContractTests(unittest.TestCase):
-    """Structural contract for the v128 S1-S7 authority."""
+class DevFlowV129ContractTests(unittest.TestCase):
+    """Structural contract for the v129 S1-S7 authority."""
 
     @staticmethod
     def read(path: Path) -> str:
@@ -123,6 +123,47 @@ class DevFlowV128ContractTests(unittest.TestCase):
         self.assertLess(s6.index("reviewed_awaiting_user"), s6.index("dependent slice"))
         self.assertIn("never lands", s6)
         self.assertIn("append-only", s6)
+
+    def test_acceptance_session_drains_feedback_before_one_repair_batch(self) -> None:
+        standard = self.read(ADMISSION_PATHS[0])
+        s5 = " ".join(self.section(standard, 5).split()).casefold()
+        s6 = " ".join(self.section(standard, 6).split()).casefold()
+
+        for token in (
+            "latest reviewed integration tip",
+            "same exact sha",
+            "pass | fail | blocked",
+            "known-bad",
+            "coordinated forward repair",
+            "failed, blocked, and named impacted",
+            "impact basis",
+            "final confirmation",
+        ):
+            with self.subTest(interface_token=token):
+                self.assertIn(token, s5)
+
+        stop_reasons = re.search(
+            r"stop reasons are a \*\*closed enum\*\*: `([^`]+)`",
+            s5,
+        )
+        if stop_reasons is None:
+            self.fail("missing closed acceptance-session stop reasons")
+        self.assertEqual(
+            set(re.findall(r"[a-z_]+", stop_reasons.group(1))),
+            {"unsafe_path", "environment_damaged", "uninterpretable"},
+        )
+
+        self.assertLess(s5.index("feedback collection"), s5.index("coordinated forward repair"))
+        repair = s5.index("coordinated forward repair")
+        ordered_gates = [s5.index(term, repair) for term in ("simplify", "canonical tests", "reviewgate")]
+        self.assertEqual(ordered_gates, sorted(ordered_gates))
+        self.assertIn("does not stop feedback collection", s5)
+        self.assertIn("does not consume", s5)
+
+        self.assertIn("all runnable", s6)
+        self.assertIn("same reviewed exact sha", s6)
+        self.assertIn("one coordinated", s6)
+        self.assertIn("failed, blocked, and named impacted", s6)
 
     def test_review_and_landing_interfaces_keep_safety_constraints(self) -> None:
         standard = self.read(ADMISSION_PATHS[0])

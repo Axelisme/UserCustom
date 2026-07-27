@@ -195,11 +195,63 @@ class OrchestrateV119MigrationContractTests(unittest.TestCase):
             ):
                 self.assertTrue(checkpoint[surface], surface)
             self.assertFalse(checkpoint["automatic_conversion"])
+            session = requirements["v128-to-v129-coordinated-acceptance-session"]
+            for surface in (
+                "adopt_planning_v14_deferred_schema",
+                "migrate_active_v13_deferred_rows_manually",
+                "preserve_completed_v13_phase_records",
+                "exercise_latest_reviewed_tip",
+                "continue_feedback_after_failure_when_safe",
+                "batch_user_findings_once",
+                "user_rework_does_not_consume_machine_cycles",
+                "repair_with_forward_commits",
+                "run_shared_machine_order_after_repair",
+                "retest_failed_blocked_and_named_impacted",
+                "carry_forward_requires_impact_basis",
+                "carry_forward_requires_final_confirmation",
+                "stale_or_known_bad_blocks_acceptance_and_landing",
+                "feedback_collection_may_continue",
+            ):
+                self.assertTrue(session[surface], surface)
+            self.assertFalse(session["automatic_conversion"])
             self.assertEqual(
                 json.loads(pin.read_text(encoding="utf-8"))["skill_version"], version
             )
             self.assertEqual(evidence.read_text(encoding="utf-8"), '{"legacy": true}\n')
             self.assertEqual(legacy_state.read_text(encoding="utf-8"), '{"lane": "old"}\n')
+
+    def test_v128_pin_receives_only_the_v129_session_boundary(self) -> None:
+        release = load_release_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.git(root, "init", "-q", "-b", "main")
+            self.git(root, "config", "user.name", "Oracle Test")
+            self.git(root, "config", "user.email", "oracle@example.test")
+            self.git(root, "commit", "--allow-empty", "-qm", "base")
+            skill, version = self.shipped_skill_fixture(root, release)
+            pin = root / ".agent_state" / "orchestrate" / "version-pin.json"
+            pin.parent.mkdir(parents=True)
+            pin.write_text(
+                json.dumps(
+                    {
+                        "pin_version": 1,
+                        "skill_version": 128,
+                        "orchestrate_compat": 128,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = release.command_pin_migrate(
+                argparse.Namespace(root=str(root), skill_dir=str(skill))
+            )
+
+            self.assertEqual(version, 129)
+            self.assertEqual(
+                [block["reason"] for block in result["migration_requirements"]],
+                ["v128-to-v129-coordinated-acceptance-session"],
+            )
+            self.assertFalse(result["migration_requirements"][0]["automatic_conversion"])
 
     def test_retained_administration_stays_on_the_root_cli(self) -> None:
         result = subprocess.run(

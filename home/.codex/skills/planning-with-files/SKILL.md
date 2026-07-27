@@ -31,7 +31,7 @@ accepts explicit task IDs: `init`, `phase-start`, `phase-set`, `log`, `status`, 
 
 The `phase/deferred-row/progress schema` is defined by `templates/phase.md` and the JSONL log.
 A phase may mutate before completion and is sealed after `completed`; `progress` only appends.
-Use the template as the authority for deferred rows instead of restating row fields here. S6/S7
+Use the template as the authority for deferred rows instead of restating row fields here. S4/S5
 references are recorded as pointers to the shared authority, not copied policy. Do not add another
 ledger, status, or execution state file. The plan stores records; it does not infer runtime state
 or decide close-out.
@@ -51,7 +51,7 @@ columns (`Slice | observable | entrypoint | steps | expected | verifier | state 
 its only cross-field rule is that state `accepted` requires a full 40- or 64-hex `accepted SHA`
 and every other state requires `none`. A retired 14-column table is rejected with a
 migration-required error and is never auto-converted. The script is the executable authority;
-this document describes only storage/schema and S6/S7 references.
+this document describes only storage/schema and S4/S5 references.
 
 ## Boundary
 

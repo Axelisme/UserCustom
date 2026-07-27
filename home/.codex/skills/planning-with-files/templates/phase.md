@@ -9,8 +9,7 @@
 
 ## Deferred user acceptance
 
-- **S6/S7:** shared admission-standard references govern acceptance and close-out.
-- speculative dependency depth: validate against admission-standard S6.3.
+- **S4/S5:** shared admission-standard references govern acceptance and close-out.
 - verifier: `user | agent`.
 - state: `pending | passed | failed | blocked | accepted | superseded`.
 - active rows update in place; multiple rows may share one entrypoint.

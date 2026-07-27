@@ -2,7 +2,7 @@
 name: planning-with-files
 description: 以 explicit task-id 管理 repo-local durable task narrative；只在跨回合、critical或資訊量確有需要時使用。
 user-invocable: true
-skill_version: 14
+skill_version: 15
 ---
 
 # Planning with Files
@@ -46,9 +46,12 @@ that `status` can derive. Completed phase records and accepted deferred rows are
 
 `checkpoint` validates schema, required fields, and the INDEX 16 KiB budget. `archive` validates
 that phases are complete and moves the plan. Template slots are allowed immediately after `init`
-but active or completed phases must fill required fields. Completed v13 deferred tables remain
-read-only history; active v13 rows require explicit migration to the current template. The script
-is the executable authority; this document describes only storage/schema and S6/S7 references.
+but active or completed phases must fill required fields. The deferred-acceptance table is 8
+columns (`Slice | observable | entrypoint | steps | expected | verifier | state | accepted SHA`);
+its only cross-field rule is that state `accepted` requires a full 40- or 64-hex `accepted SHA`
+and every other state requires `none`. A retired 14-column table is rejected with a
+migration-required error and is never auto-converted. The script is the executable authority;
+this document describes only storage/schema and S6/S7 references.
 
 ## Boundary
 

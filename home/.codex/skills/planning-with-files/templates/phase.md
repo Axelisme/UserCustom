@@ -11,19 +11,19 @@
 
 - **S6/S7:** shared admission-standard references govern acceptance and close-out.
 - speculative dependency depth: validate against admission-standard S6.3.
-- status: `pending_machine | reviewed_awaiting_user | accepted | rejected | stale`.
-- exercise result: `not_run | passed | failed | blocked`.
-- active rows update in place before acceptance; multiple rows may share one exact SHA.
-- `observed SHA` records where the user observation occurred. Carry-forward to a different
-  candidate requires a non-`none` impact/retest basis and acceptance evidence for that candidate.
+- verifier: `user | agent`.
+- state: `pending | passed | failed | blocked | accepted | superseded`.
+- active rows update in place; multiple rows may share one entrypoint.
+- `accepted SHA` must be a full 40- or 64-hex SHA when state is `accepted`, and `none` for
+  every other state — the only cross-field rule this table enforces.
 
-| Slice | exact SHA | observable sentence | entrypoint | user steps | expected | status | exercise result | observed SHA | Depends on | user evidence | impact/retest basis | acceptance evidence | machine evidence |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| none | none | none | none | none | none | none | none | none | none | none | none | none | none |
+| Slice | observable | entrypoint | steps | expected | verifier | state | accepted SHA |
+|---|---|---|---|---|---|---|---|
+| none | none | none | none | none | none | none | none |
 
-- An accepted checkpoint freezes the row. Completed v13 nine-column records remain read-only;
-  an active v13 row requires explicit migration to this schema.
-- A phase is sealed only when its required fields and deferred rows satisfy the shared schema.
+- A retired 14-column table is rejected with a migration-required error and is never
+  auto-converted.
+- A phase is sealed only when its required fields and deferred rows satisfy this schema.
 
 ## Notes
 

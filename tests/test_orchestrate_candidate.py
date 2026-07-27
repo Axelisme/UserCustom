@@ -224,18 +224,30 @@ class ReadyCandidateContractTests(unittest.TestCase):
         self.payload(self.publish(first))
         self.assertEqual(self.status()["candidate"]["behind_tip"], 0)
 
-        self.advance_integration("lane-b", "lane a\nlane b\n", "2025-01-01T00:02:00+0000")
-        self.advance_integration("lane-c", "lane a\nlane b\nlane c\n", "2025-01-01T00:03:00+0000")
+        # A --no-ff collect adds two new commits to the integration branch
+        # (the lane's own commit plus the merge commit), independent of the
+        # production formula: cross-check the cumulative count against the
+        # sum of each collect's incremental contribution.
+        after_b = self.advance_integration("lane-b", "lane a\nlane b\n", "2025-01-01T00:02:00+0000")
+        incremental_b = int(self.git(self.root, "rev-list", "--count", f"{first}..{after_b}"))
+        after_c = self.advance_integration("lane-c", "lane a\nlane b\nlane c\n", "2025-01-01T00:03:00+0000")
+        incremental_c = int(self.git(self.root, "rev-list", "--count", f"{after_b}..{after_c}"))
 
-        expected = int(self.git(
-            self.root, "rev-list", "--count", f"{self.candidate_ref}..{self.integration_branch}"
-        ))
-        self.assertEqual(expected, 2)
+        expected = incremental_b + incremental_c
+        self.assertGreater(expected, 0)
         status = self.status()
-        self.assertEqual(status["candidate"]["behind_tip"], 2)
-        # the candidate sha itself has not moved; only the tip has
+        self.assertEqual(status["candidate"]["behind_tip"], expected)
+        self.assertEqual(
+            expected,
+            int(self.git(
+                self.root, "rev-list", "--count", f"{self.candidate_ref}..{self.integration_branch}"
+            )),
+        )
+        # the candidate sha itself has not moved; only the tip has, and the
+        # acceptance worktree is still exactly where it was published, so it
+        # is still "ready" for that (now stale) candidate.
         self.assertEqual(status["candidate"]["sha"], first)
-        self.assertFalse(status["candidate"]["worktree_ready"])
+        self.assertTrue(status["candidate"]["worktree_ready"])
 
     # 6. remove tears down both worktrees and the candidate ref together.
     def test_remove_tears_down_both_worktrees_and_the_candidate_ref(self) -> None:

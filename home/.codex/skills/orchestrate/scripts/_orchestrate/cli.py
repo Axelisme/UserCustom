@@ -24,15 +24,14 @@ from .release import (
     command_release,
 )
 from .v119_core import (
-    command_contract_merge,
     command_integration_collect,
     command_integration_create,
     command_integration_remove,
     command_integration_status,
+    command_lane_create,
+    command_lane_drop,
+    command_lane_status,
     command_profile_report,
-    command_worktree_create,
-    command_worktree_remove,
-    command_worktree_status,
 )
 
 
@@ -50,27 +49,29 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--skill-dir", default=str(Path(__file__).resolve().parents[2]))
     commands = parser.add_subparsers(dest="command", required=True, parser_class=JsonArgumentParser)
 
-    worktree = commands.add_parser("worktree", help="v119 per-role Git worktree lifecycle")
-    worktree_commands = worktree.add_subparsers(dest="worktree_command", required=True, parser_class=JsonArgumentParser)
-    for operation, handler in (("create", command_worktree_create), ("status", command_worktree_status), ("remove", command_worktree_remove)):
-        operation_parser = worktree_commands.add_parser(operation)
-        add_root(operation_parser)
-        operation_parser.add_argument("--task-id", required=True)
-        operation_parser.add_argument("--wave-id", required=True)
-        operation_parser.add_argument("--role", choices=("oracle", "implementation"), required=True)
-        if operation == "create":
-            operation_parser.add_argument("--base", required=True)
-        operation_parser.set_defaults(handler=handler)
+    lane = commands.add_parser("lane", help="Git-backed lane lifecycle")
+    lane_commands = lane.add_subparsers(dest="lane_command", required=True, parser_class=JsonArgumentParser)
 
-    contract = commands.add_parser("contract", help="v119 exact Contract handoff")
-    merge = contract.add_subparsers(dest="contract_command", required=True, parser_class=JsonArgumentParser).add_parser("merge")
-    add_root(merge)
-    merge.add_argument("--task-id", required=True)
-    merge.add_argument("--wave-id", required=True)
-    merge.add_argument("--contract-sha", required=True)
-    merge.set_defaults(handler=command_contract_merge)
+    lane_create = lane_commands.add_parser("create")
+    add_root(lane_create)
+    lane_create.add_argument("--task-id", required=True)
+    lane_create.add_argument("--lane-id", required=True)
+    lane_create.add_argument("--base", required=True)
+    lane_create.set_defaults(handler=command_lane_create)
 
-    integration = commands.add_parser("integration", help="v119 task integration worktree lifecycle")
+    lane_status = lane_commands.add_parser("status")
+    add_root(lane_status)
+    lane_status.add_argument("--task-id", required=True)
+    lane_status.add_argument("--lane-id", help="omit to list every lane of the task")
+    lane_status.set_defaults(handler=command_lane_status)
+
+    lane_drop = lane_commands.add_parser("drop")
+    add_root(lane_drop)
+    lane_drop.add_argument("--task-id", required=True)
+    lane_drop.add_argument("--lane-id", required=True)
+    lane_drop.set_defaults(handler=command_lane_drop)
+
+    integration = commands.add_parser("integration", help="Git-backed task integration lifecycle")
     integration_commands = integration.add_subparsers(dest="integration_command", required=True, parser_class=JsonArgumentParser)
     for operation, handler in (
         ("create", command_integration_create),
@@ -84,8 +85,8 @@ def build_parser() -> argparse.ArgumentParser:
         if operation == "create":
             operation_parser.add_argument("--base", required=True)
         elif operation == "collect":
-            operation_parser.add_argument("--wave-id", required=True)
-            operation_parser.add_argument("--implementation-sha", required=True)
+            operation_parser.add_argument("--lane-id", required=True)
+            operation_parser.add_argument("--sha", required=True)
         operation_parser.set_defaults(handler=handler)
 
     profile = commands.add_parser("profile", help="read-only Git profile projections")
@@ -115,7 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
     admission.add_argument("--backlog", type=int, help="of those, how many were downgraded")
     admission.set_defaults(handler=command_admission)
 
-    doctor = commands.add_parser("doctor", help="verify v119 manifest, hashes, and read budgets")
+    doctor = commands.add_parser("doctor", help="verify shipped manifest, hashes, and read budgets")
     doctor.set_defaults(handler=command_doctor)
     diff = commands.add_parser("diff", help="compare bundled release manifests")
     diff.add_argument("old_version", type=int)

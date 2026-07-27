@@ -17,7 +17,16 @@ SCRIPT = (
 
 
 class StrictGitTrailerContractTests(unittest.TestCase):
-    """Black-box Contract for workflow authority carried by real Git trailers."""
+    """Black-box Contract for workflow authority carried by real Git trailers.
+
+    ``profile report`` is the one remaining reader of the Wave/Slice/Role
+    trailer vocabulary (lane/integration collect use Task/Lane/Immutable
+    instead, and Immutable is read straight from Git's own repeatable-trailer
+    format, so it never goes through the ambiguity detector exercised here).
+    Fixtures commit directly onto ``wave/<task>/<wave>/<role>`` branches with
+    raw Git rather than through a CLI worktree command, since the lane model
+    no longer has a role worktree to create.
+    """
 
     task_id = "strict-trailer-task"
     wave_id = "strict-wave"
@@ -89,53 +98,30 @@ class StrictGitTrailerContractTests(unittest.TestCase):
         self.git(root, "commit", "-q", "-m", "base")
         return self.git(root, "rev-parse", "HEAD")
 
-    def create_worktree(self, root: Path, base: str, role: str) -> Path:
-        payload = self.success_payload(
-            self.cli(
-                root,
-                "worktree",
-                "create",
-                "--root",
-                str(root),
-                "--task-id",
-                self.task_id,
-                "--wave-id",
-                self.wave_id,
-                "--role",
-                role,
-                "--base",
-                base,
-            )
-        )
-        return Path(str(payload["worktree"]))
+    def commit_on_oracle_branch(
+        self, root: Path, base: str, path: str, content: str, message: str
+    ) -> str:
+        """Commit directly onto the Oracle role branch profile report reads.
 
-    def commit_file(self, worktree: Path, path: str, content: str, message: str) -> str:
-        target = worktree / path
+        Raw Git plumbing stands in for the deleted ``worktree create --role
+        oracle`` command: profile report only cares about the branch and its
+        commits, not about a live worktree.
+        """
+        branch = f"wave/{self.task_id}/{self.wave_id}/oracle"
+        self.git(root, "checkout", "-q", "-B", branch, base)
+        target = root / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-        self.git(worktree, "add", path)
-        self.git(worktree, "commit", "-q", "-m", message)
-        return self.git(worktree, "rev-parse", "HEAD")
+        self.git(root, "add", path)
+        self.git(root, "commit", "-q", "-m", message)
+        sha = self.git(root, "rev-parse", "HEAD")
+        self.git(root, "checkout", "-q", "main")
+        return sha
 
     def trailer_lines(self, root: Path, sha: str) -> list[str]:
         """Ask Git itself which lines form the commit's final trailer block."""
         trailers = self.git(root, "show", "-s", "--format=%(trailers:only)", sha)
         return trailers.splitlines() if trailers else []
-
-    def merge(self, root: Path, contract: str) -> subprocess.CompletedProcess[str]:
-        return self.cli(
-            root,
-            "contract",
-            "merge",
-            "--root",
-            str(root),
-            "--task-id",
-            self.task_id,
-            "--wave-id",
-            self.wave_id,
-            "--contract-sha",
-            contract,
-        )
 
     def profile(self, root: Path, base: str) -> subprocess.CompletedProcess[str]:
         return self.cli(
@@ -173,78 +159,13 @@ class StrictGitTrailerContractTests(unittest.TestCase):
         trailers.insert(index + 1, f"{key.lower()}:{value}")
         return "mixed-case duplicate workflow trailer\n\n" + "\n".join(trailers)
 
-    def test_body_labels_followed_by_prose_are_rejected_without_merge_mutation(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            base = self.init_repo(root)
-            implementation = self.create_worktree(root, base, "implementation")
-            oracle = self.create_worktree(root, base, "oracle")
-            contract = self.commit_file(
-                oracle,
-                "contracts/body-labels.txt",
-                "not a contract\n",
-                "labels in the commit body\n\n"
-                f"Wave: {self.wave_id}\n"
-                "Slice: body-labels\n"
-                "Role: oracle\n"
-                "Ordinary prose after the labels makes this body text, not trailers.",
-            )
-            self.assertEqual(self.trailer_lines(root, contract), [])
-            head_before = self.git(implementation, "rev-parse", "HEAD")
-            refs_before = self.git(root, "show-ref")
-
-            error = self.error_payload(self.merge(root, contract))
-
-            self.assertRegex(str(error["error"]).lower(), r"trailer|contract")
-            self.assertEqual(self.git(implementation, "rev-parse", "HEAD"), head_before)
-            self.assertEqual(self.git(root, "show-ref"), refs_before)
-            self.assertFalse((implementation / "contracts/body-labels.txt").exists())
-            merge_head = Path(
-                self.git(implementation, "rev-parse", "--git-path", "MERGE_HEAD")
-            )
-            self.assertFalse(merge_head.exists())
-
-    def test_eof_labels_without_git_trailer_separator_reject_before_merge_mutation(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            base = self.init_repo(root)
-            implementation = self.create_worktree(root, base, "implementation")
-            oracle = self.create_worktree(root, base, "oracle")
-            contract = self.commit_file(
-                oracle,
-                "contracts/no-separator.txt",
-                "not authoritative\n",
-                "subject\n"
-                f"Wave: {self.wave_id}\n"
-                "Slice: no-separator\n"
-                "Role: oracle",
-            )
-            self.assertEqual(self.trailer_lines(root, contract), [])
-            head_before = self.git(implementation, "rev-parse", "HEAD")
-            refs_before = self.git(root, "show-ref")
-
-            error = self.error_payload(self.merge(root, contract))
-
-            self.assertRegex(str(error["error"]).lower(), r"trailer|contract")
-            self.assertEqual(self.git(implementation, "rev-parse", "HEAD"), head_before)
-            self.assertEqual(self.git(root, "show-ref"), refs_before)
-            self.assertFalse((implementation / "contracts/no-separator.txt").exists())
-            merge_head = Path(
-                self.git(implementation, "rev-parse", "--git-path", "MERGE_HEAD")
-            )
-            self.assertFalse(merge_head.exists())
-
     def test_profile_omits_eof_labels_without_git_trailer_separator(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             base = self.init_repo(root)
-            oracle = self.create_worktree(root, base, "oracle")
-            commit = self.commit_file(
-                oracle,
+            commit = self.commit_on_oracle_branch(
+                root,
+                base,
                 "contracts/profile-no-separator.txt",
                 "not a profile milestone\n",
                 "subject\n"
@@ -265,9 +186,9 @@ class StrictGitTrailerContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             base = self.init_repo(root)
-            oracle = self.create_worktree(root, base, "oracle")
-            body_only = self.commit_file(
-                oracle,
+            body_only = self.commit_on_oracle_branch(
+                root,
+                base,
                 "contracts/body-only.txt",
                 "body only\n",
                 "body labels\n\n"
@@ -276,8 +197,9 @@ class StrictGitTrailerContractTests(unittest.TestCase):
                 "Role: oracle\n"
                 "This final prose line prevents Git from recognizing a trailer block.",
             )
-            valid = self.commit_file(
-                oracle,
+            valid = self.commit_on_oracle_branch(
+                root,
+                base,
                 "contracts/valid.txt",
                 "valid\n",
                 "compact valid publication\n\n"
@@ -298,68 +220,6 @@ class StrictGitTrailerContractTests(unittest.TestCase):
             self.assertEqual(attempt["oracle_sha"], valid)
             self.assertNotIn(body_only, json.dumps(report, sort_keys=True))
 
-    def test_final_git_trailer_block_remains_mergeable_and_profiled(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            base = self.init_repo(root)
-            self.create_worktree(root, base, "implementation")
-            oracle = self.create_worktree(root, base, "oracle")
-            contract = self.commit_file(
-                oracle,
-                "contracts/final-block.txt",
-                "public contract\n",
-                f"publish\n\nWave: {self.wave_id}\nSlice: final-block\nRole: oracle",
-            )
-            self.assertEqual(
-                self.trailer_lines(root, contract),
-                [f"Wave: {self.wave_id}", "Slice: final-block", "Role: oracle"],
-            )
-
-            merged = self.success_payload(self.merge(root, contract))
-            report = self.success_payload(self.profile(root, base))
-
-            self.assertEqual(merged["contract_sha"], contract)
-            attempt = report["slices"]["final-block"]["attempts"][0]
-            self.assertEqual(attempt["oracle_sha"], contract)
-            self.assertEqual(attempt["contract_merge_sha"], merged["merge_sha"])
-
-    def test_duplicate_actual_trailers_reject_contract_merge_machine_readably(
-        self,
-    ) -> None:
-        for key in ("Wave", "Slice", "Role"):
-            with self.subTest(key=key), tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
-                base = self.init_repo(root)
-                implementation = self.create_worktree(root, base, "implementation")
-                oracle = self.create_worktree(root, base, "oracle")
-                contract = self.commit_file(
-                    oracle,
-                    f"contracts/duplicate-{key.lower()}.txt",
-                    "ambiguous\n",
-                    self.duplicate_message(key),
-                )
-                actual = self.trailer_lines(root, contract)
-                self.assertEqual(sum(line.startswith(f"{key}:") for line in actual), 2)
-                head_before = self.git(implementation, "rev-parse", "HEAD")
-                refs_before = self.git(root, "show-ref")
-
-                error = self.error_payload(self.merge(root, contract))
-
-                self.assertRegex(
-                    str(error["error"]).lower(), r"duplicate|ambiguous|trailer"
-                )
-                self.assertEqual(
-                    self.git(implementation, "rev-parse", "HEAD"), head_before
-                )
-                self.assertEqual(self.git(root, "show-ref"), refs_before)
-                self.assertFalse(
-                    Path(
-                        self.git(
-                            implementation, "rev-parse", "--git-path", "MERGE_HEAD"
-                        )
-                    ).exists()
-                )
-
     def test_duplicate_actual_trailers_make_profile_report_fail_machine_readably(
         self,
     ) -> None:
@@ -367,9 +227,9 @@ class StrictGitTrailerContractTests(unittest.TestCase):
             with self.subTest(key=key), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 base = self.init_repo(root)
-                oracle = self.create_worktree(root, base, "oracle")
-                commit = self.commit_file(
-                    oracle,
+                commit = self.commit_on_oracle_branch(
+                    root,
+                    base,
                     f"contracts/profile-duplicate-{key.lower()}.txt",
                     "ambiguous profile milestone\n",
                     self.duplicate_message(key),
@@ -383,50 +243,14 @@ class StrictGitTrailerContractTests(unittest.TestCase):
                     str(error["error"]).lower(), r"duplicate|ambiguous|trailer"
                 )
 
-    def test_mixed_case_semantic_duplicates_reject_merge_before_mutation(self) -> None:
-        for key in ("Wave", "Slice", "Role"):
-            with self.subTest(key=key), tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
-                base = self.init_repo(root)
-                implementation = self.create_worktree(root, base, "implementation")
-                oracle = self.create_worktree(root, base, "oracle")
-                contract = self.commit_file(
-                    oracle,
-                    f"contracts/mixed-case-duplicate-{key.lower()}.txt",
-                    "ambiguous despite token casing\n",
-                    self.mixed_case_duplicate_message(key),
-                )
-                actual = self.trailer_lines(root, contract)
-                tokens = [line.split(":", 1)[0].lower() for line in actual]
-                self.assertEqual(tokens.count(key.lower()), 2, actual)
-                head_before = self.git(implementation, "rev-parse", "HEAD")
-                refs_before = self.git(root, "show-ref")
-
-                error = self.error_payload(self.merge(root, contract))
-
-                self.assertRegex(
-                    str(error["error"]).lower(), r"duplicate|ambiguous|trailer"
-                )
-                self.assertEqual(
-                    self.git(implementation, "rev-parse", "HEAD"), head_before
-                )
-                self.assertEqual(self.git(root, "show-ref"), refs_before)
-                self.assertFalse(
-                    Path(
-                        self.git(
-                            implementation, "rev-parse", "--git-path", "MERGE_HEAD"
-                        )
-                    ).exists()
-                )
-
     def test_mixed_case_semantic_duplicates_reject_profile_authority(self) -> None:
         for key in ("Wave", "Slice", "Role"):
             with self.subTest(key=key), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 base = self.init_repo(root)
-                oracle = self.create_worktree(root, base, "oracle")
-                commit = self.commit_file(
-                    oracle,
+                commit = self.commit_on_oracle_branch(
+                    root,
+                    base,
                     f"contracts/profile-mixed-case-duplicate-{key.lower()}.txt",
                     "ambiguous profile authority\n",
                     self.mixed_case_duplicate_message(key),
@@ -441,14 +265,13 @@ class StrictGitTrailerContractTests(unittest.TestCase):
                     str(error["error"]).lower(), r"duplicate|ambiguous|trailer"
                 )
 
-    def test_single_mixed_case_variants_normalize_for_merge_and_profile(self) -> None:
+    def test_single_mixed_case_variants_normalize_for_profile(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             base = self.init_repo(root)
-            self.create_worktree(root, base, "implementation")
-            oracle = self.create_worktree(root, base, "oracle")
-            contract = self.commit_file(
-                oracle,
+            contract = self.commit_on_oracle_branch(
+                root,
+                base,
                 "contracts/single-mixed-case-variants.txt",
                 "case-insensitive workflow metadata\n",
                 "single semantic trailer per workflow key\n\n"
@@ -465,13 +288,10 @@ class StrictGitTrailerContractTests(unittest.TestCase):
                 ],
             )
 
-            merged = self.success_payload(self.merge(root, contract))
             report = self.success_payload(self.profile(root, base))
 
-            self.assertEqual(merged["slice"], "normalized-case")
             attempt = report["slices"]["normalized-case"]["attempts"][0]
             self.assertEqual(attempt["oracle_sha"], contract)
-            self.assertEqual(attempt["contract_merge_sha"], merged["merge_sha"])
 
 
 if __name__ == "__main__":

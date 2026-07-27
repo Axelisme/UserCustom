@@ -42,8 +42,7 @@ class ReleasedPackageTests(unittest.TestCase):
 
     retained_commands = {
         "admission",
-        "worktree",
-        "contract",
+        "lane",
         "integration",
         "profile",
         "doctor",
@@ -52,7 +51,8 @@ class ReleasedPackageTests(unittest.TestCase):
         "release",
     }
     removed_commands = {
-        "lane",
+        "worktree",
+        "contract",
         "compose-base",
         "review",
         "land",

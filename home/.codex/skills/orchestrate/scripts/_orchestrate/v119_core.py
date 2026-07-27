@@ -1,4 +1,4 @@
-"""Git-backed implementation of the v119 core command seams."""
+"""Git-backed lane and task-integration command seams."""
 
 from __future__ import annotations
 
@@ -11,16 +11,38 @@ from .git_ops import exact_commit, managed_worktree_root, run_git, worktree_reco
 from .primitives import OrchestrateError, require_identifier
 
 
-def _worktree_identity(args: argparse.Namespace, *, role: str | None = None) -> tuple[str, str, str, Path, str]:
+def _lane_identity(args: argparse.Namespace) -> tuple[str, str, Path, str]:
     task = require_identifier(str(args.task_id), label="task id")
-    wave = require_identifier(str(args.wave_id), label="wave id")
-    selected_role = str(role if role is not None else args.role)
-    if selected_role not in {"oracle", "implementation"}:
-        raise OrchestrateError("role must be oracle or implementation")
+    lane = require_identifier(str(args.lane_id), label="lane id")
+    if lane == "integration":
+        raise OrchestrateError("lane id must not be 'integration': that name is reserved for the integration branch")
     root = Path(args.root).resolve()
-    branch = f"wave/{task}/{wave}/{selected_role}"
-    path = managed_worktree_root(root) / f"{task}-{wave}-{selected_role}"
-    return task, wave, selected_role, path, branch
+    branch = f"wave/{task}/{lane}"
+    path = managed_worktree_root(root) / f"{task}-{lane}"
+    return task, lane, path, branch
+
+
+def _lane_base_ref(task: str, lane: str) -> str:
+    return f"refs/orchestrate/{task}/{lane}/base"
+
+
+def _lane_base(root: Path, task: str, lane: str) -> str:
+    """Read the exact base recorded at ``lane create`` time.
+
+    Stored as a ref, not derived from topology, for the same reason the
+    integration base is: it is a property of the lane, not of any one commit,
+    and a missing ref must fail closed rather than silently widen the walk
+    used to anchor ``Immutable:`` declarations.
+    """
+    ref = _lane_base_ref(task, lane)
+    probe = run_git(root, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}", check=False)
+    base = probe.stdout.strip()
+    if probe.returncode or not base:
+        raise OrchestrateError(
+            f"lane base ref is missing: {ref}; recreate the lane worktree or "
+            f"restore it with git update-ref {ref} <exact base sha>"
+        )
+    return base
 
 
 def _branch_exists(root: Path, branch: str) -> bool:
@@ -80,8 +102,8 @@ def _status(
     }
 
 
-def command_worktree_create(args: argparse.Namespace) -> dict[str, Any]:
-    _, _, role, path, branch = _worktree_identity(args)
+def command_lane_create(args: argparse.Namespace) -> dict[str, Any]:
+    task, lane, path, branch = _lane_identity(args)
     root = Path(args.root).resolve()
     try:
         base = exact_commit(root, str(args.base), label="base")
@@ -91,25 +113,79 @@ def command_worktree_create(args: argparse.Namespace) -> dict[str, Any]:
         raise OrchestrateError(f"derived worktree path or branch already exists: {path} / {branch}")
     path.parent.mkdir(parents=True, exist_ok=True)
     run_git(root, "worktree", "add", "-b", branch, str(path), base)
+    run_git(root, "update-ref", _lane_base_ref(task, lane), base)
     evidence = _status(root, path, branch)
-    return {"ok": True, "operation": "worktree-create", "task_id": args.task_id, "wave_id": args.wave_id, "role": role, "branch": branch, "worktree": str(path), "base": base, "head": evidence["head"], "tree": evidence["tree"], "clean": evidence["clean"]}
+    return {
+        "ok": True,
+        "operation": "lane-create",
+        "task_id": task,
+        "lane_id": lane,
+        "branch": branch,
+        "worktree": str(path),
+        "base": base,
+        "head": evidence["head"],
+        "tree": evidence["tree"],
+        "clean": evidence["clean"],
+    }
 
 
-def command_worktree_status(args: argparse.Namespace) -> dict[str, Any]:
-    _, _, _, path, branch = _worktree_identity(args)
-    return _status(Path(args.root).resolve(), path, branch)
+def _lane_status(root: Path, task: str, lane: str) -> dict[str, Any]:
+    branch = f"wave/{task}/{lane}"
+    path = managed_worktree_root(root) / f"{task}-{lane}"
+    state = _status(root, path, branch, identity_label="lane worktree")
+    state.update({"operation": "lane-status", "task_id": task, "lane_id": lane})
+    return state
 
 
-def command_worktree_remove(args: argparse.Namespace) -> dict[str, Any]:
-    _, _, role, path, branch = _worktree_identity(args)
+def _list_lanes(root: Path, task: str) -> list[str]:
+    """List every lane branch of one task from live Git refs, oldest name first."""
+    prefix = f"wave/{task}/"
+    raw = run_git(root, "for-each-ref", "--format=%(refname:short)", f"refs/heads/{prefix}").stdout
+    lanes: list[str] = []
+    for line in raw.splitlines():
+        if not line.startswith(prefix):
+            continue
+        remainder = line[len(prefix) :]
+        if not remainder or "/" in remainder or remainder == "integration":
+            continue
+        lanes.append(remainder)
+    return sorted(lanes)
+
+
+def command_lane_status(args: argparse.Namespace) -> dict[str, Any]:
+    task = require_identifier(str(args.task_id), label="task id")
     root = Path(args.root).resolve()
-    state = _status(root, path, branch)
+    lane_id = getattr(args, "lane_id", None)
+    if lane_id:
+        lane = require_identifier(str(lane_id), label="lane id")
+        return _lane_status(root, task, lane)
+    lanes = _list_lanes(root, task)
+    return {
+        "ok": True,
+        "operation": "lane-status",
+        "task_id": task,
+        "lanes": [_lane_status(root, task, lane) for lane in lanes],
+    }
+
+
+def command_lane_drop(args: argparse.Namespace) -> dict[str, Any]:
+    task, lane, path, branch = _lane_identity(args)
+    root = Path(args.root).resolve()
+    state = _status(root, path, branch, identity_label="lane worktree")
     if not state["exists"]:
-        raise OrchestrateError(f"managed {role} worktree does not exist: {path}")
+        raise OrchestrateError(f"managed lane worktree does not exist: {path}")
     if not state["clean"]:
         raise OrchestrateError(f"cannot remove worktree because it is not clean: {path}")
     run_git(root, "worktree", "remove", str(path))
-    return {"ok": True, "operation": "worktree-remove", "task_id": args.task_id, "wave_id": args.wave_id, "role": role, "worktree": str(path), "branch": branch, "removed": True}
+    return {
+        "ok": True,
+        "operation": "lane-drop",
+        "task_id": task,
+        "lane_id": lane,
+        "worktree": str(path),
+        "branch": branch,
+        "removed": True,
+    }
 
 
 def _integration_identity(args: argparse.Namespace) -> tuple[str, Path, str]:
@@ -179,15 +255,15 @@ def _collected_integrations(root: Path, task: str, branch: str) -> list[dict[str
         if not sha:
             continue
         _commit_sha, _timestamp, _subject, trailers = _commit_metadata(root, sha)
-        if trailers.get("Role") != "collect":
+        lane = trailers.get("Lane")
+        if not lane or trailers.get("Task") != task:
             continue
         parents = run_git(root, "rev-list", "--parents", "-n", "1", sha).stdout.split()
         collected.append(
             {
-                "wave": trailers.get("Wave", ""),
-                "slice": trailers.get("Slice", ""),
+                "lane": lane,
                 "collect_sha": sha,
-                "implementation_sha": parents[2] if len(parents) >= 3 else None,
+                "sha": parents[2] if len(parents) >= 3 else None,
             }
         )
     return collected
@@ -210,11 +286,10 @@ def command_integration_status(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _immutable_paths(root: Path, sha: str) -> list[str]:
-    """Read the acceptance-surface paths the Oracle declared on its Contract.
+    """Read the paths one commit declares frozen with a repeatable ``Immutable:`` trailer.
 
-    The declaration lives in repeatable ``Immutable:`` trailers because it is a
-    property of that one Contract commit: it enters the commit object, so it
-    cannot be edited afterwards without changing the SHA.
+    The declaration lives in the commit object itself, so it cannot be edited
+    afterwards without changing the SHA.
     """
     raw = run_git(
         root, "show", "-s", "--format=%(trailers:key=Immutable,valueonly,unfold)", sha
@@ -222,112 +297,121 @@ def _immutable_paths(root: Path, sha: str) -> list[str]:
     return [line.strip() for line in raw.splitlines() if line.strip()]
 
 
-def _nearest_contract_merge(root: Path, implementation_sha: str, slice_id: str) -> str | None:
-    """Find the Contract merge this Implementation was built on."""
-    raw = run_git(
-        root,
-        "log",
-        "--first-parent",
-        "--max-count=256",
-        "--format=%H%x00%(trailers:only,unfold)%x1e",
-        implementation_sha,
-    ).stdout
-    for record in raw.split("\x1e"):
-        sha, _, trailer_text = record.strip().partition("\x00")
+def _first_declaring_commits(root: Path, base: str, tip: str) -> dict[str, str]:
+    """Map each ``Immutable:`` path to the earliest ``base..tip`` commit that declared it.
+
+    A path is only protected starting at the commit that first freezes it:
+    commits before that -- including the ordinary commit that first created
+    the path -- cannot be "quietly widening an already-frozen contract",
+    because the contract did not exist yet at that point in the lane.
+    """
+    raw = run_git(root, "rev-list", "--reverse", f"{base}..{tip}").stdout
+    declarations: dict[str, str] = {}
+    for sha in raw.splitlines():
         if not sha:
             continue
-        trailers = _trailers(trailer_text)
-        if trailers.get("Role") == "merge" and trailers.get("Slice") == slice_id:
-            return sha
-    return None
+        for path in _immutable_paths(root, sha):
+            declarations.setdefault(path, sha)
+    return declarations
 
 
-def _verify_immutable_surface(
-    root: Path, merge_sha: str, implementation_sha: str
-) -> tuple[list[str], list[str]]:
-    """Compare Oracle-owned objects by id between the Contract merge and the handoff.
+def _verify_immutable_surface(root: Path, base: str, tip: str) -> tuple[list[str], list[str]]:
+    """Reject any commit, after a path's first declaration, that changes it without redeclaring.
 
-    The declaration is read from the merged Contract commit itself — the merge's
-    second parent — so the owner stays the single source.  Git is
-    content-addressed, so equal object ids prove the acceptance surface is
-    byte-identical without diffing.  A path that stopped resolving counts as a
-    violation too: deleting or relocating a contract test weakens the surface
-    exactly like editing it.
+    Multiple oracle rounds inside one lane are normal, so a Contract path may
+    legitimately be rewritten more than once -- the rule this enforces is not
+    "never touch it again" but "never touch it quietly, once frozen".  Only
+    commits strictly after each path's earliest declaring commit are checked
+    (the declaring commit itself, and anything before it, predate the freeze
+    and cannot violate it).  Of those, a commit that redeclares the path (an
+    oracle rework round) is exempt; a commit that changes it without
+    redeclaring (an implementer widening the surface) is a violation.  A path
+    never declared anywhere in the range is not tracked at all.
     """
-    contract = run_git(root, "rev-parse", "--verify", "--quiet", f"{merge_sha}^2", check=False)
-    if contract.returncode:
-        return [], []
-    declared = _immutable_paths(root, contract.stdout.strip())
+    declarations = _first_declaring_commits(root, base, tip)
+    declared = sorted(declarations)
     violations: list[str] = []
     for path in declared:
-        objects = []
-        for commit in (merge_sha, implementation_sha):
-            probe = run_git(root, "rev-parse", "--verify", "--quiet", f"{commit}:{path}", check=False)
-            objects.append(probe.stdout.strip() if probe.returncode == 0 else None)
-        if objects[0] is None:
-            violations.append(f"{path} (declared immutable but absent from the Contract merge)")
-        elif objects[1] is None:
-            violations.append(f"{path} (deleted or relocated after the Contract merge)")
-        elif objects[0] != objects[1]:
-            violations.append(f"{path} ({objects[0]} -> {objects[1]})")
+        declaring_commit = declarations[path]
+        raw = run_git(root, "log", "--reverse", "--format=%H", f"{declaring_commit}..{tip}", "--", path).stdout
+        for sha in raw.splitlines():
+            if not sha:
+                continue
+            if path not in _immutable_paths(root, sha):
+                violations.append(f"{path} changed by {sha} without redeclaring Immutable: {path}")
     return declared, violations
 
 
 def command_integration_collect(args: argparse.Namespace) -> dict[str, Any]:
-    task, path, branch = _integration_identity(args)
-    wave_id = require_identifier(str(args.wave_id), label="wave id")
+    task = require_identifier(str(args.task_id), label="task id")
+    lane = require_identifier(str(args.lane_id), label="lane id")
     root = Path(args.root).resolve()
-    implementation_sha = exact_commit(root, str(args.implementation_sha), label="implementation SHA")
-    _commit_sha, _timestamp, _subject, trailers = _commit_metadata(root, implementation_sha)
-    slice_id = trailers.get("Slice", "")
-    if trailers.get("Wave") != wave_id or not slice_id or trailers.get("Role") != "implementation":
+    sha = exact_commit(root, str(args.sha), label="sha")
+    lane_branch = f"wave/{task}/{lane}"
+    lane_path = managed_worktree_root(root) / f"{task}-{lane}"
+
+    # 1. lane tree clean.
+    lane_state = _status(
+        root, lane_path, lane_branch, require_expected_branch=True, identity_label="lane worktree"
+    )
+    if not lane_state["exists"]:
+        raise OrchestrateError(f"managed lane worktree does not exist: {lane_path}")
+    if not lane_state["clean"]:
+        raise OrchestrateError(f"lane worktree must be clean: {lane_path}")
+
+    # 2. --sha is the exact tip of the lane branch.
+    tip = run_git(root, "rev-parse", "--verify", lane_branch).stdout.strip()
+    if sha != tip:
         raise OrchestrateError(
-            "implementation SHA must carry matching Wave, non-empty Slice, and Role: implementation trailers"
+            f"--sha must be the tip of lane branch {lane_branch}: expected {tip}, got {sha}"
         )
-    state = _status(
+
+    # 3. every commit that changes a once-declared Immutable: path redeclares it.
+    lane_base = _lane_base(root, task, lane)
+    declared, violations = _verify_immutable_surface(root, lane_base, tip)
+    if violations:
+        raise OrchestrateError(
+            "lane changed an Immutable-declared path without redeclaring it in the same commit: "
+            + "; ".join(violations)
+        )
+
+    task_id, integration_path, integration_branch = _integration_identity(args)
+    integration_state = _status(
         root,
-        path,
-        branch,
+        integration_path,
+        integration_branch,
         require_expected_branch=True,
         identity_label="integration worktree",
     )
-    if not state["exists"]:
-        raise OrchestrateError(f"managed integration worktree does not exist: {path}")
-    if not state["clean"]:
-        raise OrchestrateError(f"integration worktree must be clean: {path}")
-    if any(item.get("wave") == wave_id for item in _collected_integrations(root, task, branch)):
-        raise OrchestrateError(f"Wave already collected into integration branch: {wave_id}")
-    contract_merge = _nearest_contract_merge(root, implementation_sha, slice_id)
-    declared: list[str] = []
-    if contract_merge is not None:
-        declared, violations = _verify_immutable_surface(root, contract_merge, implementation_sha)
-        if violations:
-            raise OrchestrateError(
-                "Implementation changed the Oracle-owned acceptance surface declared by the "
-                f"Contract merge {contract_merge}: " + "; ".join(violations)
-            )
-    merged = run_git(path, "merge", "--no-ff", "--no-commit", implementation_sha, check=False)
+    if not integration_state["exists"]:
+        raise OrchestrateError(f"managed integration worktree does not exist: {integration_path}")
+    if not integration_state["clean"]:
+        raise OrchestrateError(f"integration worktree must be clean: {integration_path}")
+
+    merged = run_git(integration_path, "merge", "--no-ff", "--no-commit", tip, check=False)
     if merged.returncode:
         detail = merged.stderr.strip() or merged.stdout.strip() or "integration collect conflict"
         raise OrchestrateError(f"git integration collect failed: {detail}")
-    message = f"Collect Wave {wave_id}\n\nWave: {wave_id}\nSlice: {slice_id}\nRole: collect"
-    committed = run_git(path, "commit", "-m", message, check=False)
+    message = f"Collect lane {lane}\n\nTask: {task_id}\nLane: {lane}"
+    committed = run_git(integration_path, "commit", "-m", message, check=False)
     if committed.returncode:
         detail = committed.stderr.strip() or committed.stdout.strip()
         raise OrchestrateError(f"git commit failed while recording integration collect: {detail}")
-    collect_sha = run_git(path, "rev-parse", "HEAD").stdout.strip()
+    collect_sha = run_git(integration_path, "rev-parse", "HEAD").stdout.strip()
+
+    run_git(root, "worktree", "remove", str(lane_path))
+
     return {
         "ok": True,
         "operation": "integration-collect",
-        "task_id": task,
-        "wave_id": wave_id,
-        "slice": slice_id,
-        "implementation_sha": implementation_sha,
+        "task_id": task_id,
+        "lane_id": lane,
+        "sha": sha,
         "collect_sha": collect_sha,
-        "contract_merge_sha": contract_merge,
         "immutable_paths_verified": declared,
-        "branch": branch,
-        "worktree": str(path),
+        "branch": integration_branch,
+        "worktree": str(integration_path),
+        "lane_worktree_removed": str(lane_path),
     }
 
 
@@ -350,7 +434,7 @@ def command_integration_remove(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-_WORKFLOW_TRAILER_KEYS = frozenset({"Wave", "Slice", "Role"})
+_WORKFLOW_TRAILER_KEYS = frozenset({"Wave", "Slice", "Role", "Task", "Lane"})
 
 
 def _trailers(text: str) -> dict[str, str]:
@@ -393,37 +477,6 @@ def _commit_metadata(root: Path, sha: str) -> tuple[str, str, str, dict[str, str
     subject = fields[2].strip() if len(fields) > 2 else ""
     trailer_text = fields[3] if len(fields) > 3 else ""
     return commit_sha, timestamp, subject, _trailers(trailer_text)
-
-
-def command_contract_merge(args: argparse.Namespace) -> dict[str, Any]:
-    root = Path(args.root).resolve()
-    task, wave_id, _, path, branch = _worktree_identity(args, role="implementation")
-    contract = exact_commit(root, str(args.contract_sha), label="contract SHA")
-    oracle_branch = f"wave/{task}/{wave_id}/oracle"
-    oracle_ref = f"refs/heads/{oracle_branch}"
-    if run_git(root, "merge-base", "--is-ancestor", contract, oracle_ref, check=False).returncode != 0:
-        raise OrchestrateError(f"Contract SHA is not reachable from Oracle ref: {oracle_branch}")
-    state = _status(root, path, branch, require_expected_branch=True)
-    if not state["exists"]:
-        raise OrchestrateError(f"managed implementation worktree does not exist: {path}")
-    if not state["clean"]:
-        raise OrchestrateError(f"implementation worktree must be clean: {path}")
-    _commit_sha, _timestamp, _subject, trailers = _commit_metadata(root, contract)
-    wave = trailers.get("Wave", "")
-    slice_id = trailers.get("Slice", "")
-    if wave != str(args.wave_id) or not slice_id or trailers.get("Role") != "oracle":
-        raise OrchestrateError("contract SHA must carry matching Wave, non-empty Slice, and Role: oracle trailers")
-    merged = run_git(path, "merge", "--no-ff", "--no-commit", contract, check=False)
-    if merged.returncode:
-        detail = merged.stderr.strip() or merged.stdout.strip() or "contract merge conflict"
-        raise OrchestrateError(f"git contract merge failed: {detail}")
-    message = f"Merge Contract {contract}\n\nWave: {wave}\nSlice: {slice_id}\nRole: merge"
-    committed = run_git(path, "commit", "-m", message, check=False)
-    if committed.returncode:
-        detail = committed.stderr.strip() or committed.stdout.strip()
-        raise OrchestrateError(f"git commit failed while recording contract merge: {detail}")
-    merge_sha = run_git(path, "rev-parse", "HEAD").stdout.strip()
-    return {"ok": True, "operation": "contract-merge", "task_id": args.task_id, "wave_id": args.wave_id, "contract_sha": contract, "merge_sha": merge_sha, "branch": branch, "worktree": str(path), "slice": slice_id}
 
 
 def _commit_info(root: Path, sha: str) -> dict[str, Any]:

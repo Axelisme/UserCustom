@@ -17,10 +17,9 @@ seam. Capture the problem, solution, stories, implementation and testing decisio
 source conformance, Slice map, and out-of-scope behavior. Do not put specific file paths in the
 spec unless a prototype's state/schema shape is load-bearing.
 
-The first Slice must have an observable sentence and a named deletion; it is independently
-reachable and its first accepted checkpoint is days, not weeks away. The frozen Contract is an
-artifact consumed by Oracle and Implementation. The Slice Map records the evidence required by
-**S1/S2**; the shared admission standard decides or refuses admissibility.
+The Slice Map records the evidence fields required by **S1/S2**, including any S1.2 first-seam
+declaration and predecessor pointer. The shared admission standard alone decides or refuses
+admissibility. The frozen Contract is an artifact consumed by Oracle and Implementation.
 
 ## Publish
 

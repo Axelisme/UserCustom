@@ -7,9 +7,10 @@ is exactly `<task-id>.<wave-id>.<role>` and the stable runtime item identity is 
 with no attempt detail. Git/task-plan evidence recovers position after restart or compaction; use Git to recover
 position when runtime state is ambiguous, then re-enqueue from the recovered position.
 
-After the exact Contract merge, Root lazily declares `wave-oracle` and `wave-implementer` items,
-attaches or enqueues the real task, and resumes the same identity when the frozen input is
-unchanged. After a terminal `slice-ready` carrying Slice and the full exact SHA, the role ends
+Root declares and enqueues `wave-oracle` from the admitted Slice so it can author the Contract.
+Only after the exact Contract merge does Root lazily declare and enqueue `wave-implementer`;
+attach or resume the same role identity when its frozen input is unchanged. After a terminal
+`slice-ready` carrying Slice and the full exact SHA, the role ends
 immediately; Root consumes the ready SHA only after the runtime task is completed and closes the
 runtime item after consuming a clean SHA. A completion wake is evidence; a timeout is not a
 verdict.

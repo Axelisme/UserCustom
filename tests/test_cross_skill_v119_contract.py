@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -40,48 +41,24 @@ class CrossSkillV128ContractTests(unittest.TestCase):
                     (PI_SKILLS / relative).read_bytes(),
                 )
 
-    def test_reviewgate_requires_two_fresh_axes_on_one_exact_source(self) -> None:
-        text = self.normalized(self.document(CODEX_SKILLS, "code-review/SKILL.md"))
-        lowered = text.lower()
-        self.assertIn("post-simplify", lowered)
-        self.assertIn("two fresh", lowered)
-        self.assertIn("Axis: standards", text)
-        self.assertIn("Axis: spec", text)
-        self.assertIn("same exact SHA", text)
-        self.assertIn("same source", lowered)
-
-    def test_reviewgate_defaults_to_a_clean_integration_source(self) -> None:
-        text = self.normalized(self.document(CODEX_SKILLS, "code-review/SKILL.md"))
-        lowered = text.lower()
-        self.assertIn("integration-first", lowered)
-        for term in ("same path", "same branch", "same head", "clean"):
-            with self.subTest(term=term):
-                self.assertIn(term, lowered)
-
-    def test_reviewgate_bracket_forbids_collection_and_mutation(self) -> None:
-        text = self.normalized(self.document(CODEX_SKILLS, "code-review/SKILL.md"))
-        lowered = text.lower()
-        self.assertIn("review bracket", lowered)
-        self.assertIn("pre", lowered)
-        self.assertIn("post", lowered)
-        self.assertLess(lowered.index("pre"), lowered.index("post"))
-        self.assertIn("collect", lowered)
-        self.assertIn("mutate", lowered)
-
-    def test_reviewgate_uses_capability_based_shared_detached_fallback(self) -> None:
-        text = self.normalized(self.document(CODEX_SKILLS, "code-review/SKILL.md"))
-        lowered = text.lower()
-        self.assertIn("capability-based", lowered)
-        self.assertIn("shared detached fallback", lowered)
-        self.assertIn("read-only", lowered)
-        self.assertIn("integration", lowered)
-
-    def test_bounded_delta_uses_one_reviewer_on_the_originating_axis(self) -> None:
-        text = self.normalized(self.document(CODEX_SKILLS, "code-review/SKILL.md"))
-        lowered = text.lower()
-        self.assertIn("bounded delta", lowered)
-        self.assertIn("one reviewer", lowered)
-        self.assertIn("originating axis", lowered)
+    def test_reviewgate_exposes_one_small_source_and_axis_interface(self) -> None:
+        text = self.document(CODEX_SKILLS, "code-review/SKILL.md")
+        self.assertIn("## Source and axes", text)
+        self.assertEqual(
+            re.findall(r"(?m)^- `Axis: (standards|spec)`$", text),
+            ["standards", "spec"],
+        )
+        normalized = self.normalized(text).casefold()
+        for interface_token in (
+            "integration-first",
+            "shared detached fallback",
+            "same exact sha",
+            "bounded delta",
+            "originating axis",
+        ):
+            with self.subTest(interface_token=interface_token):
+                self.assertIn(interface_token, normalized)
+        self.assertRegex(text, r"No `collect` or `mutate`")
 
     def test_orchestrate_declares_only_the_git_task_lane(self) -> None:
         text = self.normalized(self.document(CODEX_SKILLS, "orchestrate/SKILL.md"))

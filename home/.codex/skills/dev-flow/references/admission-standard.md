@@ -72,8 +72,9 @@ originating axis**; do not reopen both axes for a local delta.
 
 ## S5 — Day acceptance
 
-Day runs this shared machine order, without skipping a gate: **simplify → canonical tests →
-ReviewGate**. ReviewGate is integration-first. Its review bracket records pre and post status for
+Day and Night run this shared machine order, without skipping a gate: **simplify → canonical tests
+→ ReviewGate**. Night may defer only the user exercise after this order has produced
+`reviewed_awaiting_user`. ReviewGate is integration-first. Its review bracket records pre and post status for
 the same path, branch, HEAD, and clean tree; no collect; no mutate is allowed inside the
 bracket, and any mismatch invalidates evidence. Any capability fallback is handled by the
 ReviewGate interface, not by duplicating policy in this standard.
@@ -99,8 +100,10 @@ ReviewGate interface, not by duplicating policy in this standard.
   user-authored task turn is Day Mode and an autonomous continuation with an active goal and no live user turn
   is Night Mode. Inferred mode is recomputed and is not durable state.
 - **S6.2 Queue.** Night Mode records each deferred S5 item in the current release phase record,
-  using the planning-with-files phase template as the queue schema. `reviewed_awaiting_user` is
-  provisional and never means accepted or landed. The queue is ordered from the latest accepted checkpoint.
+  using the planning-with-files phase template as the queue schema. It must finish the shared
+  machine order and reach `reviewed_awaiting_user` before dispatching a dependent Slice;
+  that state is provisional and never means accepted or landed. The queue is ordered from the
+  latest accepted checkpoint.
 - **S6.3 Depth.** The max speculative dependency depth is **10** from the latest accepted
   checkpoint. Independent pending Slices do not add chain depth. A later Slice must not overwrite
   a pending acceptance surface or make its scenario independently untestable.

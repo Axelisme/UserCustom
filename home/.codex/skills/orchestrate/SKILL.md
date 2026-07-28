@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Minimal Git-backed lane and task-integration workflow for a Git task.
-skill_version: 131
+skill_version: 132
 ---
 
 # Orchestrate
@@ -13,15 +13,18 @@ admission standard.
 
 ## Lane
 
-A lane is one worktree, one branch, and one subagent call: it authors a Contract test (a commit
-declaring `Immutable: <path>`) and then implements against it, in the same worktree and the same
-turn. Multiple oracle → implement rounds inside one lane are normal; a declared Contract path stays
-open to change only in the same commit that redeclares it. `lane create` derives the worktree path
-and branch from `--task-id`/`--lane-id`. `integration collect` accepts only the lane's exact clean
-tip, proves every declared `Immutable:` path still resolves to the object that first declared it,
-merges the lane into the task's integration branch, and **always** removes the lane worktree — there
-is no option to keep it. A lane that quietly changed a declared path without redeclaring it is
-refused and named.
+A lane is one worktree, one branch, and one `lane-worker` call. The worker authors Contract
+tests and then implements against the frozen Contract in the same lane worktree. A Contract path
+stays open to change only in an independent amendment commit that redeclares it. `lane create`
+derives the canonical worktree path and branch from `--task-id`/`--lane-id`; Root dispatches that
+exact path and expected Git identity. The worker first changes into and attests the path, then
+keeps every operation path-bound. Before collect, Root reviews the test-first commits at their
+reported SHAs and rechecks lane identity plus primary-checkout dirt. `integration collect` accepts
+only the lane's exact clean tip, proves every declared `Immutable:` path still resolves to the object
+that first declared it, merges the lane into the task's integration branch, and **always** removes
+the lane worktree — there is no option to keep it. Afterward Root verifies the collected SHA and
+that primary dirt is unchanged. A lane that
+quietly changed a declared path without redeclaring it is refused and named.
 
 ## Integration and the ready candidate
 
@@ -67,6 +70,7 @@ admission standard's S5).
 Read the matching [Codex runtime](runtime-codex.md), [Claude runtime](runtime-claude.md), or
 [Pi runtime](runtime-pi.md) before dispatch. Runtime links describe lifecycle only; this document
 does not emulate a runtime. The admission projection points to the shared admission standard, the
-sole S1–S5 authority. For an older pin, use the executable `pin migrate`; it refuses to advance a
-repo that still carries `wave/` branches, `refs/orchestrate/*` refs, or leftover managed worktree
-directories from an earlier workflow model, and lists exactly what remains instead of guessing.
+sole S1–S5 authority. At the lane-ready to collect seam, Root applies the S2 test-review procedure
+there before reading implementation changes. `pin migrate` supports retained pins from v130 onward.
+It refuses to change the pin while current `wave/` branches, `refs/orchestrate/*` refs, or managed
+worktree directories show that a task is still active, and lists the state without mutating it.

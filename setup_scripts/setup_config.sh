@@ -31,27 +31,13 @@ if [ -n "$SOURCE_REPO" ]; then
   fi
 fi
 
-# Old destinations are kept, never deleted.  Directory destinations cannot keep a
-# `<name>.bak` sibling: the runtimes enumerate every entry of a skills directory, so
-# the backup would be listed as a second, stale skill.  Retire those out of the tree.
+# Non-current destinations are backed up before replacement. A directory destination
+# cannot keep a `<name>.bak` sibling inside a skills directory because runtimes would
+# enumerate the backup as another skill, so store it outside the installed tree.
 BACKUP_ROOT="${USERCUSTOM_BACKUP_ROOT:-$HOME/.usercustom-backups}"
-# One run is one restore point, so every backup it writes shares one stamp.
+# One run is one restore point, so every directory backup shares one stamp.
 BACKUP_STAMP=$(date +%Y%m%d-%H%M%S)
-CURRENT_RUN_BACKUPS=()
-
-record_current_backup() {
-  CURRENT_RUN_BACKUPS+=("$1")
-}
-
-backup_was_created_this_run() {
-  local candidate path=$1
-  for candidate in "${CURRENT_RUN_BACKUPS[@]}"; do
-    [ "$candidate" = "$path" ] && return 0
-  done
-  return 1
-}
-
-retire_directory_destination() {
+backup_directory_destination() {
   local dst=$1 relative target
   relative=${dst#"$HOME/"}
   target="$BACKUP_ROOT/$BACKUP_STAMP/$relative"
@@ -60,53 +46,10 @@ retire_directory_destination() {
   mv -T --backup=numbered -- "$dst" "$target"
 }
 
-# A backup is only worth keeping when the destination holds something this repository
-# cannot produce again.  Deciding that per destination, from artifacts, is what keeps
-# first-install semantics for the paths that need them without asking the caller to
-# declare a mode it cannot reliably know.  Three dispositions are recoverable:
-# identical content (a checkout only broke the hard link), a link into this source
-# tree (an earlier install artifact), and content whose blob this repository still
-# has (a version we shipped before).  Anything else is the user's, and is backed up.
-# A source that is not a git repository answers only the first two and backs up the
-# rest, so a tarball install keeps today's conservative behaviour.
-#
-# "The repository still has it" means reachable from a ref: an object that is merely
-# staged, or left over from a discarded commit, is what `git gc --prune` deletes, and
-# an object git may delete tomorrow is not a backup today.  The reachable set is read
-# once per run — a few milliseconds — and answers every destination.
-SOURCE_REACHABLE_BLOBS=""
-
-source_blob_is_reachable() {
-  local blob=$1
-  # Refuse an unidentified object structurally rather than leaving the answer to how
-  # some `grep` treats an empty pattern.  "I cannot identify this content" must never
-  # be able to become "delete it", whatever a future caller forgets to check.
-  [ -n "$blob" ] || return 1
-  [ -n "$SOURCE_REPO" ] || return 1
-  if [ -z "$SOURCE_REACHABLE_BLOBS" ]; then
-    SOURCE_REACHABLE_BLOBS=$(
-      git -C "$SOURCE_REPO" rev-list --objects --all --no-object-names 2>/dev/null || true
-    )
-    # An empty repository has no reachable objects; remember that, do not re-ask.
-    SOURCE_REACHABLE_BLOBS=${SOURCE_REACHABLE_BLOBS:-none}
-  fi
-  printf '%s\n' "$SOURCE_REACHABLE_BLOBS" | grep -qxF -- "$blob"
-}
-
-destination_is_recoverable() {
-  local src=$1 dst=$2 target blob
-  if [ -L "$dst" ]; then
-    target=$(readlink -m -- "$dst")
-    case "$target" in
-      "$UserCustom"/*) return 0 ;;
-      *) return 1 ;;
-    esac
-  fi
-  [ -f "$dst" ] || return 1
-  [ -f "$src" ] && cmp -s -- "$src" "$dst" && return 0
-  [ -n "$SOURCE_REPO" ] || return 1
-  blob=$(git -C "$SOURCE_REPO" hash-object -- "$dst" 2>/dev/null) || return 1
-  [ -n "$blob" ] && source_blob_is_reachable "$blob"
+destination_matches_current_content() {
+  local src=$1 dst=$2
+  [ -L "$dst" ] && return 1
+  [ -f "$src" ] && [ -f "$dst" ] && cmp -s -- "$src" "$dst"
 }
 
 # setup config files
@@ -127,12 +70,12 @@ backup_cp() {
           echo "skip $dst"
           continue
         fi
-        if destination_is_recoverable "$src" "$dst"; then
+        if destination_matches_current_content "$src" "$dst"; then
           rm -f -- "$dst"
         # Only a skills directory is enumerated entry by entry, so only there does a
         # sibling backup become a second, stale skill.  Everything else keeps it.
         elif [ -d "$dst" ] && [ "$(basename "$dst_dir")" = "skills" ]; then
-          retire_directory_destination "$dst"
+          backup_directory_destination "$dst"
         else
           echo "backup $dst"
           if [ -d "$dst" ]; then
@@ -142,7 +85,6 @@ backup_cp() {
           else
             mv -b -- "$dst" "$dst.bak"
           fi
-          record_current_backup "$dst.bak"
         fi
       else
         echo "skip $dst"
@@ -169,12 +111,11 @@ backup_cp_one() {
         echo "skip $dst"
         return
       fi
-      if destination_is_recoverable "$src" "$dst"; then
+      if destination_matches_current_content "$src" "$dst"; then
         rm -f -- "$dst"
       else
         echo "backup $dst"
         mv -b -- "$dst" "$dst.bak"
-        record_current_backup "$dst.bak"
       fi
     else
       echo "skip $dst"
@@ -203,16 +144,15 @@ replace_orchestrate_destination() {
   fi
   mkdir -p "$(dirname "$dst")"
   if [ -e "$dst" ] || [ -L "$dst" ]; then
-    if destination_is_recoverable "$src" "$dst"; then
+    if destination_matches_current_content "$src" "$dst"; then
       rm -f -- "$dst"
     # A skill destination lives inside a skills directory, whether it is a real
     # directory or a link to one; either way its backup must not stay there.
     elif [ -d "$src" ]; then
-      retire_directory_destination "$dst"
+      backup_directory_destination "$dst"
     else
       echo "backup $dst"
       mv -b -- "$dst" "$dst.bak"
-      record_current_backup "$dst.bak"
     fi
   fi
   if [ -d "$src" ]; then
@@ -223,20 +163,20 @@ replace_orchestrate_destination() {
   orchestrate_destination_is_current "$src" "$dst"
 }
 
-V119_SKILL_LAYOUTS=(.codex/skills .pi/agent/skills)
-V119_SKILLS=(orchestrate code-review dev-flow planning-with-files to-spec to-tickets)
+CURRENT_SKILL_LAYOUTS=(.codex/skills .pi/agent/skills)
+CURRENT_SKILLS=(orchestrate code-review dev-flow planning-with-files to-spec to-tickets)
 # Exact replacement is driven by the shipped source inventory, not a partial list of
 # known identities.  Unrelated installed profiles remain managed by the generic copy.
-V119_PROFILE_ROOTS=(.codex/agents .claude/agents .pi/agent/agents)
-V119_STANDING_ORDER_PATHS=(.codex/AGENTS.md .pi/agent/APPEND_SYSTEM.md)
+CURRENT_PROFILE_ROOTS=(.codex/agents .claude/agents .pi/agent/agents)
+CURRENT_STANDING_ORDER_PATHS=(.codex/AGENTS.md .pi/agent/APPEND_SYSTEM.md)
 
 shipped_orchestrate_profile_inventory() {
   local root source relative
-  for relative in "${V119_STANDING_ORDER_PATHS[@]}"; do
+  for relative in "${CURRENT_STANDING_ORDER_PATHS[@]}"; do
     source="$UserCustom/home/$relative"
     [ -f "$source" ] && printf '%s\n' "$relative"
   done
-  for root in "${V119_PROFILE_ROOTS[@]}"; do
+  for root in "${CURRENT_PROFILE_ROOTS[@]}"; do
     [ -d "$UserCustom/home/$root" ] || continue
     while IFS= read -r source; do
       relative=${source#"$UserCustom/home/"}
@@ -247,8 +187,8 @@ shipped_orchestrate_profile_inventory() {
 
 replace_current_orchestrate_destinations() {
   local skill layout relative
-  for layout in "${V119_SKILL_LAYOUTS[@]}"; do
-    for skill in "${V119_SKILLS[@]}"; do
+  for layout in "${CURRENT_SKILL_LAYOUTS[@]}"; do
+    for skill in "${CURRENT_SKILLS[@]}"; do
       replace_orchestrate_destination "$UserCustom/home/$layout/$skill" "$HOME/$layout/$skill"
     done
   done
@@ -257,59 +197,6 @@ replace_current_orchestrate_destinations() {
     replace_orchestrate_destination "$UserCustom/home/$relative" "$HOME/$relative"
   done < <(shipped_orchestrate_profile_inventory)
 }
-
-remove_obsolete_orchestrate_profiles() {
-  # Retire only exact legacy role identities after every shipped profile is installed.
-  # A fixture or future release may legitimately ship one of these names, so never
-  # retire a destination that is present in the source inventory.
-  local runtime legacy relative source_relative destination ready
-  for runtime in pi codex claude; do
-    case "$runtime" in
-      pi) legacy=(wave-reviewer.md integration-reviewer.md implementer.md python-module-reviewer.md); ready=.pi/agent/agents/wave-oracle.md ;;
-      codex) legacy=(wave-reviewer.toml integration-reviewer.toml implementer.toml python-module-reviewer.toml); ready=.codex/agents/wave-oracle.toml ;;
-      claude) legacy=(wave-reviewer.md integration-reviewer.md implementer.md python-module-reviewer.md); ready=.claude/agents/wave-oracle.md ;;
-    esac
-    [ -f "$UserCustom/home/$ready" ] || continue
-    for relative in "${legacy[@]}"; do
-      case "$runtime" in
-        pi) source_relative=".pi/agent/agents/$relative" ;;
-        codex) source_relative=".codex/agents/$relative" ;;
-        claude) source_relative=".claude/agents/$relative" ;;
-      esac
-      if [ ! -f "$UserCustom/home/$source_relative" ]; then
-        destination="$HOME/$source_relative"
-        if [ -e "$destination" ] || [ -L "$destination" ]; then
-          cp -a --backup=numbered -- "$destination" "$destination.bak"
-          record_current_backup "$destination.bak"
-        fi
-        rm -f "$destination"
-      fi
-    done
-  done
-}
-
-list_installed_backups() {
-  local root entry identity
-  for root in "${V119_SKILL_LAYOUTS[@]}" .claude/skills "${V119_PROFILE_ROOTS[@]}"; do
-    [ -d "$HOME/$root" ] || continue
-    for entry in "$HOME/$root"/*.bak*; do
-      { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
-      # Identity, not path: `mv -b` renames a pre-existing `<name>.bak` aside to
-      # `<name>.bak~` and puts this run's backup at the name just vacated, so a path
-      # denotes different data before and after.  A rename carries the inode along.
-      if ! identity=$(stat -c '%d:%i' -- "$entry" 2>/dev/null); then
-        { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
-        echo "error: cannot identify installed backup: $entry" >&2
-        return 1
-      fi
-      printf '%s\n' "$identity"
-    done
-  done
-}
-
-# Taken before the first installation writes anything, so "left behind by an earlier
-# run" stays a fact about the world this run found rather than one it created.
-PREEXISTING_BACKUPS=$(list_installed_backups)
 
 backup_cp "$UserCustom/home/.config" "$HOME/.config"
 backup_cp "$UserCustom/home/.codex/skills" "$HOME/.codex/skills"
@@ -323,50 +210,17 @@ backup_cp "$UserCustom/home/.local/include" "$HOME/.local/include"
 
 replace_current_orchestrate_destinations
 
-# Backups written by earlier versions of this script are still sitting in the installed
-# trees.  In a skills directory that is an active harm — every runtime enumerates the
-# directory and lists the backup as a second, stale skill — while elsewhere it is only
-# clutter, so say which it is.  They are the user's data: report, never delete.
-report_backups_in() {
-  local root=$1 message=$2 entry identity
-  [ -d "$HOME/$root" ] || return 0
-  for entry in "$HOME/$root"/*.bak*; do
-    { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
-    # A backup this run just wrote is this run's own doing, already announced on
-    # stdout; calling it something an earlier run left behind would be a lie.  Paths
-    # disambiguate hard-linked entries that intentionally share one inode.
-    backup_was_created_this_run "$entry" && continue
-    if ! identity=$(stat -c '%d:%i' -- "$entry" 2>/dev/null); then
-      { [ -e "$entry" ] || [ -L "$entry" ]; } || continue
-      echo "error: cannot identify installed backup: $entry" >&2
-      return 1
-    fi
-    printf '%s\n' "$PREEXISTING_BACKUPS" | grep -qxF -- "$identity" || continue
-    echo "notice: $entry $message" >&2
-  done
-}
-
-report_stale_backups() {
-  local root
-  for root in "${V119_SKILL_LAYOUTS[@]}" .claude/skills; do
-    report_backups_in "$root" \
-      "is listed as a stale skill; remove it once the backup is no longer needed"
-  done
-  for root in "${V119_PROFILE_ROOTS[@]}"; do
-    report_backups_in "$root" "is a leftover backup; remove it once it is no longer needed"
-  done
-}
 
 validate_orchestrate_skill_destinations() {
   local layout skill source destination
-  for layout in "${V119_SKILL_LAYOUTS[@]}"; do
-    for skill in "${V119_SKILLS[@]}"; do
+  for layout in "${CURRENT_SKILL_LAYOUTS[@]}"; do
+    for skill in "${CURRENT_SKILLS[@]}"; do
       source="$UserCustom/home/$layout/$skill"
       destination="$HOME/$layout/$skill"
       [ -d "$source" ] || continue
       if [ ! -f "$source/SKILL.md" ] || [ ! -f "$destination/SKILL.md" ] \
         || ! orchestrate_destination_is_current "$source" "$destination"; then
-        echo "error: unusable shipped v119 skill destination: $destination" >&2
+        echo "error: unusable shipped skill destination: $destination" >&2
         return 1
       fi
     done
@@ -384,9 +238,6 @@ validate_orchestrate_profile_destinations() {
   done < <(shipped_orchestrate_profile_inventory)
 }
 
-# Retire the old identities only after every source tree has installed successfully and
-# every replacement destination resolves to a usable regular profile file or skill.
+# Validate every current destination after installation completes.
 validate_orchestrate_skill_destinations
 validate_orchestrate_profile_destinations
-remove_obsolete_orchestrate_profiles
-report_stale_backups

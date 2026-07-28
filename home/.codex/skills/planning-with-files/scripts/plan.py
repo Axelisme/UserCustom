@@ -52,9 +52,6 @@ DEFERRED_COLUMNS = (
 )
 DEFERRED_VERIFIERS = ("user", "agent")
 DEFERRED_STATES = ("pending", "passed", "failed", "blocked", "accepted", "superseded")
-# The retired 14-column header this schema replaces. Detected only to report a
-# migration requirement — never parsed, converted, or otherwise accommodated.
-RETIRED_14_COLUMN_HEADER_LENGTH = 14
 FULL_SHA_PATTERN = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 ANGLE_TOKEN_PATTERN = re.compile(r"<(?P<content>[^<>\n]+)>")
 # HTML tags are shipped content, unlike the skill's named/template prompt slots.
@@ -353,12 +350,6 @@ def deferred_acceptance_state(text: str) -> tuple[list[str], list[str]]:
         return ["deferred user acceptance requires a header, separator, and data row"], []
 
     header = tuple(row_cells(table[0]))
-    if len(header) == RETIRED_14_COLUMN_HEADER_LENGTH:
-        return [
-            "deferred user acceptance table uses the retired 14-column schema; "
-            "migration required — no automatic conversion. Rewrite it against "
-            f"the current {len(DEFERRED_COLUMNS)}-column schema in templates/phase.md"
-        ], []
     if header != DEFERRED_COLUMNS:
         return [
             f"deferred user acceptance header must match the {len(DEFERRED_COLUMNS)}-column "
@@ -683,46 +674,28 @@ def command_log(args: argparse.Namespace) -> dict[str, Any]:
     validate_task_id(args.task_id)
     plan = require_plan(root, args.task_id)
     if args.verify:
-        structured = any(
-            value is not None
-            for value in (
-                args.subject_result, args.baseline_sha, args.baseline_result, args.classification
+        if args.result is not None:
+            raise PlanError("structured --verify does not accept event --result")
+        if not args.command or not args.subject_result or not args.classification:
+            raise PlanError(
+                "structured --verify requires --command, --subject-result, and --classification"
             )
-        )
-        if structured:
-            if args.result is not None or args.sha is not None:
-                raise PlanError("structured --verify cannot be combined with legacy --result/--sha")
-            if not args.command or not args.subject_result or not args.classification:
-                raise PlanError(
-                    "structured --verify requires --command, --subject-result, and --classification"
-                )
-            if args.classification not in VERIFY_CLASSIFICATIONS:
-                raise PlanError(f"--classification must be one of {VERIFY_CLASSIFICATIONS}")
-            if bool(args.baseline_sha) != bool(args.baseline_result):
-                raise PlanError("--baseline-sha and --baseline-result must be supplied together")
-            if args.classification == "baseline-debt" and not args.baseline_sha:
-                raise PlanError("baseline-debt requires --baseline-sha and --baseline-result")
-            row = {
-                "ts": now_ts(),
-                "kind": "verify",
-                "classification": args.classification,
-                "command": args.command,
-                "subject_result": args.subject_result,
-            }
-            if args.baseline_sha:
-                row["baseline_result"] = args.baseline_result
-                row["baseline_sha"] = args.baseline_sha
-        else:
-            if not args.command or not args.result:
-                raise PlanError("--verify requires --command and --result")
-            row = {
-                "ts": now_ts(),
-                "kind": "verify",
-                "command": args.command,
-                "result": args.result,
-            }
-            if args.sha:
-                row["sha"] = args.sha
+        if args.classification not in VERIFY_CLASSIFICATIONS:
+            raise PlanError(f"--classification must be one of {VERIFY_CLASSIFICATIONS}")
+        if bool(args.baseline_sha) != bool(args.baseline_result):
+            raise PlanError("--baseline-sha and --baseline-result must be supplied together")
+        if args.classification == "baseline-debt" and not args.baseline_sha:
+            raise PlanError("baseline-debt requires --baseline-sha and --baseline-result")
+        row = {
+            "ts": now_ts(),
+            "kind": "verify",
+            "classification": args.classification,
+            "command": args.command,
+            "subject_result": args.subject_result,
+        }
+        if args.baseline_sha:
+            row["baseline_result"] = args.baseline_result
+            row["baseline_sha"] = args.baseline_sha
     else:
         if not args.action:
             raise PlanError("an event log requires --action (or use --verify)")
@@ -970,7 +943,6 @@ def build_parser() -> argparse.ArgumentParser:
     log.add_argument("--next")
     log.add_argument("--verify", action="store_true")
     log.add_argument("--command")
-    log.add_argument("--sha")
     log.add_argument("--subject-result")
     log.add_argument("--baseline-sha")
     log.add_argument("--baseline-result")

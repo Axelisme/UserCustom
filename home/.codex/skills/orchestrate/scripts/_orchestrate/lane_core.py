@@ -316,11 +316,8 @@ def _lane_collect_walk(
 ) -> list[dict[str, Any]]:
     """Walk one branch's first-parent history for lane-collect merge commits.
 
-    A collect commit carries ``Task:``/``Lane:`` trailers verbatim (see
-    ``command_integration_collect``). A commit that instead carries only the
-    retired ``Wave:``/``Role:``/``Slice:`` trailers has no ``Lane:`` trailer
-    and is skipped here -- it belongs to no lane under the new trailer
-    vocabulary by construction, not by a second read path for the old one.
+    A collected lane record is formed only by a commit carrying the matching
+    ``Task:`` and ``Lane:`` trailers written by ``command_integration_collect``.
     """
     if not _branch_exists(root, branch):
         return []
@@ -1332,10 +1329,8 @@ def _max_concurrent(intervals: list[tuple[int, int]]) -> int:
 def command_report(args: argparse.Namespace) -> dict[str, Any]:
     """Report everything Git can prove about one task: lanes, checks, and candidate.
 
-    This merges the retired ``profile report`` (per-lane span/output, now
-    keyed by lane instead of Oracle/Implementation role), the four cheap
-    Git checks that used to gate the retired ``admission`` command, and the
-    ready-candidate projection ``integration status`` already exposes. It
+    The report combines per-lane span/output, four cheap Git checks, and the
+    ready-candidate projection already exposed by ``integration status``. It
     is entirely read-only: nothing here is ever refused, only presented.
     """
     task = require_identifier(str(args.task_id), label="task id")

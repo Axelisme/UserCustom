@@ -297,45 +297,6 @@
       "standing_orders_sha256": "b464d4b4861377930cd3f5cc512b08ec815f7c45ec046216b9e0da2475a9da95"
     }
   },
-  "release_delta": {
-    "acknowledge_removed": [],
-    "changed_profiles": [
-      ".claude/agents/acceptance-reviewer.md",
-      ".codex/agents/acceptance-reviewer.toml",
-      ".pi/agent/APPEND_SYSTEM.md",
-      ".pi/agent/agents/acceptance-reviewer.md"
-    ],
-    "changed_sections": {
-      "SKILL.md": [
-        "Boundaries",
-        "Commands",
-        "Git task lane",
-        "Integration and the ready candidate",
-        "Lane",
-        "Never push",
-        "Orchestrate"
-      ],
-      "scripts/_orchestrate/admission.py": [
-        "__file__"
-      ],
-      "scripts/_orchestrate/cli.py": [
-        "__file__"
-      ],
-      "scripts/_orchestrate/lane_core.py": [
-        "__file__"
-      ],
-      "scripts/_orchestrate/release.py": [
-        "__file__"
-      ],
-      "scripts/_orchestrate/v119_core.py": [
-        "__file__"
-      ]
-    },
-    "from_version": 129,
-    "must_reread": [
-      "SKILL.md"
-    ]
-  },
   "schema_version": 1,
   "skill_version": 130
 }

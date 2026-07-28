@@ -18,14 +18,11 @@ SCRIPT = (
 class ReportContractTests(unittest.TestCase):
     """Black-box Contract for the unified ``report`` command.
 
-    ``report`` merges three things that used to be separate: the retired
-    ``profile report`` (per-lane span/output accounting -- now keyed by the
-    lane model instead of Oracle/Implementation roles), the four cheap Git
-    checks that used to live behind the retired ``admission`` gate
-    (deletion / loop / mass / focus), and the ready-candidate projection
-    already exposed by ``integration status``. Everything is read-only and
-    derived from Git; nothing new is persisted. ``report`` always exits 0 --
-    a check that comes back "refuse" is presented, never enforced.
+    ``report`` combines per-lane span/output accounting, the deletion/loop/
+    mass/focus Git checks, and the ready-candidate projection already exposed
+    by ``integration status``. Everything is read-only and derived from Git;
+    nothing new is persisted. ``report`` always exits 0 -- a check that comes
+    back "refuse" is presented, never enforced.
     """
 
     task_id = "report-task"
@@ -434,48 +431,8 @@ class ReportContractTests(unittest.TestCase):
         self.assertEqual(set(report["checks"]), {"deletion", "loop", "mass", "focus"})
         self.assertEqual(report["checks"]["deletion"]["status"], "refuse")
 
-    # 6. a commit carrying only the retired Wave:/Role:/Slice: trailers is an
-    #    ordinary commit with no lane -- it must not be counted anywhere.
-    def test_legacy_wave_trailer_commit_is_not_counted_as_a_lane(self) -> None:
-        created = self.integration_create()
-        integration_path = Path(str(created["worktree"]))
-
-        lane = self.lane_create("lane-a", self.base)
-        self.commit(lane, "src/a.py", "a\n", "lane a work", "2025-01-01T00:01:00+0000")
-        self.collect(
-            "lane-a", self.git(lane, "rev-parse", "HEAD"), "2025-01-01T00:02:00+0000"
-        )
-
-        # Directly append a legacy-vocabulary commit straight onto the
-        # integration branch, bypassing `integration collect` entirely --
-        # this is what a stray v129-style Wave commit would look like.
-        (integration_path / "legacy.txt").write_text("legacy\n", encoding="utf-8")
-        self.git(integration_path, "add", "legacy.txt")
-        self.git(
-            integration_path,
-            "commit",
-            "-q",
-            "-m",
-            "Collect Wave legacy\n\nWave: legacy-wave\nSlice: legacy-slice\nRole: merge",
-            env={
-                "GIT_AUTHOR_DATE": "2025-01-01T00:03:00+0000",
-                "GIT_COMMITTER_DATE": "2025-01-01T00:03:00+0000",
-            },
-        )
-
-        report = self.report()
-        self.assertEqual(report["task"]["lanes"], 1)
-        lane_ids = {entry["lane"] for entry in report["lanes"]}
-        self.assertEqual(lane_ids, {"lane-a"})
-        self.assertNotIn("legacy-wave", lane_ids)
-        self.assertNotIn("legacy-slice", lane_ids)
-
-    # 8. a collect-shaped commit carrying two Lane: trailers is ambiguous
-    #    lane attribution -- report must refuse to silently pick one, not
-    #    guess. This is the same duplicate-workflow-trailer guard the
-    #    retired `profile report` exercised for Wave/Slice/Role; it is still
-    #    live for Task/Lane and needs its own coverage now that the old
-    #    vocabulary's test is gone.
+    # A collect-shaped commit carrying two Lane: trailers is ambiguous lane
+    # attribution; report must refuse to silently pick one.
     def test_duplicate_lane_trailer_on_a_collect_commit_is_rejected(self) -> None:
         created = self.integration_create()
         integration_path = Path(str(created["worktree"]))

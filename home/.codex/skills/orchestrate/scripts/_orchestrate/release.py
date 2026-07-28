@@ -15,6 +15,33 @@ from .git_ops import common_repo_root, managed_worktree_root, run_git
 from .primitives import OrchestrateError, normalized_sha256, sha256_bytes
 
 MANIFEST_SCHEMA = 1
+MIN_MIGRATABLE_VERSION = 130
+MIGRATION_BOUNDARIES: tuple[tuple[int, dict[str, Any]], ...] = (
+    (
+        131,
+        {
+            "reason": "v130-to-v131-executable-squash-landing",
+            "breaking": True,
+            "landing_is_a_squash_commit": True,
+            "landing_records_landed_trailer": True,
+            "close_out_removes_task_refs_and_branches": True,
+            "candidate_command_is_integration_candidate": True,
+            "automatic_conversion": False,
+        },
+    ),
+    (
+        132,
+        {
+            "reason": "v131-to-v132-lane-worker-model",
+            "breaking": True,
+            "one_worker_per_lane": True,
+            "redispatch_existing_runtime_items_to_lane_worker": True,
+            "root_pre_collect_test_review": True,
+            "worker_cwd_attestation": True,
+            "automatic_conversion": False,
+        },
+    ),
+)
 
 
 VERSION_PATTERN = re.compile(r"^skill_version:\s*(\d+)\s*$", re.MULTILINE)
@@ -130,13 +157,12 @@ PROFILE_NAMES = (
     "acceptance-reviewer",
     "contract-planner",
     "impl-detail-planner",
+    "lane-worker",
     "mcp-skill-tester",
     "mechanical-implementer",
     "plan-item-implementer",
     "python-bug-investigator",
     "repo-investigator",
-    "wave-implementer",
-    "wave-oracle",
     "web-researcher",
 )
 
@@ -321,16 +347,10 @@ def verify_release(skill_dir: Path) -> dict[str, Any]:
                 observed_entry = observed_items[name]
                 if category == "documents":
                     matches = expected["sha256"] == observed_entry["sha256"]
-                elif "profile_contract_sha256" in expected:
+                else:
                     matches = (
                         expected["profile_contract_sha256"]
                         == observed_entry["profile_contract_sha256"]
-                    )
-                else:
-                    # Historical manifests predate transport-contract hashing.
-                    matches = (
-                        expected["standing_orders_sha256"]
-                        == observed_entry["standing_orders_sha256"]
                     )
                 if not matches:
                     errors.append(f"hash mismatch: {name}")
@@ -422,15 +442,26 @@ def command_pin_set(args: argparse.Namespace) -> dict[str, Any]:
     result = require_verified_release(Path(args.skill_dir))
     pin = read_version_pin(root)
     if pin is not None:
-        if pin["skill_version"] == result["skill_version"]:
+        pinned_version = pin["skill_version"]
+        if pinned_version == result["skill_version"]:
             return {
                 "ok": True,
                 "operation": "pin-set",
                 "recovered": "already-pinned",
-                "pinned_version": pin["skill_version"],
+                "pinned_version": pinned_version,
             }
+        if pinned_version < MIN_MIGRATABLE_VERSION:
+            raise OrchestrateError(
+                f"task pin v{pinned_version} is below the supported migration floor "
+                f"v{MIN_MIGRATABLE_VERSION}; resolve the pin explicitly before `pin set`"
+            )
+        if pinned_version > result["skill_version"]:
+            raise OrchestrateError(
+                f"task is pinned to newer v{pinned_version}; installed release is "
+                f"v{result['skill_version']}"
+            )
         raise OrchestrateError(
-            f"task is already pinned to v{pin['skill_version']}; adopt"
+            f"task is already pinned to v{pinned_version}; adopt"
             f" v{result['skill_version']} with `pin migrate` instead"
         )
     path = write_version_pin(
@@ -444,20 +475,13 @@ def command_pin_set(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def migration_residue(root: Path) -> dict[str, list[str]]:
-    """Pre-lane-model Git state that ``pin migrate`` must never paper over.
+def active_task_state(root: Path) -> dict[str, list[str]]:
+    """Return active branches, refs, and managed worktree directories.
 
-    Each category is a pure Git or filesystem fact, zero-parameter like the
-    checks in ``admission.py``: any ``wave/`` branch (the retired per-Wave
-    branch prefix), any ref under ``refs/orchestrate/`` (lane, integration,
-    and candidate refs the lane model reads differently than the retired
-    Oracle/Implementation model ever did), and any leftover directory under
-    the managed worktree root. None of these is safe to reinterpret
-    automatically: a stale worktree can shadow a path the new model wants to
-    reuse, and a stale ref or branch can make a fresh task look like it is
-    resuming a task the retired model never finished.
+    Migration is read-only with respect to task state; callers must resolve these
+    entries before retrying and migration never cleans them up.
     """
-    residue: dict[str, list[str]] = {}
+    state: dict[str, list[str]] = {}
     wave_branches = sorted(
         line
         for line in run_git(
@@ -466,7 +490,7 @@ def migration_residue(root: Path) -> dict[str, list[str]]:
         if line
     )
     if wave_branches:
-        residue["wave_branches"] = wave_branches
+        state["wave_branches"] = wave_branches
     orchestrate_refs = sorted(
         line
         for line in run_git(
@@ -475,15 +499,15 @@ def migration_residue(root: Path) -> dict[str, list[str]]:
         if line
     )
     if orchestrate_refs:
-        residue["orchestrate_refs"] = orchestrate_refs
+        state["orchestrate_refs"] = orchestrate_refs
     worktrees_dir = managed_worktree_root(root)
     if worktrees_dir.is_dir():
         leftover = sorted(
             str(path) for path in worktrees_dir.iterdir() if path.is_dir()
         )
         if leftover:
-            residue["worktree_directories"] = leftover
-    return residue
+            state["worktree_directories"] = leftover
+    return state
 
 
 def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
@@ -495,6 +519,15 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
         raise OrchestrateError("no version pin to migrate; use `pin set` first")
     old_version = pin["skill_version"]
     new_version = result["skill_version"]
+    if old_version < MIN_MIGRATABLE_VERSION:
+        raise OrchestrateError(
+            f"pin migrate supports pinned versions v{MIN_MIGRATABLE_VERSION} and newer; "
+            f"found v{old_version}"
+        )
+    if old_version > new_version:
+        raise OrchestrateError(
+            f"pin migrate refused: cannot migrate down from v{old_version} to v{new_version}"
+        )
     if old_version == new_version:
         return {
             "ok": True,
@@ -502,238 +535,26 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
             "recovered": "already-current",
             "pinned_version": old_version,
         }
-    residue = migration_residue(root)
-    if residue:
+    active_state = active_task_state(root)
+    if active_state:
         detail = "; ".join(
             f"{category}: {', '.join(names)}"
-            for category, names in sorted(residue.items())
+            for category, names in sorted(active_state.items())
         )
         raise OrchestrateError(
-            "pin migrate refused: unresolved task state from an earlier workflow model"
-            f" remains; finish or remove it first: {detail}"
+            "pin migrate refused: active orchestrate task state exists; finish or "
+            f"remove it before changing the pin: {detail}"
         )
-    delta: dict[str, Any] | None
-    requirements: list[dict[str, Any]] = []
-    try:
-        delta = compare_manifests(
-            load_manifest(skill_dir, old_version),
-            load_manifest(skill_dir, new_version),
-        )
-    except OrchestrateError:
-        delta = None
-        current = load_manifest(skill_dir, new_version)
-        requirements.append(
-            {
-                "reason": "source-manifest-unavailable",
-                "must_reread": sorted(
-                    name for name in current["documents"] if name.endswith(".md")
-                ),
-                "must_rebootstrap_profiles": sorted(current["profiles"]),
-                "must_acknowledge_standing_orders": [
-                    name
-                    for name in sorted(current["profiles"])
-                    if name.endswith("/APPEND_SYSTEM.md") or name.endswith("/AGENTS.md")
-                ],
-            }
-        )
-
-    # v119 is a breaking workflow rewrite.  Keep the pin operation and its
-    # response shape, but never translate v118 workflow state into the new
-    # model: callers must preserve evidence and restart from an explicit base
-    # as a new Wave.  This requirement is additive to a manifest delta and is
-    # also emitted when an old manifest is unavailable.
-    if old_version < 119 <= new_version:
-        requirements.append(
-            {
-                "reason": "v118-to-v119-manual-restart",
-                "stop_legacy_dispatch": True,
-                "preserve_legacy_evidence": True,
-                "select_exact_base": True,
-                "create_new_wave": True,
-                "continue_as_v119_wave": True,
-                "automatic_conversion": False,
-            }
-        )
-    # v120 keeps the v119 Git model but moves where work lands and where the
-    # expensive gates run, so a task pinned to v119 must adopt the new surfaces
-    # deliberately rather than infer them from an unchanged manifest.
-    if old_version < 120 <= new_version:
-        requirements.append(
-            {
-                "reason": "v119-to-v120-workflow-adoption",
-                "adopt_integration_cli": True,
-                "record_integration_base_ref": True,
-                "machine_gates_then_collect_per_wave": True,
-                "milestone_acceptance_replaces_per_wave_review": True,
-                "correction_after_collect_is_a_new_wave": True,
-                "declare_runtime_pipelines_before_enqueue": True,
-                "empty_handoff_after_contract_merge": True,
-                "blocked_reason_enum_replaces_checkpoint": True,
-                "automatic_conversion": False,
-            }
-        )
-    # v121 turns the acceptance-surface invariant into a machine gate, so a Contract
-    # authored under v120 has no declaration for collect to verify.
-    if old_version < 121 <= new_version:
-        requirements.append(
-            {
-                "reason": "v120-to-v121-declared-acceptance-surface",
-                "declare_immutable_trailers_on_contracts": True,
-                "collect_verifies_object_identity": True,
-                "reauthor_contract_to_collect_older_wave": True,
-                "quantified_cost_alarm_with_preserved_sha": True,
-                "fresh_session_when_frozen_input_moved": True,
-                "automatic_conversion": False,
-            }
-        )
-    # v122 rebalances the milestone gates: the expensive pass keeps the whole
-    # range, the cheap one narrows to the increment it can still act on.
-    if old_version < 122 <= new_version:
-        requirements.append(
-            {
-                "reason": "v121-to-v122-bounded-simplify",
-                "simplify_reads_increment_since_last_review": True,
-                "review_keeps_whole_integration_range": True,
-                "simplify_defers_authority_and_sequencing_findings": True,
-                "removal_of_timing_requires_reproduction": True,
-                "simplify_reports_three_triage_groups": True,
-                "automatic_conversion": False,
-            }
-        )
-    # v123 makes the evidence standard symmetric so complexity stops ratcheting.
-    if old_version < 123 <= new_version:
-        requirements.append(
-            {
-                "reason": "v122-to-v123-symmetric-mechanism-evidence",
-                "mechanism_needs_a_red_test_to_enter": True,
-                "unjustified_mechanism_is_a_finding": True,
-                "harden_after_the_interface_is_stable": True,
-                "automatic_conversion": False,
-            }
-        )
-    # v124 moves production admission from one final cutover to one per Slice, and
-    # makes the admission checks decidable so no role can argue past them.
-    if old_version < 124 <= new_version:
-        requirements.append(
-            {
-                "reason": "v123-to-v124-slice-admission",
-                "read_dev_flow_admission_standard": True,
-                "recut_any_planned_atomic_cutover": True,
-                "observability_gate_before_invariant_enters_contract": True,
-                "correction_waves_per_slice_capped": True,
-                "run_admission_before_acceptance": True,
-                "automatic_conversion": False,
-            }
-        )
-    # v125 is the per-Slice user-acceptance gate: Night Mode may gather machine
-    # evidence, but human acceptance still lands one Slice at a time.
-    if old_version < 125 <= new_version:
-        requirements.append(
-            {
-                "reason": "v124-to-v125-deferred-user-acceptance",
-                "night_mode_defers_user_acceptance_only": True,
-                "deferred_acceptance_lives_in_phase_record": True,
-                "speculative_dependency_depth_is_ten": True,
-                "user_rework_does_not_consume_machine_cycles": True,
-                "machine_rework_tracks_finding_provenance": True,
-                "landing_still_requires_user_acceptance": True,
-                "automatic_conversion": False,
-            }
-        )
-    # v126 moves user acceptance behind the machine gates: v125 showed the user a
-    # candidate no reviewer had seen, so people paid attention for defects a gate
-    # would catch.
-    if old_version < 126 <= new_version:
-        requirements.append(
-            {
-                "reason": "v125-to-v126-machine-gates-before-user-test",
-                "user_tests_only_reviewed_shas": True,
-                "day_and_night_share_one_gate_order": True,
-                "rejection_reopens_gates_on_the_next_sha": True,
-                "automatic_conversion": False,
-            }
-        )
-    # v127 turns accepted checkpoints into append-only task integration landing:
-    # land only on an accepted SHA, keep the integration tip append-only, and never push.
-    if old_version < 127 <= new_version:
-        requirements.append(
-            {
-                "reason": "v126-to-v127-accepted-checkpoint-landing",
-                "every_slice_keeps_machine_gates_and_s5": True,
-                "accepted_sha_remains_on_append_only_integration": True,
-                "next_slice_bases_on_integration_tip": True,
-                "persistence_is_not_mutated_per_slice": True,
-                "final_landing_requires_current_user_request": True,
-                "partial_landing_requires_explicit_accepted_target": True,
-                "landing_is_fast_forward_only": True,
-                "partial_landing_keeps_task_state": True,
-                "final_landing_then_cleanup_and_close_out": True,
-                "never_push": True,
-                "automatic_conversion": False,
-            }
-        )
-    # v129 drains one coordinated Day acceptance session before batching user
-    # feedback, then revalidates one repaired exact SHA with selective retest.
-    if old_version < 129 <= new_version:
-        requirements.append(
-            {
-                "reason": "v128-to-v129-coordinated-acceptance-session",
-                "adopt_planning_v14_deferred_schema": True,
-                "migrate_active_v13_deferred_rows_manually": True,
-                "preserve_completed_v13_phase_records": True,
-                "exercise_latest_reviewed_tip": True,
-                "continue_feedback_after_failure_when_safe": True,
-                "batch_user_findings_once": True,
-                "user_rework_does_not_consume_machine_cycles": True,
-                "repair_with_forward_commits": True,
-                "run_shared_machine_order_after_repair": True,
-                "retest_failed_blocked_and_named_impacted": True,
-                "carry_forward_requires_impact_basis": True,
-                "carry_forward_requires_final_confirmation": True,
-                "stale_or_known_bad_blocks_acceptance_and_landing": True,
-                "feedback_collection_may_continue": True,
-                "automatic_conversion": False,
-            }
-        )
-    # v130 replaces the Oracle/Implementation Wave model with lanes, retires the
-    # dissolved Milestone admission gates and the Day/Night deferral split, and
-    # renumbers the admission standard to S1-S5. There is no mechanical reading
-    # of a v129 task's Wave branches, refs, or worktrees into the lane model, so
-    # this is a breaking change: an in-flight task must close out on v129 before
-    # its repo adopts v130 (``pin migrate`` itself refuses to advance while any
-    # such residue remains, see ``migration_residue``).
-    if old_version < 130 <= new_version:
-        requirements.append(
-            {
-                "reason": "v129-to-v130-lane-execution-model",
-                "breaking": True,
-                "close_out_legacy_task_before_migrating": True,
-                "automatic_conversion": False,
-            }
-        )
-    # v131 makes landing an executable command (`integration land`) instead of
-    # a prose checklist, switches its method from fast-forward to a single
-    # squash commit gated by a dry-run tree-equality check, closes out the
-    # measured branch/ref leak (`integration remove` now actually sweeps
-    # every ref and branch under the task's namespace, refusing unlanded or
-    # uncollected work unless `--abandon`), and renames the old `publish`
-    # subcommand to `integration candidate` with no back-compatible alias. The landing
-    # and close-out changes read the same lane/integration/candidate refs a
-    # v130 task already has, but the rename breaks any external caller still
-    # spelling the old subcommand -- so, unlike v130's own boundary, this one
-    # is breaking.
-    if old_version < 131 <= new_version:
-        requirements.append(
-            {
-                "reason": "v130-to-v131-executable-squash-landing",
-                "breaking": True,
-                "landing_is_a_squash_commit": True,
-                "landing_records_landed_trailer": True,
-                "close_out_now_removes_task_refs_and_branches": True,
-                "publish_command_renamed_to_candidate": True,
-                "automatic_conversion": False,
-            }
-        )
+    manifests = {
+        version: load_manifest(skill_dir, version)
+        for version in range(old_version, new_version + 1)
+    }
+    delta = compare_manifests(manifests[old_version], manifests[new_version])
+    requirements = [
+        dict(requirement)
+        for target, requirement in MIGRATION_BOUNDARIES
+        if old_version < target <= new_version
+    ]
     write_version_pin(root, new_version, result["orchestrate_compat"])
     return {
         "ok": True,
@@ -742,12 +563,7 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
         "to_version": new_version,
         "delta": delta,
         "migration_requirements": requirements or None,
-        "delta_note": (
-            None
-            if delta is not None
-            else f"manifest for v{old_version} unavailable; reread all documents"
-            " and re-bootstrap profiles/standing orders"
-        ),
+        "delta_note": None,
     }
 
 
@@ -793,13 +609,7 @@ def compare_manifests(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any
         if before is None or after is None:
             changed_profiles.append(name)
             continue
-        digest = (
-            "profile_contract_sha256"
-            if "profile_contract_sha256" in before
-            and "profile_contract_sha256" in after
-            else "standing_orders_sha256"
-        )
-        if before[digest] != after[digest]:
+        if before["profile_contract_sha256"] != after["profile_contract_sha256"]:
             changed_profiles.append(name)
     return {
         "from": old["skill_version"],

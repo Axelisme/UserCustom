@@ -34,16 +34,10 @@ class CoreRuntimeIndependenceTests(unittest.TestCase):
 
 
 class CoreCliRegressionTests(unittest.TestCase):
-    """Regression guards for behavior orthogonal to the lane/Wave split.
+    """Regression guards for shared command primitives.
 
-    The worktree/role/Contract-merge lifecycle these tests once exercised was
-    replaced by the lane model; that Contract now lives in
-    ``test_orchestrate_lane.py`` and ``test_orchestrate_integration.py``. The
-    Oracle/Implementation ``profile report`` these tests used to cover was
-    retired along with the role vocabulary it read; its replacement,
-    ``report``, has its own Contract in ``test_orchestrate_report.py``. What
-    remains here is a primitive shared by every command that accepts a
-    ``--base``/``--sha`` (exact full-length object ids).
+    Exact full-length object ids are required by every command that accepts a
+    ``--base`` or ``--sha`` value.
     """
 
     def git(self, root: Path, *args: str, check: bool = True) -> str:

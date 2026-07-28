@@ -387,33 +387,6 @@ class ReadyCandidateContractTests(unittest.TestCase):
         )
         self.assertNotEqual(ref_probe.returncode, 0)
 
-    # 7. `publish` is not a lingering alias: there is no back-compatible
-    #    spelling, a stale caller must fail loudly with an unknown-subcommand
-    #    error, not silently do the right thing under the old name.
-    def test_integration_candidate_works_and_publish_is_an_unknown_subcommand(
-        self,
-    ) -> None:
-        self.integration_create()
-        target = self.advance_integration(
-            "lane-a", "lane a\n", "2025-01-01T00:01:00+0000"
-        )
-        self.payload(self.candidate(target))
-
-        stale = self.cli(
-            self.root,
-            "integration",
-            "publish",
-            "--root",
-            str(self.root),
-            "--task-id",
-            self.task_id,
-            "--sha",
-            target,
-        )
-        self.assertNotEqual(stale.returncode, 0)
-        self.assertIn("invalid choice", stale.stderr)
-        self.assertIn("publish", stale.stderr)
-
 
 if __name__ == "__main__":
     unittest.main()

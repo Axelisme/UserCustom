@@ -20,8 +20,7 @@
 |---|---|---|---|---|---|---|---|
 | none | none | none | none | none | none | none | none |
 
-- A retired 14-column table is rejected with a migration-required error and is never
-  auto-converted.
+- Any other column shape is rejected as a schema mismatch.
 - A phase is sealed only when its required fields and deferred rows satisfy this schema.
 
 ## Notes

@@ -46,11 +46,11 @@ def _script_array(name: str) -> tuple[str, ...]:
 
 
 def managed_skill_layouts() -> tuple[Path, ...]:
-    return tuple(Path(entry) for entry in _script_array("V119_SKILL_LAYOUTS"))
+    return tuple(Path(entry) for entry in _script_array("CURRENT_SKILL_LAYOUTS"))
 
 
 def managed_skill_names() -> tuple[str, ...]:
-    return _script_array("V119_SKILLS")
+    return _script_array("CURRENT_SKILLS")
 
 
 def shipped_profile_relatives() -> tuple[Path, ...]:
@@ -124,56 +124,3 @@ def seed_destination(base: Path, destination: Path, state: str) -> tuple[bytes |
         raise AssertionError(f"unknown destination state: {state}")
     destination.symlink_to(target)
     return None, str(target)
-
-
-def backup_check(
-    base: Path, changed_destination: Path, prior_bytes: bytes | None, prior_link: str | None
-) -> str:
-    """Shell test asserting the destination's prior content survived as a .bak."""
-    backup = changed_destination.with_name(changed_destination.name + ".bak")
-    if prior_bytes is not None:
-        expected = base / "expected-prior-destination"
-        expected.write_bytes(prior_bytes)
-        return (
-            f"if ! cmp -s {shlex.quote(str(backup))} {shlex.quote(str(expected))}; then "
-            "printf '%s\\n' 'destination backup missing before retirement' >&2; exit 92; fi"
-        )
-    if prior_link is None:
-        raise AssertionError("a link destination must retain its prior target")
-    return (
-        f"if ! [ -L {shlex.quote(str(backup))} ] || "
-        f'[ "$(readlink {shlex.quote(str(backup))})" != {shlex.quote(prior_link)} ]; then '
-        "printf '%s\\n' 'destination link backup missing before retirement' >&2; exit 93; fi"
-    )
-
-
-def guard_rm(base: Path, checks: list[str]) -> tuple[Path, Path]:
-    """Shadow ``rm`` so ``checks`` run at the moment legacy retirement starts.
-
-    Retirement is destructive, so the contract is that every replacement is already
-    installed and validated by the time it runs.  A failing check aborts setup with
-    a non-zero status, and the marker file proves retirement was reached at all.
-    """
-    guard_bin = base / "guard-bin"
-    guard_bin.mkdir()
-    marker = base / "retirement-started"
-    real_rm = shutil.which("rm")
-    if real_rm is None:  # pragma: no cover - rm is always present
-        raise AssertionError("rm is not on PATH")
-
-    wrapper = guard_bin / "rm"
-    wrapper.write_text(
-        "#!/usr/bin/env bash\n"
-        "set -e\n"
-        + "\n".join(checks)
-        + "\n"
-        + f"printf 'validated before retirement\\n' >> {shlex.quote(str(marker))}\n"
-        + f'exec {shlex.quote(str(real_rm))} "$@"\n',
-        encoding="utf-8",
-    )
-    wrapper.chmod(0o755)
-    return guard_bin, marker
-
-
-def guarded_path(guard_bin: Path) -> dict[str, str]:
-    return {"PATH": f"{guard_bin}{os.pathsep}{os.environ['PATH']}"}

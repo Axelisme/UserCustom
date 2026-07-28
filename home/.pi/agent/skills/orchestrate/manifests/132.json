@@ -1,49 +1,37 @@
 {
   "documents": {
     "SKILL.md": {
-      "bytes": 5973,
+      "bytes": 4953,
       "sections": {
-        "Acceptance and migration": "3fd4ad18412effd0e8289a532b8330559ffb53bfc0af4f9e5890ac8946ed95c5",
-        "CLI surface": "8c22e941cc217e8ab688db193ae018215b46f23b15be9a323ff34a03287af822",
-        "Iron rules": "ef2206b313321e2e409737267405767a087115486fe0647afd0c5732f4ed40e1",
-        "Orchestrate v125": "050d3ac23292647cf05317285dfe8fb8d7d1ad629106f9910d103380db77d149",
-        "Runtime bindings": "70dcc43671bd57337a27f45432d9ca7bd9fe6b2cfd9e37ef6899490bf4976a30",
-        "Workflow": "e04201fec81cc833deb1405a0805b7974b0b6d0c44fe9c01578442367d0ba270"
+        "Boundaries": "22a3ebcce477d5e7bb8bdc0b2a0e127e84908a6f5b798b9a651426505ade5879",
+        "Commands": "13d77a23d7b062856ed746915a5e209e2317773b9d5a13bd8b39b7c9bd4caf7d",
+        "Integration and the ready candidate": "c1b4e65d7ce5d4902a2f9e84ca711a28938d646a37692e2cf71858f241a13c6c",
+        "Lane": "7f3e5c44274e12bada391a3e01e4a279546e9772a472ae59436847156cba0351",
+        "Never push": "f92a66679a9310a88bb946c44467aafbb7e53ea24f72d6d30127c5659af1a581",
+        "Orchestrate": "33393bd06cd2240e19941c84c894e3544c043d6f564adef767b2459be19cc4e7"
       },
-      "sha256": "d914ba6f08ff67d5332f9dca723d72cb3ccc04340d89bb7aae447bb0d2f38dc2"
+      "sha256": "7fb1635eb311389eb0d60d263143c5b80afea01ad634aa52047f64ecf555f362"
     },
     "runtime-claude.md": {
-      "bytes": 1998,
+      "bytes": 1256,
       "sections": {
-        "Continuation and acceptance": "b283837e4856aa35bbb6712a0998470bc406c729a8d328a6edc4af3193470bcb",
-        "Dual-role handoff": "c343135f48b37d95e47de215bcc9dddb3f7cfbea76ab665190ea732078cc030e",
-        "Orchestrate \u2014 Claude runtime binding": "aecca452d2e5726a340e3c20e2c5f87cc0a7b6cbdf5013a82c5ccd3e6db436c0"
+        "Orchestrate \u2014 Claude runtime binding": "4316c26061f74ab9bfaea878d7d9ba28720200cf0a996c0ce624ad33ad2fd52f"
       },
-      "sha256": "00e7f5648d403c2bc0e8fddf37babf65f838b093c47b89fe8a97c7530e0d4224"
+      "sha256": "ecb0d81c51e260ca3523e6ae41be4a746d5777bd88163582acd895337de67ae6"
     },
     "runtime-codex.md": {
-      "bytes": 3168,
+      "bytes": 1253,
       "sections": {
-        "Acceptance": "8df02f1e9d859cc5fd0dda558ecc68c886c9d65427a3e04c8475cd2b1595535d",
-        "Dual-role native agents and terminal handoff": "10d34d403fcb174181058558d8941d3165b02cb98192a9f27085988422e72bb8",
-        "Native generations": "eab2bdf5bb144553a3f8d840924dd2a20d6714fa9a80899383db41165110906f",
-        "Orchestrate \u2014 Codex runtime binding": "fe6444a4bbc611007de0af68f082be166490bb3bc8d2adf7fc3c7cb5c547f285",
-        "Profile bootstrap and safety": "04425c1550522b4e0678515f9c9955f18c480a66187f0bb58ff5b29271c641a9"
+        "Orchestrate \u2014 Codex runtime binding": "ed09301c3a710cfb2b2b3174a11505e60f0a1b572f9bd202e9a0bae5da87e2fa"
       },
-      "sha256": "6f954bcebb32b1e476e3bdbac213b2295fa4e8ff90ff3b5a90de2c16ee8ebf39"
+      "sha256": "09a6d4b93ced21c98914ca28f13275e242ca5666b003b41769b140cf8d68bbbd"
     },
     "runtime-pi.md": {
-      "bytes": 4858,
+      "bytes": 1252,
       "sections": {
-        "Activation and leases": "f08d1a747feb45790bfbba66acfbb10e9db42ee2399cf41634051d293bc64917",
-        "Dual-role generic pipelines and terminal handoff": "8654f390683258d7c75cde02ee8c82489d876bd4706bd1c745e978b36d0c6014",
-        "Interactive Root completion flow": "0d5c60185138716c7d994416088b02bb7ba49fb65ca271237ca495b7aa6aaaca",
-        "Milestones and flow control": "eecb1634a602c6d2ebbab91782f995c194d2065ac19f7ce69b4cd7eef41ac9ba",
-        "Orchestrate \u2014 Pi runtime binding": "448ae56d92205b4a7b4e834d93b6a71a94d2747229b149156a0d793dcbd3300c",
-        "Profile routing": "6f4a84676b1236d78a4717491a1502fcd200179b8c4be300f2a5ea98c5943075",
-        "Runtime budgets": "0ca619d7020dfade4a50800b3327f5d388d5967339833337cd7315ee54627b83"
+        "Orchestrate \u2014 Pi runtime binding": "8130c622ddd5485a7b421c5f6637ad37436bf3ae46ead2fb4b396e0cb383b04b"
       },
-      "sha256": "7c7cde534d5ae5cbeea1303b5454d333c3cbae3e02c9cbeb509211f5562f6a3c"
+      "sha256": "dc95e781002af465000cab70438f5fac79b031d67933b7898ea7bc64fb2d00e6"
     },
     "scripts/_orchestrate/__init__.py": {
       "bytes": 55,
@@ -53,18 +41,18 @@
       "sha256": "a5fddb2f6b6e3eddc1307c9af0770a246c594b21ef3f45c513bba3ca535ac2c2"
     },
     "scripts/_orchestrate/admission.py": {
-      "bytes": 14273,
+      "bytes": 4835,
       "sections": {
-        "__file__": "c7785af9f67ae73a8fc26688a41e6af3cd4ea348a53eb3fbd4648e1ad0f4635d"
+        "__file__": "ac74592f5fbb5e722e0794e8db74e6df58915064f06cff5bb7e6eee3e734193a"
       },
-      "sha256": "c7785af9f67ae73a8fc26688a41e6af3cd4ea348a53eb3fbd4648e1ad0f4635d"
+      "sha256": "ac74592f5fbb5e722e0794e8db74e6df58915064f06cff5bb7e6eee3e734193a"
     },
     "scripts/_orchestrate/cli.py": {
-      "bytes": 7317,
+      "bytes": 5952,
       "sections": {
-        "__file__": "1cc9306a14c2d6514d7656538ded2b2551f1bf28bcbbdc5ae6225a6e4ed5eeac"
+        "__file__": "aea2944df6f745e730d803eada4aa0f7da9521d6b3049dddb0ee59a98d8e33f1"
       },
-      "sha256": "1cc9306a14c2d6514d7656538ded2b2551f1bf28bcbbdc5ae6225a6e4ed5eeac"
+      "sha256": "aea2944df6f745e730d803eada4aa0f7da9521d6b3049dddb0ee59a98d8e33f1"
     },
     "scripts/_orchestrate/git_ops.py": {
       "bytes": 2442,
@@ -72,6 +60,13 @@
         "__file__": "c9a0578ca0e86c4009aabebee7e961a23fd5b7d733cc52062cad0e98d05dbaca"
       },
       "sha256": "c9a0578ca0e86c4009aabebee7e961a23fd5b7d733cc52062cad0e98d05dbaca"
+    },
+    "scripts/_orchestrate/lane_core.py": {
+      "bytes": 55986,
+      "sections": {
+        "__file__": "66e6236e9beffe7341ea0bf9c0a4367bfd1944e9f2b5546221f85c9b8a3b251e"
+      },
+      "sha256": "66e6236e9beffe7341ea0bf9c0a4367bfd1944e9f2b5546221f85c9b8a3b251e"
     },
     "scripts/_orchestrate/primitives.py": {
       "bytes": 1592,
@@ -81,18 +76,11 @@
       "sha256": "ea33877e01619e0f941abbdd360708f290f58a7aa7bd328c9c67a3cde812718a"
     },
     "scripts/_orchestrate/release.py": {
-      "bytes": 27303,
+      "bytes": 24026,
       "sections": {
-        "__file__": "d3bc79fb124861095b8ab0753a6e595a52357631c7826eda3b726030538a1d5e"
+        "__file__": "e18048e42f3d6c1b4fcce90eb0935c4e8477decca54bbc25f88851094adfc68c"
       },
-      "sha256": "d3bc79fb124861095b8ab0753a6e595a52357631c7826eda3b726030538a1d5e"
-    },
-    "scripts/_orchestrate/v119_core.py": {
-      "bytes": 30923,
-      "sections": {
-        "__file__": "726daf37eecaa89083f62e462d1d47ac10f0c082a6382a5b3b9feb1f638b2ab5"
-      },
-      "sha256": "726daf37eecaa89083f62e462d1d47ac10f0c082a6382a5b3b9feb1f638b2ab5"
+      "sha256": "e18048e42f3d6c1b4fcce90eb0935c4e8477decca54bbc25f88851094adfc68c"
     },
     "scripts/orchestrate.py": {
       "bytes": 227,
@@ -102,13 +90,13 @@
       "sha256": "ed42e8798b1cd3078cb3bd7716c5ebc483709d9f793a554e3424f9b9ceee3c07"
     }
   },
-  "orchestrate_compat": 125,
+  "orchestrate_compat": 132,
   "profiles": {
     ".claude/agents/acceptance-reviewer.md": {
-      "bytes": 4564,
-      "profile_contract_sha256": "3a0933969b16fe912c73f65e1f4ca3765967c41267fb2eb23b11e53335b87cd0",
-      "sha256": "8336ad5a5a872189288e38a4e4d614f41d597cac69a5cbaa1dcac8c5dbad1880",
-      "standing_orders_sha256": "7dea761948fbf8efbd6ec45bacb3d286c772fc7cf82c139bf03d2a3ffdf9c3f0"
+      "bytes": 1836,
+      "profile_contract_sha256": "dc0e00cac6f98151d71ac4b9f47de5f466a7a158e7c83fff5b88a838242af5ff",
+      "sha256": "fbd9574d5ca5f75b01aa457cf38889ab2bd6d462c81869a073e829fb71e3231d",
+      "standing_orders_sha256": "21b3c8677555b8f89c889c89427e1e543810fe92cbc487cfd7f235348b53684c"
     },
     ".claude/agents/contract-planner.md": {
       "bytes": 941,
@@ -122,6 +110,12 @@
       "sha256": "1ae244ee84a8904c6b9df71d382bb966de0d63760a40ff4fb911eb6b7f758427",
       "standing_orders_sha256": "c7c4edc0c0eda10888afa39532cbd399a382b0906c0b6c9cd7e2cdec2bc43fe6"
     },
+    ".claude/agents/lane-worker.md": {
+      "bytes": 1717,
+      "profile_contract_sha256": "a7d420b0c941e98b38159fa53bbfb016df99cd0e79d3b6ed2fb1a2a824b4f413",
+      "sha256": "c300ba5b9bd39f8736aff5cfc80b82afea7ee29630255d679a7339de248d498f",
+      "standing_orders_sha256": "17754b953d090758f9941facb6f4da7a7f311adddf962be22d3b16d90a20e9d6"
+    },
     ".claude/agents/mcp-skill-tester.md": {
       "bytes": 1300,
       "profile_contract_sha256": "e97cabe37a791c728bea4ccd9ac40e54ae01759b098685794338ec43ca1d1398",
@@ -129,10 +123,10 @@
       "standing_orders_sha256": "b567b85979e163519a88eab4a95b105524a843c2ae24f011a310bf691a9b9fbb"
     },
     ".claude/agents/mechanical-implementer.md": {
-      "bytes": 1341,
-      "profile_contract_sha256": "0f076a4ec747c6fb60af71bfdd664a6204ac9d7f88aef051c470a8c1cdfbe19d",
-      "sha256": "96d174d4149470e29ca09eeda56ad71adef1eb6946b6915b165df74998ffc00d",
-      "standing_orders_sha256": "299098d3ccdbdd911cf8c2e732c721d6937fedc9ede8a75fd9ba18520ffc490a"
+      "bytes": 1336,
+      "profile_contract_sha256": "0ab4b3b372389933def8edcbadcbf83163ef35f6f74da4b6556d079afe210388",
+      "sha256": "5ad84b5d2d1a19177ab1dab8629deb425af82e4501673d15000120989b1d9c72",
+      "standing_orders_sha256": "3b0a9e7e9955a075a2fd38695f12d58de142fae66efadeb8ff37954005472027"
     },
     ".claude/agents/plan-item-implementer.md": {
       "bytes": 5061,
@@ -152,18 +146,6 @@
       "sha256": "64dd44dc54ac629012775cd3a98a29ee228857f7579734a035ca1a81970e782c",
       "standing_orders_sha256": "0c7b74083a5807f1b9922b54e68c427280349ef7dbe50bea92e2f0120ee5e8fd"
     },
-    ".claude/agents/wave-implementer.md": {
-      "bytes": 3012,
-      "profile_contract_sha256": "bbde7371f9966192db4c1951e1548ae1c62490448ab4de0fa25d0bbd7b7e2e06",
-      "sha256": "13e808c512dd4df65f4f6e75752ef43eb1ada790a925db2f3020437ce5999173",
-      "standing_orders_sha256": "e9ecaeccf8de4661c34ed5a5e3ec090a80f3c538a9d3f425752f3f84238ead02"
-    },
-    ".claude/agents/wave-oracle.md": {
-      "bytes": 4614,
-      "profile_contract_sha256": "c4ca240abf351192f852b6c40016f0ef91aedaefa8adefaed01eb531ec676101",
-      "sha256": "2d41e5943fc210c3419aab6a0e2cc57505ee74a392df15214a69461da225158d",
-      "standing_orders_sha256": "3c54df2d5b70cb8fbef21e951d46331490410c0d88ad63d2b829cb37b07db849"
-    },
     ".claude/agents/web-researcher.md": {
       "bytes": 967,
       "profile_contract_sha256": "da9f0715e92d9b06079e6144629e76568580890b3857e2b74f1e141e9a91627a",
@@ -171,10 +153,10 @@
       "standing_orders_sha256": "0dd55625527ac00c73476e673dfeda257bb0404955cffc76cc9532c801745c99"
     },
     ".codex/agents/acceptance-reviewer.toml": {
-      "bytes": 4650,
-      "profile_contract_sha256": "e000be1b182c7560d44c30a763e6f0e9122d6b518bedddc3b73660888b182cd8",
-      "sha256": "c20ffeafc17416d9833a9601ddc6dc75b2e44819dd89e6d1747be238d8168269",
-      "standing_orders_sha256": "7dea761948fbf8efbd6ec45bacb3d286c772fc7cf82c139bf03d2a3ffdf9c3f0"
+      "bytes": 1922,
+      "profile_contract_sha256": "c07fd370bfba670689dd52ee2df55f45a1e576b89692fac55a398597b04eb2bd",
+      "sha256": "cee31debfafe3c1890e3da3b3d8c79c6af5b2ef5e146580b3ef14c49bed6c520",
+      "standing_orders_sha256": "21b3c8677555b8f89c889c89427e1e543810fe92cbc487cfd7f235348b53684c"
     },
     ".codex/agents/contract-planner.toml": {
       "bytes": 1013,
@@ -188,6 +170,12 @@
       "sha256": "eddbd7e874eb971f2bce6f8f1f47394dc55eda4c7bf155360dca3aef9244592d",
       "standing_orders_sha256": "c7c4edc0c0eda10888afa39532cbd399a382b0906c0b6c9cd7e2cdec2bc43fe6"
     },
+    ".codex/agents/lane-worker.toml": {
+      "bytes": 1778,
+      "profile_contract_sha256": "4a04984df44695684528cccb9b5dd6aaacfeb9ef886bb1e65a9f7279ada5ace0",
+      "sha256": "3a5f1d9804d7a16168cefc7908bb79e6a7afba57d2f15e12ce285b6fb8e77cb2",
+      "standing_orders_sha256": "17754b953d090758f9941facb6f4da7a7f311adddf962be22d3b16d90a20e9d6"
+    },
     ".codex/agents/mcp-skill-tester.toml": {
       "bytes": 1388,
       "profile_contract_sha256": "11c8295e4b6f64385041658dc9e57d0d3fa44578e5a81b6440de643e3c4fc08e",
@@ -195,10 +183,10 @@
       "standing_orders_sha256": "b567b85979e163519a88eab4a95b105524a843c2ae24f011a310bf691a9b9fbb"
     },
     ".codex/agents/mechanical-implementer.toml": {
-      "bytes": 1419,
-      "profile_contract_sha256": "d2be67111bb9d002a65d57964366ee1e4975683ab8fea740f2963def1c889926",
-      "sha256": "e5aa08d8f14555d431b9b2024c78939c391427fc5386440e45a2082ec0ecb446",
-      "standing_orders_sha256": "299098d3ccdbdd911cf8c2e732c721d6937fedc9ede8a75fd9ba18520ffc490a"
+      "bytes": 1414,
+      "profile_contract_sha256": "60cd565a8121ea3a4529d499158d1f5922d0195bb7515c5829d97e4c742a82b9",
+      "sha256": "ecad24895b83cd4a5e7c7ade6270bbb332a5a434fb7c88a3e758cde274c26a2a",
+      "standing_orders_sha256": "3b0a9e7e9955a075a2fd38695f12d58de142fae66efadeb8ff37954005472027"
     },
     ".codex/agents/plan-item-implementer.toml": {
       "bytes": 5122,
@@ -218,18 +206,6 @@
       "sha256": "c351b82c94fcd92f451bebb38abaf1ac27c02493495a795f2a2642cc9015f8aa",
       "standing_orders_sha256": "0c7b74083a5807f1b9922b54e68c427280349ef7dbe50bea92e2f0120ee5e8fd"
     },
-    ".codex/agents/wave-implementer.toml": {
-      "bytes": 3088,
-      "profile_contract_sha256": "64ca4a0058e663e337d8babdad8592f97832f2d28c1539d5ba0d06adbfd3fbff",
-      "sha256": "89f29f770e1f717443d52628dd27ef9b577b610e1db3fd8fdcefcf770c0a94c8",
-      "standing_orders_sha256": "e9ecaeccf8de4661c34ed5a5e3ec090a80f3c538a9d3f425752f3f84238ead02"
-    },
-    ".codex/agents/wave-oracle.toml": {
-      "bytes": 4690,
-      "profile_contract_sha256": "9727b042ef10e7904e88b7ef769e8dfe53b04943d93afbdf1c0a97182a90e38f",
-      "sha256": "21fc0cbcc771e93005e9b9b2d83e541d44f5f5749fb86b981b19960f411fd76d",
-      "standing_orders_sha256": "3c54df2d5b70cb8fbef21e951d46331490410c0d88ad63d2b829cb37b07db849"
-    },
     ".codex/agents/web-researcher.toml": {
       "bytes": 1036,
       "profile_contract_sha256": "5645110255f4684d1905b06f252d93bd5288302d03a54c7ced4800f1d5412cb7",
@@ -237,16 +213,16 @@
       "standing_orders_sha256": "0dd55625527ac00c73476e673dfeda257bb0404955cffc76cc9532c801745c99"
     },
     ".pi/agent/APPEND_SYSTEM.md": {
-      "bytes": 757,
-      "profile_contract_sha256": "4b926ade42b82661e7d90cc8f9aa28fff8b554c143f16743e43acb128a5e4eca",
-      "sha256": "5788d8da4a24b1f3914eb0f28a172a87428e5e4a706f03aebcc20ff25ae244c9",
-      "standing_orders_sha256": "4b926ade42b82661e7d90cc8f9aa28fff8b554c143f16743e43acb128a5e4eca"
+      "bytes": 566,
+      "profile_contract_sha256": "1a98700eae7cbc7475945552d54c9ba4e12e33c1c25f613ccd4742c410e5ef4e",
+      "sha256": "a45199cfd04152ac9380d0a42f1887ba51fc16566eec9a636c2bb9b30fad744b",
+      "standing_orders_sha256": "1a98700eae7cbc7475945552d54c9ba4e12e33c1c25f613ccd4742c410e5ef4e"
     },
     ".pi/agent/agents/acceptance-reviewer.md": {
-      "bytes": 4722,
-      "profile_contract_sha256": "03ffdf50e7a552ce6159c0f32693c3793caf4fcd6e5a936d5a669503fa3b3c93",
-      "sha256": "f57c925c7203049ecc74eb79545960fbec1d8847c0d4e45fc4faab4fe200d627",
-      "standing_orders_sha256": "7dea761948fbf8efbd6ec45bacb3d286c772fc7cf82c139bf03d2a3ffdf9c3f0"
+      "bytes": 1994,
+      "profile_contract_sha256": "5075eb398bb59eff755a85accb9c3a7286ae9f2fd9f286fd09a9db8511716f25",
+      "sha256": "d4ffce6e64de8b221d7baca6699ad4342718606ec15c93b77e01fbf9ea733998",
+      "standing_orders_sha256": "21b3c8677555b8f89c889c89427e1e543810fe92cbc487cfd7f235348b53684c"
     },
     ".pi/agent/agents/contract-planner.md": {
       "bytes": 1051,
@@ -260,6 +236,12 @@
       "sha256": "0f0b4518641d7e20dac749e922d5c266e8ea906f7d849ab455a77d987d74522e",
       "standing_orders_sha256": "c7c4edc0c0eda10888afa39532cbd399a382b0906c0b6c9cd7e2cdec2bc43fe6"
     },
+    ".pi/agent/agents/lane-worker.md": {
+      "bytes": 1859,
+      "profile_contract_sha256": "1c75d50791d750462e3528c970db1c356743fd7b2546279a94d07ced069e428f",
+      "sha256": "bd48b035b3c6caf3256bdc7052d32be0153f5b1448fbbea883e0fca61d783871",
+      "standing_orders_sha256": "17754b953d090758f9941facb6f4da7a7f311adddf962be22d3b16d90a20e9d6"
+    },
     ".pi/agent/agents/mcp-skill-tester.md": {
       "bytes": 1457,
       "profile_contract_sha256": "703e23dcc2459e16636c540e7c624fa5be2d247b928a1f167ff4a25690829888",
@@ -267,10 +249,10 @@
       "standing_orders_sha256": "9193e0adc6688d5be04d698a26cad4673cc31d0c16b6c1074a69d7b2c5ad1211"
     },
     ".pi/agent/agents/mechanical-implementer.md": {
-      "bytes": 1458,
-      "profile_contract_sha256": "fec93bd0e922573adf8fbffccc5972537fff789d6013d15f914cfa857e682e06",
-      "sha256": "68bb79edda97727c11563c6800d91580d0ea914119489db1b1c58b02d4883652",
-      "standing_orders_sha256": "504d27c96aeef0497ce2e853866e54e48cd46d41fb58ac9918b0dcf98bc93ed0"
+      "bytes": 1453,
+      "profile_contract_sha256": "47c85277ca3f0675e81387ce5179f89cd32d9e43c172630532e0b42038b394ac",
+      "sha256": "e9c2ac559527f41118a87c5096b5ac97a4da4a5ea7222bd9de4f456bc2ad5396",
+      "standing_orders_sha256": "ce3fa5391ad0417e5221a6436d9dc416710d97f28089ea19af60999a7eaca66b"
     },
     ".pi/agent/agents/plan-item-implementer.md": {
       "bytes": 5251,
@@ -290,18 +272,6 @@
       "sha256": "2ace6907752111a89d8b8eeb2904e9e7c82566d35696bfd427eebc672b4221af",
       "standing_orders_sha256": "474893db2d008e6c5034be08348f488968260a857b783352efa5f6206e0dd9da"
     },
-    ".pi/agent/agents/wave-implementer.md": {
-      "bytes": 3293,
-      "profile_contract_sha256": "d47e49bb527cbe2192820bccf890e83645a9f750b75a640d534718dc81c9be0c",
-      "sha256": "9a73a87314212db5273468bf3fc84698c2c5cbb59969a3aaa3e32524a8ef42de",
-      "standing_orders_sha256": "e9ecaeccf8de4661c34ed5a5e3ec090a80f3c538a9d3f425752f3f84238ead02"
-    },
-    ".pi/agent/agents/wave-oracle.md": {
-      "bytes": 4935,
-      "profile_contract_sha256": "115a2d79a23ad5ee4b59e36c5e20ce1b53b23a6f5d501392955219a13cdd2506",
-      "sha256": "7e4dd971aeb0829e52fd3e019865f1f2670560db0be0e93c88736c021bd076dd",
-      "standing_orders_sha256": "3c54df2d5b70cb8fbef21e951d46331490410c0d88ad63d2b829cb37b07db849"
-    },
     ".pi/agent/agents/web-researcher.md": {
       "bytes": 1125,
       "profile_contract_sha256": "1f55a53344f46948b5a417aa9d2367e21d6ab85cb96236648b153fe6f8f67ffb",
@@ -312,33 +282,44 @@
   "release_delta": {
     "acknowledge_removed": [],
     "changed_profiles": [
-      ".pi/agent/APPEND_SYSTEM.md"
+      ".claude/agents/lane-worker.md",
+      ".claude/agents/mechanical-implementer.md",
+      ".claude/agents/wave-implementer.md",
+      ".claude/agents/wave-oracle.md",
+      ".codex/agents/lane-worker.toml",
+      ".codex/agents/mechanical-implementer.toml",
+      ".codex/agents/wave-implementer.toml",
+      ".codex/agents/wave-oracle.toml",
+      ".pi/agent/agents/lane-worker.md",
+      ".pi/agent/agents/mechanical-implementer.md",
+      ".pi/agent/agents/wave-implementer.md",
+      ".pi/agent/agents/wave-oracle.md"
     ],
     "changed_sections": {
       "SKILL.md": [
-        "Acceptance and migration",
-        "Iron rules",
-        "Orchestrate v124",
-        "Orchestrate v125"
+        "Boundaries",
+        "Lane"
       ],
       "runtime-claude.md": [
-        "Continuation and acceptance",
         "Orchestrate \u2014 Claude runtime binding"
       ],
       "runtime-codex.md": [
-        "Acceptance",
         "Orchestrate \u2014 Codex runtime binding"
       ],
       "runtime-pi.md": [
-        "Interactive Root completion flow",
-        "Milestones and flow control",
         "Orchestrate \u2014 Pi runtime binding"
+      ],
+      "scripts/_orchestrate/admission.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/lane_core.py": [
+        "__file__"
       ],
       "scripts/_orchestrate/release.py": [
         "__file__"
       ]
     },
-    "from_version": 124,
+    "from_version": 131,
     "must_reread": [
       "SKILL.md",
       "runtime-claude.md",
@@ -347,5 +328,5 @@
     ]
   },
   "schema_version": 1,
-  "skill_version": 125
+  "skill_version": 132
 }

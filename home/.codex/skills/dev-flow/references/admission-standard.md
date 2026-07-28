@@ -29,6 +29,14 @@ this file and do not restate its policy.
   a test that fails without the device.
 - **S2.3 Envelope.** The violating scenario must be inside the frozen spec's recorded usage envelope.
   Anything outside it is hardening or a later spec decision, not a Contract invariant.
+- **S2.4 Lane-ready test review.** Before `integration collect`, Root binds the exact clean
+  lane-ready SHA and reads each reported Contract commit's test, fixture, and adapter diff plus its
+  red evidence before reading implementation. For timing, locking, retention, replay, security,
+  data-loss, and concurrency invariants, Root personally reruns the focused red command at the exact
+  pre-implementation Contract SHA in an isolated checkout. Routine test corrections may continue as
+  an independent amendment commit with a lane-ready summary; any semantic change to observable or
+  expected behavior, public Interface, usage envelope, or acceptance surface stops collection and
+  requires Root to re-admit the lane.
 
 ## S3 — Machine rework admission
 

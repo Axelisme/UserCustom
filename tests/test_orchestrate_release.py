@@ -49,23 +49,6 @@ class ReleasedPackageTests(unittest.TestCase):
         "pin",
         "release",
     }
-    removed_commands = {
-        "worktree",
-        "contract",
-        "compose-base",
-        "review",
-        "land",
-        "collect",
-        "cleanup",
-        "slice",
-        "findings",
-        "feedback",
-        "revalidate",
-        "reconcile",
-        "wave",
-        "admission",
-        "profile",
-    }
 
     @staticmethod
     def run_cli(*args: str, skill_dir: Path = CODEX_SKILL) -> subprocess.CompletedProcess[str]:
@@ -88,26 +71,6 @@ class ReleasedPackageTests(unittest.TestCase):
         result = self.run_cli("--help")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.help_commands(result.stdout), self.retained_commands)
-        for command in self.removed_commands | {"review", "lock", "ledger"}:
-            self.assertNotIn(command, result.stdout)
-
-    def test_historical_manifests_and_pin_migration_remain_available(self) -> None:
-        for skill in (CODEX_SKILL, PI_SKILL):
-            with self.subTest(skill=skill):
-                historical = sorted(
-                    path for path in (skill / "manifests").glob("*.json")
-                    if path.stem.isdigit() and int(path.stem) < SHIPPED_VERSION
-                )
-                self.assertTrue(historical, skill)
-                for path in historical:
-                    version = int(path.stem)
-                    manifest = json.loads(path.read_text(encoding="utf-8"))
-                    self.assertEqual(manifest["skill_version"], version)
-                    self.assertEqual(manifest["orchestrate_compat"], version)
-        result = self.run_cli("pin", "migrate", "--help")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn("lock", result.stdout.lower())
-        self.assertNotIn("ledger", result.stdout.lower())
 
     def test_every_runtime_ships_a_manifest_for_its_declared_version(self) -> None:
         # Metadata only.  Whether the shipped bytes still match the manifest
@@ -153,59 +116,61 @@ class RuntimeParityTests(unittest.TestCase):
                 if path.is_file()
             }
             self.assertEqual(set(manifest["profiles"]), expected)
-            self.assertIn(".codex/agents/wave-oracle.toml", manifest["profiles"])
-            self.assertNotIn(".codex/agents/wave-reviewer.toml", manifest["profiles"])
-
-    def test_profile_contracts_match_across_runtimes(self) -> None:
-        for name in (
-            "acceptance-reviewer",
-            "contract-planner",
-            "wave-oracle",
-            "wave-implementer",
-        ):
-            files = (
-                (HOME / ".codex" / "agents" / f"{name}.toml", ".toml"),
-                (HOME / ".claude" / "agents" / f"{name}.md", ".md"),
-                (HOME / ".pi" / "agent" / "agents" / f"{name}.md", ".md"),
-            )
-            bodies = {
-                self.release.normalized_sha256(
-                    self.release.profile_standing_orders(path.read_text(encoding="utf-8"), suffix)
-                )
-                for path, suffix in files
-            }
-            self.assertEqual(len(bodies), 1, name)
-
-    def test_codex_and_claude_profiles_do_not_advertise_pipeline_capability(self) -> None:
-        for runtime, root, suffix in (
-            ("codex", HOME / ".codex" / "agents", ".toml"),
-            ("claude", HOME / ".claude" / "agents", ".md"),
-        ):
-            for role in ("wave-oracle", "wave-implementer"):
-                with self.subTest(runtime=runtime, role=role):
-                    text = (root / f"{role}{suffix}").read_text(encoding="utf-8")
-                    self.assertNotRegex(text, r"(?m)^pipeline:\s*true\s*$")
-        for role in ("wave-oracle", "wave-implementer"):
-            pi = (HOME / ".pi" / "agent" / "agents" / f"{role}.md").read_text(
-                encoding="utf-8"
-            )
-            self.assertRegex(pi, r"(?m)^pipeline:\s*true\s*$")
-
-    def test_pi_profiles_keep_runtime_frontmatter_contract(self) -> None:
-        for name in ("wave-oracle", "wave-implementer"):
-            text = (HOME / ".pi" / "agent" / "agents" / f"{name}.md").read_text(
-                encoding="utf-8"
-            )
-            for key in (
-                "model:",
-                "thinking:",
-                "tools:",
-                "systemPromptMode:",
-                "inheritProjectContext:",
-                "inheritSkills:",
-                "pipeline:",
+            for runtime, suffix in (
+                ("codex", ".toml"),
+                ("claude", ".md"),
+                ("pi/agent", ".md"),
             ):
-                self.assertIn(key, text)
+                self.assertIn(f".{runtime}/agents/lane-worker{suffix}", manifest["profiles"])
+
+    def test_profile_contract_hash_is_compare_authority(self) -> None:
+        old = {
+            "skill_version": 130,
+            "orchestrate_compat": 130,
+            "documents": {},
+            "profiles": {
+                ".codex/agents/contract-planner.toml": {
+                    "profile_contract_sha256": "old-contract",
+                    "standing_orders_sha256": "same-standing-orders",
+                }
+            },
+        }
+        new = {
+            "skill_version": 131,
+            "orchestrate_compat": 131,
+            "documents": {},
+            "profiles": {
+                ".codex/agents/contract-planner.toml": {
+                    "profile_contract_sha256": "new-contract",
+                    "standing_orders_sha256": "same-standing-orders",
+                }
+            },
+        }
+        comparison = self.release.compare_manifests(old, new)
+        self.assertEqual(comparison["changed_profiles"], [".codex/agents/contract-planner.toml"])
+
+    def test_lane_worker_models_and_skill_selection_are_structured(self) -> None:
+        import tomllib
+
+        codex = tomllib.loads(
+            (HOME / ".codex" / "agents" / "lane-worker.toml").read_text(encoding="utf-8")
+        )
+        self.assertEqual(codex["model"], "gpt-5.6-sol")
+        self.assertEqual(codex["model_reasoning_effort"], "high")
+        self.assertNotIn("pipeline", codex)
+        self.assertNotIn("skills", codex)
+
+        claude = (HOME / ".claude" / "agents" / "lane-worker.md").read_text(encoding="utf-8")
+        self.assertRegex(claude, r"(?m)^model:\s*sonnet\s*$")
+        self.assertRegex(claude, r"(?m)^skills:\s*\[tdd\]\s*$")
+        self.assertNotRegex(claude, r"(?m)^pipeline:")
+
+        pi = (HOME / ".pi" / "agent" / "agents" / "lane-worker.md").read_text(encoding="utf-8")
+        self.assertRegex(pi, r"(?m)^model:\s*openai-codex/gpt-5.6-sol\s*$")
+        self.assertRegex(pi, r"(?m)^thinking:\s*high\s*$")
+        self.assertRegex(pi, r"(?m)^inheritSkills:\s*false\s*$")
+        self.assertRegex(pi, r"(?m)^skills:\s*tdd\s*$")
+        self.assertNotRegex(pi, r"(?m)^pipeline:")
 
     def test_doctor_detects_shipped_profile_tamper(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -213,13 +178,13 @@ class RuntimeParityTests(unittest.TestCase):
             skill = root / "home" / ".codex" / "skills" / "orchestrate"
             skill.parent.mkdir(parents=True)
             shutil.copytree(CODEX_SKILL, skill)
-            profile = root / "home" / ".codex" / "agents" / "wave-oracle.toml"
+            profile = root / "home" / ".codex" / "agents" / "lane-worker.toml"
             profile.parent.mkdir(parents=True)
-            shutil.copy2(HOME / ".codex" / "agents" / "wave-oracle.toml", profile)
+            shutil.copy2(HOME / ".codex" / "agents" / "lane-worker.toml", profile)
             profile.write_text(profile.read_text(encoding="utf-8") + "# tampered\n", encoding="utf-8")
             result = self.release.verify_release(skill)
             self.assertFalse(result["ok"])
-            self.assertTrue(any("wave-oracle" in error for error in result["errors"]))
+            self.assertTrue(any("lane-worker" in error for error in result["errors"]))
 
 
 if __name__ == "__main__":

@@ -46,25 +46,6 @@ DEFERRED_COLUMNS = (
     "accepted SHA",
 )
 
-# The 14-column header this schema replaced. Kept only to exercise the
-# migration-required rejection path; plan.py must not parse it.
-RETIRED_14_COLUMN_HEADER = (
-    "Slice",
-    "exact SHA",
-    "observable sentence",
-    "entrypoint",
-    "user steps",
-    "expected",
-    "status",
-    "exercise result",
-    "observed SHA",
-    "Depends on",
-    "user evidence",
-    "impact/retest basis",
-    "acceptance evidence",
-    "machine evidence",
-)
-
 
 def deferred_row(
     state: str,
@@ -95,35 +76,6 @@ def write_deferred_rows(path: Path, rows: list[list[str]]) -> None:
     )
     lines[header_index + 2 : header_index + 3] = [
         "| " + " | ".join(row) + " |" for row in rows
-    ]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def write_retired_14_column_table(path: Path, exact_sha: str = "abc1234") -> None:
-    lines = path.read_text(encoding="utf-8").splitlines()
-    header_index = next(
-        index for index, line in enumerate(lines) if line.startswith("| Slice |")
-    )
-    row = [
-        "slice-1",
-        exact_sha,
-        "user runs x and sees y",
-        "cli",
-        "run x",
-        "y",
-        "accepted",
-        "passed",
-        exact_sha,
-        "none",
-        "user observed result",
-        "none",
-        "user confirmed candidate",
-        "canonical tests pass",
-    ]
-    lines[header_index : header_index + 3] = [
-        "| " + " | ".join(RETIRED_14_COLUMN_HEADER) + " |",
-        "|" + "|".join("---" for _ in RETIRED_14_COLUMN_HEADER) + "|",
-        "| " + " | ".join(row) + " |",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -393,25 +345,6 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(long_result.returncode, 1)
             self.assertIn("8 columns", long_result.stdout)
 
-    def test_checkpoint_reports_migration_required_for_retired_fourteen_column_table(self) -> None:
-        # Red test 6: the old 14-column table is rejected and told to migrate,
-        # never auto-converted.
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            run_plan(root, "init", "demo", "--goal", "g")
-            run_plan(root, "phase-start", "demo", "--topic", "x")
-            phase = plan_dir(root) / "phases" / "01-x.md"
-            write_retired_14_column_table(phase, SHA_A)
-            fill_plan_slots(root)
-
-            result = run_plan(root, "checkpoint", "demo")
-
-            self.assertEqual(result.returncode, 1)
-            self.assertIn("migration required", result.stdout)
-            self.assertIn("14-column", result.stdout)
-            # Never auto-converted: the source row is untouched.
-            self.assertIn(SHA_A, phase.read_text(encoding="utf-8"))
-
     def test_agent_verified_passed_row_passes_checkpoint_and_archive(self) -> None:
         # Red test 7: a verifier=agent, state=passed row clears both checkpoint
         # and archive without ever reaching state=accepted.
@@ -525,9 +458,8 @@ class LifecycleTests(unittest.TestCase):
             self.assertEqual(accepted.returncode, 0, accepted.stdout)
 
     def test_checkpoint_rejects_duplicate_slice_id(self) -> None:
-        # Acceptance regression: cross-row Slice uniqueness is schema
-        # structural integrity, not the retired per-row combination rules,
-        # and must not be silently dropped.
+        # Cross-row Slice uniqueness is schema structural integrity and must
+        # not be silently dropped.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             run_plan(root, "init", "demo", "--goal", "g")
@@ -588,22 +520,48 @@ class LifecycleTests(unittest.TestCase):
                     self.assertEqual(phase.read_bytes(), phase_bytes)
                     self.assertEqual(index.read_bytes(), index_bytes)
 
-    def test_log_appends_events_and_verifications(self) -> None:
+    def test_log_preserves_event_result_and_requires_structured_verify(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             run_plan(root, "init", "demo", "--goal", "g")
             run_plan(root, "log", "demo", "--actor", "root", "--action", "wrote", "--result", "ok")
-            run_plan(root, "log", "demo", "--verify", "--command", "pytest", "--result", "94 pass", "--sha", "deadbeef")
+            structured = run_plan(
+                root,
+                "log",
+                "demo",
+                "--verify",
+                "--command",
+                "pytest",
+                "--subject-result",
+                "pass",
+                "--baseline-sha",
+                "deadbeef",
+                "--baseline-result",
+                "failed",
+                "--classification",
+                "baseline-debt",
+            )
+            self.assertEqual(structured.returncode, 0, structured.stdout)
+            event_result_on_verify = run_plan(
+                root,
+                "log",
+                "demo",
+                "--verify",
+                "--command",
+                "pytest",
+                "--result",
+                "94 pass",
+            )
+            self.assertEqual(event_result_on_verify.returncode, 1)
             rows = [
                 json.loads(line)
                 for line in (plan_dir(root) / "progress.jsonl").read_text(encoding="utf-8").splitlines()
                 if line.strip()
             ]
             self.assertEqual(rows[0]["kind"], "event")
-            self.assertEqual(rows[0]["action"], "wrote")
+            self.assertEqual(rows[0]["result"], "ok")
             self.assertEqual(rows[1]["kind"], "verify")
-            self.assertEqual(rows[1]["sha"], "deadbeef")
-
+            self.assertEqual(rows[1]["subject_result"], "pass")
     def test_archive_blocks_open_phases_then_moves_after_completion(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -938,11 +896,18 @@ class TracerContractTests(unittest.TestCase):
             )
             self.assertEqual(bad.returncode, 1)
             self.assertEqual(progress.read_bytes(), before)
-            legacy = run_plan(root, "log", "demo", "--verify", "--command", "old", "--result", "ok", "--sha", "deadbeef")
-            self.assertEqual(legacy.returncode, 0)
-            row = json.loads(progress.read_text(encoding="utf-8").splitlines()[-1])
-            self.assertEqual(row["result"], "ok")
-            self.assertNotIn("subject_result", row)
+            event_result_on_verify = run_plan(
+                root,
+                "log",
+                "demo",
+                "--verify",
+                "--command",
+                "pytest",
+                "--result",
+                "ok",
+            )
+            self.assertEqual(event_result_on_verify.returncode, 1)
+            self.assertEqual(progress.read_bytes(), before)
 
 class StatusGitTests(unittest.TestCase):
     def test_status_derives_git_snapshot_inside_a_repo(self) -> None:
@@ -969,15 +934,6 @@ class StatusGitTests(unittest.TestCase):
 
 
 class SkillContractTests(unittest.TestCase):
-    def test_retired_commands_are_absent(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            for command in ("migrate", "inventory", "check", "compact"):
-                with self.subTest(command=command):
-                    result = run_plan(root, command, "demo") if command != "inventory" else run_plan(root, command)
-                    self.assertEqual(result.returncode, 2)
-                    self.assertIn("invalid choice", result.stderr)
-
     def test_templates_are_the_new_set(self) -> None:
         names = {p.name for p in (SKILL / "templates").glob("*.md")}
         self.assertEqual(names, {"INDEX.md", "phase.md", "findings.md"})

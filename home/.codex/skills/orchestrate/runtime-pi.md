@@ -1,26 +1,18 @@
 # Orchestrate — Pi runtime binding
 
-Pi's native subagent tool has its own `PipelineManager` and an explicit **pipeline capability**.
-The linked pi-subagents lifecycle supplies `attach`, `enqueue`, `resume`, `close`, and wake
-behavior. Pipeline declarations are runtime metadata, not workflow policy. The role stream identity
-is exactly `<task-id>.<wave-id>.<role>` and the stable runtime item identity is `slice-<slice-id>`
-with no attempt detail. Git/task-plan evidence recovers position after restart or compaction; use Git to recover
-position when runtime state is ambiguous, then re-enqueue from the recovered position.
+Pi dispatches one native `lane-worker` subagent for the lane identity `<task-id>.<lane-id>`.
+The dispatch carries the frozen objective, canonical lane cwd, expected Git root/common-dir,
+branch, base or subject SHA, write scope, immutable paths, primary-checkout dirt snapshot,
+focused commands, evidence, and stop conditions.
 
-Root declares and enqueues `wave-oracle` from the admitted Slice so it can author the Contract.
-Only after the exact Contract merge does Root lazily declare and enqueue `wave-implementer`;
-attach or resume the same role identity when its frozen input is unchanged. After a terminal
-`slice-ready` carrying Slice and the full exact SHA, the role ends
-immediately; Root consumes the ready SHA only after the runtime task is completed and closes the
-runtime item after consuming a clean SHA. A completion wake is evidence; a timeout is not a
-verdict.
+The worker's first action is to change into the canonical cwd and attest `pwd -P`, Git identity,
+and clean state. Pi may provide a typed cwd, but the shared worker contract does not depend on
+that capability: every later operation is path-bound and a mismatch is terminal. Root verifies
+lane identity and primary dirt immediately before collect; after the lane worktree is removed,
+Root verifies the collected SHA and that primary dirt is unchanged.
 
-Pi's reviewer tools `read,bash` do not prove filesystem read-only capability, so full review uses
-the shared detached fallback unless a stronger capability is explicitly verifiable. See the shared
-ReviewGate for exact SHA, same path, branch, HEAD, and clean-state bracket checks. Runtime
-frontmatter is the only eligibility surface: Pi wave profiles carry `pipeline: true`; other
-runtime profiles do not.
-
-Every dispatch names cwd, base or subject SHA, scope, immutable paths, user dirt, evidence, stop
-conditions, and exact commands. Runtime lifecycle ends with `close`; Git remains the authority for
-identity, commits, refs, and recovery.
+Use Pi's native subagent lifecycle and continuation only while the frozen input and lane identity
+remain unchanged. A semantic Contract, observable behavior, public Interface, provider, liveness,
+or cwd change requires a fresh dispatch and Root re-admission. The terminal lane-ready handoff
+identifies every Contract commit SHA with its exact red evidence, plus the final clean SHA; Root
+owns collect, candidate, landing, and recovery.

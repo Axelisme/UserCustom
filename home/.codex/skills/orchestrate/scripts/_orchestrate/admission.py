@@ -1,17 +1,9 @@
 """Four zero-parameter Git checks over one task's collected lanes.
 
-These are what remains of the retired dev-flow admission standard's Milestone
-admission section (formerly S3, dissolved when the standard renumbered to
-S1-S5): it had seven checks, but reachability, burndown, and downgrade never
-fired in three completed tasks' worth of history and three of them required
-an operator to supply data this script cannot derive on its own (a
-reachability probe command, a burn-down file, a review-round finding
-count). They are gone, CLI plumbing included.
-
-The four that remain -- deletion, loop, mass, focus -- ask nothing of the
-caller: each is a pure function of a Git commit range (and, for loop/focus,
-the lane collect records ``report`` has already discovered). They only
-ever report; ``report`` never refuses on their account.
+Deletion, loop, mass, and focus ask nothing of the caller: each is a pure
+function of a Git commit range and the lane collect records ``report`` has
+already discovered. They only report; ``report`` never refuses on their
+account.
 """
 
 from __future__ import annotations
@@ -57,8 +49,7 @@ def numstat(root: Path, *args: str) -> list[tuple[int, int, str]]:
 def _family(lane_id: str, tokens: int) -> str:
     # A repair lane is routinely given a fresh, unrelated-looking id, so
     # counting exact lane ids would report one loop iteration per lane and
-    # never see a repeated-rework pattern. Group by the leading tokens
-    # instead, the same way the retired Slice-family grouping did.
+    # never see a repeated-rework pattern. Group by the leading tokens.
     return "-".join(lane_id.split("-")[:tokens]) or lane_id
 
 
@@ -101,8 +92,7 @@ def loop_check(
 ) -> dict[str, Any]:
     """REFUSE when one lane family was collected more than ``max_repeats`` times.
 
-    A family past its repeat cap is the same signal the retired Slice-loop
-    check reported: a scope event, not routine iteration.
+    A family past its repeat cap is a scope event, not routine iteration.
     """
     counts: dict[str, int] = {}
     for record in collected:

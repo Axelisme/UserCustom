@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Minimal Git-backed lane and task-integration workflow for a Git task.
-skill_version: 130
+skill_version: 131
 ---
 
 # Orchestrate
@@ -27,22 +27,27 @@ refused and named.
 
 `integration create` builds the task integration worktree and, in the same call, a second detached
 acceptance worktree pinned to the same base. Lane collects merge forward into integration
-(`--no-ff`, never rebased or reset); the branch is append-only. Once a batch of lanes has passed the
-shared gate order — simplify, canonical tests, ReviewGate; see the admission standard's S4 —
-`integration publish` checks the acceptance worktree out to that exact gated SHA and moves
-`refs/orchestrate/<task>/candidate` to match. A dirty acceptance worktree refuses the checkout and
-leaves the previous candidate untouched. `integration status` and `report` project everything else
-about the candidate from Git — worktree readiness, lag behind tip, timeline — with no second
-persisted format. `integration remove` tears down both worktrees and the candidate ref together.
+(`--no-ff`, never rebased or reset); the branch is append-only. A lane behind the integration tip
+integrates it into itself first, in its own worktree — the same model Git uses for pull-then-push —
+so a conflict is resolved in the lane, never in the shared integration worktree. Once a batch of
+lanes has passed the shared gate order — simplify, canonical tests, ReviewGate; see the admission
+standard's S4 — `integration candidate` checks the acceptance worktree out to that exact gated SHA
+and moves `refs/orchestrate/<task>/candidate` to match. A dirty acceptance worktree refuses the
+checkout and leaves the previous candidate untouched. `integration status` and `report` project
+everything else about the candidate from Git — worktree readiness, lag behind tip, timeline — with
+no second persisted format. `integration remove` tears down both worktrees, the candidate ref, and
+every ref and branch under the task's namespace together — refusing (unless `--abandon`) when the
+integration branch was never landed or a lane branch was never collected.
 
 ## Commands
 
 Seven top-level commands: `lane create|status|drop`, `integration
-create|status|collect|publish|remove`, `report`, and the retained administration `doctor`, `diff`,
-`pin status|set|migrate`, `release`. `report` is read-only: per-lane span and output, task
-parallelism, the four zero-parameter Git checks (deletion, loop, mass, focus — see `admission.py`),
-and the candidate projection, all in one call; nothing here is ever refused, only presented.
-Trailers are `Task:`, `Lane:`, `Immutable:`, `Origin:`.
+create|status|collect|candidate|remove|land|list`, `report`, and the retained administration
+`doctor`, `diff`, `pin status|set|migrate`, `release`. `report` is read-only: per-lane span and
+output, task parallelism, the four zero-parameter Git checks (deletion, loop, mass, focus — see
+`admission.py`), and the candidate projection, all in one call; nothing here is ever refused, only
+presented. `integration list` is the shallow, read-only view across every task in the repository.
+Trailers are `Task:`, `Lane:`, `Immutable:`, `Origin:`, `Landed:`.
 
 Every command prints one JSON object and exits with one of three codes: **0** on success, **1**
 when the command completed and decided no (for example `doctor` ran cleanly and found a hash
@@ -53,8 +58,9 @@ a missing worktree). A success payload is always on `stdout`; an error payload i
 ## Never push
 
 Orchestrate never pushes and never reads a remote ref. Every command is local-only by construction:
-nothing in this skill's surface accepts a remote or performs a network operation. Landing is
-fast-forward-only against a local persistence branch (see the admission standard's S5).
+nothing in this skill's surface accepts a remote or performs a network operation. Landing is a
+single squash commit against a local persistence branch, recording the exact landed SHA (see the
+admission standard's S5).
 
 ## Boundaries
 

@@ -67,7 +67,7 @@ here.
   passed the shared machine order; every other property is derived and never persisted: worktree
   readiness is the acceptance worktree's HEAD equal to the ref, lag behind tip is
   `git rev-list --count ref..integration`, and the candidate timeline is that ref's reflog. The
-  acceptance worktree is created once at task start; `publish` only checks it out onto the gated
+  acceptance worktree is created once at task start; `candidate` only checks it out onto the gated
   SHA — the candidate is never persistence-landed by this step. A dirty acceptance worktree
   refuses the checkout, keeps the previous candidate ref unchanged, and reports the conflict
   instead of overwriting it.
@@ -91,9 +91,13 @@ here.
 
 - **S5.1 Authority.** Landing is permitted only with current user authority.
 - **S5.2 Exact target.** The landing target is the exact SHA recorded as accepted.
-- **S5.3 Topology.** The target is an ancestor of the integration tip, and the persistence tip is an ancestor of the target.
-- **S5.4 Method.** Landing is fast-forward-only: no squash, no cherry-pick, no rebase, no merge
-  commit, no reset.
+- **S5.3 Topology.** The target is an ancestor of the integration tip, and the last landed SHA
+  recorded on the persistence tip — or the persistence tip itself when it has landed nothing — is
+  an ancestor of the target.
+- **S5.4 Method.** Landing is a single squash commit that records the landed exact SHA, and the
+  resulting persistence tree is identical to the accepted SHA's tree. No cherry-pick, no rebase, no
+  reset, no merge commit. `integration land` enforces this: it refuses before mutating anything
+  unless a dry-run tree check first confirms the squash would reproduce the accepted tree exactly.
 - **S5.5 Append-only integration.** The task integration branch is append-only: never reset,
   rebase, or force-update it. Rejected or stale work is repaired by a forward repair lane;
   historical exact-SHA evidence remains valid unless marked stale.

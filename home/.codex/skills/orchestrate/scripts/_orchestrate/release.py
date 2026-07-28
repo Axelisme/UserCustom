@@ -5,13 +5,14 @@ import json
 import os
 import re
 import tempfile
-import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .primitives import OrchestrateError, normalized_sha256, sha256_bytes
+import tomllib
+
 from .git_ops import common_repo_root, managed_worktree_root, run_git
+from .primitives import OrchestrateError, normalized_sha256, sha256_bytes
 
 MANIFEST_SCHEMA = 1
 
@@ -31,9 +32,7 @@ def source_home(skill_dir: Path) -> Path:
     resolved = skill_dir.resolve()
     for parent in resolved.parents:
         relative = resolved.relative_to(parent)
-        if parent.name in {".codex", ".claude"} and relative.parts[:1] == (
-            "skills",
-        ):
+        if parent.name in {".codex", ".claude"} and relative.parts[:1] == ("skills",):
             return parent.parent
         if parent.name == ".pi" and relative.parts[:2] == ("agent", "skills"):
             return parent.parent
@@ -461,21 +460,27 @@ def migration_residue(root: Path) -> dict[str, list[str]]:
     residue: dict[str, list[str]] = {}
     wave_branches = sorted(
         line
-        for line in run_git(root, "for-each-ref", "--format=%(refname:short)", "refs/heads/wave/").stdout.splitlines()
+        for line in run_git(
+            root, "for-each-ref", "--format=%(refname:short)", "refs/heads/wave/"
+        ).stdout.splitlines()
         if line
     )
     if wave_branches:
         residue["wave_branches"] = wave_branches
     orchestrate_refs = sorted(
         line
-        for line in run_git(root, "for-each-ref", "--format=%(refname)", "refs/orchestrate/").stdout.splitlines()
+        for line in run_git(
+            root, "for-each-ref", "--format=%(refname)", "refs/orchestrate/"
+        ).stdout.splitlines()
         if line
     )
     if orchestrate_refs:
         residue["orchestrate_refs"] = orchestrate_refs
     worktrees_dir = managed_worktree_root(root)
     if worktrees_dir.is_dir():
-        leftover = sorted(str(path) for path in worktrees_dir.iterdir() if path.is_dir())
+        leftover = sorted(
+            str(path) for path in worktrees_dir.iterdir() if path.is_dir()
+        )
         if leftover:
             residue["worktree_directories"] = leftover
     return residue
@@ -500,7 +505,8 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
     residue = migration_residue(root)
     if residue:
         detail = "; ".join(
-            f"{category}: {', '.join(names)}" for category, names in sorted(residue.items())
+            f"{category}: {', '.join(names)}"
+            for category, names in sorted(residue.items())
         )
         raise OrchestrateError(
             "pin migrate refused: unresolved task state from an earlier workflow model"
@@ -520,9 +526,7 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
             {
                 "reason": "source-manifest-unavailable",
                 "must_reread": sorted(
-                    name
-                    for name in current["documents"]
-                    if name.endswith(".md")
+                    name for name in current["documents"] if name.endswith(".md")
                 ),
                 "must_rebootstrap_profiles": sorted(current["profiles"]),
                 "must_acknowledge_standing_orders": [
@@ -704,6 +708,29 @@ def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
                 "reason": "v129-to-v130-lane-execution-model",
                 "breaking": True,
                 "close_out_legacy_task_before_migrating": True,
+                "automatic_conversion": False,
+            }
+        )
+    # v131 makes landing an executable command (`integration land`) instead of
+    # a prose checklist, switches its method from fast-forward to a single
+    # squash commit gated by a dry-run tree-equality check, closes out the
+    # measured branch/ref leak (`integration remove` now actually sweeps
+    # every ref and branch under the task's namespace, refusing unlanded or
+    # uncollected work unless `--abandon`), and renames the old `publish`
+    # subcommand to `integration candidate` with no back-compatible alias. The landing
+    # and close-out changes read the same lane/integration/candidate refs a
+    # v130 task already has, but the rename breaks any external caller still
+    # spelling the old subcommand -- so, unlike v130's own boundary, this one
+    # is breaking.
+    if old_version < 131 <= new_version:
+        requirements.append(
+            {
+                "reason": "v130-to-v131-executable-squash-landing",
+                "breaking": True,
+                "landing_is_a_squash_commit": True,
+                "landing_records_landed_trailer": True,
+                "close_out_now_removes_task_refs_and_branches": True,
+                "publish_command_renamed_to_candidate": True,
                 "automatic_conversion": False,
             }
         )

@@ -6,6 +6,19 @@ import sys
 from pathlib import Path
 from typing import NoReturn, Sequence
 
+from .lane_core import (
+    command_integration_candidate,
+    command_integration_collect,
+    command_integration_create,
+    command_integration_land,
+    command_integration_list,
+    command_integration_remove,
+    command_integration_status,
+    command_lane_create,
+    command_lane_drop,
+    command_lane_status,
+    command_report,
+)
 from .primitives import OrchestrateError
 from .release import (
     command_diff,
@@ -14,17 +27,6 @@ from .release import (
     command_pin_set,
     command_pin_status,
     command_release,
-)
-from .lane_core import (
-    command_integration_collect,
-    command_integration_create,
-    command_integration_publish,
-    command_integration_remove,
-    command_integration_status,
-    command_lane_create,
-    command_lane_drop,
-    command_lane_status,
-    command_report,
 )
 
 
@@ -40,10 +42,14 @@ def add_root(command: argparse.ArgumentParser) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = JsonArgumentParser(description=__doc__)
     parser.add_argument("--skill-dir", default=str(Path(__file__).resolve().parents[2]))
-    commands = parser.add_subparsers(dest="command", required=True, parser_class=JsonArgumentParser)
+    commands = parser.add_subparsers(
+        dest="command", required=True, parser_class=JsonArgumentParser
+    )
 
     lane = commands.add_parser("lane", help="Git-backed lane lifecycle")
-    lane_commands = lane.add_subparsers(dest="lane_command", required=True, parser_class=JsonArgumentParser)
+    lane_commands = lane.add_subparsers(
+        dest="lane_command", required=True, parser_class=JsonArgumentParser
+    )
 
     lane_create = lane_commands.add_parser("create")
     add_root(lane_create)
@@ -64,34 +70,52 @@ def build_parser() -> argparse.ArgumentParser:
     lane_drop.add_argument("--lane-id", required=True)
     lane_drop.set_defaults(handler=command_lane_drop)
 
-    integration = commands.add_parser("integration", help="Git-backed task integration lifecycle")
-    integration_commands = integration.add_subparsers(dest="integration_command", required=True, parser_class=JsonArgumentParser)
+    integration = commands.add_parser(
+        "integration", help="Git-backed task integration lifecycle"
+    )
+    integration_commands = integration.add_subparsers(
+        dest="integration_command", required=True, parser_class=JsonArgumentParser
+    )
     for operation, handler in (
         ("create", command_integration_create),
         ("status", command_integration_status),
         ("collect", command_integration_collect),
-        ("publish", command_integration_publish),
+        ("candidate", command_integration_candidate),
         ("remove", command_integration_remove),
+        ("land", command_integration_land),
+        ("list", command_integration_list),
     ):
         operation_parser = integration_commands.add_parser(operation)
         add_root(operation_parser)
-        operation_parser.add_argument("--task-id", required=True)
+        if operation != "list":
+            operation_parser.add_argument("--task-id", required=True)
         if operation == "create":
             operation_parser.add_argument("--base", required=True)
         elif operation == "collect":
             operation_parser.add_argument("--lane-id", required=True)
             operation_parser.add_argument("--sha", required=True)
-        elif operation == "publish":
+        elif operation == "candidate":
             operation_parser.add_argument("--sha", required=True)
+        elif operation == "remove":
+            operation_parser.add_argument(
+                "--abandon", action="store_true", default=False
+            )
+        elif operation == "land":
+            operation_parser.add_argument("--persist", required=True)
+            operation_parser.add_argument("--final", action="store_true", default=False)
+            operation_parser.add_argument("--message")
         operation_parser.set_defaults(handler=handler)
 
-    report = commands.add_parser("report", help="read-only unified lane, task, checks, and candidate report")
+    report = commands.add_parser(
+        "report", help="read-only unified lane, task, checks, and candidate report"
+    )
     add_root(report)
     report.add_argument("--task-id", required=True)
-    report.add_argument("--base", required=True)
     report.set_defaults(handler=command_report)
 
-    doctor = commands.add_parser("doctor", help="verify shipped manifest, hashes, and read budgets")
+    doctor = commands.add_parser(
+        "doctor", help="verify shipped manifest, hashes, and read budgets"
+    )
     doctor.set_defaults(handler=command_doctor)
     diff = commands.add_parser("diff", help="compare bundled release manifests")
     diff.add_argument("old_version", type=int)
@@ -100,13 +124,21 @@ def build_parser() -> argparse.ArgumentParser:
     diff.set_defaults(handler=command_diff)
 
     pin = commands.add_parser("pin", help="pin a task to the installed release")
-    pin_commands = pin.add_subparsers(dest="pin_command", required=True, parser_class=JsonArgumentParser)
-    for name, handler in (("status", command_pin_status), ("set", command_pin_set), ("migrate", command_pin_migrate)):
+    pin_commands = pin.add_subparsers(
+        dest="pin_command", required=True, parser_class=JsonArgumentParser
+    )
+    for name, handler in (
+        ("status", command_pin_status),
+        ("set", command_pin_set),
+        ("migrate", command_pin_migrate),
+    ):
         operation = pin_commands.add_parser(name)
         add_root(operation)
         operation.set_defaults(handler=handler)
 
-    release = commands.add_parser("release", help="atomic release: bump version, manifest, doctor")
+    release = commands.add_parser(
+        "release", help="atomic release: bump version, manifest, doctor"
+    )
     release.add_argument("--version", type=int)
     release.set_defaults(handler=command_release)
     return parser
@@ -118,7 +150,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         args = parser.parse_args(argv)
         payload = args.handler(args)
     except (OSError, UnicodeError, OrchestrateError) as exc:
-        print(json.dumps({"ok": False, "error": {"type": "orchestrate", "message": str(exc)}}, ensure_ascii=False, sort_keys=True), file=sys.stderr)
+        print(
+            json.dumps(
+                {"ok": False, "error": {"type": "orchestrate", "message": str(exc)}},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
         return 2
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
     return 0 if payload.get("ok", False) else 1

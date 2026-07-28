@@ -4,12 +4,13 @@
   "defaultModel": "gpt-5.6-sol",
   "defaultThinkingLevel": "high",
   "packages": [
-    "npm:@juicesharp/rpiv-ask-user-question",
-    "/home/axel/Documents/VSCode/Typescript/pi-subagents",
     "/home/axel/Documents/VSCode/Typescript/pi-goal",
+    "npm:@juicesharp/rpiv-ask-user-question",
     "npm:pi-mcp-adapter",
     "npm:pi-native-search",
-    "git:github.com/dbachelder/pi-btw"
+    "git:github.com/nicobailon/pi-subagents",
+    "git:github.com/dbachelder/pi-btw",
+    "npm:pi-openai-fast-mode"
   ],
   "lastChangelogVersion": "0.81.1"
 }

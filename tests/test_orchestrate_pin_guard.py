@@ -134,7 +134,7 @@ class VerifiedReleaseTaskMutationGuardTests(unittest.TestCase):
 
                     self.assertEqual(result.returncode, 2, result.stdout)
                     payload = json.loads(result.stderr)
-                    self.assertEqual(payload["orchestrate_version"], 134)
+                    self.assertEqual(payload["orchestrate_version"], 135)
                     self.assertIn("release preflight failed", payload["error"]["message"])
                     self.assertEqual(self.state(root), before)
                 finally:
@@ -196,13 +196,13 @@ class VerifiedReleaseTaskMutationGuardTests(unittest.TestCase):
             alternate_skill_md = alternate_skill / "SKILL.md"
             alternate_skill_md.write_text(
                 alternate_skill_md.read_text(encoding="utf-8").replace(
-                    "skill_version: 134", "skill_version: 133"
+                    "skill_version: 135", "skill_version: 134"
                 ),
                 encoding="utf-8",
             )
             release = load_release_module()
-            (alternate_skill / "manifests/133.json").write_text(
-                json.dumps(release.build_manifest(alternate_skill, 133)),
+            (alternate_skill / "manifests/134.json").write_text(
+                json.dumps(release.build_manifest(alternate_skill, 134)),
                 encoding="utf-8",
             )
             before = self.state(root)
@@ -225,7 +225,7 @@ class VerifiedReleaseTaskMutationGuardTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 2, result.stdout)
             payload = json.loads(result.stderr)
-            self.assertEqual(payload["orchestrate_version"], 134)
+            self.assertEqual(payload["orchestrate_version"], 135)
             self.assertIn("--skill-dir", payload["error"]["message"])
             self.assertEqual(self.state(root), before)
         finally:
@@ -253,17 +253,17 @@ class VerifiedReleaseTaskMutationGuardTests(unittest.TestCase):
                 "--task-id", "drift", "--base", base,
             )
             self.assertEqual(drift.returncode, 0, drift.stderr)
-            self.assertEqual(json.loads(drift.stdout)["orchestrate_version"], 134)
+            self.assertEqual(json.loads(drift.stdout)["orchestrate_version"], 135)
         finally:
             temporary.cleanup()
 
 
 class CurrentManifestParityTests(unittest.TestCase):
-    def test_v134_manifest_is_byte_identical_across_codex_and_pi(self) -> None:
+    def test_v135_manifest_is_byte_identical_across_codex_and_pi(self) -> None:
         release = load_release_module()
-        self.assertEqual(release.skill_version(CODEX_SKILL), 134)
-        codex_manifest = CODEX_SKILL / "manifests/134.json"
-        pi_manifest = PI_SKILL / "manifests/134.json"
+        self.assertEqual(release.skill_version(CODEX_SKILL), 135)
+        codex_manifest = CODEX_SKILL / "manifests/135.json"
+        pi_manifest = PI_SKILL / "manifests/135.json"
         self.assertTrue(codex_manifest.is_file())
         self.assertTrue(pi_manifest.is_file())
         self.assertEqual(codex_manifest.read_bytes(), pi_manifest.read_bytes())

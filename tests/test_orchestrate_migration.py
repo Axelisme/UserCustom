@@ -17,7 +17,13 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 CODEX_SKILL = ROOT / "home" / ".codex" / "skills" / "orchestrate"
 SCRIPT = CODEX_SKILL / "scripts/orchestrate.py"
-GUIDE_VERSIONS = (131, 132, 133, 134)
+GUIDE_VERSIONS = (131, 132, 133, 134, 135)
+RETAINED_GUIDE_SHA256 = {
+    131: "3ac711b53f0410640179261ee45288ce0b6a7d1e470c85df0623d2f2da5266ad",
+    132: "02b355608886e893ad9fa17c5d797e3822fd980f9a8d2072232ec6c199a57cb3",
+    133: "529d3702851b721580544743ab5f6539ee47e6e404c67c744368d4191632dde4",
+    134: "8a3a425463086faf852ea4639389dc3f16dfe20579d2006ebe49c2ec4d6d915b",
+}
 GUIDE_SECTIONS = (
     "From",
     "Observable changes",
@@ -165,7 +171,7 @@ class PinAndMigrationGuideContractTests(unittest.TestCase):
         self.assertEqual(source.count("write_version_pin("), 2)  # definition + pin set
 
     def test_guides_are_complete_and_hashed_as_release_documents(self) -> None:
-        manifest = self.release.build_manifest(CODEX_SKILL, 134)
+        manifest = self.release.build_manifest(CODEX_SKILL, 135)
         guides = CODEX_SKILL / "migrations"
         self.assertEqual(
             {int(path.stem) for path in guides.glob("*.md")}, set(GUIDE_VERSIONS)
@@ -180,6 +186,26 @@ class PinAndMigrationGuideContractTests(unittest.TestCase):
                     self.assertIn(f"## {section}", text)
                 entry = manifest["documents"][f"migrations/{version}.md"]
                 self.assertEqual(entry["sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
+
+    def test_retained_guides_remain_byte_immutable(self) -> None:
+        for version, digest in RETAINED_GUIDE_SHA256.items():
+            with self.subTest(version=version):
+                observed = hashlib.sha256(
+                    (CODEX_SKILL / f"migrations/{version}.md").read_bytes()
+                ).hexdigest()
+                self.assertEqual(observed, digest)
+
+    def test_v135_is_docs_only_and_defers_the_planning_cutover(self) -> None:
+        text = (CODEX_SKILL / "migrations/135.md").read_text(encoding="utf-8")
+        required = (
+            "docs-only release",
+            "planning-with-files to dev-flow cutover is not implemented in v135",
+            "future atomic Wave B cutover",
+            "manual legacy migration",
+        )
+        for phrase in required:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
 
     def test_retrospective_guides_preserve_every_removed_boundary(self) -> None:
         required_phrases = {

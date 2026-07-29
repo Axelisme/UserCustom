@@ -26,7 +26,7 @@ VERSION_MATCH = re.search(
 if VERSION_MATCH is None:
     raise RuntimeError("orchestrate SKILL.md has no skill_version")
 SHIPPED_VERSION = int(VERSION_MATCH.group(1))
-PUBLISHED_VERSION = 134
+PUBLISHED_VERSION = 135
 
 
 def load_release_module():
@@ -94,7 +94,7 @@ class ReleasedPackageTests(unittest.TestCase):
                 self.assertEqual(manifest["skill_version"], SHIPPED_VERSION)
                 self.assertEqual(manifest["orchestrate_compat"], SHIPPED_VERSION)
 
-    def test_pi_layout_exposes_guides_and_builds_the_codex_v134_inventory(self) -> None:
+    def test_pi_layout_exposes_guides_and_builds_the_codex_v135_inventory(self) -> None:
         release = load_release_module()
         for version in range(131, PUBLISHED_VERSION + 1):
             codex_guide = CODEX_SKILL / f"migrations/{version}.md"
@@ -106,7 +106,7 @@ class ReleasedPackageTests(unittest.TestCase):
             release.build_manifest(PI_SKILL, PUBLISHED_VERSION),
         )
 
-    def test_v134_is_a_matched_regenerable_release_for_both_logical_layouts(self) -> None:
+    def test_v135_is_a_matched_regenerable_release_for_both_logical_layouts(self) -> None:
         self.assertEqual(SHIPPED_VERSION, PUBLISHED_VERSION)
         release = load_release_module()
         manifests = [
@@ -143,6 +143,7 @@ class ReleasedPackageTests(unittest.TestCase):
             131: "c9e9a2e36c38f31b624c947e9391124f2b397f0fb774c586f2ff2eac8e3fa22f",
             132: "49e390ecb1fe40af8d5964546e310e2dc3f6aeba22a75e30091a119dc6de7767",
             133: "15b95e3f3f55fabcb7629cd2dc9ec2eb80aabb50b825cf7a729d665493ee85c8",
+            134: "744a3dbeacc31d0ce8e9dbc5806c7e9901a825c6e0369186451ba98c519d9c52",
         }
         for version, digest in expected.items():
             with self.subTest(version=version):
@@ -150,6 +151,33 @@ class ReleasedPackageTests(unittest.TestCase):
                     (CODEX_SKILL / f"manifests/{version}.json").read_bytes()
                 ).hexdigest()
                 self.assertEqual(observed, digest)
+
+
+    def test_pi_guidance_yields_long_interactive_background_work(self) -> None:
+        text = " ".join(
+            (CODEX_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split()
+        )
+        required = (
+            "normally return control",
+            "Before ending an interactive turn or calling `yield_goal`, report concise progress",
+            "only when work is blocked only on an external or background prerequisite",
+            "Outside goal mode, Root ends the turn, and Pi can wake the session when background work completes",
+            "Adapter process events remain wake-only attestation hints",
+            "rather than defaulting to `subagent_wait`",
+            "delays a compactable or yieldable boundary",
+            "can increase context-exhaustion risk",
+            "bounded same-turn run-to-completion exception",
+            "only when the current turn must receive the result before it can finish",
+            "Do not use sleep or polling loops",
+            "completed evidence",
+            "active run or prerequisite",
+            "next action or blocker",
+            "Progress prose is never terminal, readiness, or collect evidence",
+            "wake-up",
+        )
+        for phrase in required:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
 
 
 class RuntimeParityTests(unittest.TestCase):

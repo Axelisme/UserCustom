@@ -35,6 +35,26 @@ the upstream budget and hard abort remain active. The private control-event
 coupling was tested with pi-subagents 0.37.2; package drift is not refused and may
 also lose this notice without weakening the upstream hard budget.
 
+Long interactive background work should normally return control after dispatch
+rather than defaulting to `subagent_wait`. Holding the parent turn delays a
+compactable or yieldable boundary and can increase context-exhaustion risk.
+Before ending an interactive turn or calling `yield_goal`, report concise
+progress. In goal mode, Root calls `yield_goal` only when work is blocked only
+on an external or background prerequisite. Outside goal mode, Root ends the
+turn, and Pi can wake the session when background work completes. Adapter
+process events remain wake-only attestation hints; after a wake, a subsequent
+turn calls `attest-run` for the exact run. A bounded same-turn run-to-completion
+exception using `subagent_wait` is reasonable only when the current turn must
+receive the result before it can finish, the run is expected to finish shortly,
+and it remains within an explicit, small wait bound and the current turn's
+context budget. Do not use sleep or polling loops, and do not repeatedly wait to
+manufacture same-turn completion.
+
+A progress report identifies completed evidence, the active run or prerequisite,
+and the next action or blocker. Progress prose is never terminal, readiness, or
+collect evidence; only the exact evidence and Git checks defined below can support
+those decisions.
+
 Root retains the opaque receipt and calls `attest-run` for the same run.
 `process-terminal.json` is the primary durable proof, the exact status overlay is
 fallback evidence, and the process event is wake-up only. Execution state and

@@ -9,10 +9,7 @@ import unittest
 from pathlib import Path
 from typing import cast
 
-ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = (
-    ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts" / "orchestrate.py"
-)
+from tests._orchestrate_cli_support import SCRIPT, VERIFIED_SKILL
 
 
 class IntegrationWorktreeContractTests(unittest.TestCase):
@@ -46,7 +43,7 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
         env: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(SCRIPT), *args],
+            [sys.executable, str(SCRIPT), "--skill-dir", str(VERIFIED_SKILL), *args],
             cwd=root,
             text=True,
             capture_output=True,
@@ -141,9 +138,12 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
         *,
         date: str = "2025-01-01T00:01:00+0000",
         path: str = "app.txt",
+        declare_immutable: bool = True,
     ) -> str:
         (worktree / path).write_text(content, encoding="utf-8")
         self.git(worktree, "add", path)
+        if declare_immutable and "Immutable:" not in message:
+            message = f"{message}\n\nImmutable: .orchestrate-test-contract"
         self.git(
             worktree,
             "commit",
@@ -173,6 +173,19 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
                     "GIT_COMMITTER_DATE": "2025-01-01T00:10:00+0000",
                 },
             )
+        )
+
+    def candidate(self, sha: str) -> subprocess.CompletedProcess[str]:
+        return self.cli(
+            self.root,
+            "integration",
+            "candidate",
+            "--root",
+            str(self.root),
+            "--task-id",
+            self.task_id,
+            "--sha",
+            sha,
         )
 
     def status(self) -> dict[str, object]:
@@ -446,7 +459,12 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
         # byte-identical, then collects -- its staleness merge pulls in
         # lane-b's history (which touched contract_test.py) without net
         # effect on it.
-        sha_a = self.commit_lane(lane_a, "lane a\n", date="2025-01-01T00:04:00+0000")
+        sha_a = self.commit_lane(
+            lane_a,
+            "lane a\n",
+            date="2025-01-01T00:04:00+0000",
+            declare_immutable=False,
+        )
         collected = self.collect("lane-a", sha_a)
         self.assertEqual(collected["immutable_paths_verified"], ["contract_test.py"])
 
@@ -491,6 +509,50 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
         )
         self.assertIn("without redeclaring", str(error["error"]))
         self.assertIn("contract_test.py", str(error["error"]))
+
+    def test_candidate_refuses_collect_shaped_merge_with_a_forged_tree_atomically(
+        self,
+    ) -> None:
+        created = self.integration_create()
+        integration_path = Path(str(created["worktree"]))
+        acceptance_path = (
+            self.root
+            / ".agent_state"
+            / "worktrees"
+            / f"{self.task_id}-acceptance"
+        )
+        lane = self.lane_create("lane-a", self.base)
+        lane_sha = self.commit_lane(
+            lane,
+            "lane tree\n",
+            "contract\n\nImmutable: app.txt",
+        )
+        base_tree = self.git(self.root, "rev-parse", f"{self.base}^{{tree}}")
+        forged = self.git(
+            self.root,
+            "commit-tree",
+            base_tree,
+            "-p",
+            self.base,
+            "-p",
+            lane_sha,
+            "-m",
+            f"Collect lane lane-a\n\nTask: {self.task_id}\nLane: lane-a",
+        )
+        self.git(integration_path, "reset", "--hard", forged)
+        old_acceptance_head = self.git(acceptance_path, "rev-parse", "HEAD")
+        candidate_ref = f"refs/orchestrate/{self.task_id}/candidate"
+
+        error = self.error_payload(self.candidate(forged))
+
+        self.assertIn("tree", str(error["error"]).lower())
+        self.assertEqual(
+            self.git(acceptance_path, "rev-parse", "HEAD"), old_acceptance_head
+        )
+        self.assertEqual(
+            self.git(self.root, "rev-parse", "--verify", "--quiet", candidate_ref, check=False),
+            "",
+        )
 
     def test_create_refuses_existing_path_or_branch_and_remove_refuses_dirty(
         self,
@@ -614,7 +676,12 @@ class IntegrationWorktreeContractTests(unittest.TestCase):
         lane, _declaring_sha = self.prepare_declared_lane("lane-a")
 
         # Filling production behavior leaves the declared surface byte-identical.
-        sha = self.commit_lane(lane, "lane a\n", date="2025-01-01T00:03:00+0000")
+        sha = self.commit_lane(
+            lane,
+            "lane a\n",
+            date="2025-01-01T00:03:00+0000",
+            declare_immutable=False,
+        )
         collected = self.collect("lane-a", sha)
         self.assertEqual(collected["immutable_paths_verified"], ["contract_test.py"])
 

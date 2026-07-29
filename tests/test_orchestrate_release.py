@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,7 @@ VERSION_MATCH = re.search(
 if VERSION_MATCH is None:
     raise RuntimeError("orchestrate SKILL.md has no skill_version")
 SHIPPED_VERSION = int(VERSION_MATCH.group(1))
+PUBLISHED_VERSION = 134
 
 
 def load_release_module():
@@ -44,6 +46,7 @@ class ReleasedPackageTests(unittest.TestCase):
 
     retained_commands = {
         "lane",
+        "commit-check",
         "integration",
         "report",
         "doctor",
@@ -53,9 +56,12 @@ class ReleasedPackageTests(unittest.TestCase):
     }
 
     @staticmethod
-    def run_cli(*args: str, skill_dir: Path = CODEX_SKILL) -> subprocess.CompletedProcess[str]:
+    def run_cli(
+        *args: str, skill_dir: Path = CODEX_SKILL
+    ) -> subprocess.CompletedProcess[str]:
+        script = skill_dir / "scripts/orchestrate.py"
         return subprocess.run(
-            [sys.executable, str(CODEX_SCRIPT), "--skill-dir", str(skill_dir), *args],
+            [sys.executable, str(script), "--skill-dir", str(skill_dir), *args],
             cwd=ROOT,
             text=True,
             capture_output=True,
@@ -88,10 +94,62 @@ class ReleasedPackageTests(unittest.TestCase):
                 self.assertEqual(manifest["skill_version"], SHIPPED_VERSION)
                 self.assertEqual(manifest["orchestrate_compat"], SHIPPED_VERSION)
 
-    def test_pin_migrate_remains_a_retained_administration_command(self) -> None:
-        result = self.run_cli("pin", "migrate", "--help")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("--root", result.stdout)
+    def test_pi_layout_exposes_guides_and_builds_the_codex_v134_inventory(self) -> None:
+        release = load_release_module()
+        for version in range(131, PUBLISHED_VERSION + 1):
+            codex_guide = CODEX_SKILL / f"migrations/{version}.md"
+            pi_guide = PI_SKILL / f"migrations/{version}.md"
+            self.assertTrue(pi_guide.is_file(), f"missing Pi guide: {pi_guide}")
+            self.assertTrue(pi_guide.samefile(codex_guide))
+        self.assertEqual(
+            release.build_manifest(CODEX_SKILL, PUBLISHED_VERSION),
+            release.build_manifest(PI_SKILL, PUBLISHED_VERSION),
+        )
+
+    def test_v134_is_a_matched_regenerable_release_for_both_logical_layouts(self) -> None:
+        self.assertEqual(SHIPPED_VERSION, PUBLISHED_VERSION)
+        release = load_release_module()
+        manifests = [
+            skill / f"manifests/{PUBLISHED_VERSION}.json"
+            for skill in (CODEX_SKILL, PI_SKILL)
+        ]
+        for manifest in manifests:
+            self.assertTrue(manifest.is_file(), f"missing manifest: {manifest}")
+        self.assertEqual(manifests[0].read_bytes(), manifests[1].read_bytes())
+
+        with tempfile.TemporaryDirectory() as temporary:
+            generated: list[bytes] = []
+            for index, skill in enumerate((CODEX_SKILL, PI_SKILL)):
+                output = Path(temporary) / f"logical-layout-{index}.json"
+                release.write_release_manifest(
+                    skill,
+                    PUBLISHED_VERSION,
+                    PUBLISHED_VERSION - 1,
+                    output,
+                )
+                generated.append(output.read_bytes())
+            self.assertEqual(generated[0], generated[1])
+            self.assertEqual(generated[0], manifests[0].read_bytes())
+
+        for skill in (CODEX_SKILL, PI_SKILL):
+            with self.subTest(skill=skill):
+                doctor = release.verify_release(skill)
+                self.assertTrue(doctor["ok"], doctor["errors"])
+                self.assertEqual(doctor["skill_version"], PUBLISHED_VERSION)
+
+    def test_retained_manifests_remain_byte_immutable(self) -> None:
+        expected = {
+            130: "2821cf6ade0a2f5bf398fb3001bc104e026e7193683992d0ab74539532e7da10",
+            131: "c9e9a2e36c38f31b624c947e9391124f2b397f0fb774c586f2ff2eac8e3fa22f",
+            132: "49e390ecb1fe40af8d5964546e310e2dc3f6aeba22a75e30091a119dc6de7767",
+            133: "15b95e3f3f55fabcb7629cd2dc9ec2eb80aabb50b825cf7a729d665493ee85c8",
+        }
+        for version, digest in expected.items():
+            with self.subTest(version=version):
+                observed = hashlib.sha256(
+                    (CODEX_SKILL / f"manifests/{version}.json").read_bytes()
+                ).hexdigest()
+                self.assertEqual(observed, digest)
 
 
 class RuntimeParityTests(unittest.TestCase):
@@ -246,6 +304,71 @@ class RuntimeParityTests(unittest.TestCase):
             )
             self.assertEqual(codex["changed_runtime_assets"], [])
 
+    def test_doctor_refuses_json_valid_malformed_manifest_structures(self) -> None:
+        def malformed_cases(manifest: dict[str, Any]) -> dict[str, Any]:
+            document_name = next(iter(manifest["documents"]))
+            profile_name = next(iter(manifest["profiles"]))
+            runtime_name = next(iter(manifest["runtime_assets"]))
+            return {
+                "root": [],
+                "category": {**manifest, "documents": []},
+                "document-entry": {
+                    **manifest,
+                    "documents": {document_name: []},
+                },
+                "runtime-entry": {
+                    **manifest,
+                    "runtime_assets": {runtime_name: []},
+                },
+                "profile-entry": {
+                    **manifest,
+                    "profiles": {profile_name: {}},
+                },
+                "document-hash-field": {
+                    **manifest,
+                    "documents": {document_name: {"sha256": None}},
+                },
+                "profile-hash-field": {
+                    **manifest,
+                    "profiles": {
+                        profile_name: {"profile_contract_sha256": []}
+                    },
+                },
+            }
+
+        for name in (
+            "root",
+            "category",
+            "document-entry",
+            "runtime-entry",
+            "profile-entry",
+            "document-hash-field",
+            "profile-hash-field",
+        ):
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary) / "home"
+                shutil.copytree(HOME, home)
+                skill = home / ".codex/skills/orchestrate"
+                version = self.release.skill_version(skill)
+                manifest = self.release.build_manifest(skill, version)
+                malformed = malformed_cases(manifest)[name]
+                (skill / f"manifests/{version}.json").write_text(
+                    json.dumps(malformed), encoding="utf-8"
+                )
+
+                result = ReleasedPackageTests.run_cli("doctor", skill_dir=skill)
+
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertNotIn("Traceback", result.stderr)
+                payload = json.loads(result.stderr)
+                self.assertEqual(payload["orchestrate_version"], version)
+                self.assertEqual(payload["error"]["type"], "orchestrate")
+                self.assertIn(
+                    "invalid release manifest structure",
+                    payload["error"]["message"],
+                )
+
     def test_doctor_detects_missing_and_tampered_runtime_asset_raw_bytes(self) -> None:
         for state in ("missing", "tampered"):
             with self.subTest(state=state), tempfile.TemporaryDirectory() as temporary:
@@ -272,11 +395,69 @@ class RuntimeParityTests(unittest.TestCase):
                     result,
                 )
 
+    def test_release_rolls_back_when_target_migration_guide_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / "home"
+            shutil.copytree(HOME, home)
+            skill = home / ".codex/skills/orchestrate"
+            version = self.release.skill_version(skill)
+            guide = skill / f"migrations/{version + 1}.md"
+            guide.parent.mkdir(parents=True, exist_ok=True)
+            guide.write_text("temporary guide\n", encoding="utf-8")
+            (skill / f"manifests/{version}.json").write_text(
+                json.dumps(self.release.build_manifest(skill, version)), encoding="utf-8"
+            )
+            guide.unlink()
+            skill_before = (skill / "SKILL.md").read_bytes()
+            manifests_before = {
+                path.name: path.read_bytes() for path in (skill / "manifests").glob("*.json")
+            }
+
+            with self.assertRaisesRegex(Exception, "migration guide"):
+                self.release.command_release(
+                    argparse.Namespace(skill_dir=str(skill), version=version + 1)
+                )
+
+            self.assertEqual((skill / "SKILL.md").read_bytes(), skill_before)
+            self.assertEqual(
+                {path.name: path.read_bytes() for path in (skill / "manifests").glob("*.json")},
+                manifests_before,
+            )
+
+    def test_release_cli_success_reports_newly_installed_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / "home"
+            shutil.copytree(HOME, home)
+            skill = home / ".codex/skills/orchestrate"
+            version = self.release.skill_version(skill)
+            guide = skill / f"migrations/{version + 1}.md"
+            guide.parent.mkdir(parents=True, exist_ok=True)
+            guide.write_text("# test guide\n", encoding="utf-8")
+            (skill / f"manifests/{version}.json").write_text(
+                json.dumps(self.release.build_manifest(skill, version)), encoding="utf-8"
+            )
+            script = skill / "scripts/orchestrate.py"
+
+            result = subprocess.run(
+                [sys.executable, str(script), "--skill-dir", str(skill),
+                 "release", "--version", str(version + 1)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["orchestrate_version"], version + 1)
+
     def test_release_publication_refuses_missing_mandatory_runtime_asset(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary) / "home"
             shutil.copytree(HOME, home)
             skill = home / ".codex/skills/orchestrate"
+            target = SHIPPED_VERSION + 1
+            guide = skill / f"migrations/{target}.md"
+            guide.write_text("# next release fixture\n", encoding="utf-8")
             adapter = home / ".pi/agent/extensions/orchestrate-pi.ts"
             adapter.unlink()
             output = skill / "manifests/next.json"
@@ -287,7 +468,7 @@ class RuntimeParityTests(unittest.TestCase):
             ):
                 self.release.write_release_manifest(
                     skill,
-                    SHIPPED_VERSION + 1,
+                    target,
                     None,
                     output,
                 )

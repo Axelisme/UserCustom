@@ -9,10 +9,9 @@ import unittest
 from pathlib import Path
 from typing import Any
 
+from tests._orchestrate_cli_support import SCRIPT, VERIFIED_SKILL
+
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = (
-    ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts" / "orchestrate.py"
-)
 
 
 class ReportContractTests(unittest.TestCase):
@@ -50,7 +49,7 @@ class ReportContractTests(unittest.TestCase):
         self, root: Path, *args: str, env: dict[str, str] | None = None
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(SCRIPT), *args],
+            [sys.executable, str(SCRIPT), "--skill-dir", str(VERIFIED_SKILL), *args],
             cwd=root,
             text=True,
             capture_output=True,
@@ -153,6 +152,10 @@ class ReportContractTests(unittest.TestCase):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         self.git(worktree, "add", path)
+        trailer_separator = "\n" if "\n\n" in message else "\n\n"
+        message = (
+            f"{message}{trailer_separator}Immutable: .orchestrate-test-contract"
+        )
         self.git(
             worktree,
             "commit",
@@ -361,9 +364,9 @@ class ReportContractTests(unittest.TestCase):
         report = self.report()
         self.assertEqual(report["task"]["max_concurrent"], 1)
 
-    # 4. a lane carrying an Origin: user_acceptance trailer is marked in the
-    #    output; a lane without it has no origin key at all.
-    def test_origin_user_acceptance_trailer_is_surfaced_on_its_lane(self) -> None:
+    # 4. Origin is no longer workflow authority or report projection. Old
+    #    commit text may still contain it, but report deliberately ignores it.
+    def test_origin_trailer_is_not_projected_on_any_lane(self) -> None:
         self.integration_create()
         repair_lane = self.lane_create("repair-a", self.base)
         self.commit(
@@ -394,10 +397,25 @@ class ReportContractTests(unittest.TestCase):
         )
 
         report = self.report()
-        self.assertEqual(
-            self.lane_by_id(report, "repair-a")["origin"], "user_acceptance"
-        )
+        self.assertNotIn("origin", self.lane_by_id(report, "repair-a"))
         self.assertNotIn("origin", self.lane_by_id(report, "lane-b"))
+
+    def test_origin_is_absent_from_future_skill_and_admission_authority(self) -> None:
+        skill = (
+            ROOT / "home" / ".codex" / "skills" / "orchestrate" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        admission = (
+            ROOT
+            / "home"
+            / ".codex"
+            / "skills"
+            / "dev-flow"
+            / "references"
+            / "admission-standard.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("Origin:", skill)
+        self.assertNotIn("Origin:", admission)
 
     # 5. the four checks are always merely presented: a "refuse" verdict on
     #    any of them must not stop `report` from exiting 0.

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import NoReturn, Sequence
 
 from .lane_core import (
+    command_commit_check,
     command_integration_candidate,
     command_integration_collect,
     command_integration_create,
@@ -23,10 +24,11 @@ from .primitives import OrchestrateError
 from .release import (
     command_diff,
     command_doctor,
-    command_pin_migrate,
     command_pin_set,
     command_pin_status,
     command_release,
+    require_verified_release,
+    skill_version,
 )
 
 
@@ -56,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
     lane_create.add_argument("--task-id", required=True)
     lane_create.add_argument("--lane-id", required=True)
     lane_create.add_argument("--base", required=True)
-    lane_create.set_defaults(handler=command_lane_create)
+    lane_create.set_defaults(handler=command_lane_create, task_mutation=True)
 
     lane_status = lane_commands.add_parser("status")
     add_root(lane_status)
@@ -68,7 +70,16 @@ def build_parser() -> argparse.ArgumentParser:
     add_root(lane_drop)
     lane_drop.add_argument("--task-id", required=True)
     lane_drop.add_argument("--lane-id", required=True)
-    lane_drop.set_defaults(handler=command_lane_drop)
+    lane_drop.set_defaults(handler=command_lane_drop, task_mutation=True)
+
+    commit_check = commands.add_parser(
+        "commit-check", help="read-only whole-range Immutable trailer validation"
+    )
+    add_root(commit_check)
+    commit_check.add_argument("--task-id", required=True)
+    commit_check.add_argument("--lane-id", required=True)
+    commit_check.add_argument("--sha", required=True)
+    commit_check.set_defaults(handler=command_commit_check)
 
     integration = commands.add_parser(
         "integration", help="Git-backed task integration lifecycle"
@@ -104,7 +115,10 @@ def build_parser() -> argparse.ArgumentParser:
             operation_parser.add_argument("--persist", required=True)
             operation_parser.add_argument("--final", action="store_true", default=False)
             operation_parser.add_argument("--message")
-        operation_parser.set_defaults(handler=handler)
+        operation_parser.set_defaults(
+            handler=handler,
+            task_mutation=operation not in {"status", "list"},
+        )
 
     report = commands.add_parser(
         "report", help="read-only unified lane, task, checks, and candidate report"
@@ -130,11 +144,10 @@ def build_parser() -> argparse.ArgumentParser:
     for name, handler in (
         ("status", command_pin_status),
         ("set", command_pin_set),
-        ("migrate", command_pin_migrate),
     ):
         operation = pin_commands.add_parser(name)
         add_root(operation)
-        operation.set_defaults(handler=handler)
+        operation.set_defaults(handler=handler, task_mutation=name == "set")
 
     release = commands.add_parser(
         "release", help="atomic release: bump version, manifest, doctor"
@@ -144,20 +157,42 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def readable_installed_version(skill_dir: Path) -> int | None:
+    try:
+        return skill_version(skill_dir)
+    except (OSError, UnicodeError, OrchestrateError):
+        return None
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    skill_dir = Path(__file__).resolve().parents[2]
     try:
         parser = build_parser()
         args = parser.parse_args(argv)
+        selected_skill_dir = Path(args.skill_dir).resolve()
+        if selected_skill_dir != skill_dir:
+            raise OrchestrateError(
+                "--skill-dir must resolve to the executing orchestrate package "
+                f"({skill_dir})"
+            )
+        args.skill_dir = str(skill_dir)
+        # Unreadable installed metadata is itself the authoritative CLI error;
+        # never emit a successful response with unknowable provenance.
+        skill_version(skill_dir)
+        if getattr(args, "task_mutation", False):
+            args.verified_release = require_verified_release(skill_dir)
         payload = args.handler(args)
     except (OSError, UnicodeError, OrchestrateError) as exc:
+        payload = {
+            "ok": False,
+            "orchestrate_version": readable_installed_version(skill_dir),
+            "error": {"type": "orchestrate", "message": str(exc)},
+        }
         print(
-            json.dumps(
-                {"ok": False, "error": {"type": "orchestrate", "message": str(exc)}},
-                ensure_ascii=False,
-                sort_keys=True,
-            ),
+            json.dumps(payload, ensure_ascii=False, sort_keys=True),
             file=sys.stderr,
         )
         return 2
+    payload["orchestrate_version"] = readable_installed_version(skill_dir)
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
     return 0 if payload.get("ok", False) else 1

@@ -9,10 +9,9 @@ import unittest
 from pathlib import Path
 from typing import Any
 
+from tests._orchestrate_cli_support import SCRIPT, VERIFIED_SKILL
+
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = (
-    ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts" / "orchestrate.py"
-)
 
 
 class IntegrationLandContractTests(unittest.TestCase):
@@ -51,7 +50,7 @@ class IntegrationLandContractTests(unittest.TestCase):
         self, root: Path, *args: str, env: dict[str, str] | None = None
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(SCRIPT), *args],
+            [sys.executable, str(SCRIPT), "--skill-dir", str(VERIFIED_SKILL), *args],
             cwd=root,
             text=True,
             capture_output=True,
@@ -170,6 +169,8 @@ class IntegrationLandContractTests(unittest.TestCase):
     ) -> str:
         (worktree / path).write_text(content, encoding="utf-8")
         self.git(worktree, "add", path)
+        if "Immutable:" not in message:
+            message = f"{message}\n\nImmutable: .orchestrate-test-contract"
         self.git(
             worktree,
             "commit",
@@ -645,9 +646,9 @@ class IntegrationLandContractTests(unittest.TestCase):
         self,
     ) -> None:
         """The forward path out of the previous test: beta merges the persist
-        branch (append-only, S5.5) into its own integration branch, republishes
-        the merged tip, and then landing succeeds -- because the persist tip
-        genuinely is an ancestor of that new candidate now.
+        branch (append-only, S5.5) into its own integration branch, collects a
+        lane from that merged base, and then landing succeeds -- because the
+        persist tip is an ancestor and the candidate is still a proven collect.
         """
         beta = "land-task-beta"
         self.integration_create()
@@ -671,8 +672,9 @@ class IntegrationLandContractTests(unittest.TestCase):
             self.root / ".agent_state" / "worktrees" / f"{beta}-integration"
         )
 
-        # forward-merge the persist branch into beta's integration branch,
-        # then republish the merged tip as beta's new candidate.
+        # Forward-merge the persist branch into beta's integration branch,
+        # then collect one lane from that merged base so candidate provenance
+        # remains an actual Orchestrate collect rather than the direct merge.
         self.git(
             beta_integration_path,
             "merge",
@@ -686,13 +688,24 @@ class IntegrationLandContractTests(unittest.TestCase):
             },
         )
         merged_tip = self.git(self.root, "rev-parse", beta_integration_branch)
-        self.candidate(merged_tip, task_id=beta)
+        proven_tip = self.advance_integration(
+            "lane-c",
+            "ready\n",
+            "2025-01-01T00:04:00+0000",
+            path="beta-ready.txt",
+            task_id=beta,
+        )
+        self.assertEqual(
+            self.git(self.root, "merge-base", "--is-ancestor", merged_tip, proven_tip),
+            "",
+        )
+        self.candidate(proven_tip, task_id=beta)
 
         landed = self.payload(self.land(final=True, task_id=beta))
 
         self.assertEqual(
             self.git(self.persist_path, "rev-parse", "HEAD^{tree}"),
-            self.git(self.root, "rev-parse", f"{merged_tip}^{{tree}}"),
+            self.git(self.root, "rev-parse", f"{proven_tip}^{{tree}}"),
         )
         # both tasks' files are present: beta's landing did not lose alpha's.
         self.assertEqual(
@@ -703,7 +716,7 @@ class IntegrationLandContractTests(unittest.TestCase):
             (self.persist_path / "beta.txt").read_text(encoding="utf-8"),
             "beta content\n",
         )
-        self.assertEqual(landed["candidate"], merged_tip)
+        self.assertEqual(landed["candidate"], proven_tip)
 
     def test_local_modification_colliding_with_the_candidates_own_change_refuses(
         self,

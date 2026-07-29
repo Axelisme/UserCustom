@@ -13,7 +13,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CODEX_SKILL = ROOT / "home" / ".codex" / "skills" / "orchestrate"
 PI_SKILL = ROOT / "home" / ".pi" / "agent" / "skills" / "orchestrate"
-SCRIPT = CODEX_SKILL / "scripts" / "orchestrate.py"
 
 
 def load_release_module():
@@ -24,8 +23,8 @@ def load_release_module():
         sys.path.pop(0)
 
 
-class PinMigrateActiveTaskGuardTests(unittest.TestCase):
-    """Pin migration is read-only while a current task remains active."""
+class VerifiedReleaseTaskMutationGuardTests(unittest.TestCase):
+    """One CLI preflight seam covers every task-mutating command."""
 
     @staticmethod
     def git(root: Path, *args: str) -> str:
@@ -36,165 +35,235 @@ class PinMigrateActiveTaskGuardTests(unittest.TestCase):
             raise AssertionError(result.stderr)
         return result.stdout.strip()
 
-    def setUp(self) -> None:
-        self.release = load_release_module()
-        self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
-        self.git(self.root, "init", "-q", "-b", "main")
-        self.git(self.root, "config", "user.name", "Guard Test")
-        self.git(self.root, "config", "user.email", "guard@example.test")
-        self.git(self.root, "commit", "--allow-empty", "-qm", "base")
-        self.home = self.root / "home"
-        shutil.copytree(ROOT / "home", self.home)
-        self.skill = self.home / ".codex" / "skills" / "orchestrate"
-        self.version = self.release.skill_version(self.skill)
-        (self.skill / "manifests" / f"{self.version}.json").write_text(
-            json.dumps(self.release.build_manifest(self.skill, self.version)), encoding="utf-8"
+    def make_case(self) -> tuple[tempfile.TemporaryDirectory[str], Path, Path, Path, str]:
+        temporary = tempfile.TemporaryDirectory()
+        root = Path(temporary.name)
+        self.git(root, "init", "-q", "-b", "main")
+        self.git(root, "config", "user.name", "Guard Test")
+        self.git(root, "config", "user.email", "guard@example.test")
+        (root / "README").write_text("base\n", encoding="utf-8")
+        self.git(root, "add", "README")
+        self.git(root, "commit", "-qm", "base")
+        base = self.git(root, "rev-parse", "HEAD")
+        home = root / "home"
+        shutil.copytree(ROOT / "home", home)
+        skill = home / ".codex/skills/orchestrate"
+        script = skill / "scripts/orchestrate.py"
+        release = load_release_module()
+        version = release.skill_version(skill)
+        (skill / f"manifests/{version}.json").write_text(
+            json.dumps(release.build_manifest(skill, version)), encoding="utf-8"
         )
-        self.pin = self.root / ".agent_state" / "orchestrate" / "version-pin.json"
+        return temporary, root, home, script, base
 
-    def tearDown(self) -> None:
-        self.temporary.cleanup()
-
-    def write_pin(self, version: int) -> None:
-        self.pin.parent.mkdir(parents=True, exist_ok=True)
-        self.pin.write_text(
-            json.dumps(
-                {
-                    "pin_version": 1,
-                    "skill_version": version,
-                    "orchestrate_compat": version,
-                }
-            ),
-            encoding="utf-8",
-        )
-
-    def cli(self, *args: str) -> subprocess.CompletedProcess[str]:
+    @staticmethod
+    def cli(
+        root: Path, skill: Path, script: Path, *args: str
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(SCRIPT), "--skill-dir", str(self.skill), *args],
-            cwd=ROOT,
+            [sys.executable, str(script), "--skill-dir", str(skill), *args],
+            cwd=root,
             text=True,
             capture_output=True,
             check=False,
         )
 
-    def migrate(self) -> subprocess.CompletedProcess[str]:
-        return self.cli("pin", "migrate", "--root", str(self.root))
+    def state(self, root: Path) -> tuple[str, str, str, list[str]]:
+        refs = subprocess.run(
+            ["git", "show-ref"], cwd=root, text=True, capture_output=True, check=False
+        ).stdout
+        worktrees = self.git(root, "worktree", "list", "--porcelain")
+        status = self.git(root, "status", "--porcelain")
+        agent_state = sorted(
+            path.relative_to(root).as_posix()
+            for path in (root / ".agent_state").rglob("*")
+        ) if (root / ".agent_state").exists() else []
+        return refs, worktrees, status, agent_state
 
-    def test_current_task_state_blocks_migration_without_mutation(self) -> None:
-        self.write_pin(self.version)
-        created = self.cli(
-            "integration",
-            "create",
-            "--root",
-            str(self.root),
-            "--task-id",
-            "active-task",
-            "--base",
-            self.git(self.root, "rev-parse", "HEAD"),
-        )
-        self.assertEqual(created.returncode, 0, created.stderr)
-        payload = json.loads(created.stdout)
-        integration_worktree = Path(payload["worktree"])
-        acceptance_worktree = Path(payload["acceptance_worktree"])
+    @staticmethod
+    def task_bytes(root: Path) -> dict[str, bytes]:
+        return {
+            path.relative_to(root).as_posix(): path.read_bytes()
+            for path in root.rglob("*")
+            if path.is_file() and path.relative_to(root).parts[0] != "home"
+        }
 
-        self.write_pin(132)
-        pin_before = self.pin.read_bytes()
-        root_head_before = self.git(self.root, "rev-parse", "HEAD")
-        root_status_before = self.git(self.root, "status", "--porcelain")
-        integration_head_before = self.git(integration_worktree, "rev-parse", "HEAD")
-        acceptance_head_before = self.git(acceptance_worktree, "rev-parse", "HEAD")
-        branches_before = self.git(
-            self.root,
-            "for-each-ref",
-            "--format=%(refname:short)",
-            "refs/heads/wave/",
-        ).splitlines()
-        refs_before = self.git(
-            self.root,
-            "for-each-ref",
-            "--format=%(refname)",
-            "refs/orchestrate/",
-        ).splitlines()
-
-        result = self.migrate()
-
-        self.assertEqual(result.returncode, 2)
-        self.assertEqual(result.stdout, "")
-        self.assertIn("active orchestrate task state", result.stderr)
-        for name in [*branches_before, *refs_before]:
-            self.assertIn(name, result.stderr)
-        self.assertIn(str(integration_worktree), result.stderr)
-        self.assertIn(str(acceptance_worktree), result.stderr)
-        self.assertEqual(self.pin.read_bytes(), pin_before)
-        self.assertEqual(
-            self.git(
-                self.root,
-                "for-each-ref",
-                "--format=%(refname:short)",
-                "refs/heads/wave/",
-            ).splitlines(),
-            branches_before,
-        )
-        self.assertEqual(
-            self.git(
-                self.root,
-                "for-each-ref",
-                "--format=%(refname)",
-                "refs/orchestrate/",
-            ).splitlines(),
-            refs_before,
-        )
-        self.assertTrue(integration_worktree.is_dir())
-        self.assertTrue(acceptance_worktree.is_dir())
-        self.assertEqual(self.git(self.root, "rev-parse", "HEAD"), root_head_before)
-        self.assertEqual(self.git(self.root, "status", "--porcelain"), root_status_before)
-        self.assertEqual(
-            self.git(integration_worktree, "rev-parse", "HEAD"), integration_head_before
-        )
-        self.assertEqual(
-            self.git(acceptance_worktree, "rev-parse", "HEAD"), acceptance_head_before
-        )
-        self.assertEqual(self.git(integration_worktree, "status", "--porcelain"), "")
-        self.assertEqual(self.git(acceptance_worktree, "status", "--porcelain"), "")
-
-    def test_clean_repo_migrates_without_creating_task_state(self) -> None:
-        self.write_pin(self.release.MIN_MIGRATABLE_VERSION)
-
-        result = self.migrate()
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        payload = json.loads(result.stdout)
-        self.assertTrue(payload["ok"])
-        self.assertEqual(payload["to_version"], self.version)
-        self.assertIsNone(payload["delta_note"])
-        self.assertEqual(json.loads(self.pin.read_text())["skill_version"], self.version)
-        self.assertEqual(
-            self.git(
-                self.root,
-                "for-each-ref",
-                "--format=%(refname:short)",
-                "refs/heads/wave/",
+    def test_corrupt_mandatory_asset_refuses_every_task_mutation_before_change(self) -> None:
+        cases = {
+            "lane-create": lambda root, base: (
+                "lane", "create", "--root", str(root), "--task-id", "task",
+                "--lane-id", "lane", "--base", base,
             ),
-            "",
-        )
-        self.assertEqual(
-            self.git(
-                self.root,
-                "for-each-ref",
-                "--format=%(refname)",
-                "refs/orchestrate/",
+            "lane-drop": lambda root, base: (
+                "lane", "drop", "--root", str(root), "--task-id", "task",
+                "--lane-id", "lane",
             ),
-            "",
-        )
+            "integration-create": lambda root, base: (
+                "integration", "create", "--root", str(root), "--task-id", "task",
+                "--base", base,
+            ),
+            "integration-collect": lambda root, base: (
+                "integration", "collect", "--root", str(root), "--task-id", "task",
+                "--lane-id", "lane", "--sha", base,
+            ),
+            "integration-candidate": lambda root, base: (
+                "integration", "candidate", "--root", str(root), "--task-id", "task",
+                "--sha", base,
+            ),
+            "integration-remove": lambda root, base: (
+                "integration", "remove", "--root", str(root), "--task-id", "task",
+            ),
+            "integration-land": lambda root, base: (
+                "integration", "land", "--root", str(root), "--task-id", "task",
+                "--persist", "main",
+            ),
+            "pin-set": lambda root, base: (
+                "pin", "set", "--root", str(root),
+            ),
+        }
+        for name, arguments in cases.items():
+            with self.subTest(command=name):
+                temporary, root, home, script, base = self.make_case()
+                try:
+                    skill = home / ".codex/skills/orchestrate"
+                    adapter = home / ".pi/agent/extensions/orchestrate-pi.ts"
+                    adapter.write_bytes(adapter.read_bytes() + b"\ncorrupt\n")
+                    before = self.state(root)
+
+                    result = self.cli(root, skill, script, *arguments(root, base))
+
+                    self.assertEqual(result.returncode, 2, result.stdout)
+                    payload = json.loads(result.stderr)
+                    self.assertEqual(payload["orchestrate_version"], 134)
+                    self.assertIn("release preflight failed", payload["error"]["message"])
+                    self.assertEqual(self.state(root), before)
+                finally:
+                    temporary.cleanup()
+
+    def test_malformed_manifest_refuses_task_mutation_without_traceback_or_state(self) -> None:
+        temporary, root, home, script, base = self.make_case()
+        try:
+            skill = home / ".codex/skills/orchestrate"
+            release = load_release_module()
+            version = release.skill_version(skill)
+            manifest_path = skill / f"manifests/{version}.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            document_name = next(iter(manifest["documents"]))
+            manifest["documents"] = {document_name: []}
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            before = (self.state(root), self.task_bytes(root))
+
+            result = self.cli(
+                root,
+                skill,
+                script,
+                "lane",
+                "create",
+                "--root",
+                str(root),
+                "--task-id",
+                "malformed-manifest",
+                "--lane-id",
+                "lane",
+                "--base",
+                base,
+            )
+
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertEqual(result.stdout, "")
+            self.assertNotIn("Traceback", result.stderr)
+            payload = json.loads(result.stderr)
+            self.assertEqual(payload["orchestrate_version"], version)
+            self.assertIsInstance(payload["orchestrate_version"], int)
+            self.assertEqual(payload["error"]["type"], "orchestrate")
+            self.assertIn(
+                "invalid release manifest structure",
+                payload["error"]["message"],
+            )
+            self.assertEqual((self.state(root), self.task_bytes(root)), before)
+        finally:
+            temporary.cleanup()
+
+    def test_alternate_skill_dir_cannot_supply_task_mutation_provenance(self) -> None:
+        temporary, root, home, script, base = self.make_case()
+        try:
+            executing_adapter = home / ".pi/agent/extensions/orchestrate-pi.ts"
+            executing_adapter.write_bytes(executing_adapter.read_bytes() + b"\ncorrupt\n")
+
+            alternate_home = root / "alternate-home"
+            shutil.copytree(ROOT / "home", alternate_home)
+            alternate_skill = alternate_home / ".codex/skills/orchestrate"
+            alternate_skill_md = alternate_skill / "SKILL.md"
+            alternate_skill_md.write_text(
+                alternate_skill_md.read_text(encoding="utf-8").replace(
+                    "skill_version: 134", "skill_version: 133"
+                ),
+                encoding="utf-8",
+            )
+            release = load_release_module()
+            (alternate_skill / "manifests/133.json").write_text(
+                json.dumps(release.build_manifest(alternate_skill, 133)),
+                encoding="utf-8",
+            )
+            before = self.state(root)
+
+            result = self.cli(
+                root,
+                alternate_skill,
+                script,
+                "lane",
+                "create",
+                "--root",
+                str(root),
+                "--task-id",
+                "wrong-package",
+                "--lane-id",
+                "lane",
+                "--base",
+                base,
+            )
+
+            self.assertEqual(result.returncode, 2, result.stdout)
+            payload = json.loads(result.stderr)
+            self.assertEqual(payload["orchestrate_version"], 134)
+            self.assertIn("--skill-dir", payload["error"]["message"])
+            self.assertEqual(self.state(root), before)
+        finally:
+            temporary.cleanup()
+
+    def test_missing_and_mismatched_pin_do_not_block_task_mutation(self) -> None:
+        temporary, root, home, script, base = self.make_case()
+        try:
+            skill = home / ".codex/skills/orchestrate"
+            missing = self.cli(
+                root, skill, script, "lane", "create", "--root", str(root),
+                "--task-id", "missing-pin", "--lane-id", "lane", "--base", base,
+            )
+            self.assertEqual(missing.returncode, 0, missing.stderr)
+
+            pin = root / ".agent_state/orchestrate/version-pin.json"
+            pin.parent.mkdir(parents=True, exist_ok=True)
+            pin.write_text(
+                json.dumps({"pin_version": 1, "skill_version": 130,
+                            "orchestrate_compat": 130}),
+                encoding="utf-8",
+            )
+            drift = self.cli(
+                root, skill, script, "integration", "create", "--root", str(root),
+                "--task-id", "drift", "--base", base,
+            )
+            self.assertEqual(drift.returncode, 0, drift.stderr)
+            self.assertEqual(json.loads(drift.stdout)["orchestrate_version"], 134)
+        finally:
+            temporary.cleanup()
 
 
 class CurrentManifestParityTests(unittest.TestCase):
-    def test_v133_manifest_is_byte_identical_across_codex_and_pi(self) -> None:
+    def test_v134_manifest_is_byte_identical_across_codex_and_pi(self) -> None:
         release = load_release_module()
-        self.assertEqual(release.skill_version(CODEX_SKILL), 133)
-        codex_manifest = CODEX_SKILL / "manifests/133.json"
-        pi_manifest = PI_SKILL / "manifests/133.json"
+        self.assertEqual(release.skill_version(CODEX_SKILL), 134)
+        codex_manifest = CODEX_SKILL / "manifests/134.json"
+        pi_manifest = PI_SKILL / "manifests/134.json"
         self.assertTrue(codex_manifest.is_file())
         self.assertTrue(pi_manifest.is_file())
         self.assertEqual(codex_manifest.read_bytes(), pi_manifest.read_bytes())

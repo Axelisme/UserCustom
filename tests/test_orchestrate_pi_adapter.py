@@ -93,6 +93,12 @@ class OrchestratePiAdapterTests(unittest.TestCase):
     def test_run_timeout_is_optional_and_independent_from_rpc_deadline(self) -> None:
         self.run_scenario("run-timeout")
 
+    def test_explicit_turn_budget_is_validated_normalized_and_dispatched_without_steer_capability(self) -> None:
+        self.run_scenario("turn-budget")
+
+    def test_exact_turn_event_attempts_one_nonrecovering_handoff_steer(self) -> None:
+        self.run_scenario("turn-handoff")
+
     def test_spawn_receipt_requires_exact_single_async_correlation(self) -> None:
         self.run_scenario("spawn-correlation")
 

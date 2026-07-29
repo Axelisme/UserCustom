@@ -9,8 +9,7 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts" / "orchestrate.py"
+from tests._orchestrate_cli_support import SCRIPT, VERIFIED_SKILL
 
 
 class LaneLifecycleContractTests(unittest.TestCase):
@@ -45,7 +44,7 @@ class LaneLifecycleContractTests(unittest.TestCase):
         self, root: Path, *args: str, env: dict[str, str] | None = None
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(SCRIPT), *args], cwd=root, text=True,
+            [sys.executable, str(SCRIPT), "--skill-dir", str(VERIFIED_SKILL), *args], cwd=root, text=True,
             capture_output=True, check=False, env={**os.environ, **(env or {})},
         )
 
@@ -107,12 +106,14 @@ class LaneLifecycleContractTests(unittest.TestCase):
 
     def commit(
         self, cwd: Path, path: str, content: str, message: str,
-        date: str | None = None,
+        date: str | None = None, *, declare_immutable: bool = True,
     ) -> str:
         target = cwd / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         self.git(cwd, "add", path)
+        if declare_immutable and "Immutable:" not in message:
+            message = f"{message}\n\nImmutable: {path}"
         env = {"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date} if date else None
         result = subprocess.run(
             ["git", "commit", "-q", "-m", message], cwd=cwd, text=True,
@@ -208,7 +209,8 @@ class LaneLifecycleContractTests(unittest.TestCase):
             "declare contract\n\nImmutable: contract_test.py",
         )
         changed = self.commit(
-            lane_path, "contract_test.py", "assert False\n", "weaken contract"
+            lane_path, "contract_test.py", "assert False\n", "weaken contract",
+            declare_immutable=False,
         )
 
         error = self.error_payload(self.collect("lane-a", changed))
@@ -232,6 +234,7 @@ class LaneLifecycleContractTests(unittest.TestCase):
         undeclared = self.commit(
             lane_path, "x.py", "ORIGINAL = False\n",
             "implement (changes x without redeclaring it)",
+            declare_immutable=False,
         )
 
         error = self.error_payload(self.collect("lane-a", undeclared))
@@ -246,7 +249,10 @@ class LaneLifecycleContractTests(unittest.TestCase):
         lane = self.lane_create("lane-a")
         lane_path = Path(str(lane["worktree"]))
         self.commit(lane_path, "x.py", "ORIGINAL = True\n", "declare x\n\nImmutable: x.py")
-        self.commit(lane_path, "other.py", "OTHER = 1\n", "implement something else")
+        self.commit(
+            lane_path, "other.py", "OTHER = 1\n", "implement something else",
+            declare_immutable=False,
+        )
         tip = self.commit(
             lane_path, "x.py", "ORIGINAL = False\n",
             "second oracle round\n\nImmutable: x.py",
@@ -264,7 +270,10 @@ class LaneLifecycleContractTests(unittest.TestCase):
         lane_path = Path(str(lane["worktree"]))
         self.commit(lane_path, "x.py", "X = 1\n", "declare x\n\nImmutable: x.py")
         self.commit(lane_path, "y.py", "Y = 1\n", "declare y\n\nImmutable: y.py")
-        undeclared = self.commit(lane_path, "y.py", "Y = 2\n", "change y without redeclaring")
+        undeclared = self.commit(
+            lane_path, "y.py", "Y = 2\n", "change y without redeclaring",
+            declare_immutable=False,
+        )
 
         error = self.error_payload(self.collect("lane-a", undeclared))
         self.assertIn("y.py", str(error["error"]))
@@ -278,7 +287,10 @@ class LaneLifecycleContractTests(unittest.TestCase):
         lane = self.lane_create("lane-a")
         lane_path = Path(str(lane["worktree"]))
         self.commit(lane_path, "x.py", "X = 1\n", "declare x\n\nImmutable: x.py")
-        self.commit(lane_path, "impl.py", "IMPL = 1\n", "implement")
+        self.commit(
+            lane_path, "impl.py", "IMPL = 1\n", "implement",
+            declare_immutable=False,
+        )
         tip = self.commit(lane_path, "y.py", "Y = 1\n", "declare y\n\nImmutable: y.py")
 
         collected = self.payload(self.collect("lane-a", tip))
@@ -292,15 +304,37 @@ class LaneLifecycleContractTests(unittest.TestCase):
         self.integration_create()
         lane = self.lane_create("lane-a")
         lane_path = Path(str(lane["worktree"]))
-        self.commit(lane_path, "tests/c.py", "DRAFT = True\n", "create contract draft")
+        self.commit(
+            lane_path, "tests/c.py", "DRAFT = True\n", "create contract draft",
+            declare_immutable=False,
+        )
         self.commit(
             lane_path, "tests/c.py", "FROZEN = True\n",
             "declare contract\n\nImmutable: tests/c.py",
         )
-        tip = self.commit(lane_path, "impl.py", "IMPL = 1\n", "implement, never touching tests/c.py")
+        tip = self.commit(
+            lane_path, "impl.py", "IMPL = 1\n", "implement, never touching tests/c.py",
+            declare_immutable=False,
+        )
 
         collected = self.payload(self.collect("lane-a", tip))
         self.assertEqual(collected["immutable_paths_verified"], ["tests/c.py"])
+
+    def test_collect_refuses_a_whole_lane_range_without_any_immutable_declaration(
+        self,
+    ) -> None:
+        self.integration_create()
+        lane = self.lane_create("lane-a")
+        lane_path = Path(str(lane["worktree"]))
+        tip = self.commit(
+            lane_path, "feature.txt", "value\n", "implement only",
+            declare_immutable=False,
+        )
+
+        error = self.error_payload(self.collect("lane-a", tip))
+
+        self.assertIn("no parsed Immutable declaration", str(error["error"]))
+        self.assertTrue(lane_path.exists())
 
     # 7. a dirty lane tree refuses collect.
     def test_collect_rejects_dirty_lane_tree(self) -> None:

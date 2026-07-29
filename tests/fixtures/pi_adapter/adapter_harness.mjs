@@ -78,10 +78,12 @@ function dispatchRequest(cwd) {
 function pingData(overrides = {}) {
   return {
     version: 1,
-    methods: ["ping", "status", "spawn", "stop"],
+    methods: ["ping", "status", "spawn", "steer", "stop"],
     capabilities: {
       status: true,
       asyncSpawn: true,
+      steer: true,
+      nonRecoveringSteer: true,
       stop: true,
       processTerminalProof: { version: 1, lifecycleArtifactVersion: 3 },
     },
@@ -202,7 +204,11 @@ async function loadAdapter(cwd, configureRpc, profileOptions = {}) {
       {
         cwd,
         isProjectTrusted: () => profileOptions.projectTrusted ?? true,
-        sessionManager: { getSessionId: () => "host-session" },
+        sessionManager: {
+          getSessionId: () => typeof profileOptions.sessionId === "function"
+            ? profileOptions.sessionId()
+            : profileOptions.sessionId ?? "host-session",
+        },
       },
     );
   };
@@ -932,6 +938,254 @@ async function scenarioRunTimeout() {
   assert.ok(adapter.tool.parameters.properties.timeoutMs.maximum >= 7_200_000);
 }
 
+async function scenarioTurnBudget() {
+  const cwd = makeRepo();
+  let spawnIndex = 0;
+  let pingIndex = 0;
+  const spawnParams = [];
+  const adapter = await loadAdapter(cwd, ({ bus, request }) => {
+    if (request.method === "ping") {
+      const data = pingData();
+      if (pingIndex++ === 1) {
+        data.methods = data.methods.filter((method) => method !== "steer");
+        delete data.capabilities.steer;
+        delete data.capabilities.nonRecoveringSteer;
+      }
+      successReply(bus, request, data);
+    }
+    else if (request.method === "spawn") {
+      spawnParams.push(structuredClone(request.params));
+      const runId = `turn-budget-${spawnIndex++}`;
+      const asyncDir = path.join(cwd, ".runtime", runId);
+      fs.mkdirSync(asyncDir, { recursive: true });
+      successReply(bus, request, {
+        details: { mode: "single", runId, asyncId: runId, asyncDir, launchContractDigest: DIGEST },
+      });
+    } else assert.fail(`unexpected RPC method ${request.method}`);
+  });
+
+  const omitted = dispatchRequest(cwd);
+  delete omitted.turnBudget;
+  assert.equal((await adapter.execute(omitted)).isError, undefined);
+
+  const budgets = [
+    { maxTurns: 1 },
+    { maxTurns: 11, graceTurns: 0 },
+    { maxTurns: 200, graceTurns: 7 },
+  ];
+  for (const [index, budget] of budgets.entries()) {
+    const request = dispatchRequest(cwd);
+    request.turnBudget = budget;
+    const result = await adapter.execute(request);
+    assert.equal(result.isError, undefined);
+    assert.equal(
+      adapter.calls.some((call) => call.method === "steer"),
+      false,
+      "dispatch must not attempt notice steering without an exact threshold event",
+    );
+    if (index === 0) {
+      assert.deepEqual(
+        adapter.calls.map((call) => call.method),
+        ["ping", "spawn", "ping", "spawn"],
+        "missing optional steer capability must still pass the explicit budget to spawn",
+      );
+      assert.equal(adapter.activeSubscriptions(), 0, "missing steer capability must not retain a turn observer");
+    } else {
+      adapter.bus.emit(PROCESS_TERMINAL_EVENT, { runId: resultDetails(result).runId });
+      assert.equal(adapter.activeSubscriptions(), 0);
+    }
+  }
+
+  assert.equal(Object.hasOwn(spawnParams[0], "turnBudget"), false, "omission must preserve upstream inheritance");
+  assert.equal(Object.hasOwn(spawnParams[0], "control"), false, "omission must create no Adapter notice control");
+  assert.deepEqual(spawnParams.slice(1).map((params) => params.turnBudget), [
+    { maxTurns: 1, graceTurns: 1 },
+    { maxTurns: 11, graceTurns: 0 },
+    { maxTurns: 200, graceTurns: 7 },
+  ]);
+  assert.deepEqual(spawnParams.slice(1).map((params) => params.control), [
+    { enabled: true, activeNoticeAfterTurns: 1, activeNoticeAfterMs: Number.MAX_SAFE_INTEGER, activeNoticeAfterTokens: Number.MAX_SAFE_INTEGER, notifyOn: ["active_long_running"], notifyChannels: ["event"] },
+    { enabled: true, activeNoticeAfterTurns: 9, activeNoticeAfterMs: Number.MAX_SAFE_INTEGER, activeNoticeAfterTokens: Number.MAX_SAFE_INTEGER, notifyOn: ["active_long_running"], notifyChannels: ["event"] },
+    { enabled: true, activeNoticeAfterTurns: 190, activeNoticeAfterMs: Number.MAX_SAFE_INTEGER, activeNoticeAfterTokens: Number.MAX_SAFE_INTEGER, notifyOn: ["active_long_running"], notifyChannels: ["event"] },
+  ]);
+
+  const invalidAdapter = await loadAdapter(cwd, () => assert.fail("invalid turn budget must fail before Git/RPC"));
+  const unsafe = Number.MAX_SAFE_INTEGER + 1;
+  const invalidBudgets = [
+    null,
+    false,
+    "10",
+    {},
+    { maxTurns: 0 },
+    { maxTurns: 1.5 },
+    { maxTurns: unsafe },
+    { maxTurns: 10, graceTurns: null },
+    { maxTurns: 10, graceTurns: -1 },
+    { maxTurns: 10, graceTurns: 1.5 },
+    { maxTurns: Number.MAX_SAFE_INTEGER, graceTurns: 1 },
+    { maxTurns: 10, surprise: true },
+  ];
+  for (const turnBudget of invalidBudgets) {
+    const request = dispatchRequest(cwd);
+    request.turnBudget = turnBudget;
+    const result = await invalidAdapter.execute(request);
+    assert.equal(result.isError, true, JSON.stringify(turnBudget));
+    assert.equal(resultDetails(result).error.code, "invalid_request", JSON.stringify(turnBudget));
+  }
+  assert.deepEqual(invalidAdapter.calls, []);
+  assert.equal(adapter.tool.parameters.properties.turnBudget.type, "object");
+  assert.equal(adapter.tool.parameters.properties.turnBudget.additionalProperties, false);
+}
+
+function turnThresholdEvent(runId, asyncDir, turns, overrides = {}) {
+  const base = {
+    source: "async",
+    asyncDir,
+    event: {
+      type: "active_long_running",
+      to: "active_long_running",
+      ts: Date.now(),
+      agent: "lane-worker",
+      index: 0,
+      runId,
+      message: "lane-worker is still active but long-running",
+      reason: "turn_threshold",
+      turns,
+    },
+  };
+  return {
+    ...base,
+    ...overrides,
+    event: { ...base.event, ...(overrides.event ?? {}) },
+  };
+}
+
+async function waitUntil(predicate, label) {
+  const deadline = Date.now() + 750;
+  while (!predicate() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(predicate(), true, label);
+}
+
+async function scenarioTurnHandoff() {
+  const cwd = makeRepo();
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "orchestrate-pi-turn-runtime-"));
+  let hostSessionId = "host-session";
+  const plans = [
+    { runId: "pre-receipt-match", status: "exact", preEvents: "matching" },
+    { runId: "forged-digest", status: "forged", preEvents: "matching" },
+    { runId: "mismatch-matrix", status: "exact", preEvents: "mismatches" },
+    { runId: "steer-terminal-race", status: "exact", preEvents: "none" },
+    { runId: "parent-session-switched", status: "exact", preEvents: "none" },
+  ];
+  let spawnIndex = 0;
+  const steerCalls = [];
+  let adapter;
+  adapter = await loadAdapter(cwd, ({ bus, request }) => {
+    if (request.method === "ping") {
+      successReply(bus, request, pingData(), true);
+      return;
+    }
+    if (request.method === "spawn") {
+      const plan = plans[spawnIndex++];
+      const asyncDir = path.join(runtimeRoot, plan.runId);
+      fs.mkdirSync(asyncDir, { recursive: true });
+      const receipt = receiptFor(cwd, plan.runId);
+      receipt.asyncDir = asyncDir;
+      receipt.statusPath = path.join(asyncDir, "status.json");
+      receipt.processTerminalPath = path.join(asyncDir, "process-terminal.json");
+      const status = exactStatus(receipt, "running", {
+        sessionId: "upstream-run-session",
+        ...(plan.status === "forged" ? { launchContractDigest: "b".repeat(64) } : {}),
+      });
+      fs.writeFileSync(path.join(asyncDir, "status.json"), JSON.stringify(status));
+      if (plan.preEvents === "matching") {
+        bus.emit("subagent:control-event", turnThresholdEvent(plan.runId, asyncDir, 18));
+        bus.emit("subagent:control-event", turnThresholdEvent(plan.runId, asyncDir, 19));
+      } else if (plan.preEvents === "mismatches") {
+        const mismatches = [
+          turnThresholdEvent(plan.runId, asyncDir, 17),
+          turnThresholdEvent("other-run", asyncDir, 18),
+          turnThresholdEvent(plan.runId, `${asyncDir}-forged`, 18),
+          turnThresholdEvent(plan.runId, asyncDir, 18, { source: "foreground" }),
+          turnThresholdEvent(plan.runId, asyncDir, 18, { event: { type: "needs_attention" } }),
+          turnThresholdEvent(plan.runId, asyncDir, 18, { event: { reason: "time_threshold" } }),
+          turnThresholdEvent(plan.runId, asyncDir, 18, { event: { agent: "reviewer" } }),
+          turnThresholdEvent(plan.runId, asyncDir, 18, { event: { index: 1 } }),
+        ];
+        for (const event of mismatches) bus.emit("subagent:control-event", event);
+      }
+      successReply(bus, request, {
+        details: { mode: "single", runId: plan.runId, asyncId: plan.runId, asyncDir, launchContractDigest: DIGEST },
+      }, true);
+      return;
+    }
+    if (request.method === "steer") {
+      steerCalls.push(structuredClone(request));
+      if (request.params.runId === "steer-terminal-race") {
+        const asyncDir = path.join(runtimeRoot, request.params.runId);
+        const statusPath = path.join(asyncDir, "status.json");
+        const receipt = receiptFor(cwd, request.params.runId);
+        receipt.asyncDir = asyncDir;
+        receipt.statusPath = statusPath;
+        receipt.processTerminalPath = path.join(asyncDir, "process-terminal.json");
+        fs.writeFileSync(statusPath, JSON.stringify(exactStatus(receipt, "complete", { sessionId: "upstream-run-session" })));
+        bus.emit(PROCESS_TERMINAL_EVENT, { runId: request.params.runId });
+        bus.emit("subagent:control-event", turnThresholdEvent(request.params.runId, receipt.asyncDir, 20));
+        bus.emit(`${RPC_REPLY}${request.requestId}`, {
+          version: 1,
+          requestId: request.requestId,
+          method: request.method,
+          success: false,
+          error: { code: "terminal-race" },
+        });
+      } else {
+        successReply(bus, request, { steering: { state: "delivered" } }, true);
+      }
+      return;
+    }
+    assert.fail(`unexpected RPC method ${request.method}`);
+  }, { sessionId: () => hostSessionId });
+
+  const dispatchBudgeted = async () => {
+    const request = dispatchRequest(cwd);
+    request.turnBudget = { maxTurns: 20 };
+    return resultDetails(await adapter.execute(request));
+  };
+
+  const matched = await dispatchBudgeted();
+  await waitUntil(() => steerCalls.length === 1, "pre-receipt exact threshold event must steer");
+  assert.deepEqual(steerCalls[0].params, {
+    runId: matched.runId,
+    index: 0,
+    message: "Turn-budget handoff notice: finish the current tool call and start no new exploration. Make the lane state safe, then return the required lane-ready report now; if that is not defensible, return blocked evidence. Include exact HEAD SHA, clean status, focused test evidence, and residual risks. Do not collect or land.",
+    steeringRecovery: false,
+  });
+  assert.equal(adapter.activeSubscriptions(), 0, "accepted one-shot observer must clean up");
+
+  for (const label of ["forged digest", "mismatched event matrix"]) {
+    const receipt = await dispatchBudgeted();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(steerCalls.length, 1, `${label} must not steer`);
+    adapter.bus.emit(PROCESS_TERMINAL_EVENT, { runId: receipt.runId });
+    assert.equal(adapter.activeSubscriptions(), 0, `${label} observer must clean up at terminal event`);
+  }
+
+  const racing = await dispatchBudgeted();
+  adapter.bus.emit("subagent:control-event", turnThresholdEvent(racing.runId, racing.asyncDir, 18));
+  await waitUntil(() => steerCalls.length === 2, "running exact event must attempt steer");
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.equal(steerCalls.filter((call) => call.params.runId === racing.runId).length, 1, "terminal/failed-steer race must not retry");
+  assert.equal(adapter.activeSubscriptions(), 0);
+
+  const switched = await dispatchBudgeted();
+  hostSessionId = "replacement-host-session";
+  adapter.bus.emit("subagent:control-event", turnThresholdEvent(switched.runId, switched.asyncDir, 18));
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.equal(steerCalls.length, 2, "event after parent-session switch must not steer the old run");
+  adapter.bus.emit(PROCESS_TERMINAL_EVENT, { runId: switched.runId });
+  assert.equal(adapter.activeSubscriptions(), 0);
+}
+
 async function scenarioSpawnCorrelation() {
   const cwd = makeRepo();
   const invalidDetails = [
@@ -1350,7 +1604,7 @@ async function scenarioSchema() {
   assert.deepEqual(schema.properties.action.enum, ["dispatch-lane", "attest-run"]);
   assert.equal(schema.properties.action.type, "string");
   assert.deepEqual(Object.keys(schema.properties).sort(), [
-    "action", "contract", "expected", "laneId", "receipt", "subjectSha", "taskId", "timeoutMs", "version", "waitMs",
+    "action", "contract", "expected", "laneId", "receipt", "subjectSha", "taskId", "timeoutMs", "turnBudget", "version", "waitMs",
   ]);
   const harnessSource = fs.readFileSync(import.meta.filename, "utf8");
   assert.doesNotMatch(harnessSource, /\/usr\/lib\/node_modules/);
@@ -1421,6 +1675,8 @@ const scenarios = {
   "orphan-risk": scenarioOrphanRisk,
   "dispatch-unattestable-run-id": scenarioDispatchRejectsUnattestableRunId,
   "run-timeout": scenarioRunTimeout,
+  "turn-budget": scenarioTurnBudget,
+  "turn-handoff": scenarioTurnHandoff,
   "spawn-correlation": scenarioSpawnCorrelation,
   "attest-observed": scenarioAttestObserved,
   "attest-receipt-paths": scenarioAttestReceiptPaths,

@@ -477,20 +477,61 @@ def command_integration_list(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def command_integration_candidate(args: argparse.Namespace) -> dict[str, Any]:
-    """Gate a exact SHA onto the acceptance stand as the ready candidate.
+def _candidate_tree_proof(root: Path, task: str, sha: str) -> dict[str, Any]:
+    """Prove ``sha`` is one task collect whose tree is its actual lane tree."""
+    integration_branch = f"wave/{task}/integration"
+    if not _branch_exists(root, integration_branch):
+        raise OrchestrateError(
+            f"integration branch does not exist: {integration_branch}"
+        )
+    base = _integration_base(root, task)
+    first_parent = run_git(
+        root,
+        "rev-list",
+        "--first-parent",
+        f"{base}..{integration_branch}",
+    ).stdout.splitlines()
+    task_values = _trailer_values(root, sha, "Task")
+    lane_values = _trailer_values(root, sha, "Lane")
+    parents = run_git(root, "rev-list", "--parents", "-n", "1", sha).stdout.split()
+    if (
+        sha not in first_parent
+        or task_values != [task]
+        or len(lane_values) != 1
+        or len(parents) != 3
+    ):
+        raise OrchestrateError(
+            f"candidate {sha} is not one exact Orchestrate collect on task {task} "
+            "integration first-parent"
+        )
+    lane_sha = parents[2]
+    candidate_tree = run_git(root, "rev-parse", f"{sha}^{{tree}}").stdout.strip()
+    lane_tree = run_git(root, "rev-parse", f"{lane_sha}^{{tree}}").stdout.strip()
+    if candidate_tree != lane_tree:
+        raise OrchestrateError(
+            f"candidate tree {candidate_tree} differs from collected lane parent-2 tree {lane_tree}"
+        )
+    return {
+        "status": "proven",
+        "lane_sha": lane_sha,
+        "lane_tree": lane_tree,
+        "candidate_sha": sha,
+        "candidate_tree": candidate_tree,
+        "candidate_tree_equals_lane_tree": True,
+    }
 
-    Order matters for safety: check the acceptance worktree is clean *before*
-    doing anything else, then checkout, and only then move the ref.  If the
-    worktree is dirty (the user's own leftover test artifacts), nothing below
-    this check ever runs -- the ref keeps its old value and the worktree is
-    never touched.  If checkout itself fails, the ref still has not moved.
-    Only once the worktree genuinely holds --sha does the ref follow it, so
-    the ref can never point past what the worktree actually holds.
+
+def command_integration_candidate(args: argparse.Namespace) -> dict[str, Any]:
+    """Gate a proven collect SHA onto the acceptance stand as ready candidate.
+
+    All topology and tree proof is read before either candidate authority is
+    mutated. Then the acceptance worktree is checked clean, checked out, and
+    only after a successful checkout does the candidate ref move.
     """
     task = require_identifier(str(args.task_id), label="task id")
     root = Path(args.root).resolve()
     sha = exact_commit(root, str(args.sha), label="sha")
+    tree_proof = _candidate_tree_proof(root, task, sha)
     acceptance_path = _acceptance_worktree_path(root, task)
     state = _status(root, acceptance_path, "", identity_label="acceptance worktree")
     if not state["exists"]:
@@ -511,6 +552,7 @@ def command_integration_candidate(args: argparse.Namespace) -> dict[str, Any]:
         "operation": "integration-candidate",
         "task_id": task,
         "sha": sha,
+        "tree_proof": tree_proof,
         "candidate_ref": _candidate_ref(task),
         "acceptance_worktree": str(acceptance_path),
     }
@@ -783,97 +825,130 @@ def _trailer_values(root: Path, sha: str, key: str) -> list[str]:
 
 
 def _immutable_paths(root: Path, sha: str) -> list[str]:
-    """Read the paths one commit declares frozen with a repeatable ``Immutable:`` trailer."""
-    return _trailer_values(root, sha, "Immutable")
+    """Read repeatable ``Immutable:`` values, preserving malformed empty values."""
+    raw = run_git(
+        root, "show", "-s", "--format=%(trailers:only,unfold)", sha
+    ).stdout
+    values: list[str] = []
+    for line in raw.splitlines():
+        key, separator, value = line.partition(":")
+        if separator and key.casefold() == "immutable":
+            values.append(value.strip())
+    return values
 
 
-def _lane_origin(root: Path, base: str, tip: str) -> str | None:
-    """The first ``Origin:`` trailer declared by any commit in a lane's own range.
-
-    ``base..tip`` here is the lane's own base ref to its own tip, not the
-    task-wide report range: a repair lane declares this on one of its own
-    commits to mark itself as user-initiated repair work, which does not
-    consume the machine rework budget.
-    """
-    raw = run_git(root, "rev-list", "--reverse", f"{base}..{tip}").stdout
-    for sha in raw.splitlines():
-        if not sha:
-            continue
-        values = _trailer_values(root, sha, "Origin")
-        if values:
-            return values[0]
-    return None
+def _valid_immutable_path(path: str) -> bool:
+    """Whether one interpreted trailer value is a normalized repo-relative path."""
+    candidate = Path(path)
+    return (
+        bool(path)
+        and not candidate.is_absolute()
+        and path == candidate.as_posix()
+        and path not in {".", ".."}
+        and ".." not in candidate.parts
+        and "//" not in path
+        and not path.endswith("/")
+    )
 
 
-def _first_declaring_commits(root: Path, base: str, tip: str) -> dict[str, str]:
-    """Map each ``Immutable:`` path to the earliest ``base..tip`` commit that declared it.
-
-    A path is only protected starting at the commit that first freezes it:
-    commits before that -- including the ordinary commit that first created
-    the path -- cannot be "quietly widening an already-frozen contract",
-    because the contract did not exist yet at that point in the lane.
-    """
-    raw = run_git(root, "rev-list", "--reverse", f"{base}..{tip}").stdout
-    declarations: dict[str, str] = {}
-    for sha in raw.splitlines():
-        if not sha:
-            continue
-        for path in _immutable_paths(root, sha):
-            declarations.setdefault(path, sha)
-    return declarations
+def _commit_changed_paths(root: Path, sha: str) -> list[str]:
+    """Paths changed against the commit's first parent, without rename folding."""
+    raw = run_git(
+        root,
+        "diff-tree",
+        "--no-commit-id",
+        "--name-only",
+        "--no-renames",
+        "-r",
+        f"{sha}^",
+        sha,
+    ).stdout
+    return sorted(line for line in raw.splitlines() if line)
 
 
-def _verify_immutable_surface(
+def _immutable_range_validation(
     root: Path, base: str, tip: str
-) -> tuple[list[str], list[str]]:
-    """Reject any commit, after a path's first declaration, that changes it without redeclaring.
+) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+    """Apply the one authoritative whole-range Immutable validation.
 
-    Multiple oracle rounds inside one lane are normal, so a Contract path may
-    legitimately be rewritten more than once -- the rule this enforces is not
-    "never touch it again" but "never touch it quietly, once frozen".  Only
-    commits strictly after each path's earliest declaring commit are checked
-    (the declaring commit itself, and anything before it, predate the freeze
-    and cannot violate it).  Of those, a commit that redeclares the path (an
-    oracle rework round) is exempt; a commit that changes it without
-    redeclaring (an implementer widening the surface) is a violation.  A path
-    never declared anywhere in the range is not tracked at all.
-
-    The walk is ``--first-parent``: it follows only this lane's own line of
-    development.  Since a lane now merges the integration tip into itself
-    before collecting (the staleness step in `command_integration_collect`),
-    another lane's commits enter ``base..tip`` on the merge's second-parent
-    side; without ``--first-parent`` every one of those foreign commits that
-    happens to touch a path this lane declared ``Immutable:`` would be
-    reported as a violation, even though it is not this lane's own edit.
-    With ``--first-parent`` only this lane's own commits, plus the merge
-    commit itself, are checked -- and the merge commit is checked exactly
-    once, against its own first parent: it still appears (and is a genuine
-    violation, unless it redeclares) when the incoming work really does
-    rewrite the frozen path relative to what this lane already had.
+    Only the lane's first-parent line is attributed to the lane. A valid
+    declaration begins protection at that commit; every later first-parent
+    commit changing the path must redeclare it. The range must contain at
+    least one valid declaration, but there is deliberately no expected-path
+    list and therefore no claim that a multi-path Contract is complete.
     """
-    declarations = _first_declaring_commits(root, base, tip)
-    declared = sorted(declarations)
-    violations: list[str] = []
-    for path in declared:
-        declaring_commit = declarations[path]
-        raw = run_git(
-            root,
-            "log",
-            "--first-parent",
-            "--reverse",
-            "--format=%H",
-            f"{declaring_commit}..{tip}",
-            "--",
-            path,
-        ).stdout
-        for sha in raw.splitlines():
-            if not sha:
-                continue
-            if path not in _immutable_paths(root, sha):
-                violations.append(
+    shas = run_git(
+        root, "rev-list", "--first-parent", "--reverse", f"{base}..{tip}"
+    ).stdout.splitlines()
+    protected: set[str] = set()
+    records: list[dict[str, Any]] = []
+    range_errors: list[str] = []
+    for sha in shas:
+        immutable = _immutable_paths(root, sha)
+        valid = [path for path in immutable if _valid_immutable_path(path)]
+        valid_set = set(valid)
+        changed = _commit_changed_paths(root, sha)
+        errors: list[str] = []
+        if len(valid) != len(immutable):
+            errors.append(
+                "Immutable values must be non-empty normalized repo-relative paths"
+            )
+        for path in sorted(set(changed) & protected):
+            if path not in valid_set:
+                errors.append(
                     f"{path} changed by {sha} without redeclaring Immutable: {path}"
                 )
-    return declared, violations
+        protected.update(valid_set)
+        records.append(
+            {
+                "sha": sha,
+                "subject": run_git(root, "show", "-s", "--format=%s", sha).stdout.strip(),
+                "immutable": valid,
+                "changed_paths": changed,
+                "errors": errors,
+            }
+        )
+        range_errors.extend(f"{sha}: {error}" for error in errors)
+    if not protected:
+        range_errors.append("lane range has no parsed Immutable declaration")
+    return records, sorted(protected), range_errors
+
+
+def command_commit_check(args: argparse.Namespace) -> dict[str, Any]:
+    """Read-only validation of one exact derived lane branch and its full range."""
+    task = require_identifier(str(args.task_id), label="task id")
+    lane = require_identifier(str(args.lane_id), label="lane id")
+    root = Path(args.root).resolve()
+    sha = exact_commit(root, str(args.sha), label="sha")
+    branch = f"wave/{task}/{lane}"
+    if not _branch_exists(root, branch):
+        raise OrchestrateError(f"lane branch does not exist: {branch}")
+    tip = run_git(root, "rev-parse", "--verify", branch).stdout.strip()
+    if sha != tip:
+        raise OrchestrateError(
+            f"--sha must be the tip of lane branch {branch}: expected {tip}, got {sha}"
+        )
+    base = _lane_base(root, task, lane)
+    descended = run_git(root, "merge-base", "--is-ancestor", base, sha, check=False)
+    if descended.returncode != 0:
+        raise OrchestrateError(
+            f"checked SHA {sha} is not descended from exact lane base {base}"
+        )
+    commits, declared, errors = _immutable_range_validation(root, base, sha)
+    return {
+        "ok": not errors,
+        "operation": "commit-check",
+        "read_only": True,
+        "task_id": task,
+        "lane_id": lane,
+        "branch": branch,
+        "base_ref": _lane_base_ref(task, lane),
+        "base": base,
+        "sha": sha,
+        "immutable_paths": declared,
+        "commits": commits,
+        "errors": errors,
+    }
 
 
 def _conflicted_paths(worktree: Path) -> list[str]:
@@ -978,11 +1053,12 @@ def command_integration_collect(args: argparse.Namespace) -> dict[str, Any]:
     #    (first-parent): step 3 may have merged the integration tip in, and
     #    other lanes' commits must not be misattributed to this one.
     lane_base = _lane_base(root, task, lane)
-    declared, violations = _verify_immutable_surface(root, lane_base, working_tip)
+    _records, declared, violations = _immutable_range_validation(
+        root, lane_base, working_tip
+    )
     if violations:
         raise OrchestrateError(
-            "lane changed an Immutable-declared path without redeclaring it in the same commit: "
-            + "; ".join(violations)
+            "lane Immutable validation failed: " + "; ".join(violations)
         )
 
     integration_state = _status(
@@ -1283,7 +1359,6 @@ def _report_lane(
         commits = 0
         production = {"added": 0, "deleted": 0}
         test = {"added": 0, "deleted": 0}
-        origin = None
     else:
         first_ts, commits = _oldest_and_commit_count(root, lane_base, lane_tip)
         production = {"added": 0, "deleted": 0}
@@ -1292,7 +1367,6 @@ def _report_lane(
             bucket = test if is_test_path(path) else production
             bucket["added"] += added
             bucket["deleted"] += deleted
-        origin = _lane_origin(root, lane_base, lane_tip)
     entry: dict[str, Any] = {
         "lane": lane,
         "span_seconds": collect_ts - first_ts,
@@ -1300,8 +1374,6 @@ def _report_lane(
         "production": production,
         "test": test,
     }
-    if origin:
-        entry["origin"] = origin
     return entry, first_ts, collect_ts
 
 

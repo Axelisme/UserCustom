@@ -9,10 +9,7 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = (
-    ROOT / "home" / ".codex" / "skills" / "orchestrate" / "scripts" / "orchestrate.py"
-)
+from tests._orchestrate_cli_support import SCRIPT, VERIFIED_SKILL
 
 
 class ReadyCandidateContractTests(unittest.TestCase):
@@ -54,7 +51,7 @@ class ReadyCandidateContractTests(unittest.TestCase):
         self, root: Path, *args: str, env: dict[str, str] | None = None
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(SCRIPT), *args],
+            [sys.executable, str(SCRIPT), "--skill-dir", str(VERIFIED_SKILL), *args],
             cwd=root,
             text=True,
             capture_output=True,
@@ -163,6 +160,8 @@ class ReadyCandidateContractTests(unittest.TestCase):
     ) -> str:
         (worktree / path).write_text(content, encoding="utf-8")
         self.git(worktree, "add", path)
+        if "Immutable:" not in message:
+            message = f"{message}\n\nImmutable: .orchestrate-test-contract"
         self.git(
             worktree,
             "commit",
@@ -250,6 +249,21 @@ class ReadyCandidateContractTests(unittest.TestCase):
 
         self.assertEqual(gated["operation"], "integration-candidate")
         self.assertEqual(gated["sha"], target)
+        parents = self.git(self.root, "rev-list", "--parents", "-n", "1", target).split()
+        self.assertEqual(len(parents), 3)
+        lane_sha = parents[2]
+        proof = gated["tree_proof"]
+        self.assertEqual(
+            proof,
+            {
+                "status": "proven",
+                "lane_sha": lane_sha,
+                "lane_tree": self.git(self.root, "rev-parse", f"{lane_sha}^{{tree}}"),
+                "candidate_sha": target,
+                "candidate_tree": self.git(self.root, "rev-parse", f"{target}^{{tree}}"),
+                "candidate_tree_equals_lane_tree": True,
+            },
+        )
         self.assertEqual(self.git(self.root, "rev-parse", self.candidate_ref), target)
         self.assertEqual(self.git(self.acceptance_path, "rev-parse", "HEAD"), target)
 
@@ -259,6 +273,22 @@ class ReadyCandidateContractTests(unittest.TestCase):
         self.assertEqual(
             status["candidate"]["acceptance_worktree"], str(self.acceptance_path)
         )
+
+    def test_candidate_refuses_a_lane_commit_before_changing_head_or_ref(self) -> None:
+        self.integration_create()
+        collected = self.advance_integration(
+            "lane-a", "lane a\n", "2025-01-01T00:01:00+0000"
+        )
+        self.payload(self.candidate(collected))
+        old_head = self.git(self.acceptance_path, "rev-parse", "HEAD")
+        old_ref = self.git(self.root, "rev-parse", self.candidate_ref)
+        lane_sha = self.git(self.root, "rev-parse", f"{collected}^2")
+
+        error = self.error_payload(self.candidate(lane_sha))
+
+        self.assertIn("collect", str(error["error"]).lower())
+        self.assertEqual(self.git(self.acceptance_path, "rev-parse", "HEAD"), old_head)
+        self.assertEqual(self.git(self.root, "rev-parse", self.candidate_ref), old_ref)
 
     # 3. a dirty acceptance worktree refuses candidate: the ref keeps its old
     #    value and the worktree's own uncommitted content -- the user's own

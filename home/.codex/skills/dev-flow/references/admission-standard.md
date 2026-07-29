@@ -46,11 +46,11 @@ this file and do not restate its policy.
 - **S3.2** The third machine rework is a **scope event**, not an implementation event. Exactly three
   actions are legal: shrink the Slice (return to S1), downgrade the remaining findings to backlog,
   or report to the user. Opening another correction lane on the same Slice is not legal.
-- **S3.3 Provenance.** Every rework records one origin from the closed set
-  `user_acceptance | simplify | standards_review | spec_review`, carried as the commit's `Origin:`
-  trailer. Initial simplify, backlog, `blocked_on_decision`, and user acceptance do not increment
-  `machine_rework_cycles`. Provenance follows the finding even when the user later authorizes its
-  fix.
+- **S3.3 Coordination.** Root owns the current Slice's integer `machine_rework_cycles` in the task
+  narrative and routes each bounded delta from the current finding on its originating review axis;
+  Git commits carry no machine-rework provenance field. Initial simplify, backlog,
+  `blocked_on_decision`, and user acceptance do not increment `machine_rework_cycles`. A finding's
+  routing remains the same when the user later authorizes its fix.
 
 Blocking is a **closed enum**: `spec_violation | data_loss | security |
 reproducible_behavior_failure` within the frozen envelope. Every blocker carries
@@ -88,9 +88,9 @@ here.
   recorded, and no threshold is fixed in advance. The queue orders purely by dependency, oldest
   row first within a layer: what a scenario depends on already sorts ahead of it, and that is
   exactly the failure with the largest downstream cost, so priority needs no separate field.
-- **S4.4 Repair is a lane.** Every acceptance finding is fixed by an ordinary lane carrying
-  `Origin: user_acceptance`; it does not consume `machine_rework_cycles` and runs the shared
-  machine order once collected, same as any other lane.
+- **S4.4 Repair is a lane.** Every acceptance finding is fixed by an ordinary lane. It does not
+  consume `machine_rework_cycles` and runs the shared machine order once collected, same as any
+  other lane.
 - **S4.5 Session stop.** Ending an acceptance session needs no reason and no closed enum. A
   partial drain — some rows tested, the rest left `pending` — is a normal end, not a failure
   requiring justification.

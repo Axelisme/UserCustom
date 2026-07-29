@@ -14,6 +14,8 @@ const execFileAsync = promisify(execFile);
 const RPC_REQUEST = "subagents:rpc:v1:request";
 const RPC_REPLY = "subagents:rpc:v1:reply:";
 const PROCESS_TERMINAL_EVENT = "subagent:process-terminal";
+const CONTROL_EVENT = "subagent:control-event";
+const HANDOFF_MESSAGE = "Turn-budget handoff notice: finish the current tool call and start no new exploration. Make the lane state safe, then return the required lane-ready report now; if that is not defensible, return blocked evidence. Include exact HEAD SHA, clean status, focused test evidence, and residual risks. Do not collect or land.";
 const RPC_REPLY_TIMEOUT_MS = 10_000;
 const GIT_PREFLIGHT_TIMEOUT_MS = 10_000;
 const PROFILE_PREFLIGHT_TIMEOUT_MS = 10_000;
@@ -21,6 +23,7 @@ const MAX_RUN_TIMEOUT_MS = 604_800_000;
 const MAX_ATTEST_WAIT_MS = 120_000;
 const MAX_BUFFERED_PROCESS_EVENTS = 64;
 const MAX_EARLY_EVENT_WAKES = 64;
+const MAX_LIVE_DISPATCH_OBSERVERS = 64;
 const MAX_EVENT_RUN_ID_LENGTH = 512;
 
 type JsonRecord = Record<string, unknown>;
@@ -67,6 +70,33 @@ function attestWait(value: unknown): number {
   return value as number;
 }
 
+interface TurnBudget {
+  maxTurns: number;
+  graceTurns: number;
+}
+
+function turnBudget(value: unknown): TurnBudget {
+  if (!record(value)) throw new AdapterError("invalid_request", "turnBudget must be an object.");
+  exactKeys(value, ["maxTurns", "graceTurns"], "turnBudget");
+  const maxTurns = value.maxTurns;
+  const graceTurns = value.graceTurns === undefined ? 1 : value.graceTurns;
+  if (!Number.isSafeInteger(maxTurns) || (maxTurns as number) < 1) {
+    throw new AdapterError("invalid_request", "turnBudget.maxTurns must be a safe integer greater than or equal to 1.");
+  }
+  if (!Number.isSafeInteger(graceTurns) || (graceTurns as number) < 0) {
+    throw new AdapterError("invalid_request", "turnBudget.graceTurns must be a safe integer greater than or equal to 0.");
+  }
+  if (!Number.isSafeInteger((maxTurns as number) + (graceTurns as number))) {
+    throw new AdapterError("invalid_request", "turnBudget maxTurns plus graceTurns must be a safe integer.");
+  }
+  return { maxTurns: maxTurns as number, graceTurns: graceTurns as number };
+}
+
+function noticeTurn(budget: TurnBudget): number {
+  const bufferTurns = Math.min(Math.ceil(budget.maxTurns * 0.10), 10);
+  return Math.max(1, budget.maxTurns - bufferTurns);
+}
+
 function isRunComponent(runId: string): boolean {
   return runId !== "." && runId !== ".." && !runId.includes("/") && !runId.includes("\\")
     && !runId.includes("\0") && !path.isAbsolute(runId) && path.normalize(runId) === runId;
@@ -100,6 +130,7 @@ interface DispatchRequest {
   expected: ExpectedLane;
   contract: FrozenContract;
   timeoutMs?: number;
+  turnBudget?: TurnBudget;
 }
 
 interface DispatchReceipt {
@@ -135,7 +166,7 @@ interface AttestRequest {
 type AdapterRequest = DispatchRequest | AttestRequest;
 
 function parseDispatch(raw: JsonRecord): DispatchRequest {
-  exactKeys(raw, ["version", "action", "taskId", "laneId", "subjectSha", "expected", "contract", "timeoutMs"], "request");
+  exactKeys(raw, ["version", "action", "taskId", "laneId", "subjectSha", "expected", "contract", "timeoutMs", "turnBudget"], "request");
   if (raw.version !== 1) throw new AdapterError("unsupported_version", `Unsupported orchestrate_pi version: ${String(raw.version)}.`);
   if (raw.action !== "dispatch-lane") throw new AdapterError("unsupported_action", `Unsupported orchestrate_pi action: ${String(raw.action)}.`);
   if (!record(raw.expected)) throw new AdapterError("invalid_request", "expected must be an object.");
@@ -172,6 +203,7 @@ function parseDispatch(raw: JsonRecord): DispatchRequest {
       stopConditions: stringList(raw.contract.stopConditions, "contract.stopConditions"),
     },
     ...(raw.timeoutMs === undefined ? {} : { timeoutMs: runTimeout(raw.timeoutMs) }),
+    ...(raw.turnBudget === undefined ? {} : { turnBudget: turnBudget(raw.turnBudget) }),
   };
 }
 
@@ -351,19 +383,30 @@ function rpcCall(
   });
 }
 
-function requireCapabilities(raw: unknown): string {
+interface RpcCapabilities {
+  processTerminalEvent: string;
+  nonRecoveringSteer: boolean;
+}
+
+function requireCapabilities(raw: unknown): RpcCapabilities {
   if (!record(raw) || raw.version !== 1 || !Array.isArray(raw.methods) || !record(raw.capabilities) || !record(raw.events)) {
     throw new AdapterError("rpc_capability_mismatch", "Malformed subagent RPC ping response.");
   }
   const methods = raw.methods as unknown[];
   const proof = raw.capabilities.processTerminalProof;
   const compatible = ["spawn", "status", "stop"].every((method) => methods.includes(method))
-    && raw.capabilities.status === true && raw.capabilities.asyncSpawn === true && raw.capabilities.stop === true
+    && raw.capabilities.status === true && raw.capabilities.asyncSpawn === true
+    && raw.capabilities.stop === true
     && record(proof) && proof.version === 1 && proof.lifecycleArtifactVersion === 3
     && raw.events.request === RPC_REQUEST && raw.events.replyPrefix === RPC_REPLY
     && raw.events.processTerminal === PROCESS_TERMINAL_EVENT;
   if (!compatible) throw new AdapterError("rpc_capability_mismatch", "Required RPC, async spawn, or lifecycle proof capability is unavailable.");
-  return raw.events.processTerminal as string;
+  return {
+    processTerminalEvent: raw.events.processTerminal as string,
+    nonRecoveringSteer: methods.includes("steer")
+      && raw.capabilities.steer === true
+      && raw.capabilities.nonRecoveringSteer === true,
+  };
 }
 
 function profileMismatch(): AdapterError {
@@ -493,35 +536,167 @@ class BoundedRunIds {
   }
 }
 
-interface ProcessEventObserver {
-  correlate(runId: string): boolean;
-  cancel(): void;
+interface TurnEventCandidate {
+  asyncDir: string;
+  runId: string;
+  agent: string;
+  index: number;
+  turns: number;
 }
 
-function observeProcessEvents(bus: EventBus, event: string): ProcessEventObserver {
-  const observedRunIds = new BoundedRunIds(MAX_BUFFERED_PROCESS_EVENTS);
-  let cancelled = false;
-  const off = bus.on(event, (payload: unknown) => {
-    if (record(payload) && typeof payload.runId === "string"
-      && payload.runId.trim() && payload.runId.length <= MAX_EVENT_RUN_ID_LENGTH) {
-      observedRunIds.add(payload.runId);
-    }
-  });
+interface DispatchBinding {
+  runId: string;
+  asyncDir: string;
+  cwd: string;
+  launchContractDigest: string;
+  hostSessionId?: string;
+  currentHostSessionId: () => string | undefined;
+  noticeTurn: number;
+}
+
+function turnEventCandidate(payload: unknown): TurnEventCandidate | undefined {
+  if (!record(payload) || payload.source !== "async" || typeof payload.asyncDir !== "string"
+    || payload.asyncDir.includes("\0") || !path.isAbsolute(payload.asyncDir)
+    || path.normalize(payload.asyncDir) !== payload.asyncDir || !record(payload.event)) return undefined;
+  const event = payload.event;
+  if (event.type !== "active_long_running" || event.reason !== "turn_threshold"
+    || typeof event.runId !== "string" || !event.runId.trim() || event.runId.length > MAX_EVENT_RUN_ID_LENGTH
+    || typeof event.agent !== "string" || event.index !== 0
+    || !Number.isSafeInteger(event.turns) || (event.turns as number) < 0) return undefined;
   return {
-    correlate(runId: string) {
-      return observedRunIds.consume(runId);
-    },
-    cancel() {
-      if (cancelled) return;
-      cancelled = true;
-      observedRunIds.clear();
-      if (typeof off === "function") off();
-    },
+    asyncDir: payload.asyncDir,
+    runId: event.runId,
+    agent: event.agent,
+    index: 0,
+    turns: event.turns as number,
   };
+}
+
+class DispatchEventObserver {
+  private readonly observedRunIds = new BoundedRunIds(MAX_BUFFERED_PROCESS_EVENTS);
+  private readonly bufferedTurns: TurnEventCandidate[] = [];
+  private readonly offs: Array<(() => void) | void>;
+  private binding?: DispatchBinding;
+  private queue = Promise.resolve();
+  private cancelled = false;
+  private attempted = false;
+
+  constructor(
+    private readonly bus: EventBus,
+    processEvent: string,
+    watchTurns: boolean,
+    private readonly onCancel: () => void,
+  ) {
+    this.offs = [bus.on(processEvent, (payload: unknown) => this.onProcess(payload))];
+    if (watchTurns) this.offs.push(bus.on(CONTROL_EVENT, (payload: unknown) => this.onTurn(payload)));
+  }
+
+  get isCancelled(): boolean {
+    return this.cancelled;
+  }
+
+  bind(binding: DispatchBinding): boolean {
+    if (this.cancelled) return false;
+    this.binding = binding;
+    const processObserved = this.observedRunIds.consume(binding.runId);
+    this.observedRunIds.clear();
+    if (processObserved) {
+      this.cancel();
+      return true;
+    }
+    const buffered = this.bufferedTurns.splice(0);
+    for (const candidate of buffered) this.enqueue(candidate);
+    return false;
+  }
+
+  cancel(): void {
+    if (this.cancelled) return;
+    this.cancelled = true;
+    this.observedRunIds.clear();
+    this.bufferedTurns.splice(0);
+    for (const off of this.offs) if (typeof off === "function") off();
+    this.onCancel();
+  }
+
+  private onProcess(payload: unknown): void {
+    if (!record(payload) || typeof payload.runId !== "string"
+      || !payload.runId.trim() || payload.runId.length > MAX_EVENT_RUN_ID_LENGTH) return;
+    if (this.binding) {
+      if (payload.runId === this.binding.runId) this.cancel();
+      return;
+    }
+    this.observedRunIds.add(payload.runId);
+  }
+
+  private onTurn(payload: unknown): void {
+    const candidate = turnEventCandidate(payload);
+    if (!candidate || this.cancelled) return;
+    if (!this.binding) {
+      this.bufferedTurns.push(candidate);
+      while (this.bufferedTurns.length > MAX_BUFFERED_PROCESS_EVENTS) this.bufferedTurns.shift();
+      return;
+    }
+    this.enqueue(candidate);
+  }
+
+  private enqueue(candidate: TurnEventCandidate): void {
+    this.queue = this.queue.then(() => this.correlateTurn(candidate), () => this.correlateTurn(candidate));
+    void this.queue.catch(() => {});
+  }
+
+  private async correlateTurn(candidate: TurnEventCandidate): Promise<void> {
+    const binding = this.binding;
+    if (this.cancelled || this.attempted || !binding || candidate.runId !== binding.runId
+      || candidate.agent !== "lane-worker" || candidate.index !== 0 || candidate.turns < binding.noticeTurn
+      || !binding.hostSessionId || binding.currentHostSessionId() !== binding.hostSessionId) return;
+    let eventDir: string;
+    try {
+      eventDir = await canonical(candidate.asyncDir);
+    } catch {
+      return;
+    }
+    if (eventDir !== binding.asyncDir || this.cancelled) return;
+    const statusRead = await readJson(path.join(binding.asyncDir, "status.json"));
+    if (statusRead.kind !== "value" || this.cancelled) return;
+    const status = statusRead.value;
+    if (status.lifecycleArtifactVersion !== 3 || status.runId !== binding.runId || status.cwd !== binding.cwd
+      || status.launchContractDigest !== binding.launchContractDigest || status.state !== "running"
+      || binding.currentHostSessionId() !== binding.hostSessionId) return;
+    this.attempted = true;
+    this.cancel();
+    try {
+      await rpcCall(this.bus, "steer", {
+        runId: binding.runId,
+        index: 0,
+        message: HANDOFF_MESSAGE,
+        steeringRecovery: false,
+      }, RPC_REPLY_TIMEOUT_MS);
+    } catch {
+      // The one admitted handoff attempt is non-recovering and is never retried.
+    }
+  }
+}
+
+class BoundedDispatchObservers {
+  private readonly observers = new Set<DispatchEventObserver>();
+
+  add(observer: DispatchEventObserver): void {
+    this.observers.add(observer);
+    while (this.observers.size > MAX_LIVE_DISPATCH_OBSERVERS) {
+      const oldest = this.observers.values().next().value as DispatchEventObserver | undefined;
+      if (!oldest) break;
+      oldest.cancel();
+    }
+  }
+
+  delete(observer: DispatchEventObserver): void {
+    this.observers.delete(observer);
+  }
 }
 
 async function dispatch(
   bus: EventBus,
+  liveObservers: BoundedDispatchObservers,
   earlyEventWakes: BoundedRunIds,
   request: DispatchRequest,
   ctx: ExtensionContext,
@@ -530,7 +705,7 @@ async function dispatch(
   if (signal?.aborted) throw new AdapterError("aborted", "Dispatch was aborted before preflight.");
   const expected = await verifyLane(request.expected, signal);
   const ping = await rpcCall(bus, "ping", undefined, RPC_REPLY_TIMEOUT_MS, signal);
-  const processTerminalEvent = requireCapabilities(ping.data);
+  const capabilities = requireCapabilities(ping.data);
   const task = `Execute the admitted lane Contract exactly:\n${JSON.stringify({
     taskId: request.taskId,
     laneId: request.laneId,
@@ -540,7 +715,15 @@ async function dispatch(
   })}`;
   await requireProfileCapability(expected.cwd, task, ctx, signal);
   if (signal?.aborted) throw new AdapterError("aborted", "Dispatch was aborted during profile preflight.");
-  const processObserver = observeProcessEvents(bus, processTerminalEvent);
+  let eventObserver!: DispatchEventObserver;
+  eventObserver = new DispatchEventObserver(
+    bus,
+    capabilities.processTerminalEvent,
+    request.turnBudget !== undefined && capabilities.nonRecoveringSteer,
+    () => liveObservers.delete(eventObserver),
+  );
+  liveObservers.add(eventObserver);
+  let keepObserver = false;
   try {
     const spawned = await rpcCall(bus, "spawn", {
       agent: "lane-worker",
@@ -550,6 +733,17 @@ async function dispatch(
       clarify: false,
       cwd: expected.cwd,
       ...(request.timeoutMs === undefined ? {} : { timeoutMs: request.timeoutMs }),
+      ...(request.turnBudget === undefined ? {} : {
+        turnBudget: request.turnBudget,
+        control: {
+          enabled: true,
+          activeNoticeAfterTurns: noticeTurn(request.turnBudget),
+          activeNoticeAfterMs: Number.MAX_SAFE_INTEGER,
+          activeNoticeAfterTokens: Number.MAX_SAFE_INTEGER,
+          notifyOn: ["active_long_running"],
+          notifyChannels: ["event"],
+        },
+      }),
     }, RPC_REPLY_TIMEOUT_MS, signal);
     const details = record(spawned.data) && record(spawned.data.details) ? spawned.data.details : undefined;
     const possibleRunId = details && typeof details.runId === "string" && details.runId.trim() ? details.runId : undefined;
@@ -569,7 +763,19 @@ async function dispatch(
         throw new AdapterError("invalid_spawn_receipt", "Spawn launchContractDigest must be 64 hexadecimal characters.");
       }
       if (path.basename(asyncDir) !== runId) throw new AdapterError("invalid_spawn_receipt", "Spawn asyncDir is not owned by the exact runId.");
-      if (processObserver.correlate(runId)) earlyEventWakes.add(runId);
+      const processObserved = eventObserver.bind({
+        runId,
+        asyncDir,
+        cwd: expected.cwd,
+        launchContractDigest,
+        hostSessionId: ctx.sessionManager.getSessionId() ?? undefined,
+        currentHostSessionId: () => ctx.sessionManager.getSessionId() ?? undefined,
+        noticeTurn: request.turnBudget === undefined ? Number.MAX_SAFE_INTEGER : noticeTurn(request.turnBudget),
+      });
+      if (processObserved) earlyEventWakes.add(runId);
+      keepObserver = request.turnBudget !== undefined
+        && capabilities.nonRecoveringSteer
+        && !eventObserver.isCancelled;
     } catch (receiptError) {
       let stopAttempted = false;
       let stopAcknowledged = false;
@@ -612,7 +818,7 @@ async function dispatch(
       },
     };
   } finally {
-    processObserver.cancel();
+    if (!keepObserver) eventObserver.cancel();
   }
 }
 
@@ -835,6 +1041,10 @@ const ContractSchema = Type.Object({
   evidence: StringArray,
   stopConditions: StringArray,
 }, { additionalProperties: false });
+const TurnBudgetSchema = Type.Object({
+  maxTurns: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
+  graceTurns: Type.Optional(Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })),
+}, { additionalProperties: false });
 const ReceiptExpectedSchema = Type.Object({
   cwd: Type.String({ minLength: 1 }),
   gitRoot: Type.String({ minLength: 1 }),
@@ -868,11 +1078,13 @@ const ParametersSchema = Type.Object({
   expected: Type.Optional(ExpectedSchema),
   contract: Type.Optional(ContractSchema),
   timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_RUN_TIMEOUT_MS })),
+  turnBudget: Type.Optional(TurnBudgetSchema),
   receipt: Type.Optional(ReceiptSchema),
   waitMs: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_ATTEST_WAIT_MS })),
 }, { additionalProperties: false });
 
 export default function orchestratePi(pi: ExtensionAPI) {
+  const liveObservers = new BoundedDispatchObservers();
   const earlyEventWakes = new BoundedRunIds(MAX_EARLY_EVENT_WAKES);
   pi.registerTool({
     name: "orchestrate_pi",
@@ -883,7 +1095,7 @@ export default function orchestratePi(pi: ExtensionAPI) {
       try {
         const request = parseRequest(raw);
         return success(request.action === "dispatch-lane"
-          ? await dispatch(pi.events, earlyEventWakes, request, ctx, signal)
+          ? await dispatch(pi.events, liveObservers, earlyEventWakes, request, ctx, signal)
           : await attest(pi.events, earlyEventWakes, request, signal));
       } catch (error) {
         return failure(error);

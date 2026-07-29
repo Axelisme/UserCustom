@@ -11,48 +11,10 @@ from typing import Any
 
 import tomllib
 
-from .git_ops import common_repo_root, managed_worktree_root, run_git
+from .git_ops import common_repo_root
 from .primitives import OrchestrateError, normalized_sha256, sha256_bytes
 
 MANIFEST_SCHEMA = 1
-MIN_MIGRATABLE_VERSION = 130
-MIGRATION_BOUNDARIES: tuple[tuple[int, dict[str, Any]], ...] = (
-    (
-        131,
-        {
-            "reason": "v130-to-v131-executable-squash-landing",
-            "breaking": True,
-            "landing_is_a_squash_commit": True,
-            "landing_records_landed_trailer": True,
-            "close_out_removes_task_refs_and_branches": True,
-            "candidate_command_is_integration_candidate": True,
-            "automatic_conversion": False,
-        },
-    ),
-    (
-        132,
-        {
-            "reason": "v131-to-v132-lane-worker-model",
-            "breaking": True,
-            "one_worker_per_lane": True,
-            "redispatch_existing_runtime_items_to_lane_worker": True,
-            "root_pre_collect_test_review": True,
-            "worker_cwd_attestation": True,
-            "automatic_conversion": False,
-        },
-    ),
-    (
-        133,
-        {
-            "reason": "v132-to-v133-pi-runtime-adapter",
-            "breaking": True,
-            "pi_adapter_is_mandatory": True,
-            "exact_run_process_terminal_evidence": True,
-            "root_authority_is_unchanged": True,
-            "automatic_conversion": False,
-        },
-    ),
-)
 
 
 VERSION_PATTERN = re.compile(r"^skill_version:\s*(\d+)\s*$", re.MULTILINE)
@@ -160,6 +122,7 @@ def profile_contract(text: str, suffix: str) -> str:
 def document_paths(skill_dir: Path) -> list[Path]:
     paths = [skill_dir / "SKILL.md", *sorted(skill_dir.glob("runtime-*.md"))]
     paths.extend(sorted((skill_dir / "references").glob("*.md")))
+    paths.extend(sorted((skill_dir / "migrations").glob("*.md")))
     paths.extend(sorted((skill_dir / "scripts").rglob("*.py")))
     return [path for path in paths if path.is_file()]
 
@@ -248,14 +211,50 @@ def manifest_path(skill_dir: Path, version: int) -> Path:
     return skill_dir / "manifests" / f"{version}.json"
 
 
+def validate_manifest_structure(payload: Any, path: Path) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise OrchestrateError(
+            f"invalid release manifest structure {path}: root must be an object"
+        )
+    for category, hash_field in (
+        ("documents", "sha256"),
+        ("profiles", "profile_contract_sha256"),
+        ("runtime_assets", "sha256"),
+    ):
+        entries = payload.get(category, {})
+        if not isinstance(entries, dict):
+            raise OrchestrateError(
+                f"invalid release manifest structure {path}: "
+                f"{category} must be an object"
+            )
+        for name, entry in entries.items():
+            if not isinstance(name, str):
+                raise OrchestrateError(
+                    f"invalid release manifest structure {path}: "
+                    f"{category} names must be strings"
+                )
+            if not isinstance(entry, dict):
+                raise OrchestrateError(
+                    f"invalid release manifest structure {path}: "
+                    f"{category} entry {name!r} must be an object"
+                )
+            if not isinstance(entry.get(hash_field), str):
+                raise OrchestrateError(
+                    f"invalid release manifest structure {path}: "
+                    f"{category} entry {name!r} requires string {hash_field}"
+                )
+    return payload
+
+
 def load_manifest(skill_dir: Path, version: int) -> dict[str, Any]:
     path = manifest_path(skill_dir, version)
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        loaded = json.loads(path.read_text(encoding="utf-8"))
     except OSError as exc:
         raise OrchestrateError(f"release manifest not found: {path}") from exc
     except json.JSONDecodeError as exc:
         raise OrchestrateError(f"invalid release manifest {path}: {exc}") from exc
+    payload = validate_manifest_structure(loaded, path)
     if payload.get("schema_version") != MANIFEST_SCHEMA:
         raise OrchestrateError(f"unsupported manifest schema: {path}")
     if payload.get("skill_version") != version:
@@ -266,7 +265,16 @@ def load_manifest(skill_dir: Path, version: int) -> dict[str, Any]:
 def write_release_manifest(
     skill_dir: Path, version: int, previous_version: int | None, output: Path
 ) -> dict[str, Any]:
+    guide = skill_dir / "migrations" / f"{version}.md"
+    if not guide.is_file():
+        raise OrchestrateError(
+            f"cannot publish release; migration guide missing: {guide}"
+        )
     payload = build_manifest(skill_dir, version)
+    if f"migrations/{version}.md" not in payload["documents"]:
+        raise OrchestrateError(
+            f"cannot publish release; migration guide is not manifest-hashed: {guide}"
+        )
     home = source_home(skill_dir)
     missing_runtime_assets = [
         path.relative_to(home).as_posix()
@@ -443,12 +451,17 @@ def write_version_pin(root: Path, version: int, compat: Any) -> Path:
         "orchestrate_compat": compat,
         "pinned_at": datetime.now(UTC).isoformat(),
     }
-    with tempfile.NamedTemporaryFile(
-        "w", dir=path.parent, delete=False, encoding="utf-8"
-    ) as handle:
-        handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True))
-        temp_name = handle.name
-    os.replace(temp_name, path)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", dir=path.parent, delete=False, encoding="utf-8"
+        ) as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+            temp_path = Path(handle.name)
+        os.replace(temp_path, path)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
     return path
 
 
@@ -478,131 +491,26 @@ def command_pin_status(args: argparse.Namespace) -> dict[str, Any]:
 
 def command_pin_set(args: argparse.Namespace) -> dict[str, Any]:
     root = Path(args.root).resolve()
-    result = require_verified_release(Path(args.skill_dir))
+    result = args.verified_release
     pin = read_version_pin(root)
-    if pin is not None:
-        pinned_version = pin["skill_version"]
-        if pinned_version == result["skill_version"]:
-            return {
-                "ok": True,
-                "operation": "pin-set",
-                "recovered": "already-pinned",
-                "pinned_version": pinned_version,
-            }
-        if pinned_version < MIN_MIGRATABLE_VERSION:
-            raise OrchestrateError(
-                f"task pin v{pinned_version} is below the supported migration floor "
-                f"v{MIN_MIGRATABLE_VERSION}; resolve the pin explicitly before `pin set`"
-            )
-        if pinned_version > result["skill_version"]:
-            raise OrchestrateError(
-                f"task is pinned to newer v{pinned_version}; installed release is "
-                f"v{result['skill_version']}"
-            )
-        raise OrchestrateError(
-            f"task is already pinned to v{pinned_version}; adopt"
-            f" v{result['skill_version']} with `pin migrate` instead"
-        )
+    previous_version = pin["skill_version"] if pin is not None else None
+    if previous_version == result["skill_version"]:
+        return {
+            "ok": True,
+            "operation": "pin-set",
+            "recovered": "already-pinned",
+            "previous_version": previous_version,
+            "pinned_version": previous_version,
+        }
     path = write_version_pin(
         root, result["skill_version"], result["orchestrate_compat"]
     )
     return {
         "ok": True,
         "operation": "pin-set",
+        "previous_version": previous_version,
         "pinned_version": result["skill_version"],
         "pin_path": str(path),
-    }
-
-
-def active_task_state(root: Path) -> dict[str, list[str]]:
-    """Return active branches, refs, and managed worktree directories.
-
-    Migration is read-only with respect to task state; callers must resolve these
-    entries before retrying and migration never cleans them up.
-    """
-    state: dict[str, list[str]] = {}
-    wave_branches = sorted(
-        line
-        for line in run_git(
-            root, "for-each-ref", "--format=%(refname:short)", "refs/heads/wave/"
-        ).stdout.splitlines()
-        if line
-    )
-    if wave_branches:
-        state["wave_branches"] = wave_branches
-    orchestrate_refs = sorted(
-        line
-        for line in run_git(
-            root, "for-each-ref", "--format=%(refname)", "refs/orchestrate/"
-        ).stdout.splitlines()
-        if line
-    )
-    if orchestrate_refs:
-        state["orchestrate_refs"] = orchestrate_refs
-    worktrees_dir = managed_worktree_root(root)
-    if worktrees_dir.is_dir():
-        leftover = sorted(
-            str(path) for path in worktrees_dir.iterdir() if path.is_dir()
-        )
-        if leftover:
-            state["worktree_directories"] = leftover
-    return state
-
-
-def command_pin_migrate(args: argparse.Namespace) -> dict[str, Any]:
-    root = Path(args.root).resolve()
-    skill_dir = Path(args.skill_dir)
-    result = require_verified_release(skill_dir)
-    pin = read_version_pin(root)
-    if pin is None:
-        raise OrchestrateError("no version pin to migrate; use `pin set` first")
-    old_version = pin["skill_version"]
-    new_version = result["skill_version"]
-    if old_version < MIN_MIGRATABLE_VERSION:
-        raise OrchestrateError(
-            f"pin migrate supports pinned versions v{MIN_MIGRATABLE_VERSION} and newer; "
-            f"found v{old_version}"
-        )
-    if old_version > new_version:
-        raise OrchestrateError(
-            f"pin migrate refused: cannot migrate down from v{old_version} to v{new_version}"
-        )
-    if old_version == new_version:
-        return {
-            "ok": True,
-            "operation": "pin-migrate",
-            "recovered": "already-current",
-            "pinned_version": old_version,
-        }
-    active_state = active_task_state(root)
-    if active_state:
-        detail = "; ".join(
-            f"{category}: {', '.join(names)}"
-            for category, names in sorted(active_state.items())
-        )
-        raise OrchestrateError(
-            "pin migrate refused: active orchestrate task state exists; finish or "
-            f"remove it before changing the pin: {detail}"
-        )
-    manifests = {
-        version: load_manifest(skill_dir, version)
-        for version in range(old_version, new_version + 1)
-    }
-    delta = compare_manifests(manifests[old_version], manifests[new_version])
-    requirements = [
-        dict(requirement)
-        for target, requirement in MIGRATION_BOUNDARIES
-        if old_version < target <= new_version
-    ]
-    write_version_pin(root, new_version, result["orchestrate_compat"])
-    return {
-        "ok": True,
-        "operation": "pin-migrate",
-        "from_version": old_version,
-        "to_version": new_version,
-        "delta": delta,
-        "migration_requirements": requirements or None,
-        "delta_note": None,
     }
 
 

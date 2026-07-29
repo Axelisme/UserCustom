@@ -1,18 +1,101 @@
 from __future__ import annotations
 
+import json
 import os
+import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-import _setup_support as support
+try:
+    from tests import _setup_support as support
+except ImportError:  # Direct test-file execution keeps tests/ on sys.path.
+    import _setup_support as support
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class SetupConfigCurrentContractTests(unittest.TestCase):
+    def test_isolated_home_installs_the_exact_v134_release_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = support.seed_source(base)
+
+            for relative in (
+                Path(".codex/skills/orchestrate"),
+                Path(".pi/agent/skills/orchestrate"),
+                Path(".claude/skills/orchestrate"),
+            ):
+                shipped = ROOT / "home" / relative
+                target = source / "home" / relative
+                if target.is_symlink() or target.is_file():
+                    target.unlink()
+                elif target.exists():
+                    shutil.rmtree(target)
+                if shipped.is_symlink():
+                    target.symlink_to(os.readlink(shipped))
+                else:
+                    shutil.copytree(shipped, target, symlinks=True)
+
+            exact_files = (
+                *support.shipped_profile_relatives(),
+                Path(".codex/AGENTS.md"),
+                Path(".pi/agent/APPEND_SYSTEM.md"),
+                Path(".pi/agent/settings.json"),
+                support.ADAPTER_RELATIVE,
+            )
+            for relative in exact_files:
+                target = source / "home" / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / "home" / relative, target)
+
+            result = support.run_setup(source, home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for layout in support.managed_skill_layouts():
+                skill = home / layout / "orchestrate"
+                source_skill = source / "home" / layout / "orchestrate"
+                manifest_path = skill / "manifests/134.json"
+                self.assertTrue(manifest_path.is_file(), manifest_path)
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                self.assertEqual(manifest["skill_version"], 134)
+                self.assertTrue(os.path.samefile(skill, source_skill))
+                for document in manifest["documents"]:
+                    self.assertTrue(
+                        os.path.samefile(skill / document, source_skill / document),
+                        document,
+                    )
+                for profile in manifest["profiles"]:
+                    self.assertTrue(
+                        os.path.samefile(home / profile, source / "home" / profile),
+                        profile,
+                    )
+                for asset in manifest["runtime_assets"]:
+                    self.assertTrue(
+                        os.path.samefile(home / asset, source / "home" / asset),
+                        asset,
+                    )
+
+            codex_skill = home / ".codex/skills/orchestrate"
+            doctor = subprocess.run(
+                [
+                    sys.executable,
+                    str(codex_skill / "scripts/orchestrate.py"),
+                    "--skill-dir",
+                    str(codex_skill),
+                    "doctor",
+                ],
+                cwd=base,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(doctor.returncode, 0, doctor.stderr)
+            self.assertTrue(json.loads(doctor.stdout)["ok"])
+
     def test_current_surfaces_install_and_private_assets_survive(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

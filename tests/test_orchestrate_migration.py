@@ -143,6 +143,26 @@ class PinMigrationContractTests(unittest.TestCase):
                 self.assertIs(value, True, f"{reason}: {key}")
         self.assertEqual(json.loads(pin.read_text())["skill_version"], self.version)
 
+    def test_v132_to_v133_boundary_requires_pi_adapter_evidence_without_auto_conversion(self) -> None:
+        self.assertEqual(self.version, 133)
+        self.write_pin(self.root, 132)
+
+        result = self.migrate()
+
+        self.assertEqual(
+            result["migration_requirements"],
+            [
+                {
+                    "reason": "v132-to-v133-pi-runtime-adapter",
+                    "breaking": True,
+                    "pi_adapter_is_mandatory": True,
+                    "exact_run_process_terminal_evidence": True,
+                    "root_authority_is_unchanged": True,
+                    "automatic_conversion": False,
+                }
+            ],
+        )
+
     def test_pin_just_below_current_selects_only_current_boundary(self) -> None:
         self.assertGreater(self.version, self.release.MIN_MIGRATABLE_VERSION)
         self.write_pin(self.root, self.version - 1)

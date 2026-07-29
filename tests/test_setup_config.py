@@ -21,6 +21,8 @@ class SetupConfigCurrentContractTests(unittest.TestCase):
                 home / ".codex/agents/private.toml": b"private codex\n",
                 home / ".claude/agents/private.md": b"private claude\n",
                 home / ".pi/agent/agents/private.md": b"private pi\n",
+                home / ".pi/agent/extensions/private.ts": b"private extension\n",
+                home / ".pi/agent/extensions/private-package/index.ts": b"private package\n",
                 home / ".codex/skills/private/SKILL.md": b"private skill\n",
                 home / ".config/private.conf": b"private config\n",
             }
@@ -41,8 +43,63 @@ class SetupConfigCurrentContractTests(unittest.TestCase):
                 destination = home / relative
                 shipped = source / "home" / relative
                 self.assertTrue(os.path.samefile(destination, shipped))
+            adapter = home / support.ADAPTER_RELATIVE
+            self.assertTrue(
+                os.path.samefile(adapter, source / "home" / support.ADAPTER_RELATIVE)
+            )
             for path, content in private.items():
                 self.assertEqual(path.read_bytes(), content)
+
+    def test_adapter_exact_destination_replacement_semantics(self) -> None:
+        for state in ("stale", "foreign", "dangling"):
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                source, home = support.seed_source(base)
+                destination = home / support.ADAPTER_RELATIVE
+                prior_bytes, prior_target = support.seed_destination(base, destination, state)
+
+                result = support.run_setup(source, home)
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                shipped = source / "home" / support.ADAPTER_RELATIVE
+                self.assertTrue(os.path.samefile(destination, shipped))
+                backup = destination.with_name(destination.name + ".bak")
+                if prior_bytes is not None:
+                    self.assertEqual(backup.read_bytes(), prior_bytes)
+                else:
+                    self.assertTrue(backup.is_symlink())
+                    self.assertEqual(os.readlink(backup), prior_target)
+
+    def test_same_content_adapter_relinks_without_backup_then_is_inode_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = support.seed_source(base)
+            shipped = source / "home" / support.ADAPTER_RELATIVE
+            destination = home / support.ADAPTER_RELATIVE
+            destination.parent.mkdir(parents=True)
+            destination.write_bytes(shipped.read_bytes())
+
+            first = support.run_setup(source, home)
+            inode = destination.stat().st_ino
+            second = support.run_setup(source, home)
+
+            self.assertEqual(first.returncode, 0, first.stderr)
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertTrue(os.path.samefile(destination, shipped))
+            self.assertEqual(destination.stat().st_ino, inode)
+            self.assertFalse(destination.with_name(destination.name + ".bak").exists())
+
+    def test_missing_required_adapter_source_fails_final_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = support.seed_source(base)
+            (source / "home" / support.ADAPTER_RELATIVE).unlink()
+
+            result = support.run_setup(source, home)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("unusable orchestrate destination", result.stderr)
+            self.assertIn(support.ADAPTER_RELATIVE.as_posix(), result.stderr)
 
     def test_same_content_install_is_idempotent_without_backup(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

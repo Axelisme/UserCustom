@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "state": "observed",
+  "runId": "RUN_ID",
+  "runnerProcessInstanceId": "runner-1",
+  "observedAt": 1730000000000,
+  "instances": [
+    {
+      "kind": "runner",
+      "processInstanceId": "runner-1",
+      "closeObservedAt": 1730000000000,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "kind": "pi-writer",
+      "processInstanceId": "writer-1",
+      "attempt": 0,
+      "closeObservedAt": 1730000000001,
+      "exitCode": 0,
+      "signal": null
+    }
+  ],
+  "canonicalSession": {
+    "canonicalSessionId": "session-proof",
+    "leaseDisposition": "released",
+    "freeAtObservation": true,
+    "canonicalSessionLeaseReleased": true
+  }
+}

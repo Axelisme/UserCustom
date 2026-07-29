@@ -22,11 +22,13 @@ PROFILE_LAYOUTS = {
     "claude": Path(".claude/agents"),
     "pi": Path(".pi/agent/agents"),
 }
+ADAPTER_RELATIVE = Path(".pi/agent/extensions/orchestrate-pi.ts")
 ORDINARY_FILES = {
     "home/.config/shipped.conf": "shipped config\n",
     "home/.codex/AGENTS.md": "shipped Codex standing orders\n",
     "home/.pi/agent/APPEND_SYSTEM.md": "shipped Pi standing orders\n",
     "home/.pi/agent/settings.json": '{"shipped": true}\n',
+    "home/.pi/agent/extensions/orchestrate-pi.ts": "shipped adapter bytes\n",
     "home/.local/include/shipped.h": "/* shipped */\n",
 }
 

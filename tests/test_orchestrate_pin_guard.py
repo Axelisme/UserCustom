@@ -98,8 +98,12 @@ class PinMigrateActiveTaskGuardTests(unittest.TestCase):
         integration_worktree = Path(payload["worktree"])
         acceptance_worktree = Path(payload["acceptance_worktree"])
 
-        self.write_pin(self.release.MIN_MIGRATABLE_VERSION)
+        self.write_pin(132)
         pin_before = self.pin.read_bytes()
+        root_head_before = self.git(self.root, "rev-parse", "HEAD")
+        root_status_before = self.git(self.root, "status", "--porcelain")
+        integration_head_before = self.git(integration_worktree, "rev-parse", "HEAD")
+        acceptance_head_before = self.git(acceptance_worktree, "rev-parse", "HEAD")
         branches_before = self.git(
             self.root,
             "for-each-ref",
@@ -143,6 +147,14 @@ class PinMigrateActiveTaskGuardTests(unittest.TestCase):
         )
         self.assertTrue(integration_worktree.is_dir())
         self.assertTrue(acceptance_worktree.is_dir())
+        self.assertEqual(self.git(self.root, "rev-parse", "HEAD"), root_head_before)
+        self.assertEqual(self.git(self.root, "status", "--porcelain"), root_status_before)
+        self.assertEqual(
+            self.git(integration_worktree, "rev-parse", "HEAD"), integration_head_before
+        )
+        self.assertEqual(
+            self.git(acceptance_worktree, "rev-parse", "HEAD"), acceptance_head_before
+        )
         self.assertEqual(self.git(integration_worktree, "status", "--porcelain"), "")
         self.assertEqual(self.git(acceptance_worktree, "status", "--porcelain"), "")
 
@@ -178,11 +190,13 @@ class PinMigrateActiveTaskGuardTests(unittest.TestCase):
 
 
 class CurrentManifestParityTests(unittest.TestCase):
-    def test_current_manifest_is_byte_identical_across_codex_and_pi(self) -> None:
+    def test_v133_manifest_is_byte_identical_across_codex_and_pi(self) -> None:
         release = load_release_module()
-        version = release.skill_version(CODEX_SKILL)
-        codex_manifest = CODEX_SKILL / "manifests" / f"{version}.json"
-        pi_manifest = PI_SKILL / "manifests" / f"{version}.json"
+        self.assertEqual(release.skill_version(CODEX_SKILL), 133)
+        codex_manifest = CODEX_SKILL / "manifests/133.json"
+        pi_manifest = PI_SKILL / "manifests/133.json"
+        self.assertTrue(codex_manifest.is_file())
+        self.assertTrue(pi_manifest.is_file())
         self.assertEqual(codex_manifest.read_bytes(), pi_manifest.read_bytes())
 
 

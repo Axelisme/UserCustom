@@ -166,11 +166,13 @@ replace_orchestrate_destination() {
 CURRENT_SKILL_LAYOUTS=(.codex/skills .pi/agent/skills)
 CURRENT_SKILLS=(orchestrate code-review dev-flow planning-with-files to-spec to-tickets)
 # Exact replacement is driven by the shipped source inventory, not a partial list of
-# known identities.  Unrelated installed profiles remain managed by the generic copy.
+# known profile identities. Runtime assets remain an explicit allowlist so setup never
+# scans, manages, or removes unrelated files in Pi's private extensions root.
 CURRENT_PROFILE_ROOTS=(.codex/agents .claude/agents .pi/agent/agents)
 CURRENT_STANDING_ORDER_PATHS=(.codex/AGENTS.md .pi/agent/APPEND_SYSTEM.md)
+CURRENT_RUNTIME_ASSET_PATHS=(.pi/agent/extensions/orchestrate-pi.ts)
 
-shipped_orchestrate_profile_inventory() {
+shipped_orchestrate_asset_inventory() {
   local root source relative
   for relative in "${CURRENT_STANDING_ORDER_PATHS[@]}"; do
     source="$UserCustom/home/$relative"
@@ -183,6 +185,9 @@ shipped_orchestrate_profile_inventory() {
       printf '%s\n' "$relative"
     done < <(find "$UserCustom/home/$root" -type f -print | sort)
   done
+  # Required runtime assets are emitted even when missing so final validation
+  # fails closed instead of silently producing an installation without them.
+  printf '%s\n' "${CURRENT_RUNTIME_ASSET_PATHS[@]}"
 }
 
 replace_current_orchestrate_destinations() {
@@ -195,7 +200,7 @@ replace_current_orchestrate_destinations() {
   replace_orchestrate_destination "$UserCustom/home/.claude/skills/orchestrate" "$HOME/.claude/skills/orchestrate"
   while IFS= read -r relative; do
     replace_orchestrate_destination "$UserCustom/home/$relative" "$HOME/$relative"
-  done < <(shipped_orchestrate_profile_inventory)
+  done < <(shipped_orchestrate_asset_inventory)
 }
 
 backup_cp "$UserCustom/home/.config" "$HOME/.config"
@@ -227,7 +232,7 @@ validate_orchestrate_skill_destinations() {
   done
 }
 
-validate_orchestrate_profile_destinations() {
+validate_orchestrate_asset_destinations() {
   local relative path
   while IFS= read -r relative; do
     path="$HOME/$relative"
@@ -235,9 +240,9 @@ validate_orchestrate_profile_destinations() {
       echo "error: unusable orchestrate destination (expected shipped identity): $path" >&2
       return 1
     fi
-  done < <(shipped_orchestrate_profile_inventory)
+  done < <(shipped_orchestrate_asset_inventory)
 }
 
 # Validate every current destination after installation completes.
 validate_orchestrate_skill_destinations
-validate_orchestrate_profile_destinations
+validate_orchestrate_asset_destinations

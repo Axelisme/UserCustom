@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import hashlib
 import importlib
 import json
 import re
@@ -103,7 +105,13 @@ class RuntimeParityTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "cannot locate home root"):
             self.release.source_home(Path("/tmp/unsupported/skills/orchestrate"))
 
-    def test_manifest_inventory_covers_every_runtime_and_profile(self) -> None:
+    def test_manifest_inventory_covers_every_runtime_profile_and_raw_runtime_asset(self) -> None:
+        adapter_relative = ".pi/agent/extensions/orchestrate-pi.ts"
+        adapter = HOME / adapter_relative
+        expected_adapter = {
+            "bytes": len(adapter.read_bytes()),
+            "sha256": hashlib.sha256(adapter.read_bytes()).hexdigest(),
+        }
         for skill in (CODEX_SKILL, PI_SKILL):
             manifest = self.release.build_manifest(skill, SHIPPED_VERSION)
             self.assertTrue(
@@ -116,6 +124,9 @@ class RuntimeParityTests(unittest.TestCase):
                 if path.is_file()
             }
             self.assertEqual(set(manifest["profiles"]), expected)
+            self.assertEqual(
+                manifest["runtime_assets"], {adapter_relative: expected_adapter}
+            )
             for runtime, suffix in (
                 ("codex", ".toml"),
                 ("claude", ".md"),
@@ -171,6 +182,117 @@ class RuntimeParityTests(unittest.TestCase):
         self.assertRegex(pi, r"(?m)^inheritSkills:\s*false\s*$")
         self.assertRegex(pi, r"(?m)^skills:\s*tdd\s*$")
         self.assertNotRegex(pi, r"(?m)^pipeline:")
+
+    def test_old_schema_one_manifest_without_runtime_assets_compares_as_empty(self) -> None:
+        old = {
+            "schema_version": 1,
+            "skill_version": 132,
+            "orchestrate_compat": 132,
+            "documents": {},
+            "profiles": {},
+        }
+        new = {
+            **old,
+            "skill_version": 133,
+            "orchestrate_compat": 133,
+            "runtime_assets": {},
+        }
+
+        comparison = self.release.compare_manifests(old, new)
+
+        self.assertEqual(comparison["changed_runtime_assets"], [])
+
+    def test_runtime_filtered_diff_includes_only_matching_runtime_assets(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            skill = root / "home/.codex/skills/orchestrate"
+            manifests = skill / "manifests"
+            manifests.mkdir(parents=True)
+            old = {
+                "schema_version": 1,
+                "skill_version": 132,
+                "orchestrate_compat": 132,
+                "documents": {},
+                "profiles": {},
+            }
+            new = {
+                **old,
+                "skill_version": 133,
+                "orchestrate_compat": 133,
+                "runtime_assets": {
+                    ".pi/agent/extensions/orchestrate-pi.ts": {
+                        "bytes": 7,
+                        "sha256": "adapter",
+                    }
+                },
+            }
+            (manifests / "132.json").write_text(json.dumps(old), encoding="utf-8")
+            (manifests / "133.json").write_text(json.dumps(new), encoding="utf-8")
+
+            pi = self.release.command_diff(
+                argparse.Namespace(
+                    skill_dir=str(skill), old_version=132, new_version=133, runtime="pi"
+                )
+            )
+            codex = self.release.command_diff(
+                argparse.Namespace(
+                    skill_dir=str(skill), old_version=132, new_version=133, runtime="codex"
+                )
+            )
+
+            self.assertEqual(
+                pi["changed_runtime_assets"],
+                [".pi/agent/extensions/orchestrate-pi.ts"],
+            )
+            self.assertEqual(codex["changed_runtime_assets"], [])
+
+    def test_doctor_detects_missing_and_tampered_runtime_asset_raw_bytes(self) -> None:
+        for state in ("missing", "tampered"):
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                home = root / "home"
+                shutil.copytree(HOME, home)
+                skill = home / ".codex/skills/orchestrate"
+                version = self.release.skill_version(skill)
+                manifest = self.release.build_manifest(skill, version)
+                (skill / "manifests" / f"{version}.json").write_text(
+                    json.dumps(manifest), encoding="utf-8"
+                )
+                adapter = home / ".pi/agent/extensions/orchestrate-pi.ts"
+                if state == "missing":
+                    adapter.unlink()
+                else:
+                    adapter.write_bytes(adapter.read_bytes() + b"\r\nraw-tamper\r\n")
+
+                result = self.release.verify_release(skill)
+
+                self.assertFalse(result["ok"])
+                self.assertTrue(
+                    any("orchestrate-pi.ts" in error for error in result["errors"]),
+                    result,
+                )
+
+    def test_release_publication_refuses_missing_mandatory_runtime_asset(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / "home"
+            shutil.copytree(HOME, home)
+            skill = home / ".codex/skills/orchestrate"
+            adapter = home / ".pi/agent/extensions/orchestrate-pi.ts"
+            adapter.unlink()
+            output = skill / "manifests/next.json"
+
+            with self.assertRaisesRegex(
+                self.release.OrchestrateError,
+                r"mandatory runtime asset.*orchestrate-pi\.ts",
+            ):
+                self.release.write_release_manifest(
+                    skill,
+                    SHIPPED_VERSION + 1,
+                    None,
+                    output,
+                )
+
+            self.assertFalse(output.exists())
 
     def test_doctor_detects_shipped_profile_tamper(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

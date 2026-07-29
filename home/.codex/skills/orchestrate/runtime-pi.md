@@ -1,18 +1,35 @@
 # Orchestrate — Pi runtime binding
 
-Pi dispatches one native `lane-worker` subagent for the lane identity `<task-id>.<lane-id>`.
-The dispatch carries the frozen objective, canonical lane cwd, expected Git root/common-dir,
-branch, base or subject SHA, write scope, immutable paths, primary-checkout dirt snapshot,
-focused commands, evidence, and stop conditions.
+Pi Root dispatches an admitted implementation lane only through the versioned
+`orchestrate_pi` tool. The executable Adapter has exactly two actions:
+`dispatch-lane` and `attest-run`. There is no raw `subagent` fallback. An unknown
+version, action, or field; a canonical cwd/Git mismatch; an incompatible RPC
+capability response; or an invalid receipt fails closed.
 
-The worker's first action is to change into the canonical cwd and attest `pwd -P`, Git identity,
-and clean state. Pi may provide a typed cwd, but the shared worker contract does not depend on
-that capability: every later operation is path-bound and a mismatch is terminal. Root verifies
-lane identity and primary dirt immediately before collect; after the lane worktree is removed,
-Root verifies the collected SHA and that primary dirt is unchanged.
+For `dispatch-lane`, Root supplies the frozen objective, canonical lane cwd,
+expected Git root/common-dir, branch, full subject SHA, clean-state expectation,
+write scope, immutable paths, primary-checkout dirt snapshot, focused commands,
+evidence, and stop conditions. The Adapter verifies canonical Git identity before
+RPC, probes RPC v1 plus async spawn, status, stop, process-terminal proof v1, and
+lifecycle artifact v3, then fixes the upstream launch to `lane-worker`, fresh
+context, async mode, and no clarification. The Adapter subscribes to the exact
+reply channel before emitting. It returns only a structured exact-run receipt.
+If spawn may have started but that receipt is invalid, it reports orphan risk and
+best-effort stops that exact `runId`; it never redispatches automatically.
 
-Use Pi's native subagent lifecycle and continuation only while the frozen input and lane identity
-remain unchanged. A semantic Contract, observable behavior, public Interface, provider, liveness,
-or cwd change requires a fresh dispatch and Root re-admission. The terminal lane-ready handoff
-identifies every Contract commit SHA with its exact red evidence, plus the final clean SHA; Root
-owns collect, candidate, landing, and recovery.
+Root retains the opaque receipt and calls `attest-run` for the same run.
+`process-terminal.json` is the primary durable proof, the exact status overlay is
+fallback evidence, and the process event is wake-up only. Execution state and
+process-terminal/canonical-session-lease evidence remain independent. Missing,
+pending, not-started, malformed, mismatched, or otherwise unknown proof stays
+unknown. Result-file presence, `endedAt`, PID disappearance, lease-directory
+absence, and human-readable RPC text are never terminal evidence.
+
+The Adapter is transport and exact-run evidence projection only. It does not
+create or discover lanes, mutate Git, maintain a run registry, enumerate matching
+runs, decide lane readiness, grant collect or acceptance, or wrap upstream steer,
+interrupt, stop, or resume operations. Root still owns Slice admission, Contract
+semantics and amendments, S2.4 pre-collect test review, primary-checkout dirt,
+collect, candidate, landing, and recovery. Native lifecycle continuation is valid
+only while the frozen Contract, provider, cwd, and lane identity remain unchanged;
+a change requires Root re-admission and a fresh authorized dispatch.

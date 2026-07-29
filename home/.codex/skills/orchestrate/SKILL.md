@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Minimal Git-backed lane and task-integration workflow for a Git task.
-skill_version: 132
+skill_version: 133
 ---
 
 # Orchestrate

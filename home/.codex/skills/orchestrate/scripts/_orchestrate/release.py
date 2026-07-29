@@ -41,6 +41,17 @@ MIGRATION_BOUNDARIES: tuple[tuple[int, dict[str, Any]], ...] = (
             "automatic_conversion": False,
         },
     ),
+    (
+        133,
+        {
+            "reason": "v132-to-v133-pi-runtime-adapter",
+            "breaking": True,
+            "pi_adapter_is_mandatory": True,
+            "exact_run_process_terminal_evidence": True,
+            "root_authority_is_unchanged": True,
+            "automatic_conversion": False,
+        },
+    ),
 )
 
 
@@ -178,6 +189,11 @@ def profile_paths(home: Path) -> list[Path]:
     ]
 
 
+def runtime_asset_paths(home: Path) -> list[Path]:
+    """Return exact executable assets; never inventory the private extensions root."""
+    return [home / ".pi" / "agent" / "extensions" / "orchestrate-pi.ts"]
+
+
 def build_manifest(skill_dir: Path, version: int) -> dict[str, Any]:
     home = source_home(skill_dir)
     documents: dict[str, Any] = {}
@@ -209,12 +225,22 @@ def build_manifest(skill_dir: Path, version: int) -> dict[str, Any]:
             ),
         }
         profiles[path.relative_to(home).as_posix()] = entry
+    runtime_assets: dict[str, Any] = {}
+    for path in runtime_asset_paths(home):
+        if not path.is_file():
+            continue
+        data = path.read_bytes()
+        runtime_assets[path.relative_to(home).as_posix()] = {
+            "bytes": len(data),
+            "sha256": sha256_bytes(data),
+        }
     return {
         "schema_version": MANIFEST_SCHEMA,
         "skill_version": version,
         "orchestrate_compat": version,
         "documents": documents,
         "profiles": profiles,
+        "runtime_assets": runtime_assets,
     }
 
 
@@ -241,6 +267,17 @@ def write_release_manifest(
     skill_dir: Path, version: int, previous_version: int | None, output: Path
 ) -> dict[str, Any]:
     payload = build_manifest(skill_dir, version)
+    home = source_home(skill_dir)
+    missing_runtime_assets = [
+        path.relative_to(home).as_posix()
+        for path in runtime_asset_paths(home)
+        if path.relative_to(home).as_posix() not in payload["runtime_assets"]
+    ]
+    if missing_runtime_assets:
+        raise OrchestrateError(
+            "cannot publish release; mandatory runtime asset missing: "
+            + ", ".join(missing_runtime_assets)
+        )
     if previous_version is not None:
         previous = load_manifest(skill_dir, previous_version)
         comparison = compare_manifests(previous, payload)
@@ -251,6 +288,7 @@ def write_release_manifest(
                 for item in comparison["changed_documents"]
             },
             "changed_profiles": comparison["changed_profiles"],
+            "changed_runtime_assets": comparison["changed_runtime_assets"],
             "must_reread": comparison["must_reread"],
             "acknowledge_removed": comparison["acknowledge_removed"],
         }
@@ -334,9 +372,9 @@ def verify_release(skill_dir: Path) -> dict[str, Any]:
     manifest = load_manifest(skill_dir, version)
     observed = build_manifest(skill_dir, version)
     errors: list[str] = []
-    for category in ("documents", "profiles"):
-        expected_items = manifest[category]
-        observed_items = observed[category]
+    for category in ("documents", "profiles", "runtime_assets"):
+        expected_items = manifest.get(category, {})
+        observed_items = observed.get(category, {})
         for name in sorted(set(expected_items) | set(observed_items)):
             if name not in expected_items:
                 errors.append(f"unexpected {category[:-1]}: {name}")
@@ -345,7 +383,7 @@ def verify_release(skill_dir: Path) -> dict[str, Any]:
             else:
                 expected = expected_items[name]
                 observed_entry = observed_items[name]
-                if category == "documents":
+                if category in {"documents", "runtime_assets"}:
                     matches = expected["sha256"] == observed_entry["sha256"]
                 else:
                     matches = (
@@ -368,6 +406,7 @@ def verify_release(skill_dir: Path) -> dict[str, Any]:
         "orchestrate_compat": manifest.get("orchestrate_compat"),
         "documents": len(observed["documents"]),
         "profiles": len(observed["profiles"]),
+        "runtime_assets": len(observed["runtime_assets"]),
         "errors": errors,
     }
 
@@ -611,12 +650,20 @@ def compare_manifests(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any
             continue
         if before["profile_contract_sha256"] != after["profile_contract_sha256"]:
             changed_profiles.append(name)
+    old_runtime_assets = old.get("runtime_assets", {})
+    new_runtime_assets = new.get("runtime_assets", {})
+    changed_runtime_assets = [
+        name
+        for name in sorted(set(old_runtime_assets) | set(new_runtime_assets))
+        if old_runtime_assets.get(name) != new_runtime_assets.get(name)
+    ]
     return {
         "from": old["skill_version"],
         "to": new["skill_version"],
         "compat": [old["orchestrate_compat"], new["orchestrate_compat"]],
         "changed_documents": documents,
         "changed_profiles": changed_profiles,
+        "changed_runtime_assets": changed_runtime_assets,
         "must_reread": must_reread,
         "acknowledge_removed": acknowledge_removed,
     }
@@ -653,6 +700,11 @@ def command_diff(args: argparse.Namespace) -> dict[str, Any]:
         comparison["changed_profiles"] = [
             path
             for path in comparison["changed_profiles"]
+            if path.startswith(profile_prefix)
+        ]
+        comparison["changed_runtime_assets"] = [
+            path
+            for path in comparison["changed_runtime_assets"]
             if path.startswith(profile_prefix)
         ]
         comparison["runtime"] = args.runtime

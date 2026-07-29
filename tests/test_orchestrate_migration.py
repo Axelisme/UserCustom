@@ -17,12 +17,13 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 CODEX_SKILL = ROOT / "home" / ".codex" / "skills" / "orchestrate"
 SCRIPT = CODEX_SKILL / "scripts/orchestrate.py"
-GUIDE_VERSIONS = (131, 132, 133, 134, 135)
+GUIDE_VERSIONS = (131, 132, 133, 134, 135, 136)
 RETAINED_GUIDE_SHA256 = {
     131: "3ac711b53f0410640179261ee45288ce0b6a7d1e470c85df0623d2f2da5266ad",
     132: "02b355608886e893ad9fa17c5d797e3822fd980f9a8d2072232ec6c199a57cb3",
     133: "529d3702851b721580544743ab5f6539ee47e6e404c67c744368d4191632dde4",
     134: "8a3a425463086faf852ea4639389dc3f16dfe20579d2006ebe49c2ec4d6d915b",
+    135: "610fe2f54db967f287002ead5dcd7717b9c6ae91f085399ca6b86853fb7d686b",
 }
 GUIDE_SECTIONS = (
     "From",
@@ -171,7 +172,7 @@ class PinAndMigrationGuideContractTests(unittest.TestCase):
         self.assertEqual(source.count("write_version_pin("), 2)  # definition + pin set
 
     def test_guides_are_complete_and_hashed_as_release_documents(self) -> None:
-        manifest = self.release.build_manifest(CODEX_SKILL, 135)
+        manifest = self.release.build_manifest(CODEX_SKILL, 136)
         guides = CODEX_SKILL / "migrations"
         self.assertEqual(
             {int(path.stem) for path in guides.glob("*.md")}, set(GUIDE_VERSIONS)
@@ -206,6 +207,22 @@ class PinAndMigrationGuideContractTests(unittest.TestCase):
         for phrase in required:
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
+
+    def test_v136_records_atomic_cutover_and_truthful_no_migration(self) -> None:
+        text = (CODEX_SKILL / "migrations/136.md").read_text(encoding="utf-8")
+        required = (
+            "dev-flow is the sole active durable-task authority",
+            "replacement verification succeeds before managed planning links are removed",
+            "v136 migrates no legacy records",
+            "normal setup rerun is the only removal recovery",
+            "v135 pin remains unchanged",
+            "repair forward",
+        )
+        for phrase in required:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+        self.assertNotIn("convert legacy", text.casefold())
+        self.assertNotIn("restore planning", text.casefold())
 
     def test_retrospective_guides_preserve_every_removed_boundary(self) -> None:
         required_phrases = {

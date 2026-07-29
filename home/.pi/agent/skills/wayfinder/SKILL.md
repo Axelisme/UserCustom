@@ -23,18 +23,22 @@ The map is an **index**, not a store. It lists the decisions made and points at 
 
 **Where the map, its tickets, blocking, and frontier queries physically live depends on the repo:**
 
-- **Plan-directory repo** (CLAUDE.md / AGENTS.md documents `planning-with-files` / `.agent_state/plans/`): use the plan-directory backend below. Never create tracker issues or workflow state files in such a repo.
+- **Plan-directory repo** (CLAUDE.md / AGENTS.md documents dev-flow task records under `.agent_state/plans/`): use the plan-directory backend below. Never create tracker issues or a parallel workflow state file in such a repo.
 - **Tracker repo** (an issue tracker is documented, e.g. `docs/agents/issue-tracker.md`): follow that doc's conventions for issues, labels, and native blocking links.
 - **Neither**: default to a local-markdown map at `.scratch/wayfinder/<effort-slug>.md`, same shape as the plan-directory backend.
 
 ### Plan-directory backend
 
-The map is `.agent_state/plans/<task-id>/wayfinder-map.md` (init the plan directory via `planning-with-files`). Deltas from the tracker backend:
+Initialize the plan-directory backend with dev-flow `scripts/plan.py create`. The map is the
+artifact `.agent_state/plans/<task-id>/wayfinder-map.md`; its `Decisions so far` section is only an
+index of pointers. Decision and research work lives in the shared generic `tickets/*.md` files,
+created with dev-flow `ticket-create`, with dependencies in `depends_on`. Do not embed a second
+status, claim, blocking or ticket store in `wayfinder-map.md`.
 
-- **Tickets** live in the same file, under a `## Tickets` section — one `### <ticket title>` entry each, carrying `type: wayfinder:<type>`, `status: open | claimed | closed`, `blocked-by: <ticket titles or none>`, and the `## Question` body.
-- **Claiming** = setting `status: claimed` before any work. The **frontier** = entries that are `open`, unclaimed, and whose `blocked-by` list is fully closed.
-- **Closing** = setting `status: closed`, writing the resolution as a `#### Resolution` block under the ticket entry, and appending the one-line gist to **Decisions so far** — the detail stays in the ticket entry, the index only gists and links (`[<title>](#anchor)`).
-- Assets (research notes, prototypes) go next to the map in the plan directory or on throwaway branches, linked from the ticket — never pasted in.
+Claiming means changing the owning generic ticket from `open` to `active` before work. The frontier
+is the open tickets whose dependencies are closed. Closing records the resolution in that ticket,
+then adds only a one-line linked gist to the map. Research notes and prototypes remain domain
+artifacts and are linked from their owning generic ticket and from INDEX Artifacts when useful.
 
 ### The map body
 

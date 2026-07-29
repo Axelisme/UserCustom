@@ -1,15 +1,16 @@
 ---
 name: orchestrate
 description: Minimal Git-backed lane and task-integration workflow for a Git task.
-skill_version: 135
+skill_version: 136
 ---
 
 # Orchestrate
 
 Orchestrate is the **Git task lane**. It owns lane worktrees, task integration, the ready-candidate
 projection, the unified report, and links to runtime adapters. Git commits, refs, SHAs, trailers,
-and worktree state are its durable inputs. Acceptance and close-out authority remain in the
-admission standard.
+and worktree state are its durable inputs. It may consume dev-flow task/ticket IDs but derives and
+stores no task narrative. Acceptance and close-out authority remain in the admission standard,
+the sole normative S0–S5 authority. Root must read shared S0 there before creating the first lane.
 
 ## Lane
 
@@ -54,7 +55,8 @@ output, task parallelism, the four zero-parameter Git checks (deletion, loop, ma
 `admission.py`), and the candidate projection, all in one call; nothing here is ever refused, only
 presented. `integration list` is the shallow, read-only view across every task in the repository.
 Agents manage `Immutable:` trailers; Orchestrate generates `Task:`, `Lane:`, and `Landed:`.
-Machine rework counts and routing remain Root-owned narrative, not Git trailer state.
+Machine rework routing remains Root-owned in the active generic ticket's monotonic
+`Machine rework: N/2` Current line and final Result copy, never Git trailer or Orchestrate state.
 
 Every command prints one JSON object containing `orchestrate_version`, the installed executable
 version, and exits with one of three codes: **0** on success, **1** when the command completed and
@@ -80,7 +82,7 @@ admission standard's S5).
 Read the matching [Codex runtime](runtime-codex.md), [Claude runtime](runtime-claude.md), or
 [Pi runtime](runtime-pi.md) before dispatch. Runtime links describe lifecycle only; this document
 does not emulate a runtime. The admission projection points to the shared admission standard, the
-sole S1–S5 authority. At the lane-ready to collect seam, Root applies the S2 test-review procedure
+sole S0–S5 authority. At the lane-ready to collect seam, Root applies the S2 test-review procedure
 there before reading implementation changes. The pin records the last manually adopted release and never selects the executable. Apply the
 manifest-hashed `migrations/<version>.md` guides in order from pin plus one through the installed
 version, then use the sole writer, atomic idempotent `pin set`, to create or overwrite the pin.

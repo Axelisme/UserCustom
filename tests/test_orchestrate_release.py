@@ -26,7 +26,7 @@ VERSION_MATCH = re.search(
 if VERSION_MATCH is None:
     raise RuntimeError("orchestrate SKILL.md has no skill_version")
 SHIPPED_VERSION = int(VERSION_MATCH.group(1))
-PUBLISHED_VERSION = 135
+PUBLISHED_VERSION = 136
 
 
 def load_release_module():
@@ -94,7 +94,7 @@ class ReleasedPackageTests(unittest.TestCase):
                 self.assertEqual(manifest["skill_version"], SHIPPED_VERSION)
                 self.assertEqual(manifest["orchestrate_compat"], SHIPPED_VERSION)
 
-    def test_pi_layout_exposes_guides_and_builds_the_codex_v135_inventory(self) -> None:
+    def test_pi_layout_exposes_guides_and_builds_the_codex_v136_inventory(self) -> None:
         release = load_release_module()
         for version in range(131, PUBLISHED_VERSION + 1):
             codex_guide = CODEX_SKILL / f"migrations/{version}.md"
@@ -106,7 +106,7 @@ class ReleasedPackageTests(unittest.TestCase):
             release.build_manifest(PI_SKILL, PUBLISHED_VERSION),
         )
 
-    def test_v135_is_a_matched_regenerable_release_for_both_logical_layouts(self) -> None:
+    def test_v136_is_a_matched_regenerable_release_for_both_logical_layouts(self) -> None:
         self.assertEqual(SHIPPED_VERSION, PUBLISHED_VERSION)
         release = load_release_module()
         manifests = [
@@ -144,6 +144,7 @@ class ReleasedPackageTests(unittest.TestCase):
             132: "49e390ecb1fe40af8d5964546e310e2dc3f6aeba22a75e30091a119dc6de7767",
             133: "15b95e3f3f55fabcb7629cd2dc9ec2eb80aabb50b825cf7a729d665493ee85c8",
             134: "744a3dbeacc31d0ce8e9dbc5806c7e9901a825c6e0369186451ba98c519d9c52",
+            135: "fceecf9860fbec439af556cbf0b606e3d2ad5a4eda6fcf3ddf39f7eabdeb73f7",
         }
         for version, digest in expected.items():
             with self.subTest(version=version):

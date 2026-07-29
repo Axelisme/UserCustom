@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -18,39 +17,190 @@ except ImportError:  # Direct test-file execution keeps tests/ on sys.path.
 ROOT = Path(__file__).resolve().parents[1]
 
 
-class SetupConfigCurrentContractTests(unittest.TestCase):
-    def test_isolated_home_installs_the_exact_v134_release_inventory(self) -> None:
+class SetupCutoverContractTests(unittest.TestCase):
+    def test_each_logical_v136_failure_precedes_retired_removal(self) -> None:
+        for logical_layout in ("codex", "pi"):
+            with (
+                self.subTest(logical_layout=logical_layout),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                base = Path(temporary)
+                source, home = support.seed_source(base)
+                retired = support.seed_managed_retired_links(source, home)
+
+                plan = source / "home/.codex/skills/dev-flow/scripts/plan.py"
+                real_plan = plan.with_name("plan-real.py")
+                plan.rename(real_plan)
+                trace = base / "task-record-smoke.log"
+                plan.write_text(
+                    "#!/usr/bin/env python3\n"
+                    "import os, runpy, sys\n"
+                    "from pathlib import Path\n"
+                    "with Path(os.environ['SETUP_SMOKE_TRACE']).open('a', encoding='utf-8') as stream:\n"
+                    "    stream.write(sys.argv[0] + '\\n')\n"
+                    "runpy.run_path(str(Path(__file__).with_name('plan-real.py')), run_name='__main__')\n",
+                    encoding="utf-8",
+                )
+                plan.chmod(0o755)
+
+                manifest_path = source / (
+                    "home/.codex/skills/orchestrate/manifests/136.json"
+                    if logical_layout == "codex"
+                    else "home/.pi/agent/skills/orchestrate/manifests/136.json"
+                )
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest["documents"]["runtime-pi.md"]["sha256"] = "0" * 64
+                manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+                result = support.run_setup(
+                    source,
+                    home,
+                    {"SETUP_SMOKE_TRACE": str(trace)},
+                )
+
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(
+                    f"{logical_layout} v136 release verification failed",
+                    result.stderr.lower(),
+                )
+                self.assertIn(
+                    str(home / ".codex/skills/dev-flow/scripts/plan.py"),
+                    trace.read_text(encoding="utf-8").splitlines(),
+                )
+                for path in retired:
+                    self.assertTrue(path.is_symlink(), path)
+                    self.assertTrue(
+                        os.path.samefile(path, source / "home" / path.relative_to(home))
+                    )
+
+    def test_replacement_smoke_failure_leaves_planning_installed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             source, home = support.seed_source(base)
-
-            for relative in (
-                Path(".codex/skills/orchestrate"),
-                Path(".pi/agent/skills/orchestrate"),
-                Path(".claude/skills/orchestrate"),
-            ):
-                shipped = ROOT / "home" / relative
-                target = source / "home" / relative
-                if target.is_symlink() or target.is_file():
-                    target.unlink()
-                elif target.exists():
-                    shutil.rmtree(target)
-                if shipped.is_symlink():
-                    target.symlink_to(os.readlink(shipped))
-                else:
-                    shutil.copytree(shipped, target, symlinks=True)
-
-            exact_files = (
-                *support.shipped_profile_relatives(),
-                Path(".codex/AGENTS.md"),
-                Path(".pi/agent/APPEND_SYSTEM.md"),
-                Path(".pi/agent/settings.json"),
-                support.ADAPTER_RELATIVE,
+            replacement = source / "home/.codex/skills/dev-flow/scripts/plan.py"
+            replacement.parent.mkdir(parents=True, exist_ok=True)
+            replacement.write_text(
+                "#!/usr/bin/env python3\nraise SystemExit('replacement smoke failed')\n",
+                encoding="utf-8",
             )
-            for relative in exact_files:
-                target = source / "home" / relative
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(ROOT / "home" / relative, target)
+            replacement.chmod(0o755)
+            retired_source = source / "home/.codex/skills/planning-with-files"
+            retired_destination = home / ".codex/skills/planning-with-files"
+            retired_destination.parent.mkdir(parents=True, exist_ok=True)
+            retired_destination.symlink_to(retired_source)
+
+            result = support.run_setup(source, home)
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("replacement smoke", result.stderr)
+            self.assertTrue(retired_destination.is_symlink())
+            self.assertTrue(os.path.samefile(retired_destination, retired_source))
+
+    def test_foreign_retired_destination_refuses_before_any_home_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = support.seed_source(base)
+            foreign = home / ".pi/agent/skills/planning-with-files"
+            foreign.mkdir(parents=True)
+            (foreign / "SKILL.md").write_text("foreign planning bytes\n", encoding="utf-8")
+            sentinel = home / ".config/private.conf"
+            sentinel.parent.mkdir(parents=True)
+            sentinel.write_text("private\n", encoding="utf-8")
+            before = support.snapshot_home(home)
+
+            result = support.run_setup(source, home)
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("foreign retired destination", result.stderr)
+            self.assertEqual(support.snapshot_home(home), before)
+
+    def test_managed_upgrade_removes_retired_authority_and_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = support.seed_source(base)
+            retired = support.seed_managed_retired_links(source, home)
+            private = home / ".codex/skills/private/SKILL.md"
+            private.parent.mkdir(parents=True)
+            private.write_text("private skill\n", encoding="utf-8")
+
+            first = support.run_setup(source, home)
+            first_snapshot = support.snapshot_home(home)
+            second = support.run_setup(source, home)
+
+            self.assertEqual(first.returncode, 0, first.stderr)
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertEqual(support.snapshot_home(home), first_snapshot)
+            self.assertEqual(private.read_text(encoding="utf-8"), "private skill\n")
+            for path in retired:
+                self.assertFalse(path.exists() or path.is_symlink(), path)
+            for layout in (*support.managed_skill_layouts(), Path(".claude/skills")):
+                dev_flow = home / layout / "dev-flow"
+                self.assertTrue(dev_flow.is_symlink(), dev_flow)
+                self.assertTrue(os.path.samefile(dev_flow, source / "home" / layout / "dev-flow"))
+                self.assertFalse((home / layout / "planning-with-files").exists())
+
+    def test_partial_retired_removal_reports_exact_paths_then_normal_rerun_repairs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = support.seed_source(base)
+            retired = support.seed_managed_retired_links(source, home)
+            fake_bin = base / "bin"
+            fake_bin.mkdir()
+            fake_rm = fake_bin / "rm"
+            fake_rm.write_text(
+                "#!/bin/sh\n"
+                "case \" $* \" in *'.pi/agent/skills/planning-with-files'*) "
+                "echo 'forced retired removal failure' >&2; exit 1;; esac\n"
+                "exec /bin/rm \"$@\"\n",
+                encoding="utf-8",
+            )
+            fake_rm.chmod(0o755)
+
+            failed = support.run_setup(
+                source,
+                home,
+                {"PATH": f"{fake_bin}:{os.environ['PATH']}"},
+            )
+
+            self.assertNotEqual(failed.returncode, 0, failed.stdout)
+            self.assertIn("retired removal incomplete", failed.stderr)
+            self.assertIn("removed:", failed.stderr)
+            self.assertIn("remaining:", failed.stderr)
+            for path in retired:
+                self.assertIn(str(path), failed.stderr)
+            self.assertTrue((home / ".codex/skills/dev-flow").is_symlink())
+
+            rerun = support.run_setup(source, home)
+            self.assertEqual(rerun.returncode, 0, rerun.stderr)
+            for path in retired:
+                self.assertFalse(path.exists() or path.is_symlink(), path)
+
+    def test_source_derived_unrelated_skill_allowlist_installs_without_destination_scan(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = support.seed_source(base)
+            for layout in (*support.managed_skill_layouts(), Path(".claude/skills")):
+                skill = source / "home" / layout / "source-extra"
+                skill.mkdir(parents=True)
+                (skill / "SKILL.md").write_text("source extra\n", encoding="utf-8")
+            private = home / ".pi/agent/skills/destination-private/SKILL.md"
+            private.parent.mkdir(parents=True)
+            private.write_text("destination private\n", encoding="utf-8")
+
+            result = support.run_setup(source, home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for layout in (*support.managed_skill_layouts(), Path(".claude/skills")):
+                installed = home / layout / "source-extra"
+                self.assertTrue(installed.is_symlink(), installed)
+            self.assertEqual(private.read_text(encoding="utf-8"), "destination private\n")
+
+
+class SetupConfigCurrentContractTests(unittest.TestCase):
+    def test_isolated_home_installs_the_exact_v136_release_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, home = support.seed_source(base)
 
             result = support.run_setup(source, home)
 
@@ -58,10 +208,10 @@ class SetupConfigCurrentContractTests(unittest.TestCase):
             for layout in support.managed_skill_layouts():
                 skill = home / layout / "orchestrate"
                 source_skill = source / "home" / layout / "orchestrate"
-                manifest_path = skill / "manifests/134.json"
+                manifest_path = skill / "manifests/136.json"
                 self.assertTrue(manifest_path.is_file(), manifest_path)
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                self.assertEqual(manifest["skill_version"], 134)
+                self.assertEqual(manifest["skill_version"], 136)
                 self.assertTrue(os.path.samefile(skill, source_skill))
                 for document in manifest["documents"]:
                     self.assertTrue(
@@ -117,11 +267,13 @@ class SetupConfigCurrentContractTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             for layout in support.managed_skill_layouts():
-                for skill in support.managed_skill_names():
+                for skill in support.active_skill_names():
                     destination = home / layout / skill
                     shipped = source / "home" / layout / skill
                     self.assertTrue(destination.is_symlink())
                     self.assertTrue(os.path.samefile(destination, shipped))
+                for skill in support.retired_skill_names():
+                    self.assertFalse((home / layout / skill).exists())
             for relative in support.shipped_profile_relatives():
                 destination = home / relative
                 shipped = source / "home" / relative
@@ -181,7 +333,7 @@ class SetupConfigCurrentContractTests(unittest.TestCase):
             result = support.run_setup(source, home)
 
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("unusable orchestrate destination", result.stderr)
+            self.assertIn("preflight", result.stderr)
             self.assertIn(support.ADAPTER_RELATIVE.as_posix(), result.stderr)
 
     def test_same_content_install_is_idempotent_without_backup(self) -> None:

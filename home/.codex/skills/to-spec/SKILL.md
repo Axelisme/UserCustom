@@ -23,7 +23,8 @@ admissibility. The frozen Contract is an artifact consumed by Oracle and Impleme
 
 ## Publish
 
-In a plan-directory repo, initialize `.agent_state/plans/<task-id>/` with planning-with-files and
-write `spec.md`; otherwise use the documented tracker or `.scratch/<feature-slug>/spec.md`. Keep
-acceptance criteria and usage envelope explicit. This skill owns artifacts only; acceptance,
-review, execution, and close-out belong to their owning surfaces.
+In a plan-directory repo, initialize the shared task record through dev-flow, write `spec.md`, and
+add its direct pointer under INDEX `## Artifacts`; do not create another lifecycle file. Otherwise
+use the documented tracker or `.scratch/<feature-slug>/spec.md`. Keep acceptance criteria and usage
+envelope explicit. This skill owns artifacts only; acceptance, review, execution, and close-out
+belong to their owning surfaces.

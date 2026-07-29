@@ -1,34 +1,41 @@
 ---
 name: dev-flow
-description: Route frozen work through planning, Git task coordination, acceptance, and close-out.
+description: Own the durable task-record lifecycle from exploration through neutral archive.
 ---
 
 # Dev Flow
 
-Use this skill for work that needs a frozen Contract and more than one session. It is a short
-routing and coordination layer; each station owns its own interface and implementation details.
-The [admission standard](references/admission-standard.md) is the sole authority for S1–S5.
+Use this skill for work that needs durable orientation across sessions. Dev-flow is the sole
+active durable-task lifecycle authority. The [admission standard](references/admission-standard.md)
+is the sole normative S0–S5 authority. Read it before wayfinding, spec, or ticket admission and
+again after compaction; do not copy its policy into routing skills.
+
+## One task record
+
+Short work may remain in the current conversation. Durable work uses the workflow-neutral
+`scripts/plan.py` task record under `.agent_state/plans/<task-id>/`. Its public Interface is exactly
+`create | archive | resume | ticket-create | refresh | check`. The bounded `INDEX.md` keeps Goal,
+Current, Next, decisions and artifact pointers; dependency-addressable `tickets/*.md` hold all
+unfinished work. Domain skills continue to own maps, research, prototypes, specs and review
+reports and link those artifacts from the record rather than copying their state.
+
+Wayfinder, to-spec and to-tickets share these ordinary generic tickets. Unfinished implementation,
+repair and user validation are ordinary generic ticket work too; no phase/progress file,
+acceptance queue or second ticket store is created. Orchestrate consumes task/ticket IDs but owns
+only Git/runtime coordination and derives no narrative.
 
 ## Route
 
 ```text
-wayfinder → to-spec → to-tickets → orchestrate → acceptance → checkpoint → explicit close-out
+wayfinder → to-spec → to-tickets → orchestrate → review/validation → explicit close-out
 ```
 
-`to-spec` freezes the user-visible envelope and `to-tickets` publishes dependency-addressable
-Slices. `orchestrate` coordinates Git task lanes and returns an exact candidate SHA. Acceptance
-uses the admission standard and the runtime adapter; it does not create another state model.
+At each Slice, freeze the Contract, run its focused and canonical gates, and hand off only a clean
+exact SHA with evidence pointers. Root owns placement, merges and repository authority.
+Orchestrate never pushes or reads a remote ref. Current user messages remain the only mutation
+authority.
 
-## Coordination
-
-At each Slice, keep the Contract surface immutable within its lane once declared, run the named
-focused and canonical gates, and hand off only a clean exact SHA with its evidence. Findings use
-the closed classification and routing in the admission standard. A bounded delta stays on its
-originating axis; a new behavioral Contract reopens the lane for another oracle → implement round.
-Root owns placement, merges, and repository authority. Orchestrate never pushes and never reads a
-remote ref — every station in this route stays local.
-
-After compaction, reread this skill, the frozen spec, the task plan, and the admission standard.
-Keep task narrative in planning-with-files' schemas and Git evidence in commits, refs, and
-trailers. Runtime continuation belongs to the matching runtime binding. Explicit final close-out
-follows S5; this skill does not add a second landing or acceptance policy.
+Generic `archive` is a neutral directory move and may pause open work. Final close-out follows S5:
+closed tickets and green task-record checks are combined with exact Git/runtime authority and any
+task-specific rollout checklist. After compaction, reread this skill, the frozen spec, the task
+record and the admission standard.

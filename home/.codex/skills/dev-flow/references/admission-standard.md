@@ -1,120 +1,101 @@
 # Admission standard
 
-These are the sole normative S1–S5 checks for dev-flow. Every check is decided from
-artifacts, not persuasion. Routing skills, runtime bindings, planners, and reviewers reference
-this file and do not restate its policy.
+These are the sole normative S0–S5 checks for dev-flow. Every check is decided from artifacts,
+not persuasion. Routing skills, runtime bindings, planners and reviewers reference this file and
+do not restate its policy.
+
+## S0 — Minimum-complete design admission
+
+1. **Minimum need first.** Before designing, record the smallest current user-visible need and its
+   usage envelope. Refuse requirements that are only hypothetical robustness without a current
+   observable.
+2. **Start from zero.** Generate the smallest complete end-to-end design that satisfies the need.
+   Do not preserve or layer historical mechanisms merely because they already exist.
+3. **Breadth before depth.** Deliver one usable tracer through the whole required path before
+   deepening any one Module. A feature-specific hardening branch is refused unless the usable
+   whole cannot be correct without it.
+4. **Edge triage.** Every admitted in-envelope requirement stays in the current Contract. When
+   such a case is uncommon, choose the simplest correct behavior—often a clear refusal/report—
+   rather than automation or a recovery protocol. Out-of-envelope cases receive simple safe
+   refusal/reporting that preserves current data and authority. Do not add a new Interface, state
+   store, recovery protocol or automation for an unobserved case.
+5. **Backlog, not scope expansion.** Only evidence-backed, non-blocking depth may leave the current
+   task. Candidate-backlog's hard gates are the sole authority for eligibility, required fields
+   and lifecycle; S0 does not restate them. Hypothetical guesses are neither implemented nor
+   backlogged.
+6. **Promotion requires evidence.** An edge returns from backlog only through explicit planning
+   after frequency, impact or a real resumed scenario makes it part of a current minimum need.
+
+S0 does not permit backlog laundering: current correctness, regression, security, data-loss,
+acceptance or review gaps and decision-required branches remain in the current task.
 
 ## S1 — Slice admission
 
 - **S1.1 Observable sentence.** Record one sentence: “the user does X at `<production entrypoint>`
   and sees Y.” If it cannot be written without naming internal objects, refuse the Slice. Name the
-  sentence's verifier, `user` or `agent`; Root decides which one applies and records the reason —
-  no threshold is fixed in advance.
+  verifier, `user` or `agent`; Root records why.
 - **S1.2 Named deletion.** Name at least one existing production `file:symbol` deleted by the
-  Slice. A first seam may say `deletes: none` once per task only, and must name the predecessor's
-  deleting Slice.
-- **S1.3 Size.** The estimated non-test production diff is **≤ 1500** lines; otherwise recut
-  before dispatch.
-- **S1.4 Independently landable.** The Slice is useful and testable without a later Slice; its
-  first accepted checkpoint is days, not weeks away. A Slice failing any check is refused and
-  recut before implementation.
+  Slice. A first seam may say `deletes: none` once per task and names the predecessor's deleting
+  Slice.
+- **S1.3 Size.** Estimated non-test production diff is at most 1500 lines; otherwise recut before
+  dispatch.
+- **S1.4 Independently landable.** The Slice is useful and testable without a later Slice and its
+  first accepted checkpoint is days, not weeks, away.
 
 ## S2 — Invariant admission
 
-- **S2.1 Observability.** Name the difference a user, or a client outside this module, observes
-  when the invariant is violated. If it can only be stated in terms of internal objects, it is
-  hardening: send it to `candidate-backlog` and do not put it in the Contract.
+- **S2.1 Observability.** Name the difference a user or client outside this Module observes when
+  the invariant is violated. An internal-only difference is hardening and is not Contract work.
 - **S2.2 Red evidence.** A focused test must be red without the device and red for that specific
-  missing behavior; record the red evidence. Timing, locking, retention, and replay devices need
-  a test that fails without the device.
-- **S2.3 Envelope.** The violating scenario must be inside the frozen spec's recorded usage envelope.
-  Anything outside it is hardening or a later spec decision, not a Contract invariant.
-- **S2.4 Lane-ready test review.** Before `integration collect`, Root binds the exact clean
-  lane-ready SHA and reads each reported Contract commit's test, fixture, and adapter diff plus its
-  red evidence before reading implementation. For timing, locking, retention, replay, security,
-  data-loss, and concurrency invariants, Root personally reruns the focused red command at the exact
-  pre-implementation Contract SHA in an isolated checkout. Routine test corrections may continue as
-  an independent amendment commit with a lane-ready summary; any semantic change to observable or
-  expected behavior, public Interface, usage envelope, or acceptance surface stops collection and
-  requires Root to re-admit the lane.
+  missing behavior. Record the command and observed reason.
+- **S2.3 Envelope.** The violating scenario must be inside the frozen usage envelope.
+- **S2.4 Lane-ready test review.** Before collect, Root binds the exact clean lane-ready SHA and
+  reads each Contract commit's test, fixture and adapter diff plus its red evidence before reading
+  implementation. For timing, locking, retention, replay, security, data-loss and concurrency
+  invariants, Root personally reruns the focused red command at the exact pre-implementation
+  Contract SHA in an isolated checkout. A test correction that preserves observable behavior,
+  public Interface, envelope and acceptance surface uses an independent amendment commit; a
+  semantic change requires lane re-admission.
 
 ## S3 — Machine rework admission
 
-- **S3.1** `machine_rework_cycles` for one Slice is **≤ 2**. Increment once when a batched
-  `simplify`, Standards review, or Spec review finding sends the candidate back to implementation;
-  never once per finding.
-- **S3.2** The third machine rework is a **scope event**, not an implementation event. Exactly three
-  actions are legal: shrink the Slice (return to S1), downgrade the remaining findings to backlog,
-  or report to the user. Opening another correction lane on the same Slice is not legal.
-- **S3.3 Coordination.** Root owns the current Slice's integer `machine_rework_cycles` in the task
-  narrative and routes each bounded delta from the current finding on its originating review axis;
-  Git commits carry no machine-rework provenance field. Initial simplify, backlog,
-  `blocked_on_decision`, and user acceptance do not increment `machine_rework_cycles`. A finding's
-  routing remains the same when the user later authorizes its fix.
+- Root keeps one monotonic `Machine rework: N/2` prose line in the active Slice ticket's Current
+  section before a simplify, Standards or Spec production correction. When the ticket closes,
+  copy the final line into Result before replacing Current.
+- Initial simplify, Contract-only correction, backlog, decision blocking, user-validation repair
+  and rollout correction do not increment it.
+- A proposed third production correction is a scope event. Recut at S1 or report it; never dispatch
+  `Machine rework: 3/2` and never add another counter store.
 
-Blocking is a **closed enum**: `spec_violation | data_loss | security |
-reproducible_behavior_failure` within the frozen envelope. Every blocker carries
-`contract_basis`; without one, classify it as backlog. A missing product or policy decision is
-`blocked_on_decision`, not `needs_fix`. A bounded delta is reviewed by **one reviewer on the
-originating axis**; do not reopen both axes for a local delta.
+Blocking is a closed enum: `spec_violation | data_loss | security |
+reproducible_behavior_failure` within the frozen envelope. Every blocker has `contract_basis`;
+without one it is backlog. A missing product or policy decision is `blocked_on_decision`. A bounded
+delta is reviewed by one reviewer on its originating axis.
 
-## S4 — Acceptance
+## S4 — Review and validation
 
-Every gate run follows one shared machine order, without skipping a step: **simplify → canonical
-tests → ReviewGate**. ReviewGate is integration-first. Its review bracket records pre and post
-status for the same path, branch, HEAD, and clean tree; no collect; no mutate is allowed inside
-the bracket, and any mismatch invalidates evidence. Any capability fallback, and the simplify
-self-correction boundary, are the ReviewGate and simplify interfaces' own policy — not restated
-here.
+The shared gate order is **simplify → canonical tests → ReviewGate**. Root first binds the exact
+integration path, branch, HEAD, tree, clean state and base…subject diff. Standards and Spec
+reviewers are read-only, report their axis and exact SHA, and never collect or mutate. Before
+candidate mutation Root rechecks the same binding; any mismatch requires fresh review. A bounded
+delta uses only its originating axis.
 
-- **S4.1 Gate trigger.** A gate run starts only when the integration tip carries a scenario that
-  needs verification and is not yet reflected on the already-gated candidate — a new `pending`
-  row, a repair's retest, or a row just marked `superseded` — and no gate run is already in
-  flight. A lane whose every scenario is `verifier: agent` never triggers a gate by itself.
-- **S4.2 Ready candidate.** `refs/orchestrate/<task>/candidate` names the exact gated SHA that has
-  passed the shared machine order; every other property is derived and never persisted: worktree
-  readiness is the acceptance worktree's HEAD equal to the ref, lag behind tip is
-  `git rev-list --count ref..integration`, and the candidate timeline is that ref's reflog. The
-  acceptance worktree is created once at task start; `candidate` only checks it out onto the gated
-  SHA — the candidate is never persistence-landed by this step. A dirty acceptance worktree
-  refuses the checkout, keeps the previous candidate ref unchanged, and reports the conflict
-  instead of overwriting it.
-- **S4.3 Queue and state.** Each deferred row carries one lifecycle field, `state`, not a
-  status/result pair: `pending` moves to `passed | failed | blocked` on user exercise; `failed`
-  moves back to `pending` when its repair lane collects; `passed` moves to `superseded` and then
-  back to `pending` when a later lane touches its entrypoint; `passed` moves to `accepted` only on
-  the user's confirmation of the repaired exact SHA. A `verifier: agent` row enters `passed`
-  directly at creation and never joins the user's queue; that judgment is Root's, with the reason
-  recorded, and no threshold is fixed in advance. The queue orders purely by dependency, oldest
-  row first within a layer: what a scenario depends on already sorts ahead of it, and that is
-  exactly the failure with the largest downstream cost, so priority needs no separate field.
-- **S4.4 Repair is a lane.** Every acceptance finding is fixed by an ordinary lane. It does not
-  consume `machine_rework_cycles` and runs the shared machine order once collected, same as any
-  other lane.
-- **S4.5 Session stop.** Ending an acceptance session needs no reason and no closed enum. A
-  partial drain — some rows tested, the rest left `pending` — is a normal end, not a failure
-  requiring justification.
+User validation is an ordinary generic ticket depending on delivered implementation. It remains
+open or blocked until explicit successful exercise, then closes with an exact evidence pointer.
+Failure keeps it unfinished and creates or references a repair ticket. Later invalidation creates a
+new ticket rather than reopening history. Agent-verifier work does not alone trigger a gate, but an
+ungated integration tip cannot move the candidate Git ref or land.
 
 ## S5 — Landing and close-out
 
-- **S5.1 Authority.** Landing is permitted only with current user authority.
-- **S5.2 Exact target.** The landing target is the exact SHA recorded as accepted.
-- **S5.3 Topology.** The target is an ancestor of the integration tip, and the last landed SHA
-  recorded on the persistence tip — or the persistence tip itself when it has landed nothing — is
-  an ancestor of the target.
-- **S5.4 Method.** Landing is a single squash commit that records the landed exact SHA, and the
-  resulting persistence tree is identical to the accepted SHA's tree. No cherry-pick, no rebase, no
-  reset, no merge commit. `integration land` enforces this: it refuses before mutating anything
-  unless a dry-run tree check first confirms the squash would reproduce the accepted tree exactly.
-- **S5.5 Append-only integration.** The task integration branch is append-only: never reset,
-  rebase, or force-update it. Rejected or stale work is repaired by a forward repair lane;
-  historical exact-SHA evidence remains valid unless marked stale.
-- **S5.6 Partial landing.** A requested partial landing never performs task cleanup. It leaves
-  the task integration worktree, the acceptance worktree, refs, and phase records open.
-- **S5.7 Final landing.** Final landing requires every item accepted, no stale or unresolved row,
-  and the target equal to the current clean integration tip. Then, and only then, archive task
-  phase records through planning-with-files and remove their active task directory, the task
-  integration worktree, the acceptance worktree, the integration branch, and
-  `refs/orchestrate/<task-id>`. Protect pre-existing user dirt and non-task evidence: inspect and
-  prove that they are unchanged before and after cleanup. Never delete, stash, reset, overwrite, or
-  include them in the task; include them in neither cleanup nor the landing target.
+- Landing requires current user authority and targets the exact reviewed candidate Git ref.
+- The target is an ancestor of integration and follows the last landed target. Landing is one
+  squash commit whose persistence tree exactly equals the target tree; never cherry-pick, rebase,
+  reset or merge-commit the target. Integration remains append-only.
+- A partial landing never cleans task state. Final landing requires the clean current integration
+  tip, every generic ticket closed with non-pending Result, green task-record `check` (or a
+  recognized confined legacy bridge), exact candidate/landing/topology/tree checks and any
+  task-specific rollout checklist closed.
+- Generic task-record `archive` is a neutral move and never implies completion. Each landing,
+  archive and cleanup mutation requires current user authority at its own gate. Protect and recheck
+  pre-existing dirt and non-task evidence. Never push.

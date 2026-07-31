@@ -70,9 +70,20 @@ User 主動觸發,表示把「當前交付的這份任務/專案」的實作裁�
 
 ## 決策日誌
 
-邊做邊記每個非顯而易見的決策(採用方案 / 考慮過的替代 / 取捨理由),供結案逐條報告用,
-避免事後憑記憶重建。預設寫在 `/tmp/dictator-<task>.md`(沙盒內、不會誤入 commit),或該
-repo 既有的 gitignored 工作目錄。
+邊做邊記每個非顯而易見的決策(採用方案 / 考慮過的替代 / 取捨理由 / 可逆性判定),供結案
+逐條報告用,避免事後憑記憶重建。「可逆性判定」那欄同時是 A/B 邊界的證據——凡是你判定
+「可逆、自己決定」的項目,結案時要能指回這裡讓 user 校正界線。
+
+落點取決於當前任務有沒有 durable task record:
+
+- **有**(例如 dev-flow 的 `.agent_state/plans/<task-id>/`):寫該 record 目錄下的
+  `dictator-log.md`。它會被 record 的 generated files block 自動投影,compaction 後
+  resume 的你才找得到。這是獨立產物,**不要**併進 producer-owned 的 `decisions.md`。
+- **沒有**:寫 `/tmp/dictator-<task>.md`(沙盒內、不會誤入 commit),或該 repo 既有的
+  gitignored 工作目錄。
+
+開始記之前讀一次 [decision-log 範本](references/decision-log.md):欄位形狀、什麼算
+「非顯而易見」、以及一份填好的完整範例。
 
 ## 結案逐條報告
 

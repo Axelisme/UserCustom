@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -11,18 +10,13 @@ from pathlib import Path
 
 try:
     from tests import _setup_support as support
+    from tests._orchestrate_version import SOURCE_SKILL_VERSION
 except ImportError:  # Direct test-file execution keeps tests/ on sys.path.
     import _setup_support as support
+    from _orchestrate_version import SOURCE_SKILL_VERSION
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SHIPPED_VERSION = int(
-    re.search(
-        r"^skill_version:\s*(\d+)$",
-        (ROOT / "home/.codex/skills/orchestrate/SKILL.md").read_text(encoding="utf-8"),
-        re.MULTILINE,
-    ).group(1)
-)
 
 
 class SetupCutoverContractTests(unittest.TestCase):
@@ -53,7 +47,7 @@ class SetupCutoverContractTests(unittest.TestCase):
 
                 manifest_path = (
                     source
-                    / f"home/.codex/skills/orchestrate/manifests/{SHIPPED_VERSION}.json"
+                    / f"home/.codex/skills/orchestrate/manifests/{SOURCE_SKILL_VERSION}.json"
                 )
                 self.assertTrue(manifest_path.is_file(), manifest_path)
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -216,10 +210,10 @@ class SetupConfigCurrentContractTests(unittest.TestCase):
             for layout in support.managed_skill_layouts():
                 skill = home / layout / "orchestrate"
                 source_skill = source / "home" / layout / "orchestrate"
-                manifest_path = skill / f"manifests/{SHIPPED_VERSION}.json"
+                manifest_path = skill / f"manifests/{SOURCE_SKILL_VERSION}.json"
                 self.assertTrue(manifest_path.is_file(), manifest_path)
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                self.assertEqual(manifest["skill_version"], SHIPPED_VERSION)
+                self.assertEqual(manifest["skill_version"], SOURCE_SKILL_VERSION)
                 self.assertTrue(os.path.samefile(skill, source_skill))
                 for document in manifest["documents"]:
                     self.assertTrue(

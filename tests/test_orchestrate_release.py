@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -10,19 +9,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests._orchestrate_version import SOURCE_SKILL_VERSION
+
 
 ROOT = Path(__file__).resolve().parents[1]
 HOME = ROOT / "home"
 CODEX_SKILL = HOME / ".codex" / "skills" / "orchestrate"
 PI_SKILL = HOME / ".pi" / "agent" / "skills" / "orchestrate"
 CODEX_SCRIPT = CODEX_SKILL / "scripts" / "orchestrate.py"
-VERSION_MATCH = re.search(
-    r"(?m)^skill_version: (\d+)$",
-    (CODEX_SKILL / "SKILL.md").read_text(encoding="utf-8"),
-)
-if VERSION_MATCH is None:
-    raise RuntimeError("orchestrate SKILL.md has no skill_version")
-SHIPPED_VERSION = int(VERSION_MATCH.group(1))
 
 
 def load_release_module():
@@ -56,8 +50,8 @@ class ReleasedPackageTests(unittest.TestCase):
     def test_every_runtime_builds_the_same_manifest(self) -> None:
         release = load_release_module()
         self.assertEqual(
-            release.build_manifest(CODEX_SKILL, SHIPPED_VERSION),
-            release.build_manifest(PI_SKILL, SHIPPED_VERSION),
+            release.build_manifest(CODEX_SKILL, SOURCE_SKILL_VERSION),
+            release.build_manifest(PI_SKILL, SOURCE_SKILL_VERSION),
         )
 
 
@@ -74,7 +68,7 @@ class RuntimeParityTests(unittest.TestCase):
 
     def test_manifest_inventory_covers_every_runtime_profile_without_runtime_assets(self) -> None:
         for skill in (CODEX_SKILL, PI_SKILL):
-            manifest = self.release.build_manifest(skill, SHIPPED_VERSION)
+            manifest = self.release.build_manifest(skill, SOURCE_SKILL_VERSION)
             self.assertTrue(
                 {"runtime-codex.md", "runtime-claude.md", "runtime-pi.md"}
                 <= set(manifest["documents"])

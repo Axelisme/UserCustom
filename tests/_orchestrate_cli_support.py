@@ -12,18 +12,13 @@ import unittest
 from pathlib import Path
 from typing import Any
 
+from tests._orchestrate_version import SOURCE_SKILL_VERSION
+
 ROOT = Path(__file__).resolve().parents[1]
 _PACKAGE = tempfile.TemporaryDirectory(prefix="orchestrate-cli-tests-")
 TEST_HOME = Path(_PACKAGE.name) / "home"
 shutil.copytree(ROOT / "home", TEST_HOME)
 VERIFIED_SKILL = TEST_HOME / ".codex" / "skills" / "orchestrate"
-SOURCE_SKILL_VERSION = int(
-    re.search(
-        r"^skill_version:\s*(\d+)$",
-        (ROOT / "home/.codex/skills/orchestrate/SKILL.md").read_text(encoding="utf-8"),
-        re.MULTILINE,
-    ).group(1)
-)
 SCRIPT = VERIFIED_SKILL / "scripts" / "orchestrate.py"
 
 sys.path.insert(0, str(VERIFIED_SKILL / "scripts"))

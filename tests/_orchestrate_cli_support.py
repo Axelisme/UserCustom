@@ -82,10 +82,10 @@ def json_object(raw: str) -> dict[str, Any]:
 class OrchestrateCliRepositoryTestCase(unittest.TestCase):
     """Small public-seam fixture backed by one throwaway real repository."""
 
-    orchestrate_version = 138
+    orchestrate_version = 139
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory(prefix="orchestrate-v138-")
+        self.temporary = tempfile.TemporaryDirectory(prefix="orchestrate-v139-")
         self.root = Path(self.temporary.name)
         run_git(self.root, "init", "-q", "-b", "main")
         run_git(self.root, "config", "user.name", "Contract Test")

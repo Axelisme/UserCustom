@@ -44,9 +44,9 @@ class SetupCutoverContractTests(unittest.TestCase):
                 plan.chmod(0o755)
 
                 manifest_path = source / (
-                    "home/.codex/skills/orchestrate/manifests/138.json"
+                    "home/.codex/skills/orchestrate/manifests/139.json"
                     if logical_layout == "codex"
-                    else "home/.pi/agent/skills/orchestrate/manifests/138.json"
+                    else "home/.pi/agent/skills/orchestrate/manifests/139.json"
                 )
                 self.assertTrue(manifest_path.is_file(), manifest_path)
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -61,7 +61,7 @@ class SetupCutoverContractTests(unittest.TestCase):
 
                 self.assertNotEqual(result.returncode, 0, result.stdout)
                 self.assertIn(
-                    f"{logical_layout} v138 release verification failed",
+                    f"{logical_layout} v139 release verification failed",
                     result.stderr.lower(),
                 )
                 self.assertIn(
@@ -209,10 +209,10 @@ class SetupConfigCurrentContractTests(unittest.TestCase):
             for layout in support.managed_skill_layouts():
                 skill = home / layout / "orchestrate"
                 source_skill = source / "home" / layout / "orchestrate"
-                manifest_path = skill / "manifests/138.json"
+                manifest_path = skill / "manifests/139.json"
                 self.assertTrue(manifest_path.is_file(), manifest_path)
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                self.assertEqual(manifest["skill_version"], 138)
+                self.assertEqual(manifest["skill_version"], 139)
                 self.assertTrue(os.path.samefile(skill, source_skill))
                 for document in manifest["documents"]:
                     self.assertTrue(

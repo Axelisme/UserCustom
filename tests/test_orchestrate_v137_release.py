@@ -170,7 +170,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             {
                 "ok": True,
                 "operation": "pin-status",
-                "orchestrate_version": 138,
+                "orchestrate_version": 139,
                 "current": self.current(),
                 "aligned": False,
             },
@@ -208,7 +208,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             {
                 "ok": True,
                 "operation": "pin-status",
-                "orchestrate_version": 138,
+                "orchestrate_version": 139,
                 "current": self.current(),
                 "pinned": self.current(),
                 "aligned": True,
@@ -261,7 +261,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             },
         )
         self.assertEqual(unaligned["operation"], "doctor")
-        self.assertEqual(unaligned["orchestrate_version"], 138)
+        self.assertEqual(unaligned["orchestrate_version"], 139)
         self.assertEqual(unaligned["package"], expected_package)
         self.assertEqual(
             unaligned["repository"],
@@ -329,7 +329,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         )
         self.assertEqual(payload["ok"], False)
         self.assertEqual(payload["operation"], "doctor")
-        self.assertEqual(payload["orchestrate_version"], 138)
+        self.assertEqual(payload["orchestrate_version"], 139)
         self.assertEqual(payload["package"], self.package_projection())
         self.assertEqual(
             payload["repository"],
@@ -373,7 +373,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             },
         )
         self.assertEqual(result["operation"], "doctor-diff")
-        self.assertEqual(result["orchestrate_version"], 138)
+        self.assertEqual(result["orchestrate_version"], 139)
         self.assertEqual((result["from"], result["to"]), (old, new))
         self.assertEqual(result["compat"], [old, new])
         document_paths = [item["path"] for item in result["changed_documents"]]
@@ -629,7 +629,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                 payload = json_object(result.stderr)
                 self.assertEqual(payload["ok"], False)
                 self.assertEqual(payload["operation"], "release")
-                self.assertEqual(payload["orchestrate_version"], 138)
+                self.assertEqual(payload["orchestrate_version"], 139)
                 self.assertEqual(set(payload["error"]), {"code", "message"})
                 self.assertIsInstance(payload["error"]["code"], str)
                 self.assertTrue(payload["error"]["code"])
@@ -678,7 +678,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                     payload = json_object(doctor.stdout)
                     self.assertEqual(payload["ok"], False)
                     self.assertEqual(payload["operation"], "doctor")
-                    self.assertEqual(payload["orchestrate_version"], 138)
+                    self.assertEqual(payload["orchestrate_version"], 139)
                     self.assertIsInstance(payload.get("diagnostics"), list)
                     self.assertTrue(payload["diagnostics"])
                     for diagnostic in payload["diagnostics"]:
@@ -731,7 +731,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                     payload = json_object(doctor.stdout)
                     self.assertEqual(payload["ok"], False)
                     self.assertEqual(payload["operation"], "doctor")
-                    self.assertEqual(payload["orchestrate_version"], 138)
+                    self.assertEqual(payload["orchestrate_version"], 139)
                     self.assertIsInstance(payload.get("diagnostics"), list)
                     self.assertTrue(payload["diagnostics"])
                     for diagnostic in payload["diagnostics"]:
@@ -1096,15 +1096,15 @@ class SourcePublicationContractTests(unittest.TestCase):
         ):
             self.assertIn(phrase, guide_text)
 
-    def test_09_v138_manifests_are_matched_regenerable_and_doctor_valid(
+    def test_09_v139_manifests_are_matched_regenerable_and_doctor_valid(
         self,
     ) -> None:
         self.assertEqual(
             release.skill_version(CODEX_SKILL),
-            138,
-            "source package still identifies a pre-v138 release",
+            139,
+            "source package still identifies a pre-v139 release",
         )
-        paths = [skill / "manifests/138.json" for skill in (CODEX_SKILL, PI_SKILL)]
+        paths = [skill / "manifests/139.json" for skill in (CODEX_SKILL, PI_SKILL)]
         for path in paths:
             self.assertTrue(path.is_file(), path)
         self.assertEqual(paths[0].read_bytes(), paths[1].read_bytes())
@@ -1113,11 +1113,11 @@ class SourcePublicationContractTests(unittest.TestCase):
         previous = json.loads(
             (CODEX_SKILL / "manifests/137.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(current["skill_version"], 138)
-        self.assertEqual(current["orchestrate_compat"], 138)
+        self.assertEqual(current["skill_version"], 139)
+        self.assertEqual(current["orchestrate_compat"], 139)
         self.assertEqual(
             (len(current["documents"]), len(current["profiles"])),
-            (22, 31),
+            (23, 31),
         )
         self.assertNotIn("runtime_assets", current)
         self.assertEqual(set(current["profiles"]), set(previous["profiles"]))
@@ -1134,11 +1134,11 @@ class SourcePublicationContractTests(unittest.TestCase):
             [".pi/agent/extensions/orchestrate-pi.ts"],
         )
 
-        with tempfile.TemporaryDirectory(prefix="orchestrate-v138-regenerate-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="orchestrate-v139-regenerate-") as temporary:
             generated = []
             for index, skill in enumerate((CODEX_SKILL, PI_SKILL)):
                 output = Path(temporary) / f"logical-{index}.json"
-                release.write_release_manifest(skill, 138, 137, output)
+                release.write_release_manifest(skill, 139, 138, output)
                 generated.append(output.read_bytes())
             self.assertEqual(generated, [paths[0].read_bytes()] * 2)
 
@@ -1220,15 +1220,15 @@ class SourcePublicationContractTests(unittest.TestCase):
             claude.replace("Claude", "RUNTIME"), codex.replace("Codex", "RUNTIME")
         )
 
-    def test_11_setup_is_v138_replacement_first_and_idempotent(self) -> None:
+    def test_11_setup_is_v139_replacement_first_and_idempotent(self) -> None:
         setup_text = setup_support.SETUP_SCRIPT.read_text(encoding="utf-8")
         self.assertTrue(
-            "Codex v138 release verification failed" in setup_text,
-            "setup still reports a pre-v138 Codex identity",
+            "Codex v139 release verification failed" in setup_text,
+            "setup still reports a pre-v139 Codex identity",
         )
         self.assertTrue(
-            "Pi v138 release verification failed" in setup_text,
-            "setup still reports a pre-v138 Pi identity",
+            "Pi v139 release verification failed" in setup_text,
+            "setup still reports a pre-v139 Pi identity",
         )
         self.assertLess(
             setup_text.rindex("\nverify_installed_orchestrate_releases"),
@@ -1272,9 +1272,9 @@ class SourcePublicationContractTests(unittest.TestCase):
                 source, home = setup_support.seed_source(base)
                 retired = setup_support.seed_managed_retired_links(source, home)
                 manifest = source / (
-                    "home/.codex/skills/orchestrate/manifests/138.json"
+                    "home/.codex/skills/orchestrate/manifests/139.json"
                     if logical == "codex"
-                    else "home/.pi/agent/skills/orchestrate/manifests/138.json"
+                    else "home/.pi/agent/skills/orchestrate/manifests/139.json"
                 )
                 self.assertTrue(manifest.is_file(), manifest)
                 payload = json.loads(manifest.read_text(encoding="utf-8"))
@@ -1284,7 +1284,7 @@ class SourcePublicationContractTests(unittest.TestCase):
                 result = setup_support.run_setup(source, home)
 
                 self.assertNotEqual(result.returncode, 0, result.stdout)
-                self.assertIn(f"{logical} v138 release verification failed", result.stderr.lower())
+                self.assertIn(f"{logical} v139 release verification failed", result.stderr.lower())
                 for path in retired:
                     self.assertTrue(path.is_symlink(), path)
 
@@ -1350,7 +1350,7 @@ class SourcePublicationContractTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 payload = json_object(result.stdout)
                 self.assertTrue(payload["ok"])
-                self.assertEqual(payload["orchestrate_version"], 138)
+                self.assertEqual(payload["orchestrate_version"], 139)
                 return payload
 
             git("init", "-q", "-b", "main")

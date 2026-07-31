@@ -39,9 +39,9 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         return (
             self.root
             / ".agent_state"
-            / "orchestrate"
-            / "telemetry"
-            / f"{task_id or self.task_id}.jsonl"
+            / "worktrees"
+            / (task_id or self.task_id)
+            / "telemetry.jsonl"
         )
 
     def integration_branch(self, task_id: str | None = None) -> str:
@@ -156,7 +156,7 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         )
         self.assertIs(payload["ok"], False)
         self.assertEqual(payload["operation"], "lane-check")
-        self.assertEqual(payload["orchestrate_version"], 138)
+        self.assertEqual(payload["orchestrate_version"], 139)
         self.assertEqual(set(payload["error"]), {"code", "message"})
         self.assertEqual(payload["error"]["code"], "lane_not_ready")
         self.assertIsInstance(payload["error"]["message"], str)
@@ -198,7 +198,7 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         snapshot["filesystem"] = [
             item
             for item in filesystem
-            if not item[0].startswith("orchestrate/telemetry/")
+            if not item[0].endswith("/telemetry.jsonl")
         ]
         return snapshot
 
@@ -945,7 +945,7 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         payload = json_object(result.stdout)
         self.assertIs(payload["ok"], True)
         self.assertEqual(payload["operation"], "lane-drop")
-        self.assertEqual(payload["orchestrate_version"], 138)
+        self.assertEqual(payload["orchestrate_version"], 139)
 
         self.assertTrue(unrelated.is_dir())
         self.assertEqual(

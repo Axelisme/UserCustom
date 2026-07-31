@@ -93,7 +93,7 @@ class TaskResources:
 
     @property
     def telemetry_path(self) -> Path:
-        return self.repo.control_root / ".agent_state" / "orchestrate" / "telemetry" / f"{self.task_id}.jsonl"
+        return self.root / "telemetry.jsonl"
 
     def lane(self, lane_id: str) -> LaneResources:
         lane = require_identifier(lane_id, label="lane id")
@@ -144,7 +144,6 @@ class TaskResources:
             or refs
             or branches
             or os.path.lexists(self.root)
-            or os.path.lexists(self.telemetry_path)
         )
 
 

@@ -144,9 +144,9 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
         path = (
             self.root
             / ".agent_state"
-            / "orchestrate"
-            / "telemetry"
-            / f"{task_id}.jsonl"
+            / "worktrees"
+            / task_id
+            / "telemetry.jsonl"
         )
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
@@ -158,7 +158,7 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
         snapshot["filesystem"] = [
             item
             for item in filesystem
-            if not item[0].startswith("orchestrate/telemetry/")
+            if not item[0].endswith("/telemetry.jsonl")
         ]
         snapshot["exact_refs"] = self.git(
             self.root,

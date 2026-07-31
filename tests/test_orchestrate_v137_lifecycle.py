@@ -29,9 +29,9 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
         return (
             self.root
             / ".agent_state"
-            / "orchestrate"
-            / "telemetry"
-            / f"{task_id}.jsonl"
+            / "worktrees"
+            / task_id
+            / "telemetry.jsonl"
         )
 
     def integration_ref(self, task_id: str) -> str:

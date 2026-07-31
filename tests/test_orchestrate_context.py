@@ -12,7 +12,7 @@ from tests._orchestrate_cli_support import (
 
 
 class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
-    """T001 Contract through the shipped v137 subprocess seam."""
+    """T001 Contract through the shipped subprocess seam."""
 
     task_id = "closeable-tracer"
     lane_id = "clean-lane"
@@ -91,7 +91,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
         self.assertNotIn(str(self.acceptance_path), worktrees)
         self.assertNotIn(str(self.lane_path), worktrees)
 
-    def test_help_exposes_only_the_exact_v137_grammar(self) -> None:
+    def test_help_exposes_only_the_exact_grammar(self) -> None:
         help_texts = [
             self.assert_help_surface(
                 (),
@@ -419,7 +419,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                     "task_state_invalid",
                 )
 
-    def test_nested_cwd_status_and_create_use_exact_compact_v137_contract(self) -> None:
+    def test_nested_cwd_status_and_create_use_the_exact_compact_contract(self) -> None:
         self.assertEqual(
             self.success(self.cli(self.nested, "status")),
             {

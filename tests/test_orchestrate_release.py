@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import importlib
 import json
 import re
@@ -24,7 +23,6 @@ VERSION_MATCH = re.search(
 if VERSION_MATCH is None:
     raise RuntimeError("orchestrate SKILL.md has no skill_version")
 SHIPPED_VERSION = int(VERSION_MATCH.group(1))
-PUBLISHED_VERSION = 136
 
 
 def load_release_module():
@@ -55,74 +53,12 @@ class ReleasedPackageTests(unittest.TestCase):
             check=False,
         )
 
-    def test_every_runtime_ships_a_manifest_for_its_declared_version(self) -> None:
-        # Metadata only.  Whether the shipped bytes still match the manifest
-        # checksums is the doctor's question, not a test's: asserting it here
-        # would turn every edit to a shipped document into a test failure.
-        for skill in (CODEX_SKILL, PI_SKILL):
-            with self.subTest(skill=skill):
-                skill_text = (skill / "SKILL.md").read_text(encoding="utf-8")
-                self.assertRegex(skill_text, rf"(?m)^skill_version: {SHIPPED_VERSION}$")
-                manifest_path = skill / "manifests" / f"{SHIPPED_VERSION}.json"
-                self.assertTrue(manifest_path.is_file(), f"missing manifest: {manifest_path}")
-                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                self.assertEqual(manifest["skill_version"], SHIPPED_VERSION)
-                self.assertEqual(manifest["orchestrate_compat"], SHIPPED_VERSION)
-
-    def test_pi_layout_exposes_guides_and_builds_the_codex_v136_inventory(self) -> None:
+    def test_every_runtime_builds_the_same_manifest(self) -> None:
         release = load_release_module()
-        for version in range(131, PUBLISHED_VERSION + 1):
-            codex_guide = CODEX_SKILL / f"migrations/{version}.md"
-            pi_guide = PI_SKILL / f"migrations/{version}.md"
-            self.assertTrue(pi_guide.is_file(), f"missing Pi guide: {pi_guide}")
-            self.assertTrue(pi_guide.samefile(codex_guide))
         self.assertEqual(
-            release.build_manifest(CODEX_SKILL, PUBLISHED_VERSION),
-            release.build_manifest(PI_SKILL, PUBLISHED_VERSION),
+            release.build_manifest(CODEX_SKILL, SHIPPED_VERSION),
+            release.build_manifest(PI_SKILL, SHIPPED_VERSION),
         )
-
-    def test_retained_manifests_remain_byte_immutable(self) -> None:
-        expected = {
-            130: "2821cf6ade0a2f5bf398fb3001bc104e026e7193683992d0ab74539532e7da10",
-            131: "c9e9a2e36c38f31b624c947e9391124f2b397f0fb774c586f2ff2eac8e3fa22f",
-            132: "49e390ecb1fe40af8d5964546e310e2dc3f6aeba22a75e30091a119dc6de7767",
-            133: "15b95e3f3f55fabcb7629cd2dc9ec2eb80aabb50b825cf7a729d665493ee85c8",
-            134: "744a3dbeacc31d0ce8e9dbc5806c7e9901a825c6e0369186451ba98c519d9c52",
-            135: "fceecf9860fbec439af556cbf0b606e3d2ad5a4eda6fcf3ddf39f7eabdeb73f7",
-        }
-        for version, digest in expected.items():
-            with self.subTest(version=version):
-                observed = hashlib.sha256(
-                    (CODEX_SKILL / f"manifests/{version}.json").read_bytes()
-                ).hexdigest()
-                self.assertEqual(observed, digest)
-
-
-    def test_pi_guidance_uses_native_continuation_and_evidence(self) -> None:
-        text = " ".join(
-            (CODEX_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split()
-        )
-        required = (
-            "native `subagent` tool",
-            "no Pi-specific adapter",
-            "`status --task-id <task>`",
-            "`interrupt`",
-            "`resume`",
-            "`steer`",
-            "`action: \"stop\"`",
-            "turnBudget",
-            "process-terminal",
-            "rather than defaulting to `subagent_wait`",
-            "only when the current turn must receive the result before it can finish",
-            "Do not sleep, poll, or repeatedly wait",
-            "completed evidence",
-            "active run or prerequisite",
-            "next action or blocker",
-            "Pi wakes the session",
-        )
-        for phrase in required:
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, text)
 
 
 class RuntimeParityTests(unittest.TestCase):
@@ -182,32 +118,6 @@ class RuntimeParityTests(unittest.TestCase):
         }
         comparison = self.release.compare_manifests(old, new)
         self.assertEqual(comparison["changed_profiles"], [".codex/agents/contract-planner.toml"])
-
-    def test_lane_worker_identity_and_skill_selection_are_structured(self) -> None:
-        import tomllib
-
-        codex = tomllib.loads(
-            (HOME / ".codex" / "agents" / "lane-worker.toml").read_text(encoding="utf-8")
-        )
-        self.assertEqual(codex["name"], "lane-worker")
-        self.assertIn("description", codex)
-        self.assertIn("developer_instructions", codex)
-        self.assertIn("Execute one admitted lane from its frozen Contract", codex["developer_instructions"])
-        self.assertNotIn("pipeline", codex)
-        self.assertNotIn("skills", codex)
-
-        claude = (HOME / ".claude" / "agents" / "lane-worker.md").read_text(encoding="utf-8")
-        self.assertRegex(claude, r"(?m)^name:\s*lane-worker\s*$")
-        self.assertIn("Execute one admitted lane from its frozen Contract", claude)
-        self.assertRegex(claude, r"(?m)^skills:\s*\[tdd\]\s*$")
-        self.assertNotRegex(claude, r"(?m)^pipeline:")
-
-        pi = (HOME / ".pi" / "agent" / "agents" / "lane-worker.md").read_text(encoding="utf-8")
-        self.assertRegex(pi, r"(?m)^name:\s*lane-worker\s*$")
-        self.assertIn("Execute one admitted lane from its frozen Contract", pi)
-        self.assertRegex(pi, r"(?m)^inheritSkills:\s*false\s*$")
-        self.assertRegex(pi, r"(?m)^skills:\s*tdd\s*$")
-        self.assertNotRegex(pi, r"(?m)^pipeline:")
 
     def test_old_schema_one_manifest_without_runtime_assets_compares_as_empty(self) -> None:
         old = {

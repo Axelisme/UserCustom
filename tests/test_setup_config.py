@@ -205,7 +205,7 @@ class SetupCutoverContractTests(unittest.TestCase):
 
 
 class SetupConfigCurrentContractTests(unittest.TestCase):
-    def test_isolated_home_installs_the_exact_v138_release_inventory(self) -> None:
+    def test_isolated_home_installs_the_exact_release_inventory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             source, home = support.seed_source(base)

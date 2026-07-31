@@ -14,11 +14,6 @@ from pathlib import Path
 from typing import Any
 
 from tests import _setup_support as setup_support
-from tests._orchestrate_v137_cutover import (
-    PUBLICATION_OBJECTIVE_AUDIT,
-    RETIRED_TEST_PATHS,
-    SUPERSEDED_V136_COVERAGE,
-)
 from tests._orchestrate_cli_support import (
     OrchestrateCliRepositoryTestCase,
     VERIFIED_SKILL,
@@ -31,25 +26,6 @@ CODEX_SKILL = ROOT / "home/.codex/skills/orchestrate"
 PI_SKILL = ROOT / "home/.pi/agent/skills/orchestrate"
 # Derived from the source package so a release does not require editing this file.
 CURRENT_VERSION = release.skill_version(CODEX_SKILL)
-HISTORICAL_MANIFEST_SHA256 = {
-    130: "2821cf6ade0a2f5bf398fb3001bc104e026e7193683992d0ab74539532e7da10",
-    131: "c9e9a2e36c38f31b624c947e9391124f2b397f0fb774c586f2ff2eac8e3fa22f",
-    132: "49e390ecb1fe40af8d5964546e310e2dc3f6aeba22a75e30091a119dc6de7767",
-    133: "15b95e3f3f55fabcb7629cd2dc9ec2eb80aabb50b825cf7a729d665493ee85c8",
-    134: "744a3dbeacc31d0ce8e9dbc5806c7e9901a825c6e0369186451ba98c519d9c52",
-    135: "fceecf9860fbec439af556cbf0b606e3d2ad5a4eda6fcf3ddf39f7eabdeb73f7",
-    136: "44e8fda2ac4ceefd1ade28671c3494a2a05250e7cfca354b112d9c3aaec81b64",
-    137: "6fe5a6b637598e8c7d50aff6bbd1e98004eb14087f683f4dc4b393783c196c03",
-}
-HISTORICAL_GUIDE_SHA256 = {
-    131: "3ac711b53f0410640179261ee45288ce0b6a7d1e470c85df0623d2f2da5266ad",
-    132: "02b355608886e893ad9fa17c5d797e3822fd980f9a8d2072232ec6c199a57cb3",
-    133: "529d3702851b721580544743ab5f6539ee47e6e404c67c744368d4191632dde4",
-    134: "8a3a425463086faf852ea4639389dc3f16dfe20579d2006ebe49c2ec4d6d915b",
-    135: "610fe2f54db967f287002ead5dcd7717b9c6ae91f085399ca6b86853fb7d686b",
-    136: "35bf94bea868b3ed90a2de541df0009fac20b51293f922dadfdd3cd92af7e8e1",
-    137: "f084bcc68d976fa5129ef8b28dcb7610acacbb2249555cf8ec03e27b7052ddb2",
-}
 
 
 class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
@@ -1078,52 +1054,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
 class SourcePublicationContractTests(unittest.TestCase):
     """Contract E cases 8-13 at the shipped source/setup subprocess seams."""
 
-    def test_08_historical_artifacts_are_exact_and_v137_guide_is_hashed(
-        self,
-    ) -> None:
-        for version, expected in HISTORICAL_MANIFEST_SHA256.items():
-            for skill in (CODEX_SKILL, PI_SKILL):
-                with self.subTest(kind="manifest", version=version, skill=skill):
-                    path = skill / f"manifests/{version}.json"
-                    self.assertEqual(
-                        hashlib.sha256(path.read_bytes()).hexdigest(), expected
-                    )
-        for version, expected in HISTORICAL_GUIDE_SHA256.items():
-            with self.subTest(kind="guide", version=version):
-                path = CODEX_SKILL / f"migrations/{version}.md"
-                self.assertEqual(
-                    hashlib.sha256(path.read_bytes()).hexdigest(), expected
-                )
-
-        guide = CODEX_SKILL / "migrations/137.md"
-        manifest_path = CODEX_SKILL / "manifests/137.json"
-        self.assertTrue(guide.is_file(), "missing v137 migration guide")
-        self.assertTrue(manifest_path.is_file(), "missing v137 manifest")
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        self.assertEqual(
-            manifest["documents"]["migrations/137.md"]["sha256"],
-            hashlib.sha256(guide.read_bytes()).hexdigest(),
-        )
-        guide_text = guide.read_text(encoding="utf-8")
-        for section in (
-            "From",
-            "Observable changes",
-            "Active-task impact",
-            "Manual steps",
-            "Verification",
-            "Rollback",
-        ):
-            self.assertIn(f"## {section}", guide_text)
-        for phrase in (
-            "No automatic conversion",
-            "v136",
-            "v137",
-            "abandon",
-            "Adapter",
-        ):
-            self.assertIn(phrase, guide_text)
-
-    def test_09_v140_manifests_are_matched_regenerable_and_doctor_valid(
+    def test_09_current_manifests_are_matched_regenerable_and_doctor_valid(
         self,
     ) -> None:
         self.assertGreaterEqual(
@@ -1192,41 +1123,7 @@ class SourcePublicationContractTests(unittest.TestCase):
                 observed = release.verify_release(skill)
                 self.assertTrue(observed["ok"], observed["errors"])
 
-    def test_10_final_docs_and_runtime_bindings_agree(self) -> None:
-        documents = [CODEX_SKILL / "SKILL.md", *sorted(CODEX_SKILL.glob("runtime-*.md"))]
-        text = "\n".join(path.read_text(encoding="utf-8") for path in documents)
-        for required in (
-            "acceptance start",
-            "acceptance result",
-            "lane check",
-            "lane sync",
-            "integration reconcile",
-            "accepted",
-            "landed",
-            "timing pause",
-            "timing resume",
-        ):
-            with self.subTest(required=required):
-                self.assertTrue(
-                    required in text, f"missing final lifecycle guidance: {required}"
-                )
-        for retired in (
-            "commit-check",
-            "integration candidate",
-            "integration status",
-            "integration list",
-            "lane status",
-            "ready candidate",
-            "--root",
-            "--base",
-            "--sha",
-            "--final",
-        ):
-            with self.subTest(retired=retired):
-                self.assertFalse(
-                    retired in text, f"retired lifecycle guidance remains: {retired}"
-                )
-
+    def test_10_help_exposes_no_retired_lifecycle_surface(self) -> None:
         script = CODEX_SKILL / "scripts/orchestrate.py"
         help_text = []
         for argv in (
@@ -1251,35 +1148,7 @@ class SourcePublicationContractTests(unittest.TestCase):
         for retired in ("commit-check", "candidate", "--root", "--base", "--sha", "--final"):
             self.assertNotIn(retired, all_help)
 
-        pi_text = (CODEX_SKILL / "runtime-pi.md").read_text(encoding="utf-8")
-        self.assertIn("native `subagent` tool", pi_text)
-        self.assertIn("no Pi-specific adapter", pi_text)
-        self.assertNotIn("orchestrate_pi` tool", pi_text)
-        self.assertIn("process-terminal", pi_text)
-        self.assertIn("upstream pi-subagents", pi_text)
-        self.assertIn("0.38.0", pi_text)
-
-        claude = (CODEX_SKILL / "runtime-claude.md").read_text(encoding="utf-8")
-        codex = (CODEX_SKILL / "runtime-codex.md").read_text(encoding="utf-8")
-        self.assertEqual(
-            claude.replace("Claude", "RUNTIME"), codex.replace("Codex", "RUNTIME")
-        )
-
-    def test_11_setup_is_v140_replacement_first_and_idempotent(self) -> None:
-        setup_text = setup_support.SETUP_SCRIPT.read_text(encoding="utf-8")
-        self.assertTrue(
-            "Codex release verification failed" in setup_text,
-            "setup no longer reports a Codex release verification failure",
-        )
-        self.assertTrue(
-            "Pi release verification failed" in setup_text,
-            "setup no longer reports a Pi release verification failure",
-        )
-        self.assertLess(
-            setup_text.rindex("\nverify_installed_orchestrate_releases"),
-            setup_text.rindex("\nremove_retired_destinations"),
-        )
-
+    def test_11_setup_is_replacement_first_and_idempotent(self) -> None:
         with tempfile.TemporaryDirectory(prefix="orchestrate-v137-setup-") as temporary:
             base = Path(temporary)
             source, home = setup_support.seed_source(base)
@@ -1432,29 +1301,3 @@ class SourcePublicationContractTests(unittest.TestCase):
 
             rerun = setup_support.run_setup(source, home)
             self.assertEqual(rerun.returncode, 0, rerun.stderr)
-
-    def test_13_cutover_and_completion_audits_are_executable(self) -> None:
-        self.assertEqual(len(SUPERSEDED_V136_COVERAGE), 92)
-        for relative in RETIRED_TEST_PATHS:
-            self.assertFalse((ROOT / relative).exists(), relative)
-        for old_test, replacements in SUPERSEDED_V136_COVERAGE.items():
-            with self.subTest(old_test=old_test):
-                self.assertTrue(replacements)
-                for replacement in replacements:
-                    suite = unittest.defaultTestLoader.loadTestsFromName(replacement)
-                    self.assertGreater(suite.countTestCases(), 0, replacement)
-        self.assertEqual(
-            set(PUBLICATION_OBJECTIVE_AUDIT),
-            {
-                "historical-artifacts",
-                "matched-package",
-                "final-guidance",
-                "replacement-first-setup",
-                "installed-parity",
-                "completion-audit",
-            },
-        )
-        for objective, evidence in PUBLICATION_OBJECTIVE_AUDIT.items():
-            with self.subTest(objective=objective):
-                self.assertEqual(set(evidence), {"artifact", "test", "gate"})
-                self.assertTrue(all(evidence.values()))

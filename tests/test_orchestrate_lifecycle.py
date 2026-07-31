@@ -1197,4 +1197,4 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
 
 
 if __name__ == "__main__":
-    raise SystemExit("Run with: python3 -m unittest tests.test_orchestrate_v137_lifecycle")
+    raise SystemExit("Run with: python3 -m unittest tests.test_orchestrate_lifecycle")

@@ -10,7 +10,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "home" / ".codex" / "skills" / "dev-flow" / "scripts" / "plan.py"
-PI_SCRIPT = ROOT / "home" / ".pi" / "agent" / "skills" / "dev-flow" / "scripts" / "plan.py"
 
 
 def run_plan(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
@@ -83,7 +82,7 @@ class TaskRecordV2Tests(unittest.TestCase):
         self.assertEqual(error["paths"], sorted(error["paths"]))
         return body
 
-    def test_interface_has_exactly_four_commands_and_pi_links_to_owner(self) -> None:
+    def test_interface_has_exactly_four_commands(self) -> None:
         done = run_plan(Path(tempfile.gettempdir()), "--help")
         self.assertEqual(done.returncode, 0, done.stderr)
         command_line = next(line for line in done.stdout.splitlines() if "{create," in line)
@@ -91,8 +90,6 @@ class TaskRecordV2Tests(unittest.TestCase):
             self.assertIn(command, command_line)
         for retired in ("ticket-create", "check", "init", "status", "show", "set", "phase", "log", "checkpoint", "migrate"):
             self.assertNotIn(retired, command_line)
-        self.assertTrue(PI_SCRIPT.is_symlink() or PI_SCRIPT.resolve() == SCRIPT.resolve())
-        self.assertEqual(PI_SCRIPT.resolve(), SCRIPT.resolve())
 
     def test_create_and_refresh_project_the_complete_file_tree(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

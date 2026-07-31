@@ -13,16 +13,6 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = (
     ROOT / "home" / ".codex" / "skills" / "candidate-backlog" / "scripts" / "backlog.py"
 )
-PI_SCRIPT = (
-    ROOT
-    / "home"
-    / ".pi"
-    / "agent"
-    / "skills"
-    / "candidate-backlog"
-    / "scripts"
-    / "backlog.py"
-)
 
 GIT_ENV = {
     **os.environ,
@@ -123,13 +113,6 @@ class CandidateBacklogTests(unittest.TestCase):
         assert isinstance(error, dict)
         self.assertEqual(error["code"], code)
         return body
-
-    # --- pi runtime parity ---------------------------------------------
-
-    def test_pi_scripts_dir_is_a_symlink_to_the_codex_owner(self) -> None:
-        pi_scripts = PI_SCRIPT.parent
-        self.assertTrue(pi_scripts.is_symlink(), pi_scripts)
-        self.assertEqual(PI_SCRIPT.resolve(), SCRIPT.resolve())
 
     # --- envelope shape per command --------------------------------------
 

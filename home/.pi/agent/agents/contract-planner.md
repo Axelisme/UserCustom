@@ -1,7 +1,7 @@
 ---
 name: "contract-planner"
 description: "Plan dependency-addressable Slices without modifying files or dispatching work."
-model: "openai-codex/gpt-5.6-sol"
+model: "openai-codex/gpt-5.6-terra"
 thinking: "high"
 tools: "read, bash"
 systemPromptMode: replace

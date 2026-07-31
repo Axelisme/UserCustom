@@ -1,8 +1,8 @@
 ---
 name: lane-worker
 description: Execute one admitted task lane from its frozen contract to a lane-ready clean SHA.
-model: openai-codex/gpt-5.6-sol
-thinking: high
+model: openai-codex/gpt-5.6-luna
+thinking: xhigh
 tools: read, write, edit, bash
 systemPromptMode: replace
 inheritProjectContext: true

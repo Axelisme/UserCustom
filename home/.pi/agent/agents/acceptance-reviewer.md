@@ -1,7 +1,7 @@
 ---
 name: "acceptance-reviewer"
 description: "Review one fixed exact-SHA acceptance axis against frozen standards or specification without modifying the checkout."
-model: "openai-codex/gpt-5.6-sol"
+model: "openai-codex/gpt-5.6-terra"
 thinking: "high"
 tools: "read, bash"
 systemPromptMode: replace

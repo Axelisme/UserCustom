@@ -1,8 +1,8 @@
 ---
 name: "mechanical-implementer"
 description: "Apply an explicit repetitive or mechanical change within a closed write scope and fast-fail on semantic drift."
-model: "openai-codex/gpt-5.6-sol"
-thinking: "low"
+model: "openai-codex/gpt-5.6-luna"
+thinking: "medium"
 tools: "read, write, edit, bash"
 systemPromptMode: replace
 inheritProjectContext: true

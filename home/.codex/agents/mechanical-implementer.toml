@@ -1,6 +1,6 @@
 name = "mechanical-implementer"
 description = "Apply an explicit repetitive or mechanical change within a closed write scope and fast-fail on semantic drift."
-model = "gpt-5.6-sol"
+model = "gpt-5.6-luna"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 developer_instructions = '''

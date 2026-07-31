@@ -1,6 +1,6 @@
 name = "python-bug-investigator"
 description = "Diagnose root causes of Python bugs, test failures, flaky behavior, and unexpected runtime symptoms. Reads source, verifies hypotheses, and reports findings before any fix."
-model = "gpt-5.6-sol"
+model = "gpt-5.6-luna"
 model_reasoning_effort = "high"
 developer_instructions = '''
 # Python Bug Investigator

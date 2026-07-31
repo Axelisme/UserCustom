@@ -12,14 +12,19 @@ again after compaction; do not copy its policy into routing skills.
 
 ## One task record
 
-Short work may remain in the current conversation. Durable work uses the workflow-neutral
-`scripts/plan.py` task record under `.agent_state/plans/<task-id>/`. Its public Interface is exactly
-`create | archive | resume | refresh`. `INDEX.md` holds `Goal`, `Current`, and `Next`; its generated
-files block is a projection of the record directory. Agents maintain the prose, including
-`Current stage` when it is useful to say where the conditional route stopped or why a stage was skipped.
-`tickets/*.md` hold ordinary generic work; their container is a three-field header, a `Resolve by`
-action, and `Outcome`/`Current`. Decision-making work keeps its decisions in the producer-owned
-`decisions.md` artifact, not in the generic container.
+- Short work may remain in the current conversation.
+- Durable work uses the workflow-neutral `scripts/plan.py` task record under
+  `.agent_state/plans/<task-id>/`.
+- Its public Interface is exactly `create | archive | resume | refresh`.
+- `INDEX.md` holds `Goal`, `Current`, and `Next`.
+- Its generated files block is a projection of the record directory.
+- Agents maintain the prose.
+- `Current stage` says where the conditional route stopped or why a stage was skipped, when useful.
+- `tickets/*.md` hold ordinary generic work; their container is a three-field header, a
+  `Resolve by` action, and `Outcome`/`Current`.
+- Decision-making work keeps its decisions in the producer-owned `decisions.md` artifact, not in
+  the generic container.
+
 See [`references/example-record/`](references/example-record/) for a worked example of this shape.
 
 Wayfinder, to-spec and to-tickets may use these ordinary generic tickets when they select the

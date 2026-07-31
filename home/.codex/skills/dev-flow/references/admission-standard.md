@@ -75,11 +75,13 @@ delta is reviewed by one reviewer on its originating axis.
 
 ## S4 — Review and validation
 
-The shared gate order is **simplify → canonical tests → ReviewGate**. Root first binds the exact
-integration path, branch, HEAD, tree, clean state and base…subject diff. Standards and Spec
-reviewers are read-only, report their axis and exact SHA, and never collect or mutate. Before
-candidate mutation Root rechecks the same binding; any mismatch requires fresh review. A bounded
-delta uses only its originating axis.
+- The shared gate order is **simplify → canonical tests → ReviewGate**.
+- Root first binds the exact integration path, branch, HEAD, tree, clean state and base…subject
+  diff.
+- Standards and Spec reviewers are read-only, report their axis and exact SHA, and never collect
+  or mutate.
+- Before candidate mutation Root rechecks the same binding; any mismatch requires fresh review.
+- A bounded delta uses only its originating axis.
 
 User validation is an ordinary generic ticket depending on delivered implementation. It remains
 open until explicit successful exercise, then closes with an exact evidence pointer. Failure leaves

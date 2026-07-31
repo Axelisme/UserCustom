@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CODEX_SKILL = ROOT / "home" / ".codex" / "skills" / "orchestrate"
 SCRIPT = CODEX_SKILL / "scripts/orchestrate.py"
-GUIDE_VERSIONS = (131, 132, 133, 134, 135, 136, 137, 138, 139, 140)
+GUIDE_VERSIONS = (131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142)
 RETAINED_GUIDE_SHA256 = {
     131: "3ac711b53f0410640179261ee45288ce0b6a7d1e470c85df0623d2f2da5266ad",
     132: "02b355608886e893ad9fa17c5d797e3822fd980f9a8d2072232ec6c199a57cb3",
@@ -25,6 +25,8 @@ RETAINED_GUIDE_SHA256 = {
     137: "f084bcc68d976fa5129ef8b28dcb7610acacbb2249555cf8ec03e27b7052ddb2",
     138: "65eac25828efb888c81664d4200c0af5522a5a4062ed56135e190721c2679017",
     139: "ced3c3c9bd8549835fe92ce75e254cb4cbd27645bad0067b8c9fd5274979ad47",
+    140: "042bd28d751bd177fb5037d2d290e13966cbc0b01a155e51fc987d03630f2a92",
+    141: "d1a73855e69b45f721949815cd5155ef2c9ae4bab7588f2cd964516fd1526988",
 }
 GUIDE_SECTIONS = (
     "From",
@@ -114,7 +116,9 @@ class PinAndMigrationGuideContractTests(unittest.TestCase):
     def test_guides_are_complete_and_hashed_as_release_documents(self) -> None:
         guide_137 = CODEX_SKILL / "migrations/137.md"
         self.assertTrue(guide_137.is_file(), "missing v137 migration guide")
-        manifest = self.release.build_manifest(CODEX_SKILL, 140)
+        manifest = self.release.build_manifest(
+            CODEX_SKILL, self.release.skill_version(CODEX_SKILL)
+        )
         guides = CODEX_SKILL / "migrations"
         self.assertEqual(
             {int(path.stem) for path in guides.glob("*.md")}, set(GUIDE_VERSIONS)

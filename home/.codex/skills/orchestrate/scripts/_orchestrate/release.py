@@ -205,20 +205,13 @@ def document_paths(skill_dir: Path) -> list[Path]:
 
 PROFILE_NAMES = (
     "acceptance-reviewer",
-    "contract-planner",
-    "impl-detail-planner",
     "lane-worker",
-    "mcp-skill-tester",
-    "mechanical-implementer",
-    "plan-item-implementer",
-    "python-bug-investigator",
-    "repo-investigator",
-    "web-researcher",
 )
 
 
 def profile_paths(home: Path) -> list[Path]:
-    # Bind every shipped user profile so doctor detects identity/prompt drift.
+    # Bind only the profiles orchestrate itself dispatches, so editing an
+    # unrelated shipped profile is not a package change requiring a release.
     names = PROFILE_NAMES
     return [
         *[home / ".codex" / "agents" / f"{name}.toml" for name in names],

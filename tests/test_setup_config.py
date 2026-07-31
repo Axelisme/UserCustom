@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,13 @@ except ImportError:  # Direct test-file execution keeps tests/ on sys.path.
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SHIPPED_VERSION = int(
+    re.search(
+        r"^skill_version:\s*(\d+)$",
+        (ROOT / "home/.codex/skills/orchestrate/SKILL.md").read_text(encoding="utf-8"),
+        re.MULTILINE,
+    ).group(1)
+)
 
 
 class SetupCutoverContractTests(unittest.TestCase):
@@ -43,7 +51,10 @@ class SetupCutoverContractTests(unittest.TestCase):
                 )
                 plan.chmod(0o755)
 
-                manifest_path = source / "home/.codex/skills/orchestrate/manifests/140.json"
+                manifest_path = (
+                    source
+                    / f"home/.codex/skills/orchestrate/manifests/{SHIPPED_VERSION}.json"
+                )
                 self.assertTrue(manifest_path.is_file(), manifest_path)
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 manifest["documents"]["runtime-pi.md"]["sha256"] = "0" * 64
@@ -57,7 +68,7 @@ class SetupCutoverContractTests(unittest.TestCase):
 
                 self.assertNotEqual(result.returncode, 0, result.stdout)
                 self.assertIn(
-                    f"{logical_layout} v140 release verification failed",
+                    f"{logical_layout} release verification failed",
                     result.stderr.lower(),
                 )
                 self.assertIn(
@@ -205,10 +216,10 @@ class SetupConfigCurrentContractTests(unittest.TestCase):
             for layout in support.managed_skill_layouts():
                 skill = home / layout / "orchestrate"
                 source_skill = source / "home" / layout / "orchestrate"
-                manifest_path = skill / "manifests/140.json"
+                manifest_path = skill / f"manifests/{SHIPPED_VERSION}.json"
                 self.assertTrue(manifest_path.is_file(), manifest_path)
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                self.assertEqual(manifest["skill_version"], 140)
+                self.assertEqual(manifest["skill_version"], SHIPPED_VERSION)
                 self.assertTrue(os.path.samefile(skill, source_skill))
                 for document in manifest["documents"]:
                     self.assertTrue(

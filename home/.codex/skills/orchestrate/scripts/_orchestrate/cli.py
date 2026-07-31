@@ -6,193 +6,303 @@ import sys
 from pathlib import Path
 from typing import NoReturn, Sequence
 
-from .lane_core import (
-    command_commit_check,
-    command_integration_candidate,
-    command_integration_collect,
-    command_integration_create,
-    command_integration_land,
-    command_integration_list,
-    command_integration_remove,
-    command_integration_status,
-    command_lane_create,
-    command_lane_drop,
-    command_lane_status,
-    command_report,
+from .coordination import (
+    integration_collect,
+    integration_create,
+    integration_reconcile,
+    integration_remove,
+    lane_check,
+    lane_create,
+    lane_drop,
+    lane_sync,
+    status,
 )
-from .primitives import OrchestrateError
+from .delivery import (
+    acceptance_result,
+    acceptance_start,
+    integration_land,
+)
+from .primitives import CommandResult, OrchestrateError
 from .release import (
-    command_diff,
-    command_doctor,
-    command_pin_set,
-    command_pin_status,
-    command_release,
+    doctor_diff,
+    doctor_package,
+    pin_set,
+    pin_status,
+    release_package,
     require_verified_release,
-    skill_version,
 )
+from .resources import RepositoryContext, TaskResources
+from .telemetry import auto_resume, record_event, timing_transition, write_report
+
+ORCHESTRATE_VERSION = 137
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
-        raise OrchestrateError(message)
-
-
-def add_root(command: argparse.ArgumentParser) -> None:
-    command.add_argument("--root", required=True)
+        raise OrchestrateError(message, "cli_usage")
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = JsonArgumentParser(description=__doc__)
     parser.add_argument("--skill-dir", default=str(Path(__file__).resolve().parents[2]))
-    commands = parser.add_subparsers(
-        dest="command", required=True, parser_class=JsonArgumentParser
-    )
+    commands = parser.add_subparsers(dest="command", required=True, parser_class=JsonArgumentParser)
 
-    lane = commands.add_parser("lane", help="Git-backed lane lifecycle")
-    lane_commands = lane.add_subparsers(
-        dest="lane_command", required=True, parser_class=JsonArgumentParser
-    )
+    status_parser = commands.add_parser("status")
+    status_parser.add_argument("--task-id")
+    status_parser.set_defaults(route="status", mutation=False)
 
-    lane_create = lane_commands.add_parser("create")
-    add_root(lane_create)
-    lane_create.add_argument("--task-id", required=True)
-    lane_create.add_argument("--lane-id", required=True)
-    lane_create.add_argument("--base", required=True)
-    lane_create.set_defaults(handler=command_lane_create, task_mutation=True)
+    timing = commands.add_parser("timing")
+    timing_commands = timing.add_subparsers(dest="timing_command", required=True, parser_class=JsonArgumentParser)
+    for name in ("pause", "resume"):
+        op = timing_commands.add_parser(name)
+        op.add_argument("--task-id", required=True)
+        op.set_defaults(route=f"timing-{name}", mutation=True)
 
-    lane_status = lane_commands.add_parser("status")
-    add_root(lane_status)
-    lane_status.add_argument("--task-id", required=True)
-    lane_status.add_argument("--lane-id", help="omit to list every lane of the task")
-    lane_status.set_defaults(handler=command_lane_status)
+    lane = commands.add_parser("lane")
+    lane_commands = lane.add_subparsers(dest="lane_command", required=True, parser_class=JsonArgumentParser)
+    for name in ("create", "check", "sync", "drop"):
+        op = lane_commands.add_parser(name)
+        op.add_argument("--task-id", required=True)
+        op.add_argument("--lane-id", required=True)
+        op.set_defaults(route=f"lane-{name}", mutation=True)
 
-    lane_drop = lane_commands.add_parser("drop")
-    add_root(lane_drop)
-    lane_drop.add_argument("--task-id", required=True)
-    lane_drop.add_argument("--lane-id", required=True)
-    lane_drop.set_defaults(handler=command_lane_drop, task_mutation=True)
+    integration = commands.add_parser("integration")
+    integration_commands = integration.add_subparsers(dest="integration_command", required=True, parser_class=JsonArgumentParser)
+    create = integration_commands.add_parser("create")
+    create.add_argument("--task-id", required=True)
+    create.set_defaults(route="integration-create", mutation=True)
+    collect = integration_commands.add_parser("collect")
+    collect.add_argument("--task-id", required=True)
+    collect.add_argument("--lane-id", required=True)
+    collect.set_defaults(route="integration-collect", mutation=True)
+    reconcile = integration_commands.add_parser("reconcile")
+    reconcile.add_argument("--task-id", required=True)
+    reconcile.add_argument("--lane-id", required=True)
+    reconcile.add_argument("--persist", required=True)
+    reconcile.set_defaults(route="integration-reconcile", mutation=True)
+    land = integration_commands.add_parser("land")
+    land.add_argument("--task-id", required=True)
+    land.add_argument("--persist", required=True)
+    land.add_argument("--message")
+    land.set_defaults(route="integration-land", mutation=True)
+    remove = integration_commands.add_parser("remove")
+    remove.add_argument("--task-id", required=True)
+    report_choice = remove.add_mutually_exclusive_group(required=True)
+    report_choice.add_argument("--output-dir")
+    report_choice.add_argument("--no-report", action="store_true")
+    remove.add_argument("--abandon", action="store_true")
+    remove.set_defaults(route="integration-remove", mutation=True)
 
-    commit_check = commands.add_parser(
-        "commit-check", help="read-only whole-range Immutable trailer validation"
-    )
-    add_root(commit_check)
-    commit_check.add_argument("--task-id", required=True)
-    commit_check.add_argument("--lane-id", required=True)
-    commit_check.add_argument("--sha", required=True)
-    commit_check.set_defaults(handler=command_commit_check)
+    acceptance = commands.add_parser("acceptance")
+    acceptance_commands = acceptance.add_subparsers(dest="acceptance_command", required=True, parser_class=JsonArgumentParser)
+    start = acceptance_commands.add_parser("start")
+    start.add_argument("--task-id", required=True)
+    start.set_defaults(route="acceptance-start", mutation=True)
+    result = acceptance_commands.add_parser("result")
+    result.add_argument("--task-id", required=True)
+    result.add_argument("--outcome", choices=("pass", "fail"), required=True)
+    result.set_defaults(route="acceptance-result", mutation=True)
 
-    integration = commands.add_parser(
-        "integration", help="Git-backed task integration lifecycle"
-    )
-    integration_commands = integration.add_subparsers(
-        dest="integration_command", required=True, parser_class=JsonArgumentParser
-    )
-    for operation, handler in (
-        ("create", command_integration_create),
-        ("status", command_integration_status),
-        ("collect", command_integration_collect),
-        ("candidate", command_integration_candidate),
-        ("remove", command_integration_remove),
-        ("land", command_integration_land),
-        ("list", command_integration_list),
-    ):
-        operation_parser = integration_commands.add_parser(operation)
-        add_root(operation_parser)
-        if operation != "list":
-            operation_parser.add_argument("--task-id", required=True)
-        if operation == "create":
-            operation_parser.add_argument("--base", required=True)
-        elif operation == "collect":
-            operation_parser.add_argument("--lane-id", required=True)
-            operation_parser.add_argument("--sha", required=True)
-        elif operation == "candidate":
-            operation_parser.add_argument("--sha", required=True)
-        elif operation == "remove":
-            operation_parser.add_argument(
-                "--abandon", action="store_true", default=False
-            )
-        elif operation == "land":
-            operation_parser.add_argument("--persist", required=True)
-            operation_parser.add_argument("--final", action="store_true", default=False)
-            operation_parser.add_argument("--message")
-        operation_parser.set_defaults(
-            handler=handler,
-            task_mutation=operation not in {"status", "list"},
-        )
-
-    report = commands.add_parser(
-        "report", help="read-only unified lane, task, checks, and candidate report"
-    )
-    add_root(report)
+    report = commands.add_parser("report")
     report.add_argument("--task-id", required=True)
-    report.set_defaults(handler=command_report)
+    report.add_argument("--output-dir", required=True)
+    report.set_defaults(route="report", mutation=False)
 
-    doctor = commands.add_parser(
-        "doctor", help="verify shipped manifest, hashes, and read budgets"
-    )
-    doctor.set_defaults(handler=command_doctor)
-    diff = commands.add_parser("diff", help="compare bundled release manifests")
+    pin = commands.add_parser("pin")
+    pin_commands = pin.add_subparsers(dest="pin_command", required=True, parser_class=JsonArgumentParser)
+    for name in ("status", "set"):
+        op = pin_commands.add_parser(name)
+        op.set_defaults(route=f"pin-{name}", mutation=name == "set")
+
+    doctor = commands.add_parser("doctor")
+    doctor.add_argument("--path")
+    doctor_commands = doctor.add_subparsers(dest="doctor_command", parser_class=JsonArgumentParser)
+    diff = doctor_commands.add_parser("diff")
     diff.add_argument("old_version", type=int)
     diff.add_argument("new_version", type=int)
     diff.add_argument("--runtime", choices=("codex", "claude", "pi"))
-    diff.set_defaults(handler=command_diff)
+    diff.set_defaults(route="doctor-diff", mutation=False)
+    doctor.set_defaults(route="doctor", mutation=False)
 
-    pin = commands.add_parser("pin", help="pin a task to the installed release")
-    pin_commands = pin.add_subparsers(
-        dest="pin_command", required=True, parser_class=JsonArgumentParser
-    )
-    for name, handler in (
-        ("status", command_pin_status),
-        ("set", command_pin_set),
-    ):
-        operation = pin_commands.add_parser(name)
-        add_root(operation)
-        operation.set_defaults(handler=handler, task_mutation=name == "set")
-
-    release = commands.add_parser(
-        "release", help="atomic release: bump version, manifest, doctor"
-    )
-    release.add_argument("--version", type=int)
-    release.set_defaults(handler=command_release)
+    release = commands.add_parser("release")
+    release.add_argument("--version", type=int, required=True)
+    release.set_defaults(route="release", mutation=True)
     return parser
 
 
-def readable_installed_version(skill_dir: Path) -> int | None:
-    try:
-        return skill_version(skill_dir)
-    except (OSError, UnicodeError, OrchestrateError):
-        return None
+def _operation(args: argparse.Namespace) -> str:
+    return str(getattr(args, "route", "cli"))
+
+
+def _run(
+    args: argparse.Namespace,
+    repo: RepositoryContext | None,
+    skill_dir: Path,
+) -> CommandResult:
+    route = args.route
+    if route == "pin-status":
+        assert repo is not None
+        return pin_status(repo.worktree_root, skill_dir)
+    if route == "pin-set":
+        assert repo is not None
+        return pin_set(repo.worktree_root, skill_dir)
+    if route == "doctor":
+        return doctor_package(skill_dir, repo)
+    if route == "doctor-diff":
+        return doctor_diff(skill_dir, args.old_version, args.new_version, args.runtime)
+    if route == "release":
+        return release_package(skill_dir, args.version)
+    if repo is None:
+        raise OrchestrateError("current directory is not a Git repository", "not_git_repository")
+    if route == "status":
+        return status(repo, args.task_id)
+    if route == "timing-pause":
+        return timing_transition(TaskResources.derive(repo, args.task_id), pause=True)
+    if route == "timing-resume":
+        return timing_transition(TaskResources.derive(repo, args.task_id), pause=False)
+    if route == "integration-create":
+        return integration_create(repo, args.task_id)
+    if route == "lane-create":
+        return lane_create(repo, args.task_id, args.lane_id)
+    if route == "lane-check":
+        return lane_check(repo, args.task_id, args.lane_id)
+    if route == "lane-sync":
+        return lane_sync(repo, args.task_id, args.lane_id)
+    if route == "lane-drop":
+        return lane_drop(repo, args.task_id, args.lane_id)
+    if route == "integration-collect":
+        return integration_collect(repo, args.task_id, args.lane_id)
+    if route == "acceptance-start":
+        return acceptance_start(repo, args.task_id)
+    if route == "acceptance-result":
+        return acceptance_result(repo, args.task_id, args.outcome)
+    if route == "integration-reconcile":
+        return integration_reconcile(repo, args.task_id, args.lane_id, args.persist)
+    if route == "integration-land":
+        return integration_land(repo, args.task_id, args.persist, args.message)
+    if route == "integration-remove":
+        return integration_remove(
+            repo,
+            args.task_id,
+            abandon=args.abandon,
+            output_dir=Path(args.output_dir) if args.output_dir is not None else None,
+        )
+    if route == "report":
+        return write_report(
+            TaskResources.derive(repo, args.task_id), Path(args.output_dir)
+        )
+    raise OrchestrateError(f"{route} is not implemented in this tracer", "cli_usage")
+
+
+_AUTO_RESUME_OPERATIONS = frozenset(
+    {
+        "lane-create",
+        "lane-check",
+        "lane-sync",
+        "lane-drop",
+        "integration-collect",
+        "integration-reconcile",
+        "integration-land",
+        "integration-remove",
+        "acceptance-start",
+        "acceptance-result",
+    }
+)
+
+
+def _event_context(args: argparse.Namespace) -> dict[str, object]:
+    return {
+        key: getattr(args, key)
+        for key in ("lane_id", "persist")
+        if getattr(args, key, None) is not None
+    }
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     skill_dir = Path(__file__).resolve().parents[2]
+    operation = "cli"
+    args: argparse.Namespace | None = None
+    repo: RepositoryContext | None = None
+    auto_resumed = False
     try:
         parser = build_parser()
         args = parser.parse_args(argv)
-        selected_skill_dir = Path(args.skill_dir).resolve()
-        if selected_skill_dir != skill_dir:
-            raise OrchestrateError(
-                "--skill-dir must resolve to the executing orchestrate package "
-                f"({skill_dir})"
+        operation = _operation(args)
+        selected = Path(args.skill_dir).resolve()
+        if selected != skill_dir:
+            raise OrchestrateError("--skill-dir must resolve to the executing package", "cli_usage")
+        if getattr(args, "mutation", False):
+            try:
+                require_verified_release(skill_dir)
+            except (OSError, UnicodeError, OrchestrateError) as exc:
+                raise OrchestrateError(str(exc), "package_unhealthy") from exc
+        discovery_path = (
+            Path(args.path).resolve()
+            if operation == "doctor" and args.path is not None
+            else Path.cwd()
+        )
+        try:
+            repo = RepositoryContext.discover(discovery_path)
+        except OrchestrateError:
+            if operation in {"doctor", "doctor-diff", "release"}:
+                repo = None
+            else:
+                raise
+        auto_warnings: tuple[str, ...] = ()
+        if operation in _AUTO_RESUME_OPERATIONS:
+            task = TaskResources.derive(repo, args.task_id)
+            auto_warnings, auto_resumed = auto_resume(task)
+        result = _run(args, repo, skill_dir)
+        if auto_resumed and not result.ok:
+            record_event(
+                TaskResources.derive(repo, args.task_id),
+                operation,
+                "failure",
+                **_event_context(args),
             )
-        args.skill_dir = str(skill_dir)
-        # Unreadable installed metadata is itself the authoritative CLI error;
-        # never emit a successful response with unknowable provenance.
-        skill_version(skill_dir)
-        if getattr(args, "task_mutation", False):
-            args.verified_release = require_verified_release(skill_dir)
-        payload = args.handler(args)
+        if auto_warnings:
+            result = CommandResult(
+                result.ok,
+                result.data,
+                (*auto_warnings, *result.warnings),
+                result.diagnostics,
+            )
+        response_version = (
+            args.version
+            if operation == "release" and result.ok
+            else ORCHESTRATE_VERSION
+        )
+        payload: dict[str, object] = {
+            "ok": result.ok,
+            "operation": operation,
+            "orchestrate_version": response_version,
+        }
+        payload.update(result.data)
+        if result.warnings:
+            payload["warnings"] = list(result.warnings)
+        if result.diagnostics:
+            payload["diagnostics"] = [dict(item) for item in result.diagnostics]
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        return 0 if result.ok else 1
     except (OSError, UnicodeError, OrchestrateError) as exc:
+        if (
+            auto_resumed
+            and args is not None
+            and repo is not None
+            and hasattr(args, "task_id")
+        ):
+            record_event(
+                TaskResources.derive(repo, args.task_id),
+                operation,
+                "failure",
+                **_event_context(args),
+            )
+        code = getattr(exc, "code", "git_error")
         payload = {
             "ok": False,
-            "orchestrate_version": readable_installed_version(skill_dir),
-            "error": {"type": "orchestrate", "message": str(exc)},
+            "operation": operation,
+            "orchestrate_version": ORCHESTRATE_VERSION,
+            "error": {"code": code, "message": str(exc)},
         }
-        print(
-            json.dumps(payload, ensure_ascii=False, sort_keys=True),
-            file=sys.stderr,
-        )
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True), file=sys.stderr)
         return 2
-    payload["orchestrate_version"] = readable_installed_version(skill_dir)
-    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
-    return 0 if payload.get("ok", False) else 1

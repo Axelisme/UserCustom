@@ -1,90 +1,91 @@
 ---
 name: orchestrate
 description: Minimal Git-backed lane and task-integration workflow for a Git task.
-skill_version: 136
+skill_version: 137
 ---
 
 # Orchestrate
 
-Orchestrate is the **Git task lane**. It owns lane worktrees, task integration, the ready-candidate
-projection, the unified report, and links to runtime adapters. Git commits, refs, SHAs, trailers,
-and worktree state are its durable inputs. It may consume dev-flow task/ticket IDs but derives and
-stores no task narrative. Acceptance and close-out authority remain in the admission standard,
-the sole normative S0–S5 authority. Root must read shared S0 there before creating the first lane.
+Orchestrate is the **Git task lane**. It owns managed lane and integration worktrees, exact
+Git-backed task state, acceptance snapshots, local persistence landing, reporting, and runtime
+bindings. Git commits, refs, SHAs, trailers, and worktree state are its durable inputs. It may
+consume dev-flow task IDs but stores no task narrative. The shared admission standard is the sole
+normative S0–S5 authority; Root reads its current S0 before creating the first lane.
 
-## Lane
+## Minimum complete lifecycle
 
-A lane is one worktree, one branch, and one `lane-worker` call. The worker authors Contract
-tests and then implements against the frozen Contract in the same lane worktree. A Contract path
-stays open to change only in an independent amendment commit that redeclares it. `lane create`
-derives the canonical worktree path and branch from `--task-id`/`--lane-id`; Root dispatches that
-exact path and expected Git identity. The worker first changes into and attests the path, then
-keeps every operation path-bound. Before collect, Root reviews the test-first commits at their
-reported SHAs and rechecks lane identity plus primary-checkout dirt. `integration collect` accepts
-only the lane's exact clean tip, validates the entire first-parent range has a normalized
-`Immutable:` declaration and every later change redeclares its protected path, merges the lane into
-the task's integration branch, and **always** removes the lane worktree — there is no option to keep
-it. Read-only `commit-check` runs that same validator earlier against the exact lane tip/base,
-without a hook or expected-path list. Afterward Root verifies the collected SHA and
-that primary dirt is unchanged. A lane that
-quietly changed a declared path without redeclaring it is refused and named.
+`integration create --task-id <task>` creates the append-only task integration branch and
+worktree at the current repository subject. `lane create --task-id <task> --lane-id <lane>` creates
+one managed writer branch and worktree at the recorded task base. A lane is one admitted Contract,
+one worktree, one branch, and one `lane-worker` call. Root dispatches the exact canonical cwd and
+Git identity and preserves primary-checkout dirt.
 
-## Integration and the ready candidate
+The worker commits Contract tests before implementation and reports focused red evidence plus its
+exact clean tip. Contract paths remain protected by normalized `Immutable:` trailers. Before
+collection, use `lane check --task-id <task> --lane-id <lane>` to apply the shared first-parent,
+cleanliness, topology, and declaration predicates without mutation. If another collect advanced the
+integration tip, `lane sync --task-id <task> --lane-id <lane>` performs the writer-owned no-commit
+merge in that lane; the writer resolves and commits any conflict there. Root reruns the gates and
+then `integration collect --task-id <task> --lane-id <lane>` creates one fixed-parent no-ff collect
+commit and removes the managed lane worktree. A clean unwanted lane is removed with `lane drop`.
 
-`integration create` builds the task integration worktree and, in the same call, a second detached
-acceptance worktree pinned to the same base. Lane collects merge forward into integration
-(`--no-ff`, never rebased or reset); the branch is append-only. A lane behind the integration tip
-integrates it into itself first, in its own worktree — the same model Git uses for pull-then-push —
-so a conflict is resolved in the lane, never in the shared integration worktree. Once a batch of
-lanes has passed the shared gate order — simplify, canonical tests, ReviewGate; see the admission
-standard's S4 — `integration candidate` first proves the supplied SHA is a task collect on the
-integration first-parent whose tree equals its actual parent-2 lane tree, then checks the acceptance
-worktree out to that exact gated SHA and moves `refs/orchestrate/<task>/candidate` to match. A dirty acceptance worktree refuses the
-checkout and leaves the previous candidate untouched. `integration status` and `report` project
-everything else about the candidate from Git — worktree readiness, lag behind tip, timeline — with
-no second persisted format. `integration remove` tears down both worktrees, the candidate ref, and
-every ref and branch under the task's namespace together — refusing (unless `--abandon`) when the
-integration branch was never landed or a lane branch was never collected.
+When every admitted increment is collected and the required shared gates pass, `acceptance start
+--task-id <task>` checks out the current integration subject in the managed detached acceptance
+worktree. Acceptance evaluates that exact subject. `acceptance result --task-id <task> --outcome
+pass` moves `refs/orchestrate/<task>/accepted` to it; `--outcome fail` records the failure and
+revokes only an equal accepted ref. A newer start may supersede an older accepted snapshot without
+deleting it until another pass establishes new authority.
 
-## Commands
+Landing requires an accepted snapshot and exactly one local checkout of the named persistence
+branch. `integration land --task-id <task> --persist <branch>` creates one canonical squash commit
+with `Task:` and `Landed:` trailers, then records the accepted subject in
+`refs/orchestrate/<task>/landed`. If persistence moved, create an admitted reconciliation lane and
+run `integration reconcile --task-id <task> --lane-id <lane> --persist <branch>`; the writer owns
+the resulting no-commit merge, resolution, tests, commit, and normal collection before acceptance
+is repeated. Orchestrate never pushes or reads remote refs.
 
-Eight top-level commands: `lane create|status|drop`, read-only `commit-check`, `integration
-create|status|collect|candidate|remove|land|list`, `report`, and the retained administration
-`doctor`, `diff`, `pin status|set`, `release`. `report` is read-only: per-lane span and
-output, task parallelism, the four zero-parameter Git checks (deletion, loop, mass, focus — see
-`admission.py`), and the candidate projection, all in one call; nothing here is ever refused, only
-presented. `integration list` is the shallow, read-only view across every task in the repository.
-Agents manage `Immutable:` trailers; Orchestrate generates `Task:`, `Lane:`, and `Landed:`.
-Machine rework routing remains Root-owned in the active generic ticket's monotonic
-`Machine rework: N/2` Current line and final Result copy, never Git trailer or Orchestrate state.
+`integration remove --task-id <task> --output-dir <dir>` writes the final report and removes only a
+closeable task's exact managed inventory. `--no-report` explicitly omits report output. Destructive
+`--abandon` is exceptional current-user authority, not an automatic recovery path. It reports
+unlanded and uncollected state while preserving unrelated refs, paths, and user dirt.
 
-Every command prints one JSON object containing `orchestrate_version`, the installed executable
-version, and exits with one of three codes: **0** on success, **1** when the command completed and
-decided no (for example `doctor` ran cleanly and found a hash mismatch), and **2** when the command
-itself could not run (bad arguments, an unreadable Git state, a missing worktree). Only unreadable
-installed version metadata produces a null version. A success payload is always on `stdout`; an
-error payload is always on `stderr`, so the two never mix in the same stream.
+## Observation and timing
 
-Before any lane, integration, candidate, landing, removal, or pin mutation, one central CLI
-preflight verifies the installed release manifest, documents, profile contracts, and mandatory
-runtime assets. Pin drift or a missing pin never blocks task work; corrupt release provenance does.
-Read-only commands remain available for diagnosis.
+`status` is the only task discovery and state projection. Without a task ID it lists known tasks;
+with `--task-id` it reports the exact base, integration, lanes, acceptance, accepted, landed,
+telemetry, and closeability slots that exist. It does not synthesize missing authority.
 
-## Never push
+`report --task-id <task> --output-dir <dir>` atomically writes the two fixed report artifacts from
+Git and append-only telemetry. `timing pause --task-id <task>` closes active timing before an
+external wait; `timing resume --task-id <task>` resumes it. Repeated matching transitions are
+idempotent warnings. Reports and status remain read-only.
 
-Orchestrate never pushes and never reads a remote ref. Every command is local-only by construction:
-nothing in this skill's surface accepts a remote or performs a network operation. Landing is a
-single squash commit against a local persistence branch, recording the exact landed SHA (see the
-admission standard's S5).
+## Package administration
 
-## Boundaries
+`doctor` verifies the executing package's current manifest, documents, profile identity/prompt
+projections, and mandatory runtime asset. v137+ profile entries contain only `agent_name` and
+`prompt_sha256`; runtime, model, and configuration metadata are excluded. `doctor --path <repo>`
+adds the cwd-derived repository pin projection.
+`doctor diff <old> <new>` compares only bundled immutable manifests; `--runtime codex|claude|pi`
+filters runtime-specific documents, profiles, and assets. `pin status` and the atomic idempotent
+`pin set` derive the repository from cwd. A pin records the last manually adopted release; it never
+selects the executable or blocks task work merely because it is absent or different.
+
+`release --version <exact-next>` is the sole package publication command. It requires a healthy
+current package and an exact-next migration guide, updates the source identity, writes the target
+manifest, verifies the result, and restores prior bytes on failure. Apply manifest-hashed migration
+guides in order before a separately authorized setup or pin change.
+
+Every command prints one JSON object with `orchestrate_version`. Success is on stdout with exit 0;
+a completed negative predicate uses stdout and exit 1; an operational or usage error uses stderr
+and exit 2. Mutation commands fail before repository changes when the executing package is
+unhealthy. Read-only diagnosis remains available.
+
+## Runtime and authority boundaries
 
 Read the matching [Codex runtime](runtime-codex.md), [Claude runtime](runtime-claude.md), or
-[Pi runtime](runtime-pi.md) before dispatch. Runtime links describe lifecycle only; this document
-does not emulate a runtime. The admission projection points to the shared admission standard, the
-sole S0–S5 authority. At the lane-ready to collect seam, Root applies the S2 test-review procedure
-there before reading implementation changes. The pin records the last manually adopted release and never selects the executable. Apply the
-manifest-hashed `migrations/<version>.md` guides in order from pin plus one through the installed
-version, then use the sole writer, atomic idempotent `pin set`, to create or overwrite the pin.
-Active branches, refs, and worktrees do not block that explicit manual adoption, and Orchestrate
-never converts or cleans active task state as part of version handling.
+[Pi runtime](runtime-pi.md) before dispatch. Runtime bindings transport the frozen dispatch and
+exact-run evidence; they do not grant admission, collect, acceptance, persistence, setup, pin, or
+cleanup authority. Root owns Contract semantics, pre-collect test review, primary dirt, collection,
+acceptance coordination, landing, and recovery. A provider, cwd, lane identity, Interface, or
+observable Contract change requires fresh admission rather than continuation.

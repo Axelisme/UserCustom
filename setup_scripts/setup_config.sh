@@ -346,7 +346,7 @@ verify_installed_orchestrate_releases() {
   if ! result=$(python "$codex_skill/scripts/orchestrate.py" \
     --skill-dir "$codex_skill" doctor); then
     printf '%s\n' "$result" >&2
-    echo "error: Codex v136 release verification failed; retired planning destinations were not changed" >&2
+    echo "error: Codex v137 release verification failed; retired planning destinations were not changed" >&2
     return 1
   fi
 
@@ -364,7 +364,7 @@ raise SystemExit(0 if result["ok"] else 1)
 PY
   ); then
     printf '%s\n' "$result" >&2
-    echo "error: Pi v136 release verification failed; retired planning destinations were not changed" >&2
+    echo "error: Pi v137 release verification failed; retired planning destinations were not changed" >&2
     return 1
   fi
 }

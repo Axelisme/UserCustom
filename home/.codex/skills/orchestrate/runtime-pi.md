@@ -66,9 +66,18 @@ readiness evidence.
 
 The Adapter is transport and exact-run evidence projection only. It does not
 create or discover lanes, mutate Git, maintain a run registry, enumerate matching
-runs, decide lane readiness, grant collect or acceptance, or wrap upstream steer,
+runs, decide lane readiness, grant collection or acceptance, or wrap upstream steer,
 interrupt, stop, or resume operations. Root still owns Slice admission, Contract
 semantics and amendments, S2.4 pre-collect test review, primary-checkout dirt,
-collect, candidate, landing, and recovery. Native lifecycle continuation is valid
-only while the frozen Contract, provider, cwd, and lane identity remain unchanged;
-a change requires Root re-admission and a fresh authorized dispatch.
+`lane check`, `lane sync`, collection, acceptance, landing, and recovery. Native
+lifecycle continuation is valid only while the frozen Contract, provider, cwd, and
+lane identity remain unchanged; a change requires Root re-admission and a fresh
+authorized dispatch.
+
+After every lane is collected and the shared gates pass, Root uses `acceptance start`
+and `acceptance result` for the exact integration subject. Only the accepted subject
+may become landed. Persistence drift routes through a new admitted writer lane and
+`integration reconcile`, followed by normal collection and renewed acceptance.
+`timing pause` and `timing resume` bracket external waits; neither grants lifecycle
+authority. The Adapter never performs status, collection, acceptance, persistence,
+reporting, removal, setup, pinning, or abandonment.

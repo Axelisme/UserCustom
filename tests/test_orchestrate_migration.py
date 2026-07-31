@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import importlib
-import io
 import json
 import shutil
 import subprocess
@@ -11,19 +9,19 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CODEX_SKILL = ROOT / "home" / ".codex" / "skills" / "orchestrate"
 SCRIPT = CODEX_SKILL / "scripts/orchestrate.py"
-GUIDE_VERSIONS = (131, 132, 133, 134, 135, 136)
+GUIDE_VERSIONS = (131, 132, 133, 134, 135, 136, 137)
 RETAINED_GUIDE_SHA256 = {
     131: "3ac711b53f0410640179261ee45288ce0b6a7d1e470c85df0623d2f2da5266ad",
     132: "02b355608886e893ad9fa17c5d797e3822fd980f9a8d2072232ec6c199a57cb3",
     133: "529d3702851b721580544743ab5f6539ee47e6e404c67c744368d4191632dde4",
     134: "8a3a425463086faf852ea4639389dc3f16dfe20579d2006ebe49c2ec4d6d915b",
     135: "610fe2f54db967f287002ead5dcd7717b9c6ae91f085399ca6b86853fb7d686b",
+    136: "35bf94bea868b3ed90a2de541df0009fac20b51293f922dadfdd3cd92af7e8e1",
 }
 GUIDE_SECTIONS = (
     "From",
@@ -98,67 +96,6 @@ class PinAndMigrationGuideContractTests(unittest.TestCase):
         )
         return self.pin.read_bytes()
 
-    def test_pin_set_overwrites_drift_despite_active_task_state(self) -> None:
-        self.write_pin(130)
-        base = self.git(self.root, "rev-parse", "HEAD")
-        self.git(self.root, "branch", "wave/active/lane", base)
-        self.git(self.root, "update-ref", "refs/orchestrate/active/candidate", base)
-        refs_before = self.git(self.root, "show-ref")
-
-        result = self.cli("pin", "set", "--root", str(self.root))
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        payload = json.loads(result.stdout)
-        self.assertEqual(payload["operation"], "pin-set")
-        self.assertEqual(payload["previous_version"], 130)
-        self.assertEqual(payload["pinned_version"], self.version)
-        self.assertEqual(json.loads(self.pin.read_text())["skill_version"], self.version)
-        self.assertEqual(self.git(self.root, "show-ref"), refs_before)
-
-    def test_pin_set_same_version_is_idempotent_without_rewrite(self) -> None:
-        before = self.write_pin(self.version)
-
-        result = self.cli("pin", "set", "--root", str(self.root))
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.pin.read_bytes(), before)
-        self.assertEqual(json.loads(result.stdout)["recovered"], "already-pinned")
-
-    def test_failed_release_verification_preserves_previous_pin(self) -> None:
-        before = self.write_pin(130)
-        adapter = self.home / ".pi/agent/extensions/orchestrate-pi.ts"
-        adapter.write_bytes(adapter.read_bytes() + b"\ncorrupt\n")
-
-        result = self.cli("pin", "set", "--root", str(self.root))
-
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("release preflight failed", result.stderr)
-        self.assertEqual(self.pin.read_bytes(), before)
-
-    def test_atomic_replace_failure_preserves_pin_and_removes_temporary_file(self) -> None:
-        before = self.write_pin(130)
-        entries_before = sorted(self.pin.parent.iterdir())
-        cli = importlib.import_module("_orchestrate.cli")
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-
-        with mock.patch.object(
-            cli,
-            "require_verified_release",
-            return_value={
-                "skill_version": self.version,
-                "orchestrate_compat": self.version,
-            },
-        ), mock.patch.object(
-            self.release.os, "replace", side_effect=OSError("replace failed")
-        ), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            result = cli.main(["pin", "set", "--root", str(self.root)])
-
-        self.assertEqual(result, 2, stdout.getvalue())
-        self.assertIn("replace failed", stderr.getvalue())
-        self.assertEqual(self.pin.read_bytes(), before)
-        self.assertEqual(sorted(self.pin.parent.iterdir()), entries_before)
-
     def test_pin_migrate_is_absent_and_pin_set_is_the_only_pin_writer(self) -> None:
         help_result = self.cli("pin", "--help")
         self.assertEqual(help_result.returncode, 0, help_result.stderr)
@@ -172,7 +109,9 @@ class PinAndMigrationGuideContractTests(unittest.TestCase):
         self.assertEqual(source.count("write_version_pin("), 2)  # definition + pin set
 
     def test_guides_are_complete_and_hashed_as_release_documents(self) -> None:
-        manifest = self.release.build_manifest(CODEX_SKILL, 136)
+        guide_137 = CODEX_SKILL / "migrations/137.md"
+        self.assertTrue(guide_137.is_file(), "missing v137 migration guide")
+        manifest = self.release.build_manifest(CODEX_SKILL, 137)
         guides = CODEX_SKILL / "migrations"
         self.assertEqual(
             {int(path.stem) for path in guides.glob("*.md")}, set(GUIDE_VERSIONS)

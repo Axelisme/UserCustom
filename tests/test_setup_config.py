@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SetupCutoverContractTests(unittest.TestCase):
-    def test_each_logical_v136_failure_precedes_retired_removal(self) -> None:
+    def test_each_logical_v137_failure_precedes_retired_removal(self) -> None:
         for logical_layout in ("codex", "pi"):
             with (
                 self.subTest(logical_layout=logical_layout),
@@ -44,10 +44,11 @@ class SetupCutoverContractTests(unittest.TestCase):
                 plan.chmod(0o755)
 
                 manifest_path = source / (
-                    "home/.codex/skills/orchestrate/manifests/136.json"
+                    "home/.codex/skills/orchestrate/manifests/137.json"
                     if logical_layout == "codex"
-                    else "home/.pi/agent/skills/orchestrate/manifests/136.json"
+                    else "home/.pi/agent/skills/orchestrate/manifests/137.json"
                 )
+                self.assertTrue(manifest_path.is_file(), manifest_path)
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 manifest["documents"]["runtime-pi.md"]["sha256"] = "0" * 64
                 manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -60,7 +61,7 @@ class SetupCutoverContractTests(unittest.TestCase):
 
                 self.assertNotEqual(result.returncode, 0, result.stdout)
                 self.assertIn(
-                    f"{logical_layout} v136 release verification failed",
+                    f"{logical_layout} v137 release verification failed",
                     result.stderr.lower(),
                 )
                 self.assertIn(
@@ -197,7 +198,7 @@ class SetupCutoverContractTests(unittest.TestCase):
 
 
 class SetupConfigCurrentContractTests(unittest.TestCase):
-    def test_isolated_home_installs_the_exact_v136_release_inventory(self) -> None:
+    def test_isolated_home_installs_the_exact_v137_release_inventory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             source, home = support.seed_source(base)
@@ -208,10 +209,10 @@ class SetupConfigCurrentContractTests(unittest.TestCase):
             for layout in support.managed_skill_layouts():
                 skill = home / layout / "orchestrate"
                 source_skill = source / "home" / layout / "orchestrate"
-                manifest_path = skill / "manifests/136.json"
+                manifest_path = skill / "manifests/137.json"
                 self.assertTrue(manifest_path.is_file(), manifest_path)
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                self.assertEqual(manifest["skill_version"], 136)
+                self.assertEqual(manifest["skill_version"], 137)
                 self.assertTrue(os.path.samefile(skill, source_skill))
                 for document in manifest["documents"]:
                     self.assertTrue(

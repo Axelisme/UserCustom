@@ -1,0 +1,818 @@
+from __future__ import annotations
+
+import os
+import shutil
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
+from typing import Any
+
+from .git_ops import (
+    changed_paths,
+    first_parent_changed_paths,
+    first_parent_range,
+    merge_in_progress,
+    ref_exists,
+    ref_namespace_collision,
+    run_git,
+    trailer_values,
+    worktree_for,
+    worktree_records,
+)
+from .primitives import CommandResult, OrchestrateError
+from .resources import (
+    LaneResources,
+    RepositoryContext,
+    TaskResources,
+    active_task_ids,
+    lexical_path,
+    resolved_path,
+    worktree_state,
+)
+from .telemetry import record_event, write_report
+
+
+def _task(repo: RepositoryContext, task_id: str) -> TaskResources:
+    return TaskResources.derive(repo, task_id)
+
+
+def _branch_exists(repo: RepositoryContext, branch: str) -> bool:
+    return run_git(repo.worktree_root, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}", check=False).returncode == 0
+
+
+def _ref(repo: RepositoryContext, ref: str) -> str | None:
+    probe = run_git(repo.worktree_root, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}", check=False)
+    return probe.stdout.strip() if probe.returncode == 0 else None
+
+
+def _error(message: str, code: str) -> None:
+    raise OrchestrateError(message, code)
+
+
+def status(repo: RepositoryContext, task_id: str | None = None) -> CommandResult:
+    if task_id is None:
+        return CommandResult(True, {"tasks": active_task_ids(repo)})
+    task = _task(repo, task_id)
+    base = _ref(repo, task.integration_base_ref)
+    if base is None:
+        _error("task integration base is missing", "task_not_found")
+    integration = _ref(repo, task.integration_branch)
+    if integration is None:
+        _error("task integration branch is missing", "task_state_invalid")
+    lanes: dict[str, str] = {}
+    warnings: list[str] = []
+    lane_ids: set[str] = set()
+    base_ids: set[str] = set()
+    branch_ids: set[str] = set()
+    worktree_ids: set[str] = set()
+
+    def add_lane_id(candidate: str, inventory: set[str]) -> None:
+        try:
+            task.lane(candidate)
+        except OrchestrateError:
+            return
+        inventory.add(candidate)
+        lane_ids.add(candidate)
+
+    ref_prefix = f"refs/orchestrate/{task.task_id}/"
+    refs = run_git(
+        repo.worktree_root,
+        "for-each-ref",
+        "--format=%(refname)",
+        ref_prefix,
+    ).stdout.splitlines()
+    for ref in refs:
+        suffix = ref.removeprefix(ref_prefix)
+        if suffix.count("/") == 1 and suffix.endswith("/base"):
+            add_lane_id(suffix.removesuffix("/base"), base_ids)
+
+    branch_prefix = f"refs/heads/wave/{task.task_id}/"
+    branches = run_git(
+        repo.worktree_root,
+        "for-each-ref",
+        "--format=%(refname)",
+        branch_prefix,
+    ).stdout.splitlines()
+    for branch in branches:
+        suffix = branch.removeprefix(branch_prefix)
+        if "/" not in suffix:
+            add_lane_id(suffix, branch_ids)
+
+    lanes_root = task.root / "lanes"
+    for record in worktree_records(repo.worktree_root):
+        raw_path = record.get("worktree")
+        if not isinstance(raw_path, str):
+            continue
+        path = Path(raw_path)
+        if path.parent == lanes_root:
+            add_lane_id(path.name, worktree_ids)
+
+    for lane_id in sorted(lane_ids):
+        lane = task.lane(lane_id)
+        base_value = _ref(repo, lane.base_ref) if lane_id in base_ids else None
+        branch_value = _ref(repo, lane.branch) if lane_id in branch_ids else None
+        if base_value is not None and branch_value is not None:
+            lanes[lane_id] = branch_value
+        else:
+            warnings.append(f"lane resource is incomplete: {lane_id}")
+
+    data: dict[str, Any] = {"task_id": task.task_id, "integration": integration, "lanes": dict(sorted(lanes.items()))}
+    acceptance_state = worktree_state(repo, task.acceptance_path)
+    if acceptance_state["exists"] and acceptance_state["head"]:
+        data["acceptance"] = acceptance_state["head"]
+    for key, ref in (("accepted", task.accepted_ref), ("landed", task.landed_ref)):
+        value = _ref(repo, ref)
+        if value is not None:
+            data[key] = value
+    if warnings:
+        data["warnings"] = warnings[:20]
+    return CommandResult(True, data)
+
+
+def integration_create(repo: RepositoryContext, task_id: str) -> CommandResult:
+    task = _task(repo, task_id)
+    if task.collision():
+        _error(f"task {task.task_id} already has managed resources", "task_resource_collision")
+    head = run_git(repo.worktree_root, "rev-parse", "HEAD").stdout.strip()
+    task.integration_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        run_git(repo.worktree_root, "worktree", "add", "-b", task.integration_branch, str(task.integration_path), head)
+        run_git(repo.worktree_root, "update-ref", task.integration_base_ref, head)
+    except OrchestrateError:
+        # The preflight makes this path unreachable for the supported local Git envelope.
+        raise
+    warnings = record_event(task, "integration-create", "success")
+    return CommandResult(True, {}, warnings)
+
+
+def _path_df_collision(path: Path) -> bool:
+    if os.path.lexists(path):
+        return True
+    parent = path.parent
+    while parent != parent.parent:
+        if os.path.lexists(parent):
+            return parent.is_symlink() or not parent.is_dir()
+        parent = parent.parent
+    return False
+
+
+def _active_integration_tip(repo: RepositoryContext, task: TaskResources) -> str:
+    base = _ref(repo, task.integration_base_ref)
+    if base is None:
+        _error("task integration base does not exist", "task_not_found")
+    integration = _ref(repo, task.integration_branch)
+    if integration is None:
+        _error("task integration branch does not resolve", "task_state_invalid")
+    state = worktree_state(repo, task.integration_path)
+    if (
+        not state["exists"]
+        or state["branch"] != task.integration_branch
+        or state["head"] != integration
+    ):
+        _error("task integration worktree is invalid", "task_state_invalid")
+    return integration
+
+
+def _create_lane_resources(
+    repo: RepositoryContext,
+    task: TaskResources,
+    lane_id: str,
+    integration: str,
+) -> LaneResources:
+    """Create one exact lane inventory after its caller validates integration."""
+    lane = task.lane(lane_id)
+    branch_ref = f"refs/heads/{lane.branch}"
+    if (
+        ref_namespace_collision(repo.worktree_root, branch_ref)
+        or ref_namespace_collision(repo.worktree_root, lane.base_ref)
+        or _path_df_collision(lane.path)
+    ):
+        _error(
+            "lane managed resource collides with existing inventory",
+            "lane_resource_collision",
+        )
+    lane.path.parent.mkdir(parents=True, exist_ok=True)
+    run_git(
+        repo.worktree_root,
+        "worktree",
+        "add",
+        "-b",
+        lane.branch,
+        str(lane.path),
+        integration,
+    )
+    run_git(repo.worktree_root, "update-ref", lane.base_ref, integration)
+    return lane
+
+
+def lane_create(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandResult:
+    task = _task(repo, task_id)
+    integration = _active_integration_tip(repo, task)
+    lane = _create_lane_resources(repo, task, lane_id, integration)
+    return CommandResult(
+        True,
+        {},
+        record_event(task, "lane-create", "success", lane_id=lane.lane_id),
+    )
+
+
+@dataclass(frozen=True)
+class LaneValidation:
+    lane: LaneResources
+    tip: str | None
+    base: str | None
+    first_parent_valid: bool
+    protected_paths: tuple[str, ...]
+    diagnostics: tuple[dict[str, str], ...]
+
+    @property
+    def ready(self) -> bool:
+        return not self.diagnostics
+
+
+def _diagnostic(code: str, message: str) -> dict[str, str]:
+    return {"code": code, "message": message}
+
+
+def _normalized_immutable_path(value: str) -> bool:
+    candidate = PurePosixPath(value)
+    return (
+        bool(value)
+        and "\\" not in value
+        and not candidate.is_absolute()
+        and value == candidate.as_posix()
+        and value not in {".", ".."}
+        and ".." not in candidate.parts
+        and "//" not in value
+        and not value.endswith("/")
+    )
+
+
+def _lane_validation(
+    repo: RepositoryContext,
+    task: TaskResources,
+    lane_id: str,
+) -> LaneValidation:
+    """One read-only state model shared by check and collect."""
+    lane = task.lane(lane_id)
+    state = worktree_state(repo, lane.path)
+    if not state["exists"]:
+        return LaneValidation(
+            lane,
+            None,
+            None,
+            False,
+            (),
+            (_diagnostic("lane_not_found", "lane worktree does not exist"),),
+        )
+
+    diagnostics: list[dict[str, str]] = []
+    if state["branch"] != lane.branch:
+        diagnostics.append(
+            _diagnostic(
+                "worktree_identity_mismatch",
+                "lane worktree is not attached to its managed branch",
+            )
+        )
+    if not state["clean"] or merge_in_progress(lane.path):
+        diagnostics.append(_diagnostic("dirty_worktree", "lane worktree is dirty"))
+
+    tip = _ref(repo, lane.branch)
+    base = _ref(repo, lane.base_ref)
+    if tip is None or base is None:
+        diagnostics.append(
+            _diagnostic("lane_not_ready", "lane branch or base ref is missing")
+        )
+
+    protected: set[str] = set()
+    commits = first_parent_range(repo.worktree_root, base, tip) if base and tip else None
+    first_parent_valid = commits is not None
+    if base and tip and commits is None:
+        diagnostics.append(
+            _diagnostic("lane_not_ready", "lane tip is not on the lane base first-parent range")
+        )
+    elif commits is not None:
+        immutable_invalid = False
+        immutable_violation = False
+        for sha in commits:
+            declared = trailer_values(repo.worktree_root, sha, "Immutable")
+            valid = [value for value in declared if _normalized_immutable_path(value)]
+            if len(valid) != len(declared):
+                immutable_invalid = True
+            declared_set = set(valid)
+            changed = set(first_parent_changed_paths(repo.worktree_root, sha))
+            if (changed & protected) - declared_set:
+                immutable_violation = True
+            protected.update(declared_set)
+        if immutable_invalid or immutable_violation:
+            details = []
+            if immutable_invalid:
+                details.append("malformed Immutable declaration")
+            if immutable_violation:
+                details.append("protected path changed without redeclaration")
+            diagnostics.append(_diagnostic("lane_not_ready", "; ".join(details)))
+
+    unique: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in diagnostics:
+        identity = (item["code"], item["message"])
+        if identity not in seen:
+            unique.append(item)
+            seen.add(identity)
+    return LaneValidation(
+        lane,
+        tip,
+        base,
+        first_parent_valid,
+        tuple(sorted(protected)),
+        tuple(unique[:20]),
+    )
+
+
+def _raise_lane_refusal(validation: LaneValidation) -> None:
+    first = validation.diagnostics[0]
+    _error(first["message"], first["code"])
+
+
+def lane_check(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandResult:
+    task = _task(repo, task_id)
+    validation = _lane_validation(repo, task, lane_id)
+    if not validation.ready:
+        return CommandResult(
+            False,
+            {
+                "error": {
+                    "code": "lane_not_ready",
+                    "message": "lane is not ready for collection",
+                }
+            },
+            diagnostics=validation.diagnostics,
+        )
+    return CommandResult(
+        True,
+        {},
+        record_event(task, "lane-check", "success", lane_id=lane_id),
+    )
+
+
+def _integration_state_ready(repo: RepositoryContext, task: TaskResources) -> None:
+    integration_state = worktree_state(repo, task.integration_path)
+    if not integration_state["exists"]:
+        _error("integration worktree does not exist", "task_state_invalid")
+    if integration_state["branch"] != task.integration_branch:
+        _error("integration worktree identity mismatch", "worktree_identity_mismatch")
+    if not integration_state["clean"] or merge_in_progress(task.integration_path):
+        _error("integration worktree is dirty", "dirty_worktree")
+    tip = _ref(repo, task.integration_branch)
+    if tip is None or integration_state["head"] != tip:
+        _error("integration branch is invalid", "task_state_invalid")
+
+
+def integration_collect(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandResult:
+    task = _task(repo, task_id)
+    validation = _lane_validation(repo, task, lane_id)
+    if not validation.ready:
+        _raise_lane_refusal(validation)
+    lane = validation.lane
+    lane_tip = validation.tip
+    assert lane_tip is not None
+    _integration_state_ready(repo, task)
+    merge = run_git(
+        task.integration_path,
+        "merge",
+        "--no-ff",
+        "--no-commit",
+        lane_tip,
+        check=False,
+    )
+    if merge.returncode:
+        run_git(task.integration_path, "merge", "--abort", check=False)
+        _error("integration collect has a merge conflict", "merge_conflict")
+    message = (
+        f"Collect lane {lane.lane_id}\n\n"
+        f"Task: {task.task_id}\n"
+        f"Lane: {lane.lane_id}"
+    )
+    run_git(task.integration_path, "commit", "-m", message)
+    run_git(repo.worktree_root, "worktree", "remove", str(lane.path))
+    run_git(repo.worktree_root, "branch", "-D", lane.branch)
+    run_git(repo.worktree_root, "update-ref", "-d", lane.base_ref)
+    warnings = record_event(
+        task,
+        "integration-collect",
+        "success",
+        lane_id=lane.lane_id,
+        subject_sha=lane_tip,
+    )
+    return CommandResult(True, {}, warnings)
+
+
+def _reconcile_integration_subject(
+    repo: RepositoryContext, task: TaskResources
+) -> str:
+    integration = _ref(repo, task.integration_branch)
+    if integration is None:
+        _error("task integration is missing", "task_not_found")
+    state = worktree_state(repo, task.integration_path)
+    if (
+        not state["exists"]
+        or state["branch"] != task.integration_branch
+        or state["head"] != integration
+    ):
+        _error("integration worktree identity mismatch", "worktree_identity_mismatch")
+    if not state["clean"]:
+        _error("integration worktree is dirty", "dirty_worktree")
+    return integration
+
+
+def _checked_out_persistence_tip(
+    repo: RepositoryContext, branch_ref: str
+) -> str:
+    tip = _ref(repo, branch_ref)
+    paths: list[Path] = []
+    for record in worktree_records(repo.worktree_root):
+        raw = record.get("worktree")
+        if record.get("branch") == branch_ref and isinstance(raw, str):
+            paths.append(Path(raw))
+    if tip is None or len(paths) != 1 or not paths[0].is_dir():
+        _error(
+            "persistence branch must have exactly one checkout",
+            "task_state_invalid",
+        )
+    head = run_git(paths[0], "rev-parse", "HEAD", check=False)
+    if head.returncode or head.stdout.strip() != tip:
+        _error(
+            "persistence checkout is not at its branch tip", "task_state_invalid"
+        )
+    return tip
+
+
+def integration_reconcile(
+    repo: RepositoryContext, task_id: str, lane_id: str, persist: str
+) -> CommandResult:
+    task = _task(repo, task_id)
+    integration = _reconcile_integration_subject(repo, task)
+    persistence = _checked_out_persistence_tip(
+        repo, f"refs/heads/{persist}"
+    )
+
+    if run_git(
+        repo.worktree_root,
+        "merge-base",
+        "--is-ancestor",
+        persistence,
+        integration,
+        check=False,
+    ).returncode == 0:
+        event_warnings = record_event(
+            task,
+            "integration-reconcile",
+            "noop",
+            lane_id=lane_id,
+            persist=persist,
+        )
+        return CommandResult(
+            True,
+            {},
+            ("persistence is already included in integration", *event_warnings),
+        )
+
+    lane = _create_lane_resources(repo, task, lane_id, integration)
+    merged = run_git(
+        lane.path,
+        "merge",
+        "--no-ff",
+        "--no-commit",
+        persistence,
+        check=False,
+    )
+    if merged.returncode:
+        _error("persistence reconciliation has conflicts", "merge_conflict")
+    return CommandResult(
+        True,
+        {},
+        record_event(
+            task,
+            "integration-reconcile",
+            "success",
+            lane_id=lane_id,
+            persist=persist,
+            subject_sha=persistence,
+        ),
+    )
+
+
+def lane_sync(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandResult:
+    task = _task(repo, task_id)
+    validation = _lane_validation(repo, task, lane_id)
+    sync_blocking = [
+        item
+        for item in validation.diagnostics
+        if item["code"] != "lane_not_ready"
+    ]
+    if (
+        sync_blocking
+        or validation.tip is None
+        or validation.base is None
+        or not validation.first_parent_valid
+    ):
+        _raise_lane_refusal(validation)
+    lane_tip = validation.tip
+    assert lane_tip is not None
+    integration_tip = _active_integration_tip(repo, task)
+    current = run_git(
+        repo.worktree_root,
+        "merge-base",
+        "--is-ancestor",
+        integration_tip,
+        lane_tip,
+        check=False,
+    )
+    if current.returncode == 0:
+        event_warnings = record_event(
+            task, "lane-sync", "noop", lane_id=validation.lane.lane_id
+        )
+        return CommandResult(
+            True,
+            {},
+            ("lane already includes latest integration", *event_warnings),
+        )
+
+    merge = run_git(
+        validation.lane.path,
+        "merge",
+        "--no-ff",
+        "--no-commit",
+        integration_tip,
+        check=False,
+    )
+    if merge.returncode:
+        _error("integration sync has a merge conflict", "merge_conflict")
+
+    staged = changed_paths(validation.lane.path, "--cached", lane_tip)
+    redeclared = sorted(set(staged) & set(validation.protected_paths))
+    message_lines = [
+        f"Sync integration into lane {validation.lane.lane_id}",
+        "",
+        f"Task: {task.task_id}",
+        f"Lane: {validation.lane.lane_id}",
+        *(f"Immutable: {path}" for path in redeclared),
+    ]
+    run_git(validation.lane.path, "commit", "-m", "\n".join(message_lines))
+    return CommandResult(
+        True,
+        {},
+        record_event(
+            task, "lane-sync", "success", lane_id=validation.lane.lane_id
+        ),
+    )
+
+
+def lane_drop(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandResult:
+    task = _task(repo, task_id)
+    lane = task.lane(lane_id)
+    branch_ref = f"refs/heads/{lane.branch}"
+    worktree = worktree_for(repo.worktree_root, lane.path)
+    path_present = worktree is not None or os.path.lexists(lane.path)
+    branch_present = ref_exists(repo.worktree_root, branch_ref)
+    base_present = ref_exists(repo.worktree_root, lane.base_ref)
+    present = (path_present, branch_present, base_present)
+    if not any(present):
+        _error("lane managed inventory does not exist", "lane_not_found")
+
+    if worktree is not None:
+        run_git(
+            repo.worktree_root,
+            "worktree",
+            "remove",
+            "--force",
+            str(lane.path),
+        )
+    elif os.path.lexists(lane.path):
+        if lane.path.is_dir() and not lane.path.is_symlink():
+            shutil.rmtree(lane.path)
+        else:
+            lane.path.unlink()
+    if branch_present:
+        run_git(repo.worktree_root, "branch", "-D", lane.branch)
+    if base_present:
+        run_git(repo.worktree_root, "update-ref", "-d", lane.base_ref)
+
+    warnings = () if all(present) else ("lane managed inventory was incomplete",)
+    return CommandResult(
+        True,
+        {},
+        (*warnings, *record_event(task, "lane-drop", "success", lane_id=lane.lane_id)),
+    )
+
+
+@dataclass(frozen=True)
+class _WorktreeRemoval:
+    path: Path
+    force: bool
+    registered: bool
+    lexical_kind: str
+    directory_footprint: Path | None
+
+
+def _paths_overlap(left: Path, right: Path) -> bool:
+    left = lexical_path(left)
+    right = lexical_path(right)
+    return left == right or left in right.parents or right in left.parents
+
+
+def _is_same_or_descendant(path: Path, directory: Path) -> bool:
+    return path == directory or directory in path.parents
+
+
+def _preflight_worktree_removals(
+    repo: RepositoryContext,
+    removals: list[tuple[Path, bool]],
+) -> list[_WorktreeRemoval]:
+    """Freeze lexical cleanup actions before the first destructive operation."""
+    planned: list[_WorktreeRemoval] = []
+    for path, force in removals:
+        registered = worktree_for(repo.worktree_root, path) is not None
+        try:
+            if not os.path.lexists(path):
+                kind = "absent"
+            elif path.is_symlink():
+                kind = "symlink"
+            elif path.is_dir():
+                kind = "directory"
+            else:
+                kind = "file"
+        except OSError as exc:
+            raise OrchestrateError(
+                f"cannot inspect cleanup inventory: {path}",
+                "task_state_invalid",
+            ) from exc
+        directory_footprint = (
+            resolved_path(path) if kind == "directory" else None
+        )
+        planned.append(
+            _WorktreeRemoval(
+                path,
+                force,
+                registered,
+                kind,
+                directory_footprint,
+            )
+        )
+    return planned
+
+
+def _remove_worktree(repo: RepositoryContext, removal: _WorktreeRemoval) -> None:
+    path = removal.path
+    if removal.registered:
+        run_git(
+            repo.worktree_root,
+            "worktree",
+            "remove",
+            *(["--force"] if removal.force else []),
+            str(path),
+        )
+    elif removal.force and removal.lexical_kind != "absent":
+        if removal.lexical_kind == "directory":
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+
+
+def _closed_lane_inventory(
+    repo: RepositoryContext, task: TaskResources
+) -> list[Any]:
+    lane_ids: set[str] = set()
+    ref_prefix = f"refs/orchestrate/{task.task_id}/"
+    refs = run_git(
+        repo.worktree_root,
+        "for-each-ref",
+        "--format=%(refname)",
+        ref_prefix,
+    ).stdout.splitlines()
+    for ref in refs:
+        suffix = ref.removeprefix(ref_prefix)
+        if suffix.count("/") == 1 and suffix.endswith("/base"):
+            lane_ids.add(suffix.removesuffix("/base"))
+
+    branch_prefix = f"refs/heads/wave/{task.task_id}/"
+    branches = run_git(
+        repo.worktree_root,
+        "for-each-ref",
+        "--format=%(refname)",
+        branch_prefix,
+    ).stdout.splitlines()
+    for branch in branches:
+        suffix = branch.removeprefix(branch_prefix)
+        if "/" not in suffix:
+            lane_ids.add(suffix)
+
+    lanes_root = task.root / "lanes"
+    for record in worktree_records(repo.worktree_root):
+        raw_path = record.get("worktree")
+        if not isinstance(raw_path, str):
+            continue
+        path = Path(raw_path)
+        if path.parent == lanes_root:
+            lane_ids.add(path.name)
+
+    lanes = []
+    for lane_id in sorted(lane_ids):
+        if lane_id == "integration":
+            continue
+        try:
+            lanes.append(task.lane(lane_id))
+        except OrchestrateError:
+            continue
+    return lanes
+
+
+def integration_remove(
+    repo: RepositoryContext,
+    task_id: str,
+    *,
+    abandon: bool,
+    output_dir: Path | None = None,
+) -> CommandResult:
+    task = _task(repo, task_id)
+    if _ref(repo, task.integration_base_ref) is None:
+        _error("task does not exist", "task_not_found")
+    integration = _ref(repo, task.integration_branch)
+    if integration is None:
+        _error("integration branch is missing", "task_state_invalid")
+    if not abandon:
+        integration_state = worktree_state(repo, task.integration_path)
+        if (
+            not integration_state["exists"]
+            or integration_state["branch"] != task.integration_branch
+        ):
+            _error("integration worktree identity mismatch", "worktree_identity_mismatch")
+        if not integration_state["clean"]:
+            _error("integration worktree is dirty", "dirty_worktree")
+    lanes = _closed_lane_inventory(repo, task)
+    accepted = _ref(repo, task.accepted_ref)
+    landed = _ref(repo, task.landed_ref)
+    base = _ref(repo, task.integration_base_ref)
+    integration_tree = run_git(
+        repo.worktree_root, "rev-parse", f"{integration}^{{tree}}"
+    ).stdout.strip()
+    base_tree = run_git(
+        repo.worktree_root, "rev-parse", f"{base}^{{tree}}"
+    ).stdout.strip()
+    no_change = integration_tree == base_tree
+    if lanes and not abandon:
+        _error("task has active lanes", "task_incomplete")
+    complete = accepted == integration and landed == integration
+    if not abandon and not no_change and not complete:
+        _error("task is not accepted and landed", "task_incomplete")
+    removals = [
+        (task.acceptance_path, True),
+        *((lane.path, True) for lane in lanes),
+        (task.telemetry_path, True),
+        (task.integration_path, abandon),
+    ]
+    cleanup = _preflight_worktree_removals(repo, removals)
+    telemetry_cleanup = cleanup[-2]
+    if telemetry_cleanup.registered or telemetry_cleanup.lexical_kind == "directory":
+        _error("telemetry cleanup inventory is invalid", "task_state_invalid")
+    cleanup_paths = [removal.path for removal in cleanup]
+    if output_dir is not None:
+        resolved_output = resolved_path(output_dir)
+        overlaps_cleanup = any(
+            _paths_overlap(output_dir, path) for path in cleanup_paths
+        ) or any(
+            removal.directory_footprint is not None
+            and _is_same_or_descendant(
+                resolved_output,
+                removal.directory_footprint,
+            )
+            for removal in cleanup
+        )
+        if overlaps_cleanup:
+            _error(
+                "report output overlaps cleanup inventory",
+                "report_write_failed",
+            )
+    if output_dir is not None:
+        write_report(task, output_dir, project_terminal_remove=True)
+    warnings: tuple[str, ...] = ()
+    for removal in cleanup:
+        _remove_worktree(repo, removal)
+    for branch in [task.integration_branch, *(lane.branch for lane in lanes)]:
+        if _branch_exists(repo, branch):
+            run_git(repo.worktree_root, "branch", "-D", branch)
+    for ref in [
+        task.integration_base_ref,
+        *(lane.base_ref for lane in lanes),
+        task.accepted_ref,
+        task.landed_ref,
+    ]:
+        if _ref(repo, ref) is not None:
+            run_git(repo.worktree_root, "update-ref", "-d", ref)
+    if no_change and not abandon:
+        warnings = ("task reverted to its integration base",)
+    if task.root.exists():
+        try:
+            task.root.rmdir()
+        except OSError:
+            pass
+    return CommandResult(True, {}, warnings)

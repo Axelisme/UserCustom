@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Minimal Git-backed lane and task-integration workflow for a Git task.
-skill_version: 137
+skill_version: 138
 ---
 
 # Orchestrate
@@ -63,7 +63,7 @@ idempotent warnings. Reports and status remain read-only.
 ## Package administration
 
 `doctor` verifies the executing package's current manifest, documents, profile identity/prompt
-projections, and mandatory runtime asset. v137+ profile entries contain only `agent_name` and
+projections. v137+ profile entries contain only `agent_name` and
 `prompt_sha256`; runtime, model, and configuration metadata are excluded. `doctor --path <repo>`
 adds the cwd-derived repository pin projection.
 `doctor diff <old> <new>` compares only bundled immutable manifests; `--runtime codex|claude|pi`

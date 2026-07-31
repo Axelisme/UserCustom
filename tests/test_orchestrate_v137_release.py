@@ -29,7 +29,6 @@ from tests._orchestrate_cli_support import (
 ROOT = Path(__file__).resolve().parents[1]
 CODEX_SKILL = ROOT / "home/.codex/skills/orchestrate"
 PI_SKILL = ROOT / "home/.pi/agent/skills/orchestrate"
-ADAPTER = ROOT / "home/.pi/agent/extensions/orchestrate-pi.ts"
 HISTORICAL_MANIFEST_SHA256 = {
     130: "2821cf6ade0a2f5bf398fb3001bc104e026e7193683992d0ab74539532e7da10",
     131: "c9e9a2e36c38f31b624c947e9391124f2b397f0fb774c586f2ff2eac8e3fa22f",
@@ -38,6 +37,7 @@ HISTORICAL_MANIFEST_SHA256 = {
     134: "744a3dbeacc31d0ce8e9dbc5806c7e9901a825c6e0369186451ba98c519d9c52",
     135: "fceecf9860fbec439af556cbf0b606e3d2ad5a4eda6fcf3ddf39f7eabdeb73f7",
     136: "44e8fda2ac4ceefd1ade28671c3494a2a05250e7cfca354b112d9c3aaec81b64",
+    137: "6fe5a6b637598e8c7d50aff6bbd1e98004eb14087f683f4dc4b393783c196c03",
 }
 HISTORICAL_GUIDE_SHA256 = {
     131: "3ac711b53f0410640179261ee45288ce0b6a7d1e470c85df0623d2f2da5266ad",
@@ -46,11 +46,8 @@ HISTORICAL_GUIDE_SHA256 = {
     134: "8a3a425463086faf852ea4639389dc3f16dfe20579d2006ebe49c2ec4d6d915b",
     135: "610fe2f54db967f287002ead5dcd7717b9c6ae91f085399ca6b86853fb7d686b",
     136: "35bf94bea868b3ed90a2de541df0009fac20b51293f922dadfdd3cd92af7e8e1",
+    137: "f084bcc68d976fa5129ef8b28dcb7610acacbb2249555cf8ec03e27b7052ddb2",
 }
-ADAPTER_SHA256 = "a0cb21447bb1c7fd4d620c3a87a2d58f0b73a68600140c6eec4d8da113cf2a89"
-PI_ADAPTER_PARAGRAPHS_SHA256 = (
-    "f634774d979a7831360ca4da6e662f81d81cd92947b0b72340493b34025d1d3d"
-)
 
 
 class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
@@ -92,7 +89,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         return int(match.group(1))
 
     def seal_current_package(self) -> dict[str, Any]:
-        """Fixture adapter: seal copied bytes before crossing the public seam."""
+        """Fixture helper: seal copied bytes before crossing the public seam."""
         version = self.current()
         manifest = release.build_manifest(self.skill, version)
         (self.skill / "manifests" / f"{version}.json").write_text(
@@ -111,7 +108,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             "current": self.current(),
             "documents": len(manifest["documents"]),
             "profiles": len(manifest["profiles"]),
-            "runtime_assets": len(manifest["runtime_assets"]),
+            "runtime_assets": 0,
         }
 
     def pin_path(self) -> Path:
@@ -173,7 +170,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             {
                 "ok": True,
                 "operation": "pin-status",
-                "orchestrate_version": 137,
+                "orchestrate_version": 138,
                 "current": self.current(),
                 "aligned": False,
             },
@@ -211,7 +208,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             {
                 "ok": True,
                 "operation": "pin-status",
-                "orchestrate_version": 137,
+                "orchestrate_version": 138,
                 "current": self.current(),
                 "pinned": self.current(),
                 "aligned": True,
@@ -264,7 +261,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             },
         )
         self.assertEqual(unaligned["operation"], "doctor")
-        self.assertEqual(unaligned["orchestrate_version"], 137)
+        self.assertEqual(unaligned["orchestrate_version"], 138)
         self.assertEqual(unaligned["package"], expected_package)
         self.assertEqual(
             unaligned["repository"],
@@ -332,7 +329,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         )
         self.assertEqual(payload["ok"], False)
         self.assertEqual(payload["operation"], "doctor")
-        self.assertEqual(payload["orchestrate_version"], 137)
+        self.assertEqual(payload["orchestrate_version"], 138)
         self.assertEqual(payload["package"], self.package_projection())
         self.assertEqual(
             payload["repository"],
@@ -376,7 +373,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             },
         )
         self.assertEqual(result["operation"], "doctor-diff")
-        self.assertEqual(result["orchestrate_version"], 137)
+        self.assertEqual(result["orchestrate_version"], 138)
         self.assertEqual((result["from"], result["to"]), (old, new))
         self.assertEqual(result["compat"], [old, new])
         document_paths = [item["path"] for item in result["changed_documents"]]
@@ -632,7 +629,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                 payload = json_object(result.stderr)
                 self.assertEqual(payload["ok"], False)
                 self.assertEqual(payload["operation"], "release")
-                self.assertEqual(payload["orchestrate_version"], 137)
+                self.assertEqual(payload["orchestrate_version"], 138)
                 self.assertEqual(set(payload["error"]), {"code", "message"})
                 self.assertIsInstance(payload["error"]["code"], str)
                 self.assertTrue(payload["error"]["code"])
@@ -681,7 +678,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                     payload = json_object(doctor.stdout)
                     self.assertEqual(payload["ok"], False)
                     self.assertEqual(payload["operation"], "doctor")
-                    self.assertEqual(payload["orchestrate_version"], 137)
+                    self.assertEqual(payload["orchestrate_version"], 138)
                     self.assertIsInstance(payload.get("diagnostics"), list)
                     self.assertTrue(payload["diagnostics"])
                     for diagnostic in payload["diagnostics"]:
@@ -734,7 +731,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                     payload = json_object(doctor.stdout)
                     self.assertEqual(payload["ok"], False)
                     self.assertEqual(payload["operation"], "doctor")
-                    self.assertEqual(payload["orchestrate_version"], 137)
+                    self.assertEqual(payload["orchestrate_version"], 138)
                     self.assertIsInstance(payload.get("diagnostics"), list)
                     self.assertTrue(payload["diagnostics"])
                     for diagnostic in payload["diagnostics"]:
@@ -1099,29 +1096,30 @@ class SourcePublicationContractTests(unittest.TestCase):
         ):
             self.assertIn(phrase, guide_text)
 
-    def test_09_v137_manifests_are_matched_regenerable_and_doctor_valid(
+    def test_09_v138_manifests_are_matched_regenerable_and_doctor_valid(
         self,
     ) -> None:
         self.assertEqual(
             release.skill_version(CODEX_SKILL),
-            137,
-            "source package still identifies a pre-v137 release",
+            138,
+            "source package still identifies a pre-v138 release",
         )
-        paths = [skill / "manifests/137.json" for skill in (CODEX_SKILL, PI_SKILL)]
+        paths = [skill / "manifests/138.json" for skill in (CODEX_SKILL, PI_SKILL)]
         for path in paths:
             self.assertTrue(path.is_file(), path)
         self.assertEqual(paths[0].read_bytes(), paths[1].read_bytes())
 
         current = json.loads(paths[0].read_text(encoding="utf-8"))
         previous = json.loads(
-            (CODEX_SKILL / "manifests/136.json").read_text(encoding="utf-8")
+            (CODEX_SKILL / "manifests/137.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(current["skill_version"], 137)
-        self.assertEqual(current["orchestrate_compat"], 137)
+        self.assertEqual(current["skill_version"], 138)
+        self.assertEqual(current["orchestrate_compat"], 138)
         self.assertEqual(
-            (len(current["documents"]), len(current["profiles"]), len(current["runtime_assets"])),
-            (21, 31, 1),
+            (len(current["documents"]), len(current["profiles"])),
+            (22, 31),
         )
+        self.assertNotIn("runtime_assets", current)
         self.assertEqual(set(current["profiles"]), set(previous["profiles"]))
         for path, entry in current["profiles"].items():
             with self.subTest(profile=path):
@@ -1129,27 +1127,18 @@ class SourcePublicationContractTests(unittest.TestCase):
                 self.assertIsInstance(entry["agent_name"], str)
                 self.assertTrue(entry["agent_name"])
                 self.assertRegex(entry["prompt_sha256"], r"^[0-9a-f]{64}$")
-        self.assertEqual(current["runtime_assets"], previous["runtime_assets"])
-        self.assertEqual(
-            current["runtime_assets"],
-            {
-                ".pi/agent/extensions/orchestrate-pi.ts": {
-                    "bytes": 47_920,
-                    "sha256": ADAPTER_SHA256,
-                }
-            },
-        )
         comparison = release.compare_manifests(previous, current)
+        self.assertEqual(comparison["changed_profiles"], [])
         self.assertEqual(
-            comparison["changed_profiles"], sorted(current["profiles"])
+            comparison["changed_runtime_assets"],
+            [".pi/agent/extensions/orchestrate-pi.ts"],
         )
-        self.assertEqual(comparison["changed_runtime_assets"], [])
 
-        with tempfile.TemporaryDirectory(prefix="orchestrate-v137-regenerate-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="orchestrate-v138-regenerate-") as temporary:
             generated = []
             for index, skill in enumerate((CODEX_SKILL, PI_SKILL)):
                 output = Path(temporary) / f"logical-{index}.json"
-                release.write_release_manifest(skill, 137, 136, output)
+                release.write_release_manifest(skill, 138, 137, output)
                 generated.append(output.read_bytes())
             self.assertEqual(generated, [paths[0].read_bytes()] * 2)
 
@@ -1157,9 +1146,8 @@ class SourcePublicationContractTests(unittest.TestCase):
             with self.subTest(doctor=skill):
                 observed = release.verify_release(skill)
                 self.assertTrue(observed["ok"], observed["errors"])
-        self.assertEqual(hashlib.sha256(ADAPTER.read_bytes()).hexdigest(), ADAPTER_SHA256)
 
-    def test_10_final_docs_help_and_pi_adapter_paragraphs_agree(self) -> None:
+    def test_10_final_docs_and_runtime_bindings_agree(self) -> None:
         documents = [CODEX_SKILL / "SKILL.md", *sorted(CODEX_SKILL.glob("runtime-*.md"))]
         text = "\n".join(path.read_text(encoding="utf-8") for path in documents)
         for required in (
@@ -1219,21 +1207,28 @@ class SourcePublicationContractTests(unittest.TestCase):
             self.assertNotIn(retired, all_help)
 
         pi_text = (CODEX_SKILL / "runtime-pi.md").read_text(encoding="utf-8")
-        adapter_paragraphs = pi_text.split("\nThe Adapter is transport", 1)[0] + "\n"
+        self.assertIn("native `subagent` tool", pi_text)
+        self.assertIn("no Pi-specific adapter", pi_text)
+        self.assertNotIn("orchestrate_pi` tool", pi_text)
+        self.assertIn("process-terminal", pi_text)
+        self.assertIn("upstream pi-subagents", pi_text)
+        self.assertIn("0.38.0", pi_text)
+
+        claude = (CODEX_SKILL / "runtime-claude.md").read_text(encoding="utf-8")
+        codex = (CODEX_SKILL / "runtime-codex.md").read_text(encoding="utf-8")
         self.assertEqual(
-            hashlib.sha256(adapter_paragraphs.encode()).hexdigest(),
-            PI_ADAPTER_PARAGRAPHS_SHA256,
+            claude.replace("Claude", "RUNTIME"), codex.replace("Codex", "RUNTIME")
         )
 
-    def test_11_setup_is_v137_replacement_first_and_idempotent(self) -> None:
+    def test_11_setup_is_v138_replacement_first_and_idempotent(self) -> None:
         setup_text = setup_support.SETUP_SCRIPT.read_text(encoding="utf-8")
         self.assertTrue(
-            "Codex v137 release verification failed" in setup_text,
-            "setup still reports a pre-v137 Codex identity",
+            "Codex v138 release verification failed" in setup_text,
+            "setup still reports a pre-v138 Codex identity",
         )
         self.assertTrue(
-            "Pi v137 release verification failed" in setup_text,
-            "setup still reports a pre-v137 Pi identity",
+            "Pi v138 release verification failed" in setup_text,
+            "setup still reports a pre-v138 Pi identity",
         )
         self.assertLess(
             setup_text.rindex("\nverify_installed_orchestrate_releases"),
@@ -1260,12 +1255,6 @@ class SourcePublicationContractTests(unittest.TestCase):
             self.assertEqual(second.returncode, 0, second.stderr)
             self.assertEqual(setup_support.snapshot_home(home), first_snapshot)
             self.assertEqual(protected.read_bytes(), b"protected installed bytes\n")
-            self.assertTrue(
-                os.path.samefile(
-                    home / setup_support.ADAPTER_RELATIVE,
-                    source / "home" / setup_support.ADAPTER_RELATIVE,
-                )
-            )
             for path in retired:
                 self.assertFalse(path.exists() or path.is_symlink(), path)
             self.assertEqual(
@@ -1283,9 +1272,9 @@ class SourcePublicationContractTests(unittest.TestCase):
                 source, home = setup_support.seed_source(base)
                 retired = setup_support.seed_managed_retired_links(source, home)
                 manifest = source / (
-                    "home/.codex/skills/orchestrate/manifests/137.json"
+                    "home/.codex/skills/orchestrate/manifests/138.json"
                     if logical == "codex"
-                    else "home/.pi/agent/skills/orchestrate/manifests/137.json"
+                    else "home/.pi/agent/skills/orchestrate/manifests/138.json"
                 )
                 self.assertTrue(manifest.is_file(), manifest)
                 payload = json.loads(manifest.read_text(encoding="utf-8"))
@@ -1295,7 +1284,7 @@ class SourcePublicationContractTests(unittest.TestCase):
                 result = setup_support.run_setup(source, home)
 
                 self.assertNotEqual(result.returncode, 0, result.stdout)
-                self.assertIn(f"{logical} v137 release verification failed", result.stderr.lower())
+                self.assertIn(f"{logical} v138 release verification failed", result.stderr.lower())
                 for path in retired:
                     self.assertTrue(path.is_symlink(), path)
 
@@ -1361,7 +1350,7 @@ class SourcePublicationContractTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 payload = json_object(result.stdout)
                 self.assertTrue(payload["ok"])
-                self.assertEqual(payload["orchestrate_version"], 137)
+                self.assertEqual(payload["orchestrate_version"], 138)
                 return payload
 
             git("init", "-q", "-b", "main")
@@ -1399,7 +1388,7 @@ class SourcePublicationContractTests(unittest.TestCase):
             self.assertEqual(rerun.returncode, 0, rerun.stderr)
 
     def test_13_cutover_and_completion_audits_are_executable(self) -> None:
-        self.assertEqual(len(SUPERSEDED_V136_COVERAGE), 93)
+        self.assertEqual(len(SUPERSEDED_V136_COVERAGE), 92)
         for relative in RETIRED_TEST_PATHS:
             self.assertFalse((ROOT / relative).exists(), relative)
         for old_test, replacements in SUPERSEDED_V136_COVERAGE.items():

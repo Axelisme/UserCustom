@@ -16,7 +16,6 @@ PROFILE_LAYOUTS = {
     "claude": Path(".claude/agents"),
     "pi": Path(".pi/agent/agents"),
 }
-ADAPTER_RELATIVE = Path(".pi/agent/extensions/orchestrate-pi.ts")
 ORDINARY_FILES = {
     "home/.config/shipped.conf": "shipped config\n",
     "home/.local/include/shipped.h": "/* shipped */\n",
@@ -87,7 +86,6 @@ def seed_source(base: Path) -> tuple[Path, Path]:
         "home/.codex/AGENTS.md",
         "home/.pi/agent/APPEND_SYSTEM.md",
         "home/.pi/agent/settings.json",
-        f"home/{ADAPTER_RELATIVE.as_posix()}",
     ):
         target = source / relative
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -127,21 +125,3 @@ def snapshot_home(home: Path) -> dict[str, tuple[str, bytes | str | None]]:
         else:
             result[relative] = ("file", path.read_bytes())
     return result
-
-
-def seed_destination(base: Path, destination: Path, state: str) -> tuple[bytes | None, str | None]:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if state == "stale":
-        content = b"stale user copy\n"
-        destination.write_bytes(content)
-        return content, None
-
-    if state == "foreign":
-        target = base / f"foreign-{destination.name}"
-        target.write_text("foreign profile\n", encoding="utf-8")
-    elif state == "dangling":
-        target = base / f"missing-{destination.name}"
-    else:
-        raise AssertionError(f"unknown destination state: {state}")
-    destination.symlink_to(target)
-    return None, str(target)

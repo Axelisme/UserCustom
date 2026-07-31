@@ -1,83 +1,75 @@
 # Orchestrate — Pi runtime binding
 
-Pi Root dispatches an admitted implementation lane only through the versioned
-`orchestrate_pi` tool. The executable Adapter has exactly two actions:
-`dispatch-lane` and `attest-run`. There is no raw `subagent` fallback. An unknown
-version, action, or field; a canonical cwd/Git mismatch; an incompatible RPC
-capability response; or an invalid receipt fails closed.
+Pi Root dispatches an admitted implementation lane through the native `subagent` tool. Orchestrate ships
+no Pi-specific adapter: transport, control, and evidence are the runtime's own, and Root reads them
+directly.
 
-For `dispatch-lane`, Root supplies the frozen objective, canonical lane cwd,
-expected Git root/common-dir, branch, full subject SHA, clean-state expectation,
-write scope, immutable paths, primary-checkout dirt snapshot, focused commands,
-evidence, and stop conditions. Root may also supply an explicit `turnBudget`
-with safe-integer `maxTurns >= 1` and optional `graceTurns >= 0` (default 1).
-The Adapter verifies canonical Git identity before RPC, probes RPC v1 plus async
-spawn, status, non-recovering steer, stop, process-terminal proof v1, and
-lifecycle artifact v3, then fixes the upstream launch to `lane-worker`, fresh
-context, async mode, and no clarification. An explicit budget is the upstream
-run override; omission passes no budget or notice control and preserves upstream
-inheritance. The Adapter subscribes to the exact reply channel before emitting.
-It returns only the unchanged structured exact-run receipt. If spawn may have
-started but that receipt is invalid, it reports orphan risk and best-effort stops
-that exact `runId`; it never redispatches automatically.
+Before dispatch Root runs `lane check --task-id <task> --lane-id <lane>`, which must exit 0, and reads
+`status --task-id <task>` to record the exact lane tip SHA. The launch carries that SHA together with the
+frozen objective, canonical lane cwd, expected Git root/common-dir, branch, write scope, immutable paths,
+primary-checkout dirt snapshot, focused commands, evidence, and stop conditions. Root launches
+`lane-worker` with fresh context in async mode. Working inside the canonical lane cwd is the only hard
+contract; the agent name, its skills, and the context mode are recommendations. The worker reports the
+cwd, Git root/common-dir, branch, HEAD, and clean state it observes, and Root judges whether they match
+the admitted lane; the worker runs no mechanical self-check and does not block itself. Root records the
+returned run id, which is the handle for every later status, evidence, and continuation call.
 
-For an explicit budget, the Adapter derives the notice turn as
-`max(1, maxTurns - min(ceil(maxTurns * 0.10), 10))`. It raises time/token active
-notice thresholds to the safe-integer ceiling so the turn threshold owns the one
-notice. One same-parent-session async lane-worker turn event may cause one exact
-run/index-0 handoff steer after canonical async-directory and running
-status/cwd/digest/session correlation. The steer disables recovery, is never
-retried, and only asks the worker to make state safe and return the existing
-lane-ready or blocked evidence; it is not readiness or compliance evidence.
-Wrong, forged, early, duplicate, post-terminal, and cross-run events do nothing.
-The bounded observer is ephemeral: reload can lose the best-effort notice while
-the upstream budget and hard abort remain active. The private control-event
-coupling was tested with pi-subagents 0.37.2; package drift is not refused and may
-also lose this notice without weakening the upstream hard budget.
+Root normally passes `turnBudget` for an async writer lane with `maxTurns` no lower than 80 and
+`graceTurns` at least 1; a lower ceiling requires a stated reason. At `maxTurns` the child is asked to wrap up, and after
+`graceTurns` further assistant turns it is aborted with partial output returned, so a budget bounds a
+lane without cutting a write in half.
 
-Long interactive background work should normally return control after dispatch
-rather than defaulting to `subagent_wait`. Holding the parent turn delays a
-compactable or yieldable boundary and can increase context-exhaustion risk.
-Before ending an interactive turn or calling `yield_goal`, report concise
-progress. In goal mode, Root calls `yield_goal` only when work is blocked only
-on an external or background prerequisite. Outside goal mode, Root ends the
-turn, and Pi can wake the session when background work completes. Adapter
-process events remain wake-only attestation hints; after a wake, a subsequent
-turn calls `attest-run` for the exact run. A bounded same-turn run-to-completion
-exception using `subagent_wait` is reasonable only when the current turn must
-receive the result before it can finish, the run is expected to finish shortly,
-and it remains within an explicit, small wait bound and the current turn's
-context budget. Do not use sleep or polling loops, and do not repeatedly wait to
-manufacture same-turn completion.
+## Continuation
 
-A progress report identifies completed evidence, the active run or prerequisite,
-and the next action or blocker. Progress prose is never terminal, readiness, or
-collect evidence; only the exact evidence and Git checks defined below can support
-those decisions.
+A `paused`, `completed`, or `failed` run may be resumed with `action: "resume"` while the frozen
+Contract, provider, cwd, and lane identity are all unchanged; a change in any of them requires Root
+re-admission and a fresh dispatch instead. Resume keeps the run id, session, and launch contract, so
+continuation preserves the worker's context. Before every resume Root reruns `lane check` and `status`
+and rebinds the exact SHA.
 
-Root retains the opaque receipt and calls `attest-run` for the same run.
-`process-terminal.json` is the primary durable proof, the exact status overlay is
-fallback evidence, and the process event is wake-up only. Execution state and
-process-terminal/canonical-session-lease evidence remain independent. Missing,
-pending, not-started, malformed, mismatched, or otherwise unknown proof stays
-unknown. Result-file presence, `endedAt`, PID disappearance, lease-directory
-absence, human-readable RPC text, and turn/steering state are never terminal or
-readiness evidence.
+`action: "interrupt"` softly interrupts the current child turn and leaves the run `paused`; it is the
+resumable pause. `action: "stop"` is terminal and a stopped run can never be resumed, so it is reserved
+for abandoning a run. `action: "steer"` only delivers guidance: its reply reports that Pi accepted the
+input, never that the model complied, so steering is never readiness, compliance, collect, or terminal
+evidence.
 
-The Adapter is transport and exact-run evidence projection only. It does not
-create or discover lanes, mutate Git, maintain a run registry, enumerate matching
-runs, decide lane readiness, grant collection or acceptance, or wrap upstream steer,
-interrupt, stop, or resume operations. Root still owns Slice admission, Contract
-semantics and amendments, S2.4 pre-collect test review, primary-checkout dirt,
-`lane check`, `lane sync`, collection, acceptance, landing, and recovery. Native
-lifecycle continuation is valid only while the frozen Contract, provider, cwd, and
-lane identity remain unchanged; a change requires Root re-admission and a fresh
-authorized dispatch.
+Root may optionally use a Contract checkpoint on a risky Slice: the worker reports and ends its run after
+committing the Contract tests, Root reviews the Contract diff and the exact red evidence, and the same
+run is resumed for implementation. This is a tool, not a required step; the admission standard alone
+decides when Root must personally rerun a focused red command.
 
-After every lane is collected and the shared gates pass, Root uses `acceptance start`
-and `acceptance result` for the exact integration subject. Only the accepted subject
-may become landed. Persistence drift routes through a new admitted writer lane and
-`integration reconcile`, followed by normal collection and renewed acceptance.
-`timing pause` and `timing resume` bracket external waits; neither grants lifecycle
-authority. The Adapter never performs status, collection, acceptance, persistence,
-reporting, removal, setup, pinning, or abandonment.
+## Evidence
+
+Only the run's `process-terminal` artifact and exact Git checks constitute readiness or terminal
+evidence; everything else the runtime exposes is diagnostic, and unknown proof stays unknown.
+
+## Turn boundaries
+
+Long interactive background work returns control after dispatch rather than defaulting to
+`subagent_wait`; holding the parent turn delays a compactable boundary and raises context-exhaustion
+risk. Before ending an interactive turn or calling `yield_goal`, Root reports concise progress naming
+completed evidence, the active run or prerequisite, and the next action or blocker. In goal mode Root
+calls `yield_goal` only when work is blocked solely on an external or background prerequisite; outside
+goal mode Root ends the turn and Pi wakes the session when background work completes. A bounded
+same-turn `subagent_wait` is reasonable only when the current turn must receive the result before it can
+finish, the run is expected to finish shortly, and the wait stays within a small explicit bound. Do not
+sleep, poll, or repeatedly wait to manufacture same-turn completion.
+
+## Runtime dependency
+
+This binding depends on upstream pi-subagents providing `resume`, `interrupt`, `steer`, `turnBudget`, the
+`process-terminal` artifact, and the async status fields named above. It was verified against upstream
+0.38.0. Root runs a read-only `subagent action: "doctor"` once at the start of a task to confirm runtime
+paths, agent and skill discovery, sessions, and intercom. No further capability probe exists: an
+interface change outside that report surfaces at the first failing dispatch, and Root then judges against
+this dependency list rather than retrying.
+
+## Authority
+
+Root owns Slice admission, Contract semantics and amendments, the S2.4 pre-collect test review,
+primary-checkout dirt, `lane check`, `lane sync`, collection, acceptance, landing, reporting, removal,
+and recovery. After every lane is collected and the shared gates pass, Root uses `acceptance start` and
+`acceptance result` for the exact integration subject; only the accepted subject may become landed.
+Persistence drift routes through a new admitted writer lane and `integration reconcile`, followed by
+normal collection and renewed acceptance. `timing pause` and `timing resume` bracket external waits and
+grant no lifecycle authority.

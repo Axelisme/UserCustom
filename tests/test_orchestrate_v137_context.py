@@ -270,7 +270,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             {
                 "ok": True,
                 "operation": "status",
-                "orchestrate_version": 137,
+                "orchestrate_version": 138,
                 "tasks": ["alpha", "beta"],
             },
         )
@@ -293,7 +293,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             {
                 "ok": True,
                 "operation": "status",
-                "orchestrate_version": 137,
+                "orchestrate_version": 138,
                 "task_id": task_id,
                 "integration": self.base,
                 "lanes": {"api": self.base, "docs": self.base},
@@ -325,7 +325,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             {
                 "ok": True,
                 "operation": "status",
-                "orchestrate_version": 137,
+                "orchestrate_version": 138,
                 "task_id": task_id,
                 "integration": self.base,
                 "lanes": {"api": self.base, "docs": self.base},
@@ -437,7 +437,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             {
                 "ok": True,
                 "operation": "status",
-                "orchestrate_version": 137,
+                "orchestrate_version": 138,
                 "tasks": [],
             },
         )
@@ -481,7 +481,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             {
                 "ok": True,
                 "operation": "status",
-                "orchestrate_version": 137,
+                "orchestrate_version": 138,
                 "tasks": [self.task_id],
             },
         )
@@ -490,7 +490,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             {
                 "ok": True,
                 "operation": "status",
-                "orchestrate_version": 137,
+                "orchestrate_version": 138,
                 "task_id": self.task_id,
                 "integration": self.base,
                 "lanes": {},
@@ -672,7 +672,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             {
                 "ok": True,
                 "operation": "status",
-                "orchestrate_version": 137,
+                "orchestrate_version": 138,
                 "task_id": self.task_id,
                 "integration": integration_tip,
                 "lanes": {},

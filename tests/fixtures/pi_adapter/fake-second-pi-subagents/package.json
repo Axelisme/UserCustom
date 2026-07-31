@@ -1,9 +1,0 @@
-{
-  "name": "pi-subagents",
-  "version": "0.0.0-second-test",
-  "type": "module",
-  "exports": {
-    ".": "./index.mjs",
-    "./preflight": "./preflight.mjs"
-  }
-}

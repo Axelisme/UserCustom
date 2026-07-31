@@ -228,11 +228,6 @@ def profile_paths(home: Path) -> list[Path]:
     ]
 
 
-def runtime_asset_paths(home: Path) -> list[Path]:
-    """Return exact executable assets; never inventory the private extensions root."""
-    return [home / ".pi" / "agent" / "extensions" / "orchestrate-pi.ts"]
-
-
 def build_manifest(skill_dir: Path, version: int) -> dict[str, Any]:
     home = source_home(skill_dir)
     documents: dict[str, Any] = {}
@@ -272,22 +267,12 @@ def build_manifest(skill_dir: Path, version: int) -> dict[str, Any]:
                 ),
             }
         profiles[relative] = entry
-    runtime_assets: dict[str, Any] = {}
-    for path in runtime_asset_paths(home):
-        if not path.is_file():
-            continue
-        data = path.read_bytes()
-        runtime_assets[path.relative_to(home).as_posix()] = {
-            "bytes": len(data),
-            "sha256": sha256_bytes(data),
-        }
     return {
         "schema_version": MANIFEST_SCHEMA,
         "skill_version": version,
         "orchestrate_compat": version,
         "documents": documents,
         "profiles": profiles,
-        "runtime_assets": runtime_assets,
     }
 
 
@@ -363,11 +348,25 @@ def validate_manifest_structure(
             f"invalid release manifest structure {path}: "
             "orchestrate_compat must be an integer"
         )
-    for category, hash_field in (
+    if shape_version <= 137:
+        runtime_assets = payload.get("runtime_assets")
+        if not isinstance(runtime_assets, dict):
+            raise OrchestrateError(
+                f"invalid release manifest structure {path}: "
+                "runtime_assets must be an object for v137 and earlier"
+            )
+    elif "runtime_assets" in payload:
+        raise OrchestrateError(
+            f"invalid release manifest structure {path}: "
+            "runtime_assets is not allowed for v138 and later"
+        )
+    categories = [
         ("documents", "sha256"),
         ("profiles", None),
-        ("runtime_assets", "sha256"),
-    ):
+    ]
+    if shape_version <= 137:
+        categories.append(("runtime_assets", "sha256"))
+    for category, hash_field in categories:
         entries = payload.get(category)
         if not isinstance(entries, dict):
             raise OrchestrateError(
@@ -442,17 +441,6 @@ def write_release_manifest(
     if f"migrations/{version}.md" not in payload["documents"]:
         raise OrchestrateError(
             f"cannot publish release; migration guide is not manifest-hashed: {guide}"
-        )
-    home = source_home(skill_dir)
-    missing_runtime_assets = [
-        path.relative_to(home).as_posix()
-        for path in runtime_asset_paths(home)
-        if path.relative_to(home).as_posix() not in payload["runtime_assets"]
-    ]
-    if missing_runtime_assets:
-        raise OrchestrateError(
-            "cannot publish release; mandatory runtime asset missing: "
-            + ", ".join(missing_runtime_assets)
         )
     if previous_version is not None:
         previous = load_manifest(skill_dir, previous_version)
@@ -573,7 +561,7 @@ def verify_release(skill_dir: Path) -> dict[str, Any]:
     manifest = load_manifest(skill_dir, version)
     observed = build_manifest(skill_dir, version)
     errors: list[str] = []
-    for category in ("documents", "profiles", "runtime_assets"):
+    for category in ("documents", "profiles"):
         expected_items = manifest.get(category, {})
         observed_items = observed.get(category, {})
         for name in sorted(set(expected_items) | set(observed_items)):
@@ -584,7 +572,7 @@ def verify_release(skill_dir: Path) -> dict[str, Any]:
             else:
                 expected = expected_items[name]
                 observed_entry = observed_items[name]
-                if category in {"documents", "runtime_assets"}:
+                if category == "documents":
                     matches = expected["sha256"] == observed_entry["sha256"]
                 elif version >= 137:
                     matches = (
@@ -613,7 +601,7 @@ def verify_release(skill_dir: Path) -> dict[str, Any]:
         "orchestrate_compat": manifest.get("orchestrate_compat"),
         "documents": len(observed["documents"]),
         "profiles": len(observed["profiles"]),
-        "runtime_assets": len(observed["runtime_assets"]),
+        "runtime_assets": 0,
         "errors": errors,
     }
 
@@ -698,7 +686,7 @@ def _package_projection(skill_dir: Path) -> dict[str, int]:
         "current": current,
         "documents": len(observed["documents"]),
         "profiles": len(observed["profiles"]),
-        "runtime_assets": len(observed["runtime_assets"]),
+        "runtime_assets": 0,
     }
 
 

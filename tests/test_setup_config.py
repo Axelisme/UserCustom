@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SetupCutoverContractTests(unittest.TestCase):
-    def test_each_logical_v137_failure_precedes_retired_removal(self) -> None:
+    def test_each_logical_v138_failure_precedes_retired_removal(self) -> None:
         for logical_layout in ("codex", "pi"):
             with (
                 self.subTest(logical_layout=logical_layout),
@@ -44,9 +44,9 @@ class SetupCutoverContractTests(unittest.TestCase):
                 plan.chmod(0o755)
 
                 manifest_path = source / (
-                    "home/.codex/skills/orchestrate/manifests/137.json"
+                    "home/.codex/skills/orchestrate/manifests/138.json"
                     if logical_layout == "codex"
-                    else "home/.pi/agent/skills/orchestrate/manifests/137.json"
+                    else "home/.pi/agent/skills/orchestrate/manifests/138.json"
                 )
                 self.assertTrue(manifest_path.is_file(), manifest_path)
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -61,7 +61,7 @@ class SetupCutoverContractTests(unittest.TestCase):
 
                 self.assertNotEqual(result.returncode, 0, result.stdout)
                 self.assertIn(
-                    f"{logical_layout} v137 release verification failed",
+                    f"{logical_layout} v138 release verification failed",
                     result.stderr.lower(),
                 )
                 self.assertIn(
@@ -198,7 +198,7 @@ class SetupCutoverContractTests(unittest.TestCase):
 
 
 class SetupConfigCurrentContractTests(unittest.TestCase):
-    def test_isolated_home_installs_the_exact_v137_release_inventory(self) -> None:
+    def test_isolated_home_installs_the_exact_v138_release_inventory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             source, home = support.seed_source(base)
@@ -209,10 +209,10 @@ class SetupConfigCurrentContractTests(unittest.TestCase):
             for layout in support.managed_skill_layouts():
                 skill = home / layout / "orchestrate"
                 source_skill = source / "home" / layout / "orchestrate"
-                manifest_path = skill / "manifests/137.json"
+                manifest_path = skill / "manifests/138.json"
                 self.assertTrue(manifest_path.is_file(), manifest_path)
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                self.assertEqual(manifest["skill_version"], 137)
+                self.assertEqual(manifest["skill_version"], 138)
                 self.assertTrue(os.path.samefile(skill, source_skill))
                 for document in manifest["documents"]:
                     self.assertTrue(
@@ -223,11 +223,6 @@ class SetupConfigCurrentContractTests(unittest.TestCase):
                     self.assertTrue(
                         os.path.samefile(home / profile, source / "home" / profile),
                         profile,
-                    )
-                for asset in manifest["runtime_assets"]:
-                    self.assertTrue(
-                        os.path.samefile(home / asset, source / "home" / asset),
-                        asset,
                     )
 
             codex_skill = home / ".codex/skills/orchestrate"
@@ -279,63 +274,8 @@ class SetupConfigCurrentContractTests(unittest.TestCase):
                 destination = home / relative
                 shipped = source / "home" / relative
                 self.assertTrue(os.path.samefile(destination, shipped))
-            adapter = home / support.ADAPTER_RELATIVE
-            self.assertTrue(
-                os.path.samefile(adapter, source / "home" / support.ADAPTER_RELATIVE)
-            )
             for path, content in private.items():
                 self.assertEqual(path.read_bytes(), content)
-
-    def test_adapter_exact_destination_replacement_semantics(self) -> None:
-        for state in ("stale", "foreign", "dangling"):
-            with self.subTest(state=state), tempfile.TemporaryDirectory() as temporary:
-                base = Path(temporary)
-                source, home = support.seed_source(base)
-                destination = home / support.ADAPTER_RELATIVE
-                prior_bytes, prior_target = support.seed_destination(base, destination, state)
-
-                result = support.run_setup(source, home)
-
-                self.assertEqual(result.returncode, 0, result.stderr)
-                shipped = source / "home" / support.ADAPTER_RELATIVE
-                self.assertTrue(os.path.samefile(destination, shipped))
-                backup = destination.with_name(destination.name + ".bak")
-                if prior_bytes is not None:
-                    self.assertEqual(backup.read_bytes(), prior_bytes)
-                else:
-                    self.assertTrue(backup.is_symlink())
-                    self.assertEqual(os.readlink(backup), prior_target)
-
-    def test_same_content_adapter_relinks_without_backup_then_is_inode_idempotent(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            base = Path(temporary)
-            source, home = support.seed_source(base)
-            shipped = source / "home" / support.ADAPTER_RELATIVE
-            destination = home / support.ADAPTER_RELATIVE
-            destination.parent.mkdir(parents=True)
-            destination.write_bytes(shipped.read_bytes())
-
-            first = support.run_setup(source, home)
-            inode = destination.stat().st_ino
-            second = support.run_setup(source, home)
-
-            self.assertEqual(first.returncode, 0, first.stderr)
-            self.assertEqual(second.returncode, 0, second.stderr)
-            self.assertTrue(os.path.samefile(destination, shipped))
-            self.assertEqual(destination.stat().st_ino, inode)
-            self.assertFalse(destination.with_name(destination.name + ".bak").exists())
-
-    def test_missing_required_adapter_source_fails_final_validation(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            base = Path(temporary)
-            source, home = support.seed_source(base)
-            (source / "home" / support.ADAPTER_RELATIVE).unlink()
-
-            result = support.run_setup(source, home)
-
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("preflight", result.stderr)
-            self.assertIn(support.ADAPTER_RELATIVE.as_posix(), result.stderr)
 
     def test_same_content_install_is_idempotent_without_backup(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

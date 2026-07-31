@@ -156,7 +156,7 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         )
         self.assertIs(payload["ok"], False)
         self.assertEqual(payload["operation"], "lane-check")
-        self.assertEqual(payload["orchestrate_version"], 137)
+        self.assertEqual(payload["orchestrate_version"], 138)
         self.assertEqual(set(payload["error"]), {"code", "message"})
         self.assertEqual(payload["error"]["code"], "lane_not_ready")
         self.assertIsInstance(payload["error"]["message"], str)
@@ -945,7 +945,7 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         payload = json_object(result.stdout)
         self.assertIs(payload["ok"], True)
         self.assertEqual(payload["operation"], "lane-drop")
-        self.assertEqual(payload["orchestrate_version"], 137)
+        self.assertEqual(payload["orchestrate_version"], 138)
 
         self.assertTrue(unrelated.is_dir())
         self.assertEqual(

@@ -98,27 +98,27 @@ class ReleasedPackageTests(unittest.TestCase):
                 self.assertEqual(observed, digest)
 
 
-    def test_pi_guidance_yields_long_interactive_background_work(self) -> None:
+    def test_pi_guidance_uses_native_continuation_and_evidence(self) -> None:
         text = " ".join(
             (CODEX_SKILL / "runtime-pi.md").read_text(encoding="utf-8").split()
         )
         required = (
-            "normally return control",
-            "Before ending an interactive turn or calling `yield_goal`, report concise progress",
-            "only when work is blocked only on an external or background prerequisite",
-            "Outside goal mode, Root ends the turn, and Pi can wake the session when background work completes",
-            "Adapter process events remain wake-only attestation hints",
+            "native `subagent` tool",
+            "no Pi-specific adapter",
+            "`status --task-id <task>`",
+            "`interrupt`",
+            "`resume`",
+            "`steer`",
+            "`action: \"stop\"`",
+            "turnBudget",
+            "process-terminal",
             "rather than defaulting to `subagent_wait`",
-            "delays a compactable or yieldable boundary",
-            "can increase context-exhaustion risk",
-            "bounded same-turn run-to-completion exception",
             "only when the current turn must receive the result before it can finish",
-            "Do not use sleep or polling loops",
+            "Do not sleep, poll, or repeatedly wait",
             "completed evidence",
             "active run or prerequisite",
             "next action or blocker",
-            "Progress prose is never terminal, readiness, or collect evidence",
-            "wake-up",
+            "Pi wakes the session",
         )
         for phrase in required:
             with self.subTest(phrase=phrase):
@@ -136,28 +136,20 @@ class RuntimeParityTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "cannot locate home root"):
             self.release.source_home(Path("/tmp/unsupported/skills/orchestrate"))
 
-    def test_manifest_inventory_covers_every_runtime_profile_and_raw_runtime_asset(self) -> None:
-        adapter_relative = ".pi/agent/extensions/orchestrate-pi.ts"
-        adapter = HOME / adapter_relative
-        expected_adapter = {
-            "bytes": len(adapter.read_bytes()),
-            "sha256": hashlib.sha256(adapter.read_bytes()).hexdigest(),
-        }
+    def test_manifest_inventory_covers_every_runtime_profile_without_runtime_assets(self) -> None:
         for skill in (CODEX_SKILL, PI_SKILL):
             manifest = self.release.build_manifest(skill, SHIPPED_VERSION)
             self.assertTrue(
                 {"runtime-codex.md", "runtime-claude.md", "runtime-pi.md"}
                 <= set(manifest["documents"])
             )
+            self.assertNotIn("runtime_assets", manifest)
             expected = {
                 path.relative_to(HOME).as_posix()
                 for path in self.release.profile_paths(HOME)
                 if path.is_file()
             }
             self.assertEqual(set(manifest["profiles"]), expected)
-            self.assertEqual(
-                manifest["runtime_assets"], {adapter_relative: expected_adapter}
-            )
             for runtime, suffix in (
                 ("codex", ".toml"),
                 ("claude", ".md"),
@@ -236,32 +228,6 @@ class RuntimeParityTests(unittest.TestCase):
 
         self.assertEqual(comparison["changed_runtime_assets"], [])
 
-    def test_doctor_detects_missing_and_tampered_runtime_asset_raw_bytes(self) -> None:
-        for state in ("missing", "tampered"):
-            with self.subTest(state=state), tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
-                home = root / "home"
-                shutil.copytree(HOME, home)
-                skill = home / ".codex/skills/orchestrate"
-                version = self.release.skill_version(skill)
-                manifest = self.release.build_manifest(skill, version)
-                (skill / "manifests" / f"{version}.json").write_text(
-                    json.dumps(manifest), encoding="utf-8"
-                )
-                adapter = home / ".pi/agent/extensions/orchestrate-pi.ts"
-                if state == "missing":
-                    adapter.unlink()
-                else:
-                    adapter.write_bytes(adapter.read_bytes() + b"\r\nraw-tamper\r\n")
-
-                result = self.release.verify_release(skill)
-
-                self.assertFalse(result["ok"])
-                self.assertTrue(
-                    any("orchestrate-pi.ts" in error for error in result["errors"]),
-                    result,
-                )
-
     def test_release_cli_success_reports_newly_installed_version(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary) / "home"
@@ -288,30 +254,38 @@ class RuntimeParityTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout)["orchestrate_version"], version + 1)
 
-    def test_release_publication_refuses_missing_mandatory_runtime_asset(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            home = Path(temporary) / "home"
-            shutil.copytree(HOME, home)
-            skill = home / ".codex/skills/orchestrate"
-            target = SHIPPED_VERSION + 1
-            guide = skill / f"migrations/{target}.md"
-            guide.write_text("# next release fixture\n", encoding="utf-8")
-            adapter = home / ".pi/agent/extensions/orchestrate-pi.ts"
-            adapter.unlink()
-            output = skill / "manifests/next.json"
+    def test_v138_manifest_rejects_runtime_assets(self) -> None:
+        payload = {
+            "schema_version": 1,
+            "skill_version": 138,
+            "orchestrate_compat": 138,
+            "documents": {},
+            "profiles": {},
+            "runtime_assets": {},
+        }
+        with self.assertRaisesRegex(
+            self.release.OrchestrateError,
+            r"runtime_assets is not allowed for v138 and later",
+        ):
+            self.release.validate_manifest_structure(
+                payload, Path("/tmp/v138-invalid-manifest.json"), 138
+            )
 
-            with self.assertRaisesRegex(
-                self.release.OrchestrateError,
-                r"mandatory runtime asset.*orchestrate-pi\.ts",
-            ):
-                self.release.write_release_manifest(
-                    skill,
-                    target,
-                    None,
-                    output,
-                )
-
-            self.assertFalse(output.exists())
+    def test_v137_manifest_requires_runtime_assets(self) -> None:
+        payload = {
+            "schema_version": 1,
+            "skill_version": 137,
+            "orchestrate_compat": 137,
+            "documents": {},
+            "profiles": {},
+        }
+        with self.assertRaisesRegex(
+            self.release.OrchestrateError,
+            r"runtime_assets must be an object for v137 and earlier",
+        ):
+            self.release.validate_manifest_structure(
+                payload, Path("/tmp/v137-invalid-manifest.json"), 137
+            )
 
     def test_doctor_detects_shipped_profile_tamper(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

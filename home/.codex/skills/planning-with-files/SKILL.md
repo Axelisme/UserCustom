@@ -8,7 +8,8 @@ skill_version: 15
 # Retired transition capsule
 
 This skill is no longer an active lifecycle authority and must not create or manage new tasks.
-Use `dev-flow` and its task-record `scripts/plan.py` for all new durable work.
+Use `dev-flow` and its task-record `scripts/plan.py` for all new durable work. Its current public
+surface is `create | archive | resume | refresh`; this capsule is not a compatibility surface.
 
 The preserved `scripts/plan.py` and templates are available for **direct legacy diagnostics only**
 during the v136 transition. Invoke the script by its explicit source path when old record bytes

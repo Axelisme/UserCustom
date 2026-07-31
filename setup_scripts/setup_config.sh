@@ -242,7 +242,7 @@ smoke_task_record() {
   smoke_root=$(mktemp -d "${TMPDIR:-/tmp}/usercustom-task-record.XXXXXX")
   if ! (cd "$smoke_root" \
     && python "$plan" create setup-smoke --goal "Verify durable task replacement." >/dev/null \
-    && python "$plan" check setup-smoke >/dev/null); then
+    && python "$plan" refresh setup-smoke >/dev/null); then
     rm -rf -- "$smoke_root"
     echo "error: replacement smoke failed; retired planning destinations were not changed" >&2
     return 1

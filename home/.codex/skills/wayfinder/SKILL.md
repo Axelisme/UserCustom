@@ -19,7 +19,9 @@ Every map and ticket is an issue, so it has a **name** — its title. In everyth
 
 The map is the canonical artifact of the effort. On a tracker backend it is a single issue labelled `wayfinder:map` whose tickets are child issues; on a plan-directory backend it is a single file (see below).
 
-The map is an **index**, not a store. It lists the decisions made and points at the tickets that hold their detail; a decision lives in exactly one place — its ticket — so the map never restates it, only gists it and links.
+The map is a **route narrative**, not a decision store. It records how each closed ticket changed
+the route and links to that work; the decision details live in the producer-owned `decisions.md`, so
+the map never restates them.
 
 **Where the map, its tickets, blocking, and frontier queries physically live depends on the repo:**
 
@@ -30,15 +32,16 @@ The map is an **index**, not a store. It lists the decisions made and points at 
 ### Plan-directory backend
 
 Initialize the plan-directory backend with dev-flow `scripts/plan.py create`. The map is the
-artifact `.agent_state/plans/<task-id>/wayfinder-map.md`; its `Decisions so far` section is only an
-index of pointers. Decision and research work lives in the shared generic `tickets/*.md` files,
-created with dev-flow `ticket-create`, with dependencies in `depends_on`. Do not embed a second
-status, claim, blocking or ticket store in `wayfinder-map.md`.
+artifact `.agent_state/plans/<task-id>/wayfinder-map.md`. Write generic `tickets/*.md` directly:
+use the shared three-field header, `Resolve by` action, and `Outcome`/`Current` container; record
+blocking in its `depends_on` header field. Do not embed a second status, claim, blocking or ticket
+store in `wayfinder-map.md`.
 
 Claiming means changing the owning generic ticket from `open` to `active` before work. The frontier
-is the open tickets whose dependencies are closed. Closing records the resolution in that ticket,
-then adds only a one-line linked gist to the map. Research notes and prototypes remain domain
-artifacts and are linked from their owning generic ticket and from INDEX Artifacts when useful.
+is the open tickets whose dependencies are closed. Wayfinder decisions belong in the producer-owned
+`decisions.md`; closing a ticket records the route outcome there, then adds a one-line linked route
+narrative to the map's `Decisions so far` section. Research notes and prototypes remain domain
+artifacts and are linked from their owning generic ticket and from INDEX prose when useful.
 
 ### The map body
 
@@ -61,9 +64,9 @@ The whole map at low resolution, loaded once per session. Open tickets are **not
 
 ## Decisions so far
 
-<!-- the index — one line per closed ticket: enough to judge relevance, then zoom the link for the detail the ticket holds -->
+<!-- route narrative — one line per closed ticket saying how that resolution changed the route -->
 
-- [<closed ticket title>](link) — <one-line gist of the answer>
+- [<closed ticket title>](link) — <one-line description of the route change>
 
 ## Not yet specified
 

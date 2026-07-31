@@ -60,8 +60,7 @@ acceptance or review gaps and decision-required branches remain in the current t
 ## S3 — Machine rework admission
 
 - Root keeps one monotonic `Machine rework: N/2` prose line in the active Slice ticket's Current
-  section before a simplify, Standards or Spec production correction. When the ticket closes,
-  copy the final line into Result before replacing Current.
+  section before a simplify, Standards or Spec production correction.
 - Initial simplify, Contract-only correction, backlog, decision blocking, user-validation repair
   and rollout correction do not increment it.
 - A proposed third production correction is a scope event. Recut at S1 or report it; never dispatch
@@ -81,10 +80,10 @@ candidate mutation Root rechecks the same binding; any mismatch requires fresh r
 delta uses only its originating axis.
 
 User validation is an ordinary generic ticket depending on delivered implementation. It remains
-open or blocked until explicit successful exercise, then closes with an exact evidence pointer.
-Failure keeps it unfinished and creates or references a repair ticket. Later invalidation creates a
-new ticket rather than reopening history. Agent-verifier work does not alone trigger a gate, but an
-ungated integration tip cannot move the candidate Git ref or land.
+open until explicit successful exercise, then closes with an exact evidence pointer. Failure leaves
+it unfinished and creates or references a repair ticket. Later invalidation creates a new ticket
+rather than reopening history. Agent-verifier work does not alone trigger a gate, but an ungated
+integration tip cannot move the candidate Git ref or land.
 
 ## S5 — Landing and close-out
 
@@ -93,9 +92,9 @@ ungated integration tip cannot move the candidate Git ref or land.
   squash commit whose persistence tree exactly equals the target tree; never cherry-pick, rebase,
   reset or merge-commit the target. Integration remains append-only.
 - A partial landing never cleans task state. Final landing requires the clean current integration
-  tip, every generic ticket closed with non-pending Result, green task-record `check` (or a
-  recognized confined legacy bridge), exact candidate/landing/topology/tree checks and any
-  task-specific rollout checklist closed.
+  tip, every generic ticket closed with recorded final state, a successful current-version
+  task-record `refresh` (or a recognized confined legacy bridge), exact
+  candidate/landing/topology/tree checks and any task-specific rollout checklist closed.
 - Generic task-record `archive` is a neutral move and never implies completion. Each landing,
   archive and cleanup mutation requires current user authority at its own gate. Protect and recheck
   pre-existing dirt and non-task evidence. Never push.

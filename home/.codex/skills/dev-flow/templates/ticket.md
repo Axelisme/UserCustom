@@ -6,17 +6,9 @@
 | status | open |
 | depends_on | {{DEPENDS_ON}} |
 
+**Resolve by:** <action and whether the user must be present>
+
 ## Outcome
 {{OUTCOME}}
 
 ## Current
-Ticket created.
-
-## Decisions
-| ID | Status | Decision | Supersedes |
-|---|---|---|---|
-
-## Evidence
-
-## Result
-pending

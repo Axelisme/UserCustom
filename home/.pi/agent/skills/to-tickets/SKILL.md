@@ -25,8 +25,9 @@ owning surfaces.
 
 ## Publish
 
-In a plan-directory repo, publish each Slice through dev-flow `ticket-create` as the shared generic
-`tickets/*.md` record and encode blocking edges only in `depends_on`; do not create a second ticket
-store. In a tracker, publish issues with native blocking edges. Otherwise write numbered local
-ticket files under `.scratch/<feature-slug>/issues/`. Use authority pointers for Oracle, merge and
-Implementation coordination. Never modify the source issue.
+In a plan-directory repo, write each Slice directly as a shared generic `tickets/*.md` record:
+use the three-field header, a `Resolve by` action, and `Outcome`/`Current`; encode blocking only in
+`depends_on` and do not create a second ticket store. Its Slice evidence belongs in the producer's
+content rather than a dev-flow schema. In a tracker, publish issues with native blocking edges.
+Otherwise write numbered local ticket files under `.scratch/<feature-slug>/issues/`. Use authority
+pointers for Oracle, merge and Implementation coordination. Never modify the source issue.

@@ -1,16 +1,15 @@
 {
   "theme": "dark",
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.6-sol",
-  "defaultThinkingLevel": "high",
+  "defaultModel": "gpt-5.6-luna",
+  "defaultThinkingLevel": "max",
   "packages": [
     "/home/axel/Documents/VSCode/Typescript/pi-goal",
-    "npm:@juicesharp/rpiv-ask-user-question",
     "npm:pi-mcp-adapter",
-    "npm:pi-native-search",
     "git:github.com/nicobailon/pi-subagents",
-    "git:github.com/dbachelder/pi-btw",
-    "npm:pi-openai-fast-mode"
+    "npm:pi-openai-fast-mode",
+    "git:github.com/nicobailon/pi-web-access",
+    "npm:@tintinweb/pi-tasks"
   ],
   "lastChangelogVersion": "0.81.1"
 }

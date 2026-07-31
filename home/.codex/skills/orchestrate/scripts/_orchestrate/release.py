@@ -659,6 +659,30 @@ def require_verified_release(skill_dir: Path) -> dict[str, Any]:
     return result
 
 
+def require_intact_package(skill_dir: Path) -> dict[str, Any]:
+    """Publication preflight: the current package must be whole, not unchanged.
+
+    Publishing a release necessarily edits documents the current manifest still
+    hashes, so hash equality cannot be a precondition for it. Require instead
+    that the current manifest loads and that no document it lists has gone
+    missing; `release_package` verifies the published result against the target
+    manifest and restores prior bytes when that fails.
+    """
+    skill_dir = skill_dir.resolve()
+    version = skill_version(skill_dir)
+    manifest = load_manifest(skill_dir, version)
+    missing = sorted(
+        name
+        for name in manifest.get("documents", {})
+        if not (skill_dir / name).is_file()
+    )
+    if missing:
+        raise OrchestrateError(
+            "release preflight failed: " + "; ".join(f"missing document: {name}" for name in missing)
+        )
+    return manifest
+
+
 def pin_status(root: Path, skill_dir: Path) -> CommandResult:
     current = skill_version(skill_dir)
     pin = read_version_pin(root)

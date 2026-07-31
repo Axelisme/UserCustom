@@ -82,7 +82,7 @@ SUPERSEDED_V136_COVERAGE: dict[str, tuple[str, ...]] = {
     'tests.test_orchestrate_pin_guard.VerifiedReleaseTaskMutationGuardTests.test_malformed_manifest_refuses_task_mutation_without_traceback_or_state': ('tests.test_orchestrate_v137_release.PackageCommandContractTests.test_11_malformed_manifest_sections_refuse_doctor_and_diff',),
     'tests.test_orchestrate_pin_guard.VerifiedReleaseTaskMutationGuardTests.test_alternate_skill_dir_cannot_supply_task_mutation_provenance': ('tests.test_orchestrate_v137_release.PackageCommandContractTests.test_01_help_and_pin_status_are_exact_and_cwd_derived',),
     'tests.test_orchestrate_pin_guard.VerifiedReleaseTaskMutationGuardTests.test_missing_and_mismatched_pin_do_not_block_task_mutation': ('tests.test_orchestrate_v137_context.CloseableTracerContractTests.test_pin_absence_and_version_drift_do_not_block_create',),
-    'tests.test_orchestrate_pin_guard.CurrentManifestParityTests.test_v136_manifest_is_byte_identical_across_codex_and_pi': ('tests.test_orchestrate_v137_release.SourcePublicationContractTests.test_09_v139_manifests_are_matched_regenerable_and_doctor_valid',),
+    'tests.test_orchestrate_pin_guard.CurrentManifestParityTests.test_v136_manifest_is_byte_identical_across_codex_and_pi': ('tests.test_orchestrate_v137_release.SourcePublicationContractTests.test_09_v140_manifests_are_matched_regenerable_and_doctor_valid',),
     'tests.test_orchestrate_report.ReportContractTests.test_two_lanes_report_isolated_span_commits_and_numstat': ('tests.test_orchestrate_v137_lifecycle.ObservationReportingCleanupContractTests.test_10_report_owns_two_fixed_names_and_atomically_overwrites_without_timestamps',),
     'tests.test_orchestrate_report.ReportContractTests.test_production_and_test_numstat_are_separate_buckets': ('tests.test_orchestrate_v137_lifecycle.ObservationReportingCleanupContractTests.test_10_report_owns_two_fixed_names_and_atomically_overwrites_without_timestamps',),
     'tests.test_orchestrate_report.ReportContractTests.test_max_concurrent_is_two_when_lane_intervals_overlap': ('tests.test_orchestrate_v137_lifecycle.ObservationReportingCleanupContractTests.test_10_report_owns_two_fixed_names_and_atomically_overwrites_without_timestamps',),
@@ -100,24 +100,24 @@ SUPERSEDED_V136_COVERAGE: dict[str, tuple[str, ...]] = {
     'tests.test_orchestrate_migration.PinAndMigrationGuideContractTests.test_failed_release_verification_preserves_previous_pin': ('tests.test_orchestrate_v137_release.PackageCommandContractTests.test_02_pin_set_verifies_current_and_aligned_set_preserves_bytes',),
     'tests.test_orchestrate_migration.PinAndMigrationGuideContractTests.test_atomic_replace_failure_preserves_pin_and_removes_temporary_file': ('tests.test_orchestrate_v137_release.PackageCommandContractTests.test_12_malformed_pin_refuses_status_and_set_without_mutation',),
     'tests.test_orchestrate_release.ReleasedPackageTests.test_root_help_is_only_the_workflow_and_retained_administration': ('tests.test_orchestrate_v137_release.SourcePublicationContractTests.test_10_final_docs_and_runtime_bindings_agree',),
-    'tests.test_orchestrate_release.ReleasedPackageTests.test_v136_is_a_matched_regenerable_release_for_both_logical_layouts': ('tests.test_orchestrate_v137_release.SourcePublicationContractTests.test_09_v139_manifests_are_matched_regenerable_and_doctor_valid',),
+    'tests.test_orchestrate_release.ReleasedPackageTests.test_v136_is_a_matched_regenerable_release_for_both_logical_layouts': ('tests.test_orchestrate_v137_release.SourcePublicationContractTests.test_09_v140_manifests_are_matched_regenerable_and_doctor_valid',),
     'tests.test_orchestrate_release.RuntimeParityTests.test_runtime_filtered_diff_includes_only_matching_runtime_assets': ('tests.test_orchestrate_v137_release.PackageCommandContractTests.test_05_doctor_diff_is_nested_immutable_sorted_and_runtime_filtered',),
     'tests.test_orchestrate_release.RuntimeParityTests.test_doctor_refuses_json_valid_malformed_manifest_structures': ('tests.test_orchestrate_v137_release.PackageCommandContractTests.test_11_malformed_manifest_sections_refuse_doctor_and_diff',),
     'tests.test_orchestrate_release.RuntimeParityTests.test_release_rolls_back_when_target_migration_guide_is_missing': ('tests.test_orchestrate_v137_release.PackageCommandContractTests.test_07_failed_release_restores_skill_bytes_and_deletes_manifest',),
-    'tests.test_setup_config.SetupCutoverContractTests.test_each_logical_v136_failure_precedes_retired_removal': ('tests.test_orchestrate_v137_release.SourcePublicationContractTests.test_11_setup_is_v139_replacement_first_and_idempotent',),
+    'tests.test_setup_config.SetupCutoverContractTests.test_each_logical_v136_failure_precedes_retired_removal': ('tests.test_orchestrate_v137_release.SourcePublicationContractTests.test_11_setup_is_v140_replacement_first_and_idempotent',),
     'tests.test_setup_config.SetupConfigCurrentContractTests.test_isolated_home_installs_the_exact_v136_release_inventory': ('tests.test_orchestrate_v137_release.SourcePublicationContractTests.test_12_installed_help_and_lifecycle_match_source',),
 }
 
 PUBLICATION_OBJECTIVE_AUDIT = {
     "historical-artifacts": {
-        "artifact": "manifests/130.json..138.json and migrations/131.md..139.md",
+        "artifact": "manifests/130.json..139.json and migrations/131.md..140.md",
         "test": "SourcePublicationContractTests.test_08_historical_artifacts_are_exact_and_v137_guide_is_hashed",
-        "gate": "historical SHA-256 and v139 manifest regeneration",
+        "gate": "historical SHA-256 and v140 manifest regeneration",
     },
     "matched-package": {
-        "artifact": "Codex/Pi manifests/139.json",
-        "test": "SourcePublicationContractTests.test_09_v139_manifests_are_matched_regenerable_and_doctor_valid",
-        "gate": "source doctor, logical-Pi doctor, cmp, and 138-to-139 diff",
+        "artifact": "Codex/Pi manifests/140.json",
+        "test": "SourcePublicationContractTests.test_09_v140_manifests_are_matched_regenerable_and_doctor_valid",
+        "gate": "source doctor, logical-Pi doctor, cmp, and 139-to-140 diff",
     },
     "final-guidance": {
         "artifact": "SKILL.md and runtime-*.md",
@@ -126,7 +126,7 @@ PUBLICATION_OBJECTIVE_AUDIT = {
     },
     "replacement-first-setup": {
         "artifact": "setup_scripts/setup_config.sh",
-        "test": "SourcePublicationContractTests.test_11_setup_is_v139_replacement_first_and_idempotent",
+        "test": "SourcePublicationContractTests.test_11_setup_is_v140_replacement_first_and_idempotent",
         "gate": "bash -n plus isolated-HOME failure/idempotence tests",
     },
     "installed-parity": {

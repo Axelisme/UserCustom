@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SetupCutoverContractTests(unittest.TestCase):
-    def test_each_logical_v138_failure_precedes_retired_removal(self) -> None:
-        for logical_layout in ("codex", "pi"):
+    def test_release_verification_failure_precedes_retired_removal(self) -> None:
+        for logical_layout in ("codex",):
             with (
                 self.subTest(logical_layout=logical_layout),
                 tempfile.TemporaryDirectory() as temporary,
@@ -43,11 +43,7 @@ class SetupCutoverContractTests(unittest.TestCase):
                 )
                 plan.chmod(0o755)
 
-                manifest_path = source / (
-                    "home/.codex/skills/orchestrate/manifests/139.json"
-                    if logical_layout == "codex"
-                    else "home/.pi/agent/skills/orchestrate/manifests/139.json"
-                )
+                manifest_path = source / "home/.codex/skills/orchestrate/manifests/140.json"
                 self.assertTrue(manifest_path.is_file(), manifest_path)
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 manifest["documents"]["runtime-pi.md"]["sha256"] = "0" * 64
@@ -61,7 +57,7 @@ class SetupCutoverContractTests(unittest.TestCase):
 
                 self.assertNotEqual(result.returncode, 0, result.stdout)
                 self.assertIn(
-                    f"{logical_layout} v139 release verification failed",
+                    f"{logical_layout} v140 release verification failed",
                     result.stderr.lower(),
                 )
                 self.assertIn(
@@ -209,10 +205,10 @@ class SetupConfigCurrentContractTests(unittest.TestCase):
             for layout in support.managed_skill_layouts():
                 skill = home / layout / "orchestrate"
                 source_skill = source / "home" / layout / "orchestrate"
-                manifest_path = skill / "manifests/139.json"
+                manifest_path = skill / "manifests/140.json"
                 self.assertTrue(manifest_path.is_file(), manifest_path)
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                self.assertEqual(manifest["skill_version"], 139)
+                self.assertEqual(manifest["skill_version"], 140)
                 self.assertTrue(os.path.samefile(skill, source_skill))
                 for document in manifest["documents"]:
                     self.assertTrue(

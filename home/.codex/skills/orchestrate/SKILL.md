@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Minimal Git-backed lane and task-integration workflow for a Git task.
-skill_version: 139
+skill_version: 140
 ---
 
 # Orchestrate
@@ -71,10 +71,12 @@ filters runtime-specific documents, profiles, and assets. `pin status` and the a
 `pin set` derive the repository from cwd. A pin records the last manually adopted release; it never
 selects the executable or blocks task work merely because it is absent or different.
 
-`release --version <exact-next>` is the sole package publication command. It requires a healthy
-current package and an exact-next migration guide, updates the source identity, writes the target
-manifest, verifies the result, and restores prior bytes on failure. Apply manifest-hashed migration
-guides in order before a separately authorized setup or pin change.
+`release --version <exact-next>` is the sole package publication command. It requires an intact
+current package — its manifest loads and lists no missing document — and an exact-next migration
+guide. It does not require the current package to still match its own hashes, because publication
+edits exactly those documents. It updates the source identity, writes the target manifest, verifies
+the published result against it, and restores prior bytes on failure. Apply manifest-hashed
+migration guides in order before a separately authorized setup or pin change.
 
 Every command prints one JSON object with `orchestrate_version`. Success is on stdout with exit 0;
 a completed negative predicate uses stdout and exit 1; an operational or usage error uses stderr

@@ -17,6 +17,13 @@ _PACKAGE = tempfile.TemporaryDirectory(prefix="orchestrate-cli-tests-")
 TEST_HOME = Path(_PACKAGE.name) / "home"
 shutil.copytree(ROOT / "home", TEST_HOME)
 VERIFIED_SKILL = TEST_HOME / ".codex" / "skills" / "orchestrate"
+SOURCE_SKILL_VERSION = int(
+    re.search(
+        r"^skill_version:\s*(\d+)$",
+        (ROOT / "home/.codex/skills/orchestrate/SKILL.md").read_text(encoding="utf-8"),
+        re.MULTILINE,
+    ).group(1)
+)
 SCRIPT = VERIFIED_SKILL / "scripts" / "orchestrate.py"
 
 sys.path.insert(0, str(VERIFIED_SKILL / "scripts"))
@@ -82,10 +89,12 @@ def json_object(raw: str) -> dict[str, Any]:
 class OrchestrateCliRepositoryTestCase(unittest.TestCase):
     """Small public-seam fixture backed by one throwaway real repository."""
 
-    orchestrate_version = 139
+    orchestrate_version = SOURCE_SKILL_VERSION
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory(prefix="orchestrate-v139-")
+        self.temporary = tempfile.TemporaryDirectory(
+            prefix=f"orchestrate-v{self.orchestrate_version}-"
+        )
         self.root = Path(self.temporary.name)
         run_git(self.root, "init", "-q", "-b", "main")
         run_git(self.root, "config", "user.name", "Contract Test")

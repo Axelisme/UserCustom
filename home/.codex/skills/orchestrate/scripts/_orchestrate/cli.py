@@ -29,12 +29,13 @@ from .release import (
     pin_set,
     pin_status,
     release_package,
+    require_intact_package,
     require_verified_release,
 )
 from .resources import RepositoryContext, TaskResources
 from .telemetry import auto_resume, record_event, timing_transition, write_report
 
-ORCHESTRATE_VERSION = 139
+ORCHESTRATE_VERSION = 140
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
@@ -232,8 +233,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         if selected != skill_dir:
             raise OrchestrateError("--skill-dir must resolve to the executing package", "cli_usage")
         if getattr(args, "mutation", False):
+            # Publication edits the very documents the current manifest hashes,
+            # so it is gated on package integrity rather than on hash equality.
+            preflight = (
+                require_intact_package if operation == "release" else require_verified_release
+            )
             try:
-                require_verified_release(skill_dir)
+                preflight(skill_dir)
             except (OSError, UnicodeError, OrchestrateError) as exc:
                 raise OrchestrateError(str(exc), "package_unhealthy") from exc
         discovery_path = (

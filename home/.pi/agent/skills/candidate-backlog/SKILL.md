@@ -1,7 +1,7 @@
 ---
 name: candidate-backlog
 description: Capture evidence-backed discoveries that are valuable but outside the current task into a repo-local candidate backlog, without expanding scope or avoiding current-task obligations. Also use when planning work in an area (check its inbox first) or when the user asks what is worth doing next.
-skill_version: 3
+skill_version: 4
 ---
 
 # Candidate Backlog
@@ -23,7 +23,7 @@ skill_version: 3
 2. 用 `list` 搜尋相同 title / area；`add` 也會 Fast Fail 並回報既有 ID。
 3. 用 `scripts/backlog.py add` 建立一項一檔的 observation。
 4. 在 task report / final 回報新建或補充的 backlog ID。
-5. 不自行把項目升為 task；決定執行時才用 `plan` 綁定正式 task-id。
+5. 不自行把項目升為 task；決定執行時才用 `bind` 綁定正式 task-id。
 
 欄位與 taxonomy 見 [schema.md](references/schema.md)；狀態轉移與收尾條件見
 [lifecycle.md](references/lifecycle.md)；人工撰寫時使用
@@ -33,18 +33,19 @@ skill_version: 3
 ## CLI
 
 文件中的 `<repo-python>` 代表 repo 文件記載的直譯器（例如 `.venv/bin/python`），`<skill-dir>` 是本
-`SKILL.md` 所在目錄。資料存於目標 repo 的 `.agent_state/backlog/`（gitignored）。所有命令明確指定
-主 checkout：
+`SKILL.md` 所在目錄。資料存於主 checkout 的 `.agent_state/backlog/`（gitignored）。`--root` 可省略，
+省略時 CLI 從 cwd 自動推導主 checkout（拒絕 linked worktree）；只有在需要覆寫時才顯式指定：
 
 ```text
-<repo-python> <skill-dir>/scripts/backlog.py --root <main-checkout> add --kind <kind> --area <area> --source-task <task-id> --title <title> --observation <text> --evidence <text> --impact <text> --desired-outcome <text>
-<repo-python> <skill-dir>/scripts/backlog.py --root <main-checkout> list [--status inbox|planned|resolved|closed] [--kind <kind>] [--area <area>] [--json]
-<repo-python> <skill-dir>/scripts/backlog.py --root <main-checkout> plan <id> --task-id <task-id>
-<repo-python> <skill-dir>/scripts/backlog.py --root <main-checkout> close <id> --resolution implemented --task-id <task-id> --commit <sha> --validation <text>
-<repo-python> <skill-dir>/scripts/backlog.py --root <main-checkout> close <id> --resolution duplicate --duplicate-of <canonical-id>
+<repo-python> <skill-dir>/scripts/backlog.py add --kind <kind> --area <area> --source-task <task-id> --title <title> --observation <text> --evidence <text> --impact <text> --desired-outcome <text>
+<repo-python> <skill-dir>/scripts/backlog.py list [--status inbox|planned|resolved|closed] [--kind <kind>] [--area <area>]
+<repo-python> <skill-dir>/scripts/backlog.py bind <id> --task-id <task-id>
+<repo-python> <skill-dir>/scripts/backlog.py close <id> --resolution implemented --task-id <task-id> --commit <sha> --validation <text>
+<repo-python> <skill-dir>/scripts/backlog.py close <id> --resolution duplicate --duplicate-of <canonical-id>
 ```
 
-CLI 使用 UTC timestamp、UTF-8、lock 與 atomic replace；不要繞過 transition 或直接覆寫 metadata。
+CLI 使用 UTC timestamp、UTF-8 與 atomic replace；輸出恆為單行 JSON envelope（成功與錯誤皆印到
+stdout，`ok`/`operation`/`backlog_version` 固定欄位）。不要繞過 transition 或直接覆寫 metadata。
 
 ## 消費時刻（防 inbox rot）
 

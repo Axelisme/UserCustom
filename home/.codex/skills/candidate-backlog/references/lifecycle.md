@@ -1,12 +1,12 @@
 # Candidate Backlog Lifecycle
 
 ```text
-inbox --plan--> planned --close implemented--> resolved
+inbox --bind--> planned --close implemented--> resolved
 inbox --close implemented (rider, with evidence)--> resolved
 inbox/planned --close declined|duplicate|obsolete|not-reproducible|out-of-scope--> closed
 ```
 
-- `plan` 綁定 task-id（CLI 只驗證格式；dev-flow task record 的存在與正確性屬 task record
+- `bind` 綁定 task-id（CLI 只驗證格式；dev-flow task record 的存在與正確性屬 task record
   慣例與 review 職責，CLI 不跨界檢查）；正式 task 的 generic ticket 反向引用 backlog ID。
 - 實作完成但尚未整合仍是 `planned`。
 - `implemented` 接受 `planned`（task-id 必須與 plan 綁定值相同）或 `inbox` 直達（順風單：規劃時

@@ -8,7 +8,9 @@ do not restate its policy.
 
 1. **Minimum need first.** Before designing, record the smallest current user-visible need and its
    usage envelope. Refuse requirements that are only hypothetical robustness without a current
-   observable.
+   observable. The envelope is agreed with the current user, not inferred: confirm the expected
+   behavior, the usage scenarios and which cases are out of envelope before designing. If they
+   cannot be confirmed, stop and ask; do not design past the gap.
 2. **Start from zero.** Generate the smallest complete end-to-end design that satisfies the need.
    Do not preserve or layer historical mechanisms merely because they already exist.
 3. **Breadth before depth.** Deliver one usable tracer through the whole required path before

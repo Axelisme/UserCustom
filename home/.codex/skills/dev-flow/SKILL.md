@@ -20,6 +20,7 @@ files block is a projection of the record directory. Agents maintain the prose, 
 `tickets/*.md` hold ordinary generic work; their container is a three-field header, a `Resolve by`
 action, and `Outcome`/`Current`. Decision-making work keeps its decisions in the producer-owned
 `decisions.md` artifact, not in the generic container.
+See [`references/example-record/`](references/example-record/) for a worked example of this shape.
 
 Wayfinder, to-spec and to-tickets may use these ordinary generic tickets when they select the
 plan-directory backend. Unfinished implementation, repair and user validation are generic ticket

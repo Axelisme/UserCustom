@@ -1,8 +1,8 @@
 {
   "theme": "dark",
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.6-luna",
-  "defaultThinkingLevel": "max",
+  "defaultModel": "gpt-5.6-terra",
+  "defaultThinkingLevel": "high",
   "packages": [
     "/home/axel/Documents/VSCode/Typescript/pi-goal",
     "npm:pi-mcp-adapter",
@@ -11,5 +11,17 @@
     "git:github.com/nicobailon/pi-web-access",
     "npm:@tintinweb/pi-tasks"
   ],
-  "lastChangelogVersion": "0.81.1"
+  "lastChangelogVersion": "0.81.1",
+  "enabledModels": [
+    "openai-codex/gpt-5.5",
+    "openai-codex/gpt-5.6-luna",
+    "openai-codex/gpt-5.6-sol",
+    "openai-codex/gpt-5.6-terra"
+  ],
+  "subagents": {
+    "disableBuiltins": true,
+    "watchdog": {
+      "enabled": false
+    }
+  }
 }

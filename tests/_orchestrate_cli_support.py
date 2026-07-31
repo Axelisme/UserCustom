@@ -17,7 +17,20 @@ from tests._orchestrate_version import SOURCE_SKILL_VERSION
 ROOT = Path(__file__).resolve().parents[1]
 _PACKAGE = tempfile.TemporaryDirectory(prefix="orchestrate-cli-tests-")
 TEST_HOME = Path(_PACKAGE.name) / "home"
-shutil.copytree(ROOT / "home", TEST_HOME)
+# Copy only what the package itself binds: the skill under test, and the
+# profile roots its manifest projects. Copying all of home/ pulled in every
+# other skill for 24MB per process, which the parallel runner multiplies by
+# one process per module and a killed run leaves behind in full.
+for _relative in (
+    ".codex/skills/orchestrate",
+    ".codex/agents",
+    ".claude/agents",
+    ".pi/agent/agents",
+):
+    shutil.copytree(ROOT / "home" / _relative, TEST_HOME / _relative, symlinks=True)
+_APPEND_SYSTEM = TEST_HOME / ".pi/agent/APPEND_SYSTEM.md"
+_APPEND_SYSTEM.parent.mkdir(parents=True, exist_ok=True)
+shutil.copy2(ROOT / "home/.pi/agent/APPEND_SYSTEM.md", _APPEND_SYSTEM)
 VERIFIED_SKILL = TEST_HOME / ".codex" / "skills" / "orchestrate"
 SCRIPT = VERIFIED_SKILL / "scripts" / "orchestrate.py"
 

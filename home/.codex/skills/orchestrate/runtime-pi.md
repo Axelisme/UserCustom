@@ -13,7 +13,30 @@ the handle for every later status, evidence, and continuation call.
 Root normally passes `turnBudget` for an async writer lane with `maxTurns` no lower than 80 and
 `graceTurns` at least 1; a lower ceiling requires a stated reason. At `maxTurns` the child is asked to wrap up, and after
 `graceTurns` further assistant turns it is aborted with partial output returned, so a budget bounds a
-lane without cutting a write in half.
+lane without cutting a write in half. **A budget is not inherited by a continuation:** the recovery
+descriptor restores `toolBudget` but not the initial turn budget, so a `resume` that omits
+`turnBudget` runs unbounded. Pass it on every resume.
+
+`status` reports `turnBudgetExceeded`, which is how Root tells a budget stop from any other stop.
+
+### When a budget stops a lane
+
+Root chooses; these are the available moves, not a decision procedure. Only the last two lose the
+lane's committed work, and only a recut changes the Contract.
+
+| | worker context | lane and its commits | Contract | re-admission |
+|---|---|---|---|---|
+| `resume` the same run with a larger `turnBudget` | kept | kept | unchanged | no |
+| `resume` the same run unchanged (after an `interrupt`) | kept | kept | unchanged | no |
+| dispatch a new run into the **same lane** | lost | kept | unchanged | no |
+| recut the Slice into a new lane | lost | lost | changed | yes |
+| `lane drop` | lost | lost | — | — |
+
+Changing the run is not changing the lane: a lane is a branch and a worktree, a run is the agent
+working in it. Raising a budget needs a new run, never a new lane, so it costs neither the Contract
+tests already committed nor a fresh admission. Reuse of the worker's context is the cheapest of these
+moves — prefer a resume while the worker's understanding of the Contract is still sound, and take a
+fresh run when it has drifted.
 
 ## Continuation
 

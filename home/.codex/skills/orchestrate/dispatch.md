@@ -4,7 +4,9 @@ Before dispatch Root runs `lane check --task-id <task> --lane-id <lane>`, which 
 --task-id <task>` to record the exact lane tip SHA. That SHA is the expected base carried in the
 dispatch together with the frozen objective, canonical lane cwd, expected Git root/common-dir, branch,
 write scope, immutable paths, primary-checkout dirt snapshot, focused commands, evidence, and stop
-conditions.
+conditions. When the task has a durable record, the dispatch also carries its `Envelope` and any
+`Standing orders`: the worker cannot honour a boundary the user froze, or an instruction the user
+issued, that never reached it.
 
 Working inside the canonical lane cwd is the only hard contract; the agent, its skills, and its context
 mode are recommendations. The worker reports the cwd, Git root/common-dir, branch, HEAD, and clean state

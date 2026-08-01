@@ -4,32 +4,66 @@ These are the sole normative S0–S5 checks for dev-flow. Every check is decided
 not persuasion. Routing skills, runtime bindings, planners and reviewers reference this file and
 do not restate its policy.
 
-## S0 — Minimum-complete design admission
+## S0 — Design admission: Need → Design → Slicing → Triage
 
-1. **Minimum need first.** Before designing, record the smallest current user-visible need and its
-   usage envelope. Refuse requirements that are only hypothetical robustness without a current
-   observable. The envelope is agreed with the current user, not inferred: confirm the expected
-   behavior, the usage scenarios and which cases are out of envelope before designing. If they
-   cannot be confirmed, stop and ask; do not design past the gap.
-2. **Start from zero.** Generate the smallest complete end-to-end design that satisfies the need.
-   Do not preserve or layer historical mechanisms merely because they already exist.
-3. **Breadth before depth.** Deliver one usable tracer through the whole required path before
-   deepening any one Module. A feature-specific hardening branch is refused unless the usable
-   whole cannot be correct without it.
-4. **Edge triage.** Every admitted in-envelope requirement stays in the current Contract. When
-   such a case is uncommon, choose the simplest correct behavior—often a clear refusal/report—
-   rather than automation or a recovery protocol. Out-of-envelope cases receive simple safe
-   refusal/reporting that preserves current data and authority. Do not add a new Interface, state
-   store, recovery protocol or automation for an unobserved case.
-5. **Backlog, not scope expansion.** Only evidence-backed, non-blocking depth may leave the current
-   task. Candidate-backlog's hard gates are the sole authority for eligibility, required fields
-   and lifecycle; S0 does not restate them. Hypothetical guesses are neither implemented nor
-   backlogged.
-6. **Promotion requires evidence.** An edge returns from backlog only through explicit planning
-   after frequency, impact or a real resumed scenario makes it part of a current minimum need.
+S0 governs admission of new design work. It runs as a four-stage sequence — Need, Design, Slicing,
+Triage — in that order; each stage's output is what the next stage designs, slices or triages.
+`S0` remains the cross-reference anchor for the whole sequence.
 
-S0 does not permit backlog laundering: current correctness, regression, security, data-loss,
-acceptance or review gaps and decision-required branches remain in the current task.
+Purely decision-only tasks (no implementation output) and small corrections completed within
+Root's single context do not need the full sequence. They still owe the Envelope slot in the task
+record a value — see Need below — it is never left blank.
+
+### Need
+
+Before designing, record the smallest current observable user-visible need and its usage envelope,
+and ground the design in that observable rather than in hypothetical robustness. The envelope is
+agreed with the current user, not inferred: confirm the expected behavior, the usage scenarios and
+which cases are out of envelope before designing. If they cannot be confirmed, stop and ask; do not
+design past the gap.
+
+Record the agreed envelope in the task record's `Envelope` section, or point that section at the
+artifact that carries it (for example a frozen `spec.md`). This landing point is the evidence
+downstream stages use to reject an out-of-envelope finding: S3 already requires `contract_basis`
+against a closed blocking enum, but that gate only holds when the envelope has somewhere to point.
+
+### Design
+
+Generate the smallest complete end-to-end design that satisfies the need, starting from the need
+itself rather than from what already exists. Carry forward an existing mechanism only when it is
+the smallest way to satisfy the current need, not because it is already there.
+
+Module depth is a deliverable of this stage, produced deliberately, not a side effect discovered
+during implementation. For the vocabulary and technique for designing a deep Module, see
+[`codebase-design`](../../codebase-design/SKILL.md); S0 does not restate it.
+
+### Slicing
+
+Deliver one usable tracer through the whole required path before deepening any one Module, then
+advance slice by slice — never big-bang. Depth on a single Module waits until the tracer shows the
+usable whole cannot be correct without it.
+
+### Triage
+
+Both questions below are asked about something that has actually been observed. A case that exists
+only as speculation is not triaged at all: it is neither built nor backlogged.
+
+For each admitted requirement, ask two questions:
+
+1. Is it common in the expected usage scenarios?
+2. Did the current user ask for it?
+
+When the answer to both is no, give it the simplest correct handling in the current Contract — a
+clear refusal, a fast-fail or a report all qualify — and send the more elaborate treatment to the
+backlog instead of building it now.
+
+Guardrail: the simplest handling must itself be safe — it must preserve current data and current
+authority. When no safe simple handling exists, the case is not "rare, therefore simple"; it is a
+current correctness gap and stays in the current Contract.
+
+Candidate-backlog's hard gates are the sole authority for backlog eligibility, required fields and
+lifecycle; S0 does not restate them. An edge returns from backlog only through explicit planning,
+after frequency, impact or a real resumed scenario makes it part of a current minimum need.
 
 ## S1 — Slice admission
 

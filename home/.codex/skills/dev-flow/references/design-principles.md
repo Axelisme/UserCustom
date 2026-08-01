@@ -1,6 +1,6 @@
 # Dev-flow design principles
 
-Read this file when evolving the workflow. The admission standard is the normative S1–S5
+Read this file when evolving the workflow. The admission standard is the normative S0–S5
 authority; these principles explain altitude and evidence without duplicating its checks.
 
 1. Git commits, refs, and trailers are durable workflow truth; prose is a pointer.
@@ -12,8 +12,10 @@ authority; these principles explain altitude and evidence without duplicating it
 7. Run cheap machine evidence early; reserve independent judgement for the assembled exact
    candidate after the increment is bounded.
 8. Keep judgement with Root and give every role closed decisions, scopes, and stop conditions.
-9. Design the observable interface and failure contract first, implement the smallest behavior,
-   and harden only when the envelope or a red Contract test requires it.
+9. Depth does not appear on its own: incremental, slice-by-slice delivery only constrains the size
+   and order of each increment, and takes no position on where a seam belongs, so left unchecked it
+   pulls toward one thin adapter per feature. S0's Design stage and S2's red-evidence gate exist to
+   counteract that pull; see `admission-standard.md` for the checks.
 10. A timing, locking, retention, or replay device enters only with a test that is red without
     it; otherwise it is speculative complexity.
 11. Production reachability is evidence, not an assumption: a green test suite cannot validate

@@ -16,7 +16,13 @@ again after compaction; do not copy its policy into routing skills.
 - Durable work uses the workflow-neutral `scripts/plan.py` task record under
   `.agent_state/plans/<task-id>/`.
 - Its public Interface is exactly `create | archive | resume | refresh`.
-- `INDEX.md` holds `Goal`, `Current`, and `Next`.
+- `INDEX.md` holds `Goal`, `Current`, `Next`, `Envelope`, and `Standing orders`.
+- `Envelope` carries the frozen minimum need and usage envelope, or a pointer to the artifact that
+  owns it. A task with no implementation output records `Not applicable` with a reason. It is never
+  blank: a blank Envelope is the visible evidence that the need was never frozen, and every later
+  out-of-envelope refusal cites it.
+- `Standing orders` carries the user-issued instructions still in force for this task — a mode
+  activation, an ad-hoc grant, or a rule under test — each with its scope and when it lapses.
 - Its generated files block is a projection of the record directory.
 - Agents maintain the prose.
 - `Current stage` says where the conditional route stopped or why a stage was skipped, when useful.
@@ -24,6 +30,12 @@ again after compaction; do not copy its policy into routing skills.
   `Resolve by` action, and `Outcome`/`Current`.
 - Decision-making work keeps its decisions in the producer-owned `decisions.md` artifact, not in
   the generic container.
+
+Write a standing order only from words the user actually said: **quote the user's sentence verbatim**,
+stamp when it was issued, and list the new entries in the same reply so the user can disown them on
+the spot. A paraphrase of the user, or a rule the agent inferred for itself, is not a standing order.
+When an entry activates another skill's contract, name that skill and point at it; its grants and
+exclusions stay in that skill.
 
 See [`references/example-record/`](references/example-record/) for a worked example of this shape.
 
@@ -49,5 +61,6 @@ authority.
 
 `archive` is a neutral directory move and never implies completion, but use it only after
 implementation completes or the task is explicitly abandoned; a handoff alone does not qualify.
-Final close-out follows S5. After compaction, reread this skill, the frozen spec, the task record and
-the admission standard.
+Final close-out follows S5. After compaction, reread this skill, the frozen spec, the admission
+standard, and the task record — including its `Envelope` and `Standing orders`, which carry what the
+user froze and granted and are the first things a compacted session loses.

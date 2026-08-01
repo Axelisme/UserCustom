@@ -1,22 +1,24 @@
 ---
 name: dev-flow
-description: Own the durable task-record lifecycle from exploration through neutral archive.
+description: Durable task record for work that must survive compaction and handoff. Use when starting multi-session work, resuming or archiving an existing task record, asking what a task's current state is, or when another skill needs the shared plan-directory record. Not for single-session edits that need no durable record.
 ---
 
 # Dev Flow
 
 Use this skill for work that needs durable orientation across sessions. Dev-flow is the sole
 active durable-task lifecycle authority. The [admission standard](references/admission-standard.md)
-is the sole normative S0–S5 authority. Read it before wayfinding, spec, or ticket admission and
-again after compaction; do not copy its policy into routing skills.
+is the sole normative S0–S5 authority; read it before wayfinding, spec, or ticket admission, and
+point at it from routing skills rather than restating it. When evolving the workflow itself, read
+the [design principles](references/design-principles.md) for the altitude and evidence behind those
+checks.
 
 ## One task record
 
-- Short work may remain in the current conversation.
 - Durable work uses the workflow-neutral `scripts/plan.py` task record under
   `.agent_state/plans/<task-id>/`.
 - Its public Interface is exactly `create | archive | resume | refresh`.
 - `INDEX.md` holds `Goal`, `Current`, `Next`, `Envelope`, and `Standing orders`.
+- `Current` says where the conditional route stopped or why a stage was skipped, when useful.
 - `Envelope` carries the frozen minimum need and usage envelope, or a pointer to the artifact that
   owns it. A task with no implementation output records `Not applicable` with a reason. It is never
   blank: a blank Envelope is the visible evidence that the need was never frozen, and every later
@@ -24,8 +26,6 @@ again after compaction; do not copy its policy into routing skills.
 - `Standing orders` carries the user-issued instructions still in force for this task — a mode
   activation, an ad-hoc grant, or a rule under test — each with its scope and when it lapses.
 - Its generated files block is a projection of the record directory.
-- Agents maintain the prose.
-- `Current stage` says where the conditional route stopped or why a stage was skipped, when useful.
 - `tickets/*.md` hold ordinary generic work; their container is a three-field header, a
   `Resolve by` action, and `Outcome`/`Current`.
 - Decision-making work keeps its decisions in the producer-owned `decisions.md` artifact, not in
@@ -44,6 +44,17 @@ plan-directory backend. Unfinished implementation, repair and user validation ar
 work too; no phase/progress file, acceptance queue or second ticket store is created. Orchestrate
 consumes task/ticket IDs but owns only Git/runtime coordination and derives no narrative.
 
+## Reading the record
+
+- The frontier, the largest ticket ID, and the complete dependency graph are the ticket headers in
+  `tickets/*.md`.
+- Superseded decisions are the `Status` cells in `decisions.md`.
+- The complete record inventory is the generated files block after `scripts/plan.py refresh
+  <task-id>`.
+
+These are queries, not validators. A record can violate what they reveal; readers bear the cost of
+noticing and repairing that fact in context.
+
 ## Conditional route
 
 Wayfinder, to-spec, and to-tickets are independently usable producers; dev-flow only records their
@@ -54,10 +65,8 @@ an admission gate; Root completing work in one context still records a generic t
 need to-tickets. A handoff is a decision-authority transfer event, not a route stage, and the record
 continues to own implementation work after it.
 
-At each Slice, freeze the Contract, run its focused and canonical gates, and hand off only a clean
-exact SHA with evidence pointers. Root owns placement, merges and repository authority.
-Orchestrate never pushes or reads a remote ref. Current user messages remain the only mutation
-authority.
+Current user messages remain the only mutation authority. A standing order records what the user
+granted; it never manufactures authority the user did not give.
 
 `archive` is a neutral directory move and never implies completion, but use it only after
 implementation completes or the task is explicitly abandoned; a handoff alone does not qualify.

@@ -1,18 +1,14 @@
 # Orchestrate — Pi runtime binding
 
+See [dispatch.md](dispatch.md) for the runtime-neutral dispatch contract, evidence, acceptance, and
+authority rules shared by every runtime. This file states only Pi's own delta.
+
 Pi Root dispatches an admitted implementation lane through the native `subagent` tool. Orchestrate ships
 no Pi-specific adapter: transport, control, and evidence are the runtime's own, and Root reads them
 directly.
 
-Before dispatch Root runs `lane check --task-id <task> --lane-id <lane>`, which must exit 0, and reads
-`status --task-id <task>` to record the exact lane tip SHA. The launch carries that SHA together with the
-frozen objective, canonical lane cwd, expected Git root/common-dir, branch, write scope, immutable paths,
-primary-checkout dirt snapshot, focused commands, evidence, and stop conditions. Root launches
-`lane-worker` with fresh context in async mode. Working inside the canonical lane cwd is the only hard
-contract; the agent name, its skills, and the context mode are recommendations. The worker reports the
-cwd, Git root/common-dir, branch, HEAD, and clean state it observes, and Root judges whether they match
-the admitted lane; the worker runs no mechanical self-check and does not block itself. Root records the
-returned run id, which is the handle for every later status, evidence, and continuation call.
+Root launches `lane-worker` with fresh context in async mode. Root records the returned run id, which is
+the handle for every later status, evidence, and continuation call.
 
 Root normally passes `turnBudget` for an async writer lane with `maxTurns` no lower than 80 and
 `graceTurns` at least 1; a lower ceiling requires a stated reason. At `maxTurns` the child is asked to wrap up, and after
@@ -21,11 +17,10 @@ lane without cutting a write in half.
 
 ## Continuation
 
-A `paused`, `completed`, or `failed` run may be resumed with `action: "resume"` while the frozen
-Contract, provider, cwd, and lane identity are all unchanged; a change in any of them requires Root
-re-admission and a fresh dispatch instead. Resume keeps the run id, session, and launch contract, so
-continuation preserves the worker's context. Before every resume Root reruns `lane check` and `status`
-and rebinds the exact SHA.
+A `paused`, `completed`, or `failed` run may be resumed with `action: "resume"` under the conditions
+`dispatch.md` states; a change in any of them requires Root re-admission and a fresh dispatch instead.
+Resume keeps the run id, session, and launch contract, so continuation preserves the worker's context.
+Before every resume Root reruns `lane check` and `status` and rebinds the exact SHA.
 
 `action: "interrupt"` softly interrupts the current child turn and leaves the run `paused`; it is the
 resumable pause. `action: "stop"` is terminal and a stopped run can never be resumed, so it is reserved
@@ -66,10 +61,6 @@ this dependency list rather than retrying.
 
 ## Authority
 
-Root owns Slice admission, Contract semantics and amendments, the S2.4 pre-collect test review,
-primary-checkout dirt, `lane check`, `lane sync`, collection, acceptance, landing, reporting, removal,
-and recovery. After every lane is collected and the shared gates pass, Root uses `acceptance start` and
-`acceptance result` for the exact integration subject; only the accepted subject may become landed.
-Persistence drift routes through a new admitted writer lane and `integration reconcile`, followed by
-normal collection and renewed acceptance. `timing pause` and `timing resume` bracket external waits and
-grant no lifecycle authority.
+Beyond the shared authority in [dispatch.md](dispatch.md), Root also owns Slice admission, Contract
+semantics and amendments, the S2.4 pre-collect test review, primary-checkout dirt, `lane check`, and
+`lane sync`.

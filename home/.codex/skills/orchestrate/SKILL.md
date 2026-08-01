@@ -14,40 +14,68 @@ normative S0–S5 authority; Root reads its current S0 before creating the first
 
 ## Minimum complete lifecycle
 
-`integration create --task-id <task>` creates the append-only task integration branch and
-worktree at the current repository subject. `lane create --task-id <task> --lane-id <lane>` creates
-one managed writer branch and worktree at the recorded task base. A lane is one admitted Contract,
-one worktree, one branch, and one `lane-worker` call. Root dispatches the exact canonical cwd and
-Git identity and preserves primary-checkout dirt.
+1. `integration create --task-id <task>` creates the append-only task integration branch and
+   worktree at the current repository subject. Done when the integration branch and worktree exist.
 
-The worker commits Contract tests before implementation and reports focused red evidence plus its
-exact clean tip. Contract paths remain protected by normalized `Immutable:` trailers. Before
-collection, use `lane check --task-id <task> --lane-id <lane>` to apply the shared first-parent,
-cleanliness, topology, and declaration predicates without mutation. If another collect advanced the
-integration tip, `lane sync --task-id <task> --lane-id <lane>` performs the writer-owned no-commit
-merge in that lane; the writer resolves and commits any conflict there. Root reruns the gates and
-then `integration collect --task-id <task> --lane-id <lane>` creates one fixed-parent no-ff collect
-commit and removes the managed lane worktree. A clean unwanted lane is removed with `lane drop`.
+2. `lane create --task-id <task> --lane-id <lane>` creates one managed writer branch and worktree
+   at the recorded task base. A lane is one admitted Contract, one worktree, one branch, and one
+   `lane-worker` call. Root dispatches the exact canonical cwd and Git identity and preserves
+   primary-checkout dirt. Done when the lane branch and worktree exist at the recorded base.
 
-When every admitted increment is collected and the required shared gates pass, `acceptance start
---task-id <task>` checks out the current integration subject in the managed detached acceptance
-worktree. Acceptance evaluates that exact subject. `acceptance result --task-id <task> --outcome
-pass` moves `refs/orchestrate/<task>/accepted` to it; `--outcome fail` records the failure and
-revokes only an equal accepted ref. A newer start may supersede an older accepted snapshot without
-deleting it until another pass establishes new authority.
+3. The worker commits Contract tests before implementation and reports focused red evidence plus
+   its exact clean tip. Contract paths remain protected by normalized `Immutable:` trailers. Done
+   when Root holds the reported red evidence and the exact clean tip SHA.
 
-Landing requires an accepted snapshot and exactly one local checkout of the named persistence
-branch. `integration land --task-id <task> --persist <branch>` creates one canonical squash commit
-with `Task:` and `Landed:` trailers, then records the accepted subject in
-`refs/orchestrate/<task>/landed`. If persistence moved, create an admitted reconciliation lane and
-run `integration reconcile --task-id <task> --lane-id <lane> --persist <branch>`; the writer owns
-the resulting no-commit merge, resolution, tests, commit, and normal collection before acceptance
-is repeated. Orchestrate never pushes or reads remote refs.
+4. Before collection, use `lane check --task-id <task> --lane-id <lane>` to apply the shared
+   first-parent, cleanliness, topology, and declaration predicates without mutation. Done when
+   `lane check` exits 0.
 
-`integration remove --task-id <task> --output-dir <dir>` writes the final report and removes only a
-closeable task's exact managed inventory. `--no-report` explicitly omits report output. Destructive
-`--abandon` is exceptional current-user authority, not an automatic recovery path. It reports
-unlanded and uncollected state while preserving unrelated refs, paths, and user dirt.
+5. If another collect advanced the integration tip, `lane sync --task-id <task> --lane-id <lane>`
+   performs the writer-owned no-commit merge in that lane; the writer resolves and commits any
+   conflict there. Done when the lane tip carries the merge (or is unchanged, if no sync was
+   needed).
+
+6. Root reruns the gates (return to step 4) until `lane check` exits 0 against the current
+   integration tip.
+
+7. `integration collect --task-id <task> --lane-id <lane>` creates one fixed-parent no-ff collect
+   commit and removes the managed lane worktree. Done when the collect commit exists and the lane
+   worktree is gone.
+
+8. When every admitted increment is collected and the required shared gates pass, `acceptance
+   start --task-id <task>` checks out the current integration subject in the managed detached
+   acceptance worktree. Acceptance evaluates that exact subject. Done when the acceptance worktree
+   holds the exact integration subject.
+
+9. `acceptance result --task-id <task> --outcome pass` moves `refs/orchestrate/<task>/accepted` to
+   it; `--outcome fail` records the failure and revokes only an equal accepted ref. A newer start
+   may supersede an older accepted snapshot without deleting it until another pass establishes new
+   authority. Done when the result is recorded and, on pass, the accepted ref points at the
+   evaluated subject.
+
+10. Landing requires an accepted snapshot and exactly one local checkout of the named persistence
+    branch. `integration land --task-id <task> --persist <branch>` creates one canonical squash
+    commit with `Task:` and `Landed:` trailers, then records the accepted subject in
+    `refs/orchestrate/<task>/landed`. Orchestrate never pushes or reads remote refs. Done when the
+    landed ref points at the accepted subject.
+
+11. `integration remove --task-id <task> --output-dir <dir>` writes the final report and removes
+    only a closeable task's exact managed inventory. `--no-report` explicitly omits report output.
+    Done when the report is written (unless `--no-report`) and the closeable managed inventory is
+    removed.
+
+### Exceptions to the main sequence
+
+A clean unwanted lane is removed with `lane drop` instead of being collected.
+
+If persistence moved before landing, create an admitted reconciliation lane and run `integration
+reconcile --task-id <task> --lane-id <lane> --persist <branch>`; the writer owns the resulting
+no-commit merge, resolution, tests, commit, and normal collection (steps 4–7) before acceptance
+(steps 8–9) is repeated.
+
+Destructive `--abandon` on `integration remove` is exceptional current-user authority, not an
+automatic recovery path. It reports unlanded and uncollected state while preserving unrelated refs,
+paths, and user dirt.
 
 ## Observation and timing
 
@@ -62,21 +90,8 @@ idempotent warnings. Reports and status remain read-only.
 
 ## Package administration
 
-`doctor` verifies the executing package's current manifest, documents, profile identity/prompt
-projections. v137+ profile entries contain only `agent_name` and
-`prompt_sha256`; runtime, model, and configuration metadata are excluded. `doctor --path <repo>`
-adds the cwd-derived repository pin projection.
-`doctor diff <old> <new>` compares only bundled immutable manifests; `--runtime codex|claude|pi`
-filters runtime-specific documents, profiles, and assets. `pin status` and the atomic idempotent
-`pin set` derive the repository from cwd. A pin records the last manually adopted release; it never
-selects the executable or blocks task work merely because it is absent or different.
-
-`release --version <exact-next>` is the sole package publication command. It requires an intact
-current package — its manifest loads and lists no missing document — and an exact-next migration
-guide. It does not require the current package to still match its own hashes, because publication
-edits exactly those documents. It updates the source identity, writes the target manifest, verifies
-the published result against it, and restores prior bytes on failure. Apply manifest-hashed
-migration guides in order before a separately authorized setup or pin change.
+Doctor, doctor diff, pin, and release are covered in [package-admin.md](package-admin.md); read it
+before a release or pin change.
 
 Every command prints one JSON object with `orchestrate_version`. Success is on stdout with exit 0;
 a completed negative predicate uses stdout and exit 1; an operational or usage error uses stderr

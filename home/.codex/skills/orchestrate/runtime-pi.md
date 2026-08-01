@@ -1,6 +1,6 @@
 # Orchestrate — Pi runtime binding
 
-See [dispatch.md](dispatch.md) for the runtime-neutral dispatch contract, evidence, acceptance, and
+See [dispatch.md](references/dispatch.md) for the runtime-neutral dispatch contract, evidence, acceptance, and
 authority rules shared by every runtime. This file states only Pi's own delta.
 
 Pi Root dispatches an admitted implementation lane through the native `subagent` tool. Orchestrate ships
@@ -84,6 +84,6 @@ this dependency list rather than retrying.
 
 ## Authority
 
-Beyond the shared authority in [dispatch.md](dispatch.md), Root also owns Slice admission, Contract
+Beyond the shared authority in [dispatch.md](references/dispatch.md), Root also owns Slice admission, Contract
 semantics and amendments, the S2.4 pre-collect test review, primary-checkout dirt, `lane check`, and
 `lane sync`.

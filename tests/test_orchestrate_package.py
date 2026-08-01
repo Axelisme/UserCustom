@@ -1096,12 +1096,18 @@ class SourcePublicationContractTests(unittest.TestCase):
                 self.assertTrue(entry["agent_name"])
                 self.assertRegex(entry["prompt_sha256"], r"^[0-9a-f]{64}$")
         comparison = release.compare_manifests(previous, current)
-        # Narrowing the roster removes entries; the profiles that survived must
-        # still project the same identity and prompt they did at v137.
+        # Narrowing the roster removes entries; a surviving profile changes only
+        # when a release deliberately rewrites its prompt. v143 gave lane-worker
+        # codebase-design and diagnosing-bugs, so its three projections moved and
+        # nothing else did.
         common = set(current["profiles"]) & set(previous["profiles"])
         self.assertEqual(
-            [name for name in comparison["changed_profiles"] if name in common],
-            [],
+            sorted(name for name in comparison["changed_profiles"] if name in common),
+            [
+                ".claude/agents/lane-worker.md",
+                ".codex/agents/lane-worker.toml",
+                ".pi/agent/agents/lane-worker.md",
+            ],
         )
         self.assertEqual(
             comparison["changed_runtime_assets"],

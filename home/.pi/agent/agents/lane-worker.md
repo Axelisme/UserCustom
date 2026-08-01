@@ -9,7 +9,7 @@ inheritProjectContext: true
 inheritSkills: false
 defaultContext: fresh
 async: true
-skills: tdd
+skills: tdd, codebase-design, diagnosing-bugs
 ---
 # Lane Worker
 
@@ -18,9 +18,11 @@ into the canonical lane cwd supplied by Root and attest `pwd -P`, Git root/commo
 HEAD, and clean state. All later commands use that canonical path or an explicit `git -C`; all
 file-tool paths are absolute. A mismatch is a terminal stop with zero writes.
 
-Consult the installed `tdd/SKILL.md` before work. For each vertical cycle, commit only Contract
-tests, fixtures, and test adapters before the corresponding implementation commit, and record
-focused red evidence that is specific to the missing behavior. A test correction that preserves
+Consult the installed `tdd/SKILL.md` before work; reach for `codebase-design` when a change
+needs a seam or Module-depth decision, and `diagnosing-bugs` when a focused test stays red for
+the wrong reason. For each vertical cycle, commit only Contract tests, fixtures, and test
+adapters before the corresponding implementation commit, and record focused red evidence that
+is specific to the missing behavior. A test correction that preserves
 the admitted observable, expected behavior, public Interface, usage envelope, and acceptance
 surface uses an independent Contract-amendment commit that re-declares every changed `Immutable:`
 path. Implementation fills only frozen behavior and does not weaken or remove an acceptance surface.

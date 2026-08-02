@@ -242,12 +242,35 @@ def set_refreshed_marker(text: str, value: str, separator: str) -> str:
 
 
 def files_projection(directory: Path) -> str:
-    entries = sorted(directory.rglob("*"), key=lambda path: path.relative_to(directory).parts)
-    lines = []
-    for path in entries:
-        parts = path.relative_to(directory).parts
-        suffix = "/" if path.is_dir() else ""
-        lines.append(f"{'  ' * (len(parts) - 1)}{parts[-1]}{suffix}")
+    lines: list[str] = []
+
+    def regular_file_count(path: Path) -> int:
+        return sum(descendant.is_file() for descendant in path.rglob("*"))
+
+    def render(current: Path, depth: int) -> None:
+        entries = sorted(current.iterdir(), key=lambda path: path.name)
+        direct_files = [entry for entry in entries if entry.is_file()]
+        displayed_files = set(direct_files[:10])
+        omitted_files = len(direct_files) - len(displayed_files)
+
+        for entry in entries:
+            indent = "  " * (depth + 1)
+            if entry.is_dir():
+                lines.append(f"{indent}{entry.name}/")
+                entry_depth = depth + 1
+                if entry_depth >= 2:
+                    hidden_files = regular_file_count(entry)
+                    if hidden_files:
+                        lines.append(f"{'  ' * (entry_depth + 1)}...{hidden_files} file")
+                else:
+                    render(entry, entry_depth)
+            elif entry in displayed_files:
+                lines.append(f"{indent}{entry.name}")
+
+        if omitted_files:
+            lines.append(f"{'  ' * (depth + 1)}...{omitted_files} file")
+
+    render(directory, -1)
     return "\n".join(lines)
 
 

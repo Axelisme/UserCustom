@@ -60,8 +60,6 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
                 task_id,
                 "--lane-id",
                 lane_id,
-                "--group",
-                lane_id,
             ),
             "lane-create",
         )
@@ -87,18 +85,20 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
             "acceptance-start",
         )
         subject = self.git(self.acceptance_path(task_id), "rev-parse", "HEAD")
-        self.mutation_success(
+        payload = self.success(
             self.cli(
                 self.nested,
                 "acceptance",
                 "result",
                 "--task-id",
                 task_id,
+                "--verifier",
+                "agent",
                 "--outcome",
                 "pass",
-            ),
-            "acceptance-result",
+            )
         )
+        self.assertEqual(payload["operation"], "acceptance-result")
         return subject
 
     def land(self, task_id: str) -> None:
@@ -247,7 +247,7 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
         invocations: tuple[tuple[str, tuple[str, ...], int, str], ...] = (
             (
                 "lane-create",
-                ("lane", "create", "--lane-id", "writer", "--group", "writer"),
+                ("lane", "create", "--lane-id", "writer"),
                 0,
                 "success",
             ),
@@ -283,7 +283,7 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
             ("acceptance-start", ("acceptance", "start"), 0, "success"),
             (
                 "acceptance-result",
-                ("acceptance", "result", "--outcome", "pass"),
+                ("acceptance", "result", "--verifier", "agent", "--outcome", "pass"),
                 2,
                 "failure",
             ),
@@ -359,8 +359,6 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
             "--task-id",
             task_id,
             "--lane-id",
-            "writer",
-            "--group",
             "writer",
         )
         self.mutation_success(lane, "lane-create", warnings=True)
@@ -781,18 +779,20 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
         self.collect_lane(revoked, "delivery")
         self.accept_current(revoked)
         self.land(revoked)
-        self.mutation_success(
+        payload = self.success(
             self.cli(
                 self.nested,
                 "acceptance",
                 "result",
                 "--task-id",
                 revoked,
+                "--verifier",
+                "agent",
                 "--outcome",
                 "fail",
-            ),
-            "acceptance-result",
+            )
         )
+        self.assertEqual(payload["operation"], "acceptance-result")
         self.assertEqual(self.ref_value(self.accepted_ref(revoked)), "")
         before = self.managed_state_snapshot()
         result = self.cli(

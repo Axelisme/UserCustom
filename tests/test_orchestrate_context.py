@@ -67,6 +67,24 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             "integration-create",
         )
 
+    def agent_acceptance_result(self, task_id: str, outcome: str = "pass") -> dict[str, object]:
+        payload = self.success(
+            self.cli(
+                self.nested,
+                "acceptance",
+                "result",
+                "--task-id",
+                task_id,
+                "--verifier",
+                "agent",
+                "--outcome",
+                outcome,
+            )
+        )
+        self.assertEqual(payload["operation"], "acceptance-result")
+        self.assertEqual(payload["verifier"], "agent")
+        return payload
+
     def assert_task_git_inventory_absent(self) -> None:
         self.assertEqual(
             self.git(
@@ -106,11 +124,11 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                     "doctor",
                     "release",
                 ),
-                long_options=("--skill-dir",),
+                long_options=("--skill-dir", "--version"),
             ),
             self.assert_help_surface(("timing",), commands=("pause", "resume")),
             self.assert_help_surface(
-                ("lane",), commands=("create", "check", "sync", "drop")
+                ("lane",), commands=("create", "check", "sync", "drop", "comment")
             ),
             self.assert_help_surface(
                 ("integration",),
@@ -124,10 +142,12 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             self.assert_help_surface(("status",), long_options=("--task-id",)),
             self.assert_help_surface(("timing", "pause"), long_options=("--task-id",)),
             self.assert_help_surface(("timing", "resume"), long_options=("--task-id",)),
-            # `create` alone takes --group: the need a lane serves is declared
-            # once, when the lane is cut, and read from telemetry thereafter.
             self.assert_help_surface(
-                ("lane", "create"), long_options=("--task-id", "--lane-id", "--group")
+                ("lane", "create"), long_options=("--task-id", "--lane-id", "--comment")
+            ),
+            self.assert_help_surface(
+                ("lane", "comment"),
+                long_options=("--task-id", "--lane-id", "--text", "--clear"),
             ),
             self.assert_help_surface(
                 ("lane", "check"), long_options=("--task-id", "--lane-id")
@@ -163,11 +183,11 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 ),
             ),
             self.assert_help_surface(
-                ("acceptance", "start"), long_options=("--task-id",)
+                ("acceptance", "start"), long_options=("--task-id", "--sha")
             ),
             self.assert_help_surface(
                 ("acceptance", "result"),
-                long_options=("--task-id", "--outcome"),
+                long_options=("--task-id", "--outcome", "--verifier"),
             ),
             self.assert_help_surface(
                 ("report",), long_options=("--task-id", "--output-dir")
@@ -183,15 +203,15 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             "candidate",
             "--root",
             "--base",
-            "--sha",
             "--final",
         ):
             self.assertNotIn(retired, all_help)
         acceptance_result_help = self.assert_help_surface(
             ("acceptance", "result"),
-            long_options=("--task-id", "--outcome"),
+            long_options=("--task-id", "--outcome", "--verifier"),
         )
         self.assertIn("{pass,fail}", acceptance_result_help)
+        self.assertIn("{agent,user}", acceptance_result_help)
         doctor_diff_help = self.assert_help_surface(
             ("doctor", "diff"), long_options=("--runtime",)
         )
@@ -286,11 +306,14 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "orchestrate_version": self.orchestrate_version,
                 "task_id": task_id,
                 "integration": self.base,
-                "lanes": {"api": self.base, "docs": self.base},
+                "lanes": {
+                    "api": {"sha": self.base},
+                    "docs": {"sha": self.base},
+                },
             },
         )
         self.assertEqual(list(payload["lanes"]), ["api", "docs"])
-        for omitted in ("acceptance", "accepted", "landed", "warnings"):
+        for omitted in ("acceptance", "accepted", "landed", "warnings", "lane_consumption"):
             self.assertNotIn(omitted, payload)
 
         acceptance = self.task_worktree(task_id, "acceptance")
@@ -318,8 +341,10 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "orchestrate_version": self.orchestrate_version,
                 "task_id": task_id,
                 "integration": self.base,
-                "lanes": {"api": self.base, "docs": self.base},
-                "acceptance": self.base,
+                "lanes": {
+                    "api": {"sha": self.base},
+                    "docs": {"sha": self.base},
+                },
                 "accepted": self.base,
                 "landed": self.base,
             },
@@ -379,7 +404,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             self.assertEqual(payload.get("task_id"), task_id)
             self.assertEqual(payload.get("integration"), self.base)
             self.assertEqual(payload.get("lanes"), {})
-        for optional in ("acceptance", "accepted", "landed"):
+        for optional in ("acceptance", "accepted", "landed", "lane_consumption"):
             with self.subTest(assertion="optional-slot-omitted", slot=optional):
                 self.assertNotIn(optional, payload)
         warnings = payload.get("warnings", [])
@@ -500,8 +525,6 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 self.task_id,
                 "--lane-id",
                 self.lane_id,
-                "--group",
-                self.lane_id,
             ),
             "lane-create",
         )
@@ -599,18 +622,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             ),
             "",
         )
-        self.mutation_success(
-            self.cli(
-                self.nested,
-                "acceptance",
-                "result",
-                "--task-id",
-                self.task_id,
-                "--outcome",
-                "pass",
-            ),
-            "acceptance-result",
-        )
+        self.agent_acceptance_result(self.task_id)
         self.assertEqual(
             self.git(
                 self.root,
@@ -668,14 +680,6 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "task_id": self.task_id,
                 "integration": integration_tip,
                 "lanes": {},
-                # `lanes` is what still exists; `lane_consumption` is what the
-                # task has ever spent. The collected lane is gone from the first
-                # and still counted in the second — that gap is the whole point.
-                "lane_consumption": {
-                    "threshold": 6,
-                    "groups": {"clean-lane": {"count": 1, "lanes": ["clean-lane"]}},
-                },
-                "acceptance": integration_tip,
                 "accepted": integration_tip,
                 "landed": integration_tip,
             },
@@ -699,88 +703,51 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
         self.assertEqual((self.root / "delivered.txt").read_bytes(), b"delivered\n")
         self.assertEqual(self.git(self.root, "status", "--porcelain"), "")
 
-    def test_acceptance_start_refuses_tracked_and_index_dirty_integration(
+    def test_acceptance_start_ignores_tracked_and_index_dirty_integration(
         self,
     ) -> None:
-        for dirt_kind, replace_existing in (
-            ("tracked-unstaged", False),
-            ("staged-index", True),
-        ):
+        for dirt_kind in ("tracked-unstaged", "staged-index"):
             task_id = f"start-{dirt_kind}"
             integration = self.task_worktree(task_id, "integration")
             acceptance = self.task_worktree(task_id, "acceptance")
-            with self.subTest(dirt_kind=dirt_kind, phase="create-task"):
-                self.mutation_success(
-                    self.cli(
-                        self.nested,
-                        "integration",
-                        "create",
-                        "--task-id",
-                        task_id,
-                    ),
-                    "integration-create",
-                )
-
-            sentinel = acceptance / "validator-sentinel.bin"
-            sentinel_bytes = b"preserve prior acceptance bytes\x00\xff"
-            if replace_existing:
-                with self.subTest(dirt_kind=dirt_kind, phase="seed-acceptance"):
-                    self.mutation_success(
-                        self.cli(
-                            self.nested,
-                            "acceptance",
-                            "start",
-                            "--task-id",
-                            task_id,
-                        ),
-                        "acceptance-start",
-                    )
-                sentinel.write_bytes(sentinel_bytes)
-
+            self.mutation_success(
+                self.cli(
+                    self.nested,
+                    "integration",
+                    "create",
+                    "--task-id",
+                    task_id,
+                ),
+                "integration-create",
+            )
+            subject = self.git(integration, "rev-parse", "HEAD")
             tracked = integration / "base.txt"
             tracked_bytes = f"{dirt_kind} integration bytes\n".encode()
             tracked.write_bytes(tracked_bytes)
             if dirt_kind == "staged-index":
                 self.git(integration, "add", "base.txt")
             status_before = self.git(integration, "status", "--porcelain")
-            with self.subTest(dirt_kind=dirt_kind, assertion="arranged-dirt"):
-                expected = (
-                    "M  base.txt"
-                    if dirt_kind == "staged-index"
-                    else "M base.txt"
-                )
-                self.assertEqual(status_before, expected)
-            before = self.managed_state_snapshot()
 
-            result = self.cli(
-                self.nested,
-                "acceptance",
-                "start",
-                "--task-id",
-                task_id,
+            self.mutation_success(
+                self.cli(
+                    self.nested,
+                    "acceptance",
+                    "start",
+                    "--task-id",
+                    task_id,
+                ),
+                "acceptance-start",
             )
-            after = self.managed_state_snapshot()
 
-            with self.subTest(dirt_kind=dirt_kind, assertion="stable-refusal"):
-                self.operational_failure(result, "acceptance-start", "dirty_worktree")
-            with self.subTest(dirt_kind=dirt_kind, assertion="exact-zero-mutation"):
-                self.assertEqual(after, before)
-            with self.subTest(dirt_kind=dirt_kind, assertion="tracked-bytes"):
+            with self.subTest(dirt_kind=dirt_kind):
+                self.assertEqual(self.git(acceptance, "rev-parse", "HEAD"), subject)
                 self.assertEqual(tracked.read_bytes(), tracked_bytes)
                 self.assertEqual(
-                    self.git(integration, "status", "--porcelain"),
-                    status_before,
+                    self.git(integration, "status", "--porcelain"), status_before
                 )
-            if replace_existing:
-                with self.subTest(dirt_kind=dirt_kind, assertion="acceptance-bytes"):
-                    self.assertTrue(sentinel.is_file())
-                    if sentinel.is_file():
-                        self.assertEqual(sentinel.read_bytes(), sentinel_bytes)
-            else:
-                with self.subTest(dirt_kind=dirt_kind, assertion="not-created"):
-                    self.assertFalse(acceptance.exists())
+                self.assertEqual(self.git(acceptance, "status", "--porcelain"), "")
 
-    def test_acceptance_start_refuses_clean_wrong_integration_branch_atomically(
+    def test_acceptance_start_uses_managed_ref_when_integration_checkout_switched(
         self,
     ) -> None:
         task_id = "start-wrong-branch"
@@ -796,6 +763,13 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             ),
             "integration-create",
         )
+        subject = self.git(
+            self.root, "rev-parse", f"refs/heads/wave/{task_id}/integration"
+        )
+        wrong_branch = "operator-preserve-acceptance-start"
+        self.git(integration, "switch", "-c", wrong_branch)
+        branch_before = self.git(integration, "symbolic-ref", "--short", "HEAD")
+
         self.mutation_success(
             self.cli(
                 self.nested,
@@ -806,64 +780,11 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             ),
             "acceptance-start",
         )
-        sentinel = acceptance / "validator-sentinel.bin"
-        sentinel_bytes = b"wrong branch must not replace acceptance\x00\xff"
-        sentinel.write_bytes(sentinel_bytes)
 
-        wrong_branch = "operator-preserve-acceptance-start"
-        self.git(integration, "switch", "-c", wrong_branch)
-        self.assertEqual(self.git(integration, "status", "--porcelain"), "")
-        branch_before = self.git(integration, "symbolic-ref", "--short", "HEAD")
-        branch_sha_before = self.git(
-            self.root,
-            "show-ref",
-            "--hash",
-            f"refs/heads/{wrong_branch}",
+        self.assertEqual(self.git(acceptance, "rev-parse", "HEAD"), subject)
+        self.assertEqual(
+            self.git(integration, "symbolic-ref", "--short", "HEAD"), branch_before
         )
-        acceptance_head_before = self.git(acceptance, "rev-parse", "HEAD")
-        before = self.managed_state_snapshot()
-
-        result = self.cli(
-            self.nested,
-            "acceptance",
-            "start",
-            "--task-id",
-            task_id,
-        )
-        after = self.managed_state_snapshot()
-
-        with self.subTest(assertion="stable-refusal"):
-            self.operational_failure(
-                result,
-                "acceptance-start",
-                "worktree_identity_mismatch",
-            )
-        with self.subTest(assertion="exact-zero-mutation"):
-            self.assertEqual(after, before)
-        with self.subTest(assertion="wrong-branch-preserved"):
-            self.assertEqual(
-                self.git(integration, "symbolic-ref", "--short", "HEAD"),
-                branch_before,
-            )
-            self.assertEqual(
-                self.git(
-                    self.root,
-                    "show-ref",
-                    "--hash",
-                    f"refs/heads/{wrong_branch}",
-                    check=False,
-                ),
-                branch_sha_before,
-            )
-        with self.subTest(assertion="acceptance-snapshot-preserved"):
-            self.assertEqual(
-                self.git(acceptance, "rev-parse", "HEAD"),
-                acceptance_head_before,
-            )
-        with self.subTest(assertion="sentinel-bytes"):
-            self.assertTrue(sentinel.is_file())
-            if sentinel.is_file():
-                self.assertEqual(sentinel.read_bytes(), sentinel_bytes)
 
     def test_acceptance_pass_allows_untracked_and_ignored_runtime_artifacts(
         self,
@@ -921,18 +842,10 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             ".agent_state/runtime/ignored-output.bin",
         )
 
-        result = self.cli(
-            self.nested,
-            "acceptance",
-            "result",
-            "--task-id",
-            task_id,
-            "--outcome",
-            "pass",
-        )
+        result = self.agent_acceptance_result(task_id)
 
         with self.subTest(assertion="pass-succeeds"):
-            self.mutation_success(result, "acceptance-result")
+            self.assertEqual(result["current_sha"], subject)
         with self.subTest(assertion="accepted-is-exact-head"):
             self.assertEqual(
                 self.git(
@@ -980,18 +893,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 ),
                 "acceptance-start",
             )
-            self.mutation_success(
-                self.cli(
-                    self.nested,
-                    "acceptance",
-                    "result",
-                    "--task-id",
-                    task_id,
-                    "--outcome",
-                    "pass",
-                ),
-                "acceptance-result",
-            )
+            self.agent_acceptance_result(task_id)
             accepted_ref = f"refs/orchestrate/{task_id}/accepted"
             accepted_before = self.git(self.root, "show-ref", "--hash", accepted_ref)
 
@@ -1032,6 +934,8 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 task_id,
                 "--outcome",
                 "pass",
+                "--verifier",
+                "agent",
             )
             after = self.managed_state_snapshot()
 
@@ -1096,8 +1000,6 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "--task-id",
                 self.task_id,
                 "--lane-id",
-                self.lane_id,
-                "--group",
                 self.lane_id,
             ),
             "lane-create",
@@ -1164,8 +1066,6 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "--task-id",
                 self.task_id,
                 "--lane-id",
-                self.lane_id,
-                "--group",
                 self.lane_id,
             ),
             "lane-create",
@@ -1274,8 +1174,6 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                     "--task-id",
                     self.task_id,
                     "--lane-id",
-                    lane_id,
-                    "--group",
                     lane_id,
                 ),
                 "lane-create",
@@ -1408,8 +1306,6 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 self.task_id,
                 "--lane-id",
                 change_lane_id,
-                "--group",
-                change_lane_id,
             ),
             "lane-create",
         )
@@ -1449,8 +1345,6 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "--task-id",
                 self.task_id,
                 "--lane-id",
-                revert_lane_id,
-                "--group",
                 revert_lane_id,
             ),
             "lane-create",
@@ -1711,8 +1605,6 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                         "--task-id",
                         task_id,
                         "--lane-id",
-                        lane_id,
-                        "--group",
                         lane_id,
                     ),
                     "lane-create",

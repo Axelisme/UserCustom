@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -28,7 +29,7 @@ from .resources import (
     resolved_path,
     worktree_state,
 )
-from .telemetry import lane_consumption, lane_consumption_warnings, record_event, write_report
+from .telemetry import lane_comments, record_event, write_report
 
 
 def _task(repo: RepositoryContext, task_id: str) -> TaskResources:
@@ -58,7 +59,8 @@ def status(repo: RepositoryContext, task_id: str | None = None) -> CommandResult
     integration = _ref(repo, task.integration_branch)
     if integration is None:
         _error("task integration branch is missing", "task_state_invalid")
-    lanes: dict[str, str] = {}
+    lanes: dict[str, dict[str, object]] = {}
+    comments = lane_comments(task)
     warnings: list[str] = []
     lane_ids: set[str] = set()
     base_ids: set[str] = set()
@@ -111,21 +113,23 @@ def status(repo: RepositoryContext, task_id: str | None = None) -> CommandResult
         base_value = _ref(repo, lane.base_ref) if lane_id in base_ids else None
         branch_value = _ref(repo, lane.branch) if lane_id in branch_ids else None
         if base_value is not None and branch_value is not None:
-            lanes[lane_id] = branch_value
+            lane_status: dict[str, object] = {"sha": branch_value}
+            comment = comments.get(lane_id)
+            if comment is not None:
+                lane_status["comment"] = comment
+            lanes[lane_id] = lane_status
         else:
             warnings.append(f"lane resource is incomplete: {lane_id}")
 
     data: dict[str, Any] = {"task_id": task.task_id, "integration": integration, "lanes": dict(sorted(lanes.items()))}
-    acceptance_state = worktree_state(repo, task.acceptance_path)
-    if acceptance_state["exists"] and acceptance_state["head"]:
-        data["acceptance"] = acceptance_state["head"]
-    for key, ref in (("accepted", task.accepted_ref), ("landed", task.landed_ref)):
+    for key, ref in (
+        ("accepted", task.accepted_ref),
+        ("user_accepted", task.user_accepted_ref),
+        ("landed", task.landed_ref),
+    ):
         value = _ref(repo, ref)
         if value is not None:
             data[key] = value
-    consumption = lane_consumption(task)
-    if consumption:
-        data["lane_consumption"] = consumption
     if warnings:
         data["warnings"] = warnings[:20]
     return CommandResult(True, data)
@@ -207,12 +211,73 @@ def _create_lane_resources(
     return lane
 
 
-def lane_create(repo: RepositoryContext, task_id: str, lane_id: str, group: str) -> CommandResult:
+def _annotation(value: str) -> str:
+    if any(unicodedata.category(character).startswith("C") for character in value):
+        _error("lane comment must not contain control characters", "cli_usage")
+    normalized = value.strip()
+    if not normalized:
+        _error("lane comment must not be empty", "cli_usage")
+    if len(normalized) > 500:
+        _error("lane comment must be at most 500 Unicode characters", "cli_usage")
+    return normalized
+
+
+def _active_lane_count(repo: RepositoryContext, task: TaskResources) -> int:
+    projected = status(repo, task.task_id).data.get("lanes", {})
+    return len(projected) if isinstance(projected, dict) else 0
+
+
+def lane_create(
+    repo: RepositoryContext,
+    task_id: str,
+    lane_id: str,
+    comment: str | None = None,
+) -> CommandResult:
     task = _task(repo, task_id)
+    normalized = _annotation(comment) if comment is not None else None
     integration = _active_integration_tip(repo, task)
     lane = _create_lane_resources(repo, task, lane_id, integration)
-    warnings = record_event(task, "lane-create", "success", lane_id=lane.lane_id, group=group)
-    return CommandResult(True, {}, (*warnings, *lane_consumption_warnings(task, group)))
+    event_extra: dict[str, object] = {"lane_id": lane.lane_id}
+    if normalized is not None:
+        event_extra["comment"] = normalized
+    event_warnings = record_event(task, "lane-create", "success", **event_extra)
+    active_count = _active_lane_count(repo, task)
+    count_warnings = (
+        (
+            f"task has {active_count} active lanes; Root should collect/drop "
+            "unneeded lanes",
+        )
+        if active_count >= 9
+        else ()
+    )
+    return CommandResult(True, {}, (*event_warnings, *count_warnings))
+
+
+def lane_comment(
+    repo: RepositoryContext,
+    task_id: str,
+    lane_id: str,
+    text: str | None,
+    clear: bool,
+) -> CommandResult:
+    task = _task(repo, task_id)
+    lane = task.lane(lane_id)
+    projected = status(repo, task.task_id).data.get("lanes", {})
+    if not isinstance(projected, dict) or lane.lane_id not in projected:
+        _error("lane is not a currently projected active lane", "lane_not_found")
+    normalized = None if clear else _annotation(text or "")
+    current = lane_comments(task).get(lane.lane_id)
+    warnings: tuple[str, ...] = ()
+    if current == normalized:
+        warnings = ("lane comment is already current",)
+    event_warnings = record_event(
+        task,
+        "lane-comment",
+        "success",
+        lane_id=lane.lane_id,
+        comment=normalized,
+    )
+    return CommandResult(True, {}, (*warnings, *event_warnings))
 
 
 @dataclass(frozen=True)
@@ -804,6 +869,7 @@ def integration_remove(
         task.integration_base_ref,
         *(lane.base_ref for lane in lanes),
         task.accepted_ref,
+        task.user_accepted_ref,
         task.landed_ref,
     ]:
         if _ref(repo, ref) is not None:

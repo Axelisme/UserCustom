@@ -80,6 +80,10 @@ class TaskResources:
         return f"refs/orchestrate/{self.task_id}/accepted"
 
     @property
+    def user_accepted_ref(self) -> str:
+        return f"refs/orchestrate/{self.task_id}/user-accepted"
+
+    @property
     def landed_ref(self) -> str:
         return f"refs/orchestrate/{self.task_id}/landed"
 

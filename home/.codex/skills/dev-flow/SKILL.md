@@ -1,7 +1,7 @@
 ---
 name: dev-flow
 description: Durable task record for work that must survive compaction and handoff. Use when starting multi-session work, resuming or archiving an existing task record, asking what a task's current state is, or when another skill needs the shared plan-directory record. Not for single-session edits that need no durable record.
-skill_version: 1
+skill_version: 2
 ---
 
 # Dev Flow
@@ -61,11 +61,8 @@ compaction, and their vocabulary — `pending`, `in_progress`, `completed` — d
 Mirroring the record into them is still a second store, and the copy that gets believed is whichever
 one the next agent reads first.
 
-See [`references/example-record/`](references/example-record/) for a worked example of this shape.
-
 Wayfinder, to-spec and to-tickets may use these ordinary generic tickets when they select the
-plan-directory backend. Unfinished implementation, repair and user validation are generic ticket
-work too.
+plan-directory backend. Unfinished implementation and repair are generic ticket work too.
 
 ## Reading the record
 

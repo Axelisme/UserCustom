@@ -5,7 +5,13 @@ import os
 import shutil
 from pathlib import Path
 
-from .git_ops import changed_paths, direct_commit_ref, run_git, worktree_records
+from .git_ops import (
+    changed_paths,
+    direct_commit_ref,
+    exact_commit,
+    run_git,
+    worktree_records,
+)
 from .primitives import CommandResult, OrchestrateError
 from .resources import RepositoryContext, TaskResources, worktree_state
 from .telemetry import record_event
@@ -45,32 +51,57 @@ def _is_ancestor(repo: RepositoryContext, ancestor: str, descendant: str) -> boo
     )
 
 
-def _integration_subject(repo: RepositoryContext, task: TaskResources) -> str:
-    integration = _ref(repo, task.integration_branch)
-    if integration is None:
-        raise OrchestrateError("task integration is missing", "task_not_found")
-    state = worktree_state(repo, task.integration_path)
-    if (
-        not state["exists"]
-        or state["branch"] != task.integration_branch
-        or state["head"] != integration
-    ):
-        raise OrchestrateError(
-            "integration worktree identity mismatch", "worktree_identity_mismatch"
-        )
-    if not state["clean"]:
-        raise OrchestrateError("integration worktree is dirty", "dirty_worktree")
-    return integration
-
-
 def _authority_ref(repo: RepositoryContext, ref: str, *, label: str) -> str | None:
     return direct_commit_ref(repo.worktree_root, ref, label=label)
 
 
-def acceptance_start(repo: RepositoryContext, task_id: str) -> CommandResult:
+def _on_integration_first_parent(
+    repo: RepositoryContext, integration: str, subject: str
+) -> bool:
+    history = run_git(
+        repo.worktree_root, "rev-list", "--first-parent", integration
+    ).stdout.splitlines()
+    return subject in history
+
+
+def _acceptance_subject(
+    repo: RepositoryContext,
+    task: TaskResources,
+    requested_sha: str | None,
+) -> str:
+    integration = _authority_ref(
+        repo,
+        f"refs/heads/{task.integration_branch}",
+        label="integration branch authority slot",
+    )
+    if integration is None:
+        raise OrchestrateError("task integration is missing", "task_not_found")
+    if requested_sha is None:
+        return integration
+    try:
+        subject = exact_commit(
+            repo.worktree_root,
+            requested_sha,
+            label="acceptance SHA",
+        )
+    except OrchestrateError as exc:
+        raise OrchestrateError(str(exc), "acceptance_subject_invalid") from exc
+    if not _on_integration_first_parent(repo, integration, subject):
+        raise OrchestrateError(
+            "acceptance SHA must be an integration first-parent commit",
+            "acceptance_subject_invalid",
+        )
+    return subject
+
+
+def acceptance_start(
+    repo: RepositoryContext,
+    task_id: str,
+    requested_sha: str | None = None,
+) -> CommandResult:
     task = _task(repo, task_id)
     accepted = _authority_ref(repo, task.accepted_ref, label="accepted authority slot")
-    integration = _integration_subject(repo, task)
+    subject = _acceptance_subject(repo, task, requested_sha)
     prior = worktree_state(repo, task.acceptance_path)
     superseded = (
         bool(prior["exists"])
@@ -99,13 +130,13 @@ def acceptance_start(repo: RepositoryContext, task_id: str) -> CommandResult:
         "add",
         "--detach",
         str(task.acceptance_path),
-        integration,
+        subject,
     )
-    outcome = "superseded" if superseded else "success"
+    start_outcome = "superseded" if superseded else "success"
     return CommandResult(
         True,
         {},
-        record_event(task, "acceptance-start", outcome, subject_sha=integration),
+        record_event(task, "acceptance-start", start_outcome, subject_sha=subject),
     )
 
 
@@ -121,49 +152,91 @@ def _acceptance_tracked_state_is_clean(path: Path) -> bool:
     return True
 
 
-def _on_integration_first_parent(
-    repo: RepositoryContext, integration: str, subject: str
-) -> bool:
-    history = run_git(
-        repo.worktree_root, "rev-list", "--first-parent", integration
-    ).stdout.splitlines()
-    return subject in history
-
-
 def acceptance_result(
-    repo: RepositoryContext, task_id: str, outcome: str
+    repo: RepositoryContext,
+    task_id: str,
+    outcome: str,
+    verifier: str,
 ) -> CommandResult:
     task = _task(repo, task_id)
-    accepted = _authority_ref(repo, task.accepted_ref, label="accepted authority slot")
+    verifier_refs = {
+        "agent": (task.accepted_ref, "accepted authority slot"),
+        "user": (task.user_accepted_ref, "user-accepted authority slot"),
+    }
+    if verifier not in verifier_refs:
+        raise OrchestrateError("unsupported acceptance verifier", "cli_usage")
+    authority_ref, label = verifier_refs[verifier]
+    previous = _authority_ref(repo, authority_ref, label=label)
     state = worktree_state(repo, task.acceptance_path)
     if not state["exists"]:
         raise OrchestrateError("acceptance workspace is missing", "acceptance_missing")
     head = run_git(task.acceptance_path, "rev-parse", "HEAD").stdout.strip()
 
-    if outcome == "pass":
-        integration = _ref(repo, task.integration_branch)
-        valid = (
-            state["branch"] is None
-            and integration is not None
-            and _on_integration_first_parent(repo, integration, head)
-            and _acceptance_tracked_state_is_clean(task.acceptance_path)
+    integration = _authority_ref(
+        repo,
+        f"refs/heads/{task.integration_branch}",
+        label="integration branch authority slot",
+    )
+    valid = (
+        state["branch"] is None
+        and integration is not None
+        and _on_integration_first_parent(repo, integration, head)
+        and _acceptance_tracked_state_is_clean(task.acceptance_path)
+    )
+    if not valid:
+        raise OrchestrateError(
+            "acceptance subject is not a clean detached integration first-parent",
+            "acceptance_subject_invalid",
         )
-        if not valid:
-            raise OrchestrateError(
-                "acceptance subject is not a clean detached integration first-parent",
-                "acceptance_subject_invalid",
-            )
-        run_git(repo.worktree_root, "update-ref", task.accepted_ref, head)
+
+    regressed = False
+    ref_updated = False
+    current = previous
+    if outcome == "pass":
+        regressed = (
+            previous is not None
+            and previous != head
+            and _is_ancestor(repo, head, previous)
+        )
+        if previous != head:
+            run_git(repo.worktree_root, "update-ref", authority_ref, head)
+            ref_updated = True
+        current = head
     elif outcome == "fail":
-        if accepted == head:
-            run_git(repo.worktree_root, "update-ref", "-d", task.accepted_ref, head)
+        if previous == head:
+            run_git(repo.worktree_root, "update-ref", "-d", authority_ref, head)
+            ref_updated = True
+            current = None
     else:
         raise OrchestrateError("unsupported acceptance outcome", "cli_usage")
 
+    warnings: tuple[str, ...] = ()
+    if regressed:
+        warnings = (
+            f"{verifier} acceptance authority regressed from {previous} to {head}",
+        )
+    telemetry_warnings = record_event(
+        task,
+        "acceptance-result",
+        outcome,
+        subject_sha=head,
+        verifier=verifier,
+        previous_sha=previous,
+        current_sha=current,
+        ref_updated=ref_updated,
+        regressed=regressed,
+    )
     return CommandResult(
         True,
-        {},
-        record_event(task, "acceptance-result", outcome, subject_sha=head),
+        {
+            "verifier": verifier,
+            "subject_sha": head,
+            "previous_sha": previous,
+            "current_sha": current,
+            "ref_updated": ref_updated,
+            "regressed": regressed,
+        },
+        (*warnings, *telemetry_warnings),
     )
 
 

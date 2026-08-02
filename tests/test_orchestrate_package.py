@@ -117,7 +117,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                     "doctor",
                     "release",
                 ),
-                long_options=("--skill-dir",),
+                long_options=("--skill-dir", "--version"),
             ),
             self.assert_help_surface(("pin",), commands=("status", "set")),
             self.assert_help_surface(("pin", "status")),
@@ -1097,15 +1097,17 @@ class SourcePublicationContractTests(unittest.TestCase):
                 self.assertRegex(entry["prompt_sha256"], r"^[0-9a-f]{64}$")
         comparison = release.compare_manifests(previous, current)
         # Narrowing the roster removes entries; a surviving profile changes only
-        # when a release deliberately rewrites its prompt. v143 gave lane-worker
-        # codebase-design and diagnosing-bugs, so its three projections moved and
-        # nothing else did.
+        # when a release deliberately rewrites its prompt. v143 changed lane-worker
+        # and v145 binds acceptance-reviewer to the managed acceptance checkout.
         common = set(current["profiles"]) & set(previous["profiles"])
         self.assertEqual(
             sorted(name for name in comparison["changed_profiles"] if name in common),
             [
+                ".claude/agents/acceptance-reviewer.md",
                 ".claude/agents/lane-worker.md",
+                ".codex/agents/acceptance-reviewer.toml",
                 ".codex/agents/lane-worker.toml",
+                ".pi/agent/agents/acceptance-reviewer.md",
                 ".pi/agent/agents/lane-worker.md",
             ],
         )
@@ -1286,8 +1288,6 @@ class SourcePublicationContractTests(unittest.TestCase):
             "installed-contract",
             "--lane-id",
             "tracer",
-            "--group",
-            "tracer",
         )
             lane = repository / ".agent_state/worktrees/installed-contract/lanes/tracer"
             (lane / "delivered.txt").write_text("delivered\n", encoding="utf-8")
@@ -1301,7 +1301,16 @@ class SourcePublicationContractTests(unittest.TestCase):
             cli("lane", "check", "--task-id", "installed-contract", "--lane-id", "tracer")
             cli("integration", "collect", "--task-id", "installed-contract", "--lane-id", "tracer")
             cli("acceptance", "start", "--task-id", "installed-contract")
-            cli("acceptance", "result", "--task-id", "installed-contract", "--outcome", "pass")
+            cli(
+                "acceptance",
+                "result",
+                "--task-id",
+                "installed-contract",
+                "--verifier",
+                "agent",
+                "--outcome",
+                "pass",
+            )
             cli("integration", "land", "--task-id", "installed-contract", "--persist", "main")
             cli("integration", "remove", "--task-id", "installed-contract", "--no-report")
             self.assertEqual((repository / "delivered.txt").read_text(), "delivered\n")

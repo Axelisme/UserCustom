@@ -6,23 +6,24 @@
 | task_id | {{TASK_ID}} |
 
 ## Goal
+<!-- Fill with the user's smallest current goal and observable outcome. Do not add inferred requirements, success claims, or quotes. -->
 {{GOAL}}
 
 ## Current
+<!-- Update with verified current facts, progress, blockers, and authority or evidence. Do not record guesses, plans, or unissued decisions. -->
 Task created.
 
 ## Next
+<!-- Set the next bounded action and its owner after the current stop. Do not turn suggestions or unapproved work into instructions. -->
 Write or select the first ticket.
 
 ## Envelope
-Not yet recorded. Record the minimum need and usage envelope here, or point at the artifact that
-owns it (`spec.md` when to-spec ran, `wayfinder-map.md` for decision-only work). Write
-`Not applicable — <reason>` when this task has no implementation output. Never leave it blank.
+<!-- Record the frozen minimum need, usage boundaries, and out-of-envelope cases, or point to the owning artifact. Do not invent constraints, policy, or acceptance facts. -->
+Not yet recorded.
 
 ## Standing orders
-None. Each entry is a user-issued instruction that stays in force for this task: a mode activation,
-an ad-hoc grant, or a rule under test. Quote the user's own sentence verbatim — never a paraphrase
-of it — and record when it was issued and when it lapses.
+<!-- Add only current-user instructions verbatim, with when issued and when they lapse. Do not paraphrase, fabricate, or grant authority the user did not give. -->
+None.
 
 <!-- task-record:files:start -->
 INDEX.md

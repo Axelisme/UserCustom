@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,14 @@ def payload(done: subprocess.CompletedProcess[str]) -> dict[str, object]:
 
 def record(root: Path, task_id: str = "demo") -> Path:
     return root / ".agent_state" / "plans" / task_id
+
+
+def generated_projection(index: Path) -> str:
+    text = index.read_text(encoding="utf-8")
+    start = "<!-- task-record:files:start -->"
+    end = "<!-- task-record:files:end -->"
+    start_index = text.index(start) + len(start)
+    return text[start_index : text.index(end, start_index)].strip("\r\n")
 
 
 def ticket_text(ticket_id: str, status: str, disposition: str | None = None, depends_on: str = "none") -> str:
@@ -138,6 +147,98 @@ class TaskRecordTests(unittest.TestCase):
             # itself advances (it is not byte-for-byte idempotent, by design: see (b) staleness).
             second = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
             self.assertIsNone(second["stale"])
+
+    def test_refresh_bounds_large_file_tree_by_depth_and_direct_file_count(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            task = record(root)
+
+            # Build this in reverse order so the generated projection must impose its own
+            # deterministic lexical order. INDEX.md is itself a direct regular file.
+            for number in reversed(range(11)):
+                (task / f"root-{number:02d}.md").write_text("root\n", encoding="utf-8")
+
+            first = task / "a-dir"
+            first.mkdir()
+            for number in reversed(range(11)):
+                (first / f"first-{number:02d}.md").write_text("first\n", encoding="utf-8")
+
+            nested = first / "nested"
+            nested.mkdir()
+            (nested / "inside.md").write_text("inside\n", encoding="utf-8")
+            deep = nested / "z-deep"
+            deep.mkdir()
+            (deep / "deep-a.md").write_text("deep\n", encoding="utf-8")
+            deeper = deep / "deeper"
+            deeper.mkdir()
+            (deeper / "deep-b.md").write_text("deeper\n", encoding="utf-8")
+
+            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
+            self.assertEqual(
+                generated_projection(task / "INDEX.md"),
+                "\n".join(
+                    [
+                        "INDEX.md",
+                        "a-dir/",
+                        "  first-00.md",
+                        "  first-01.md",
+                        "  first-02.md",
+                        "  first-03.md",
+                        "  first-04.md",
+                        "  first-05.md",
+                        "  first-06.md",
+                        "  first-07.md",
+                        "  first-08.md",
+                        "  first-09.md",
+                        "  nested/",
+                        "    inside.md",
+                        "    z-deep/",
+                        "      ...2 file",
+                        "  ...1 file",
+                        "root-00.md",
+                        "root-01.md",
+                        "root-02.md",
+                        "root-03.md",
+                        "root-04.md",
+                        "root-05.md",
+                        "root-06.md",
+                        "root-07.md",
+                        "root-08.md",
+                        "tickets/",
+                        "...2 file",
+                    ]
+                ),
+            )
+
+    def test_refresh_omits_zero_file_metadata_for_level_three_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            task = record(root)
+
+            empty = task / "empty" / "branch" / "leaf"
+            empty.mkdir(parents=True)
+            empty_subtree = task / "empty-subtree" / "branch" / "leaf"
+            empty_subtree.mkdir(parents=True)
+            (empty_subtree / "child").mkdir()
+
+            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
+            self.assertEqual(
+                generated_projection(task / "INDEX.md"),
+                "\n".join(
+                    [
+                        "INDEX.md",
+                        "empty/",
+                        "  branch/",
+                        "    leaf/",
+                        "empty-subtree/",
+                        "  branch/",
+                        "    leaf/",
+                        "tickets/",
+                    ]
+                ),
+            )
 
     def test_refresh_is_content_blind_except_version_and_markers(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -367,6 +468,67 @@ class TaskRecordTests(unittest.TestCase):
             # Once refreshed again, the stamp catches up and staleness clears.
             third = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
             self.assertIsNone(third["stale"])
+
+    def test_create_generates_persistent_guidance_without_fabricating_initial_facts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            goal = "Ship one durable record."
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", goal), "create")
+            index = record(root) / "INDEX.md"
+            created = index.read_text(encoding="utf-8")
+            sections = {
+                "Goal": ("Current", goal),
+                "Current": ("Next", "Task created."),
+                "Next": ("Envelope", "Write or select the first ticket."),
+                "Envelope": ("Standing orders", "Not yet recorded."),
+                "Standing orders": (None, "None."),
+            }
+            guidance = {
+                "Goal": ("user", "goal", "do not"),
+                "Current": ("verified", "authority", "do not"),
+                "Next": ("next", "owner", "do not"),
+                "Envelope": ("minimum", "out-of-envelope", "do not"),
+                "Standing orders": ("verbatim", "issued", "do not"),
+            }
+            comments: list[str] = []
+            for heading, (following, initial_fact) in sections.items():
+                start = created.index(f"## {heading}\n") + len(f"## {heading}\n")
+                end = created.index(f"\n## {following}", start) if following else created.index(
+                    "\n<!-- task-record:files:start -->", start
+                )
+                body = created[start:end]
+                matches = re.findall(r"<!--.*?-->", body, flags=re.DOTALL)
+                self.assertEqual(len(matches), 1, heading)
+                comment = matches[0].casefold()
+                comments.append(matches[0])
+                self.assertTrue(body.lstrip().startswith("<!--"), heading)
+                for phrase in guidance[heading]:
+                    self.assertIn(phrase, comment, heading)
+                self.assertNotIn(goal.casefold(), comment)
+                self.assertNotIn("config-single-source", comment)
+                visible = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL).strip()
+                self.assertEqual(visible, initial_fact, heading)
+
+            self.assertEqual(len(comments), 5)
+            filled = created
+            for old, new in {
+                "Task created.": "Verified: no tickets yet.",
+                "Write or select the first ticket.": "Select the first bounded ticket.",
+                "Not yet recorded.": "spec.md",
+                "None.": "No active orders.",
+            }.items():
+                filled = filled.replace(old, new)
+            index.write_text(filled, encoding="utf-8")
+            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
+            refreshed = index.read_text(encoding="utf-8")
+            for comment in comments:
+                self.assertIn(comment, refreshed)
+
+    def test_worked_example_tree_and_skill_link_are_absent(self) -> None:
+        example = ROOT / "home" / ".codex" / "skills" / "dev-flow" / "references" / "example-record"
+        self.assertFalse(example.exists())
+        skill = (ROOT / "home" / ".codex" / "skills" / "dev-flow" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertNotIn("references/example-record", skill)
 
     def test_v3_refresh_leaves_v2_and_v1_content_untouched_by_new_marker(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

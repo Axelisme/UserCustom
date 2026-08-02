@@ -77,7 +77,6 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         self,
         task_id: str | None = None,
         lane_id: str | None = None,
-        group: str | None = None,
     ) -> Path:
         task = task_id or self.task_id
         lane = lane_id or self.lane_id
@@ -90,8 +89,6 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
                 task,
                 "--lane-id",
                 lane,
-                "--group",
-                group or lane,
             ),
             "lane-create",
         )
@@ -112,8 +109,6 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
             task_id or self.task_id,
             "--lane-id",
             lane,
-            # `--group` names the need a lane serves and only `create` takes it.
-            *(("--group", lane) if command == "create" else ()),
         )
 
     def collect(

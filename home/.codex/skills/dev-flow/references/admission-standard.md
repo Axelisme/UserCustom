@@ -1,6 +1,6 @@
 # Admission standard
 
-`standard_version: 1`. Cite this number when reporting which checks a task was admitted under; it
+`standard_version: 2`. Cite this number when reporting which checks a task was admitted under; it
 is maintained by hand, so a report that needs certainty cites the Git subject as well.
 
 These are the sole normative S0–S5 checks for dev-flow. Every check is decided from artifacts,
@@ -72,7 +72,7 @@ after frequency, impact or a real resumed scenario makes it part of a current mi
 
 - **S1.1 Observable sentence, bound to its oracle.** Record one sentence: “the user does X at
   `<production entrypoint>` and sees Y.” If it cannot be written without naming internal objects,
-  refuse the Slice. Name the verifier, `user` or `agent`; Root records why.
+  refuse the Slice.
 
   Then say how the Slice's oracle reaches that entrypoint. Naming an entrypoint is free; the check
   is whether the evidence will be taken there. An oracle that proves a **stand-in** — a factory
@@ -108,32 +108,18 @@ after frequency, impact or a real resumed scenario makes it part of a current mi
 ## S3 — Machine rework admission
 
 - Root keeps one monotonic `Machine rework: N/2` prose line in the active Slice ticket's Current
-  section before a simplify, Standards or Spec production correction.
-- Initial simplify, Contract-only correction, backlog, decision blocking, user-validation repair
-  and rollout correction do not increment it.
+  section before a Standards or Spec production correction.
+- Contract-only correction, backlog, decision blocking and rollout correction do not increment it.
 - A proposed third production correction is a scope event. Recut at S1 or report it; never dispatch
   `Machine rework: 3/2` and never add another counter store.
 
 Recutting resets that counter, because the recut Slice is a new ticket. The count that a recut must
 not reset is the one below.
 
-- **Lane consumption.** Every lane declares the need it serves, and orchestrate counts the lanes a
-  need has consumed across every recut and re-admission. At six it says so on the next `lane create`.
-  The count lives in append-only telemetry, so a recut cannot clear it and a dropped lane still
-  counts: a need that has been re-cut five times has spent five lanes, whatever its current ticket
-  says.
-- **What six means.** Six lanes on one need is not a budget that has run out; it is evidence that
-  the need was admitted in the wrong shape. Exactly two shapes produce it, and the next act is
-  whichever one applies:
-  - **Merge.** Neighbouring Slices each fail to give the user something they could not do before, so
-    each lane pays a full admission, Contract and review cycle to deliver a fragment. Combine them
-    and cut once.
-  - **Rebind.** The oracle is bound to a stand-in. It proves the same stand-in correct every time
-    while the production path stays broken, so each lane rediscovers the same gap. Rebind to the
-    production entrypoint under S1.1 and cut again.
-- Record which one applied and continue. Only when neither fits does the count go to the user, in
-  the record's `Current`, and the work continues meanwhile — the count exists to redirect the work,
-  not to halt it.
+- **Active lane reminder.** Orchestrate reports a factual warning when a task's current active
+  projected lane count reaches nine. Creation still succeeds; Root collects or drops unneeded
+  lanes. Collected, dropped, and historical telemetry do not count, and the count is not a durable
+  admission or closeability policy.
 
 Blocking is a closed enum: `spec_violation | data_loss | security |
 reproducible_behavior_failure` within the frozen envelope. Every blocker has `contract_basis`;
@@ -142,24 +128,18 @@ delta is reviewed by one reviewer on its originating axis.
 
 ## S4 — Review and validation
 
-- The shared gate order is **simplify → canonical tests → ReviewGate**.
-- Root first binds the exact integration path, branch, HEAD, tree, clean state and base…subject
-  diff.
-- Standards and Spec reviewers are read-only, report their axis and exact SHA, and never collect
-  or mutate.
-- Before candidate mutation Root rechecks the same binding; any mismatch requires fresh review.
-- A bounded delta uses only its originating axis.
+- The shared gate order is **canonical tests → ReviewGate** on one managed acceptance snapshot.
+- Root binds the exact clean detached acceptance path, HEAD, tree and base…subject diff. Integration
+  may advance without changing or invalidating that snapshot.
+- Standards and Spec reviewers are read-only, report their axis and exact SHA, and never mutate the
+  acceptance checkout.
+- A passing agent-verifier result records ReviewGate authority for that exact snapshot. A bounded
+  delta uses only its originating axis.
 
 Each accepted increment closes by bringing the task record with it: update `INDEX.md`'s `Current`
 and `Next` to the accepted state, then run `refresh`. The record is the only authority a compacted
 session inherits, and a `Current` naming a frontier three increments behind reads as correct while
 being wrong — the failure mode that made this step explicit.
-
-User validation is an ordinary generic ticket depending on delivered implementation. It remains
-open until explicit successful exercise, then closes with an exact evidence pointer. Failure leaves
-it unfinished and creates or references a repair ticket. Later invalidation creates a new ticket
-rather than reopening history. Agent-verifier work does not alone trigger a gate, but an ungated
-integration tip cannot move the candidate Git ref or land.
 
 ## S5 — Landing and close-out
 

@@ -12,6 +12,7 @@ from .coordination import (
     integration_reconcile,
     integration_remove,
     lane_check,
+    lane_comment,
     lane_create,
     lane_drop,
     lane_sync,
@@ -35,7 +36,7 @@ from .release import (
 from .resources import RepositoryContext, TaskResources
 from .telemetry import auto_resume, record_event, timing_transition, write_report
 
-ORCHESTRATE_VERSION = 144
+ORCHESTRATE_VERSION = 146
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
@@ -46,7 +47,8 @@ class JsonArgumentParser(argparse.ArgumentParser):
 def build_parser() -> argparse.ArgumentParser:
     parser = JsonArgumentParser(description=__doc__)
     parser.add_argument("--skill-dir", default=str(Path(__file__).resolve().parents[2]))
-    commands = parser.add_subparsers(dest="command", required=True, parser_class=JsonArgumentParser)
+    parser.add_argument("--version", dest="version_query", action="store_true")
+    commands = parser.add_subparsers(dest="command", required=False, parser_class=JsonArgumentParser)
 
     status_parser = commands.add_parser("status")
     status_parser.add_argument("--task-id")
@@ -66,8 +68,15 @@ def build_parser() -> argparse.ArgumentParser:
         op.add_argument("--task-id", required=True)
         op.add_argument("--lane-id", required=True)
         if name == "create":
-            op.add_argument("--group", required=True)
+            op.add_argument("--comment")
         op.set_defaults(route=f"lane-{name}", mutation=True)
+    comment = lane_commands.add_parser("comment")
+    comment.add_argument("--task-id", required=True)
+    comment.add_argument("--lane-id", required=True)
+    comment_choice = comment.add_mutually_exclusive_group(required=True)
+    comment_choice.add_argument("--text")
+    comment_choice.add_argument("--clear", action="store_true")
+    comment.set_defaults(route="lane-comment", mutation=True)
 
     integration = commands.add_parser("integration")
     integration_commands = integration.add_subparsers(dest="integration_command", required=True, parser_class=JsonArgumentParser)
@@ -100,9 +109,11 @@ def build_parser() -> argparse.ArgumentParser:
     acceptance_commands = acceptance.add_subparsers(dest="acceptance_command", required=True, parser_class=JsonArgumentParser)
     start = acceptance_commands.add_parser("start")
     start.add_argument("--task-id", required=True)
+    start.add_argument("--sha")
     start.set_defaults(route="acceptance-start", mutation=True)
     result = acceptance_commands.add_parser("result")
     result.add_argument("--task-id", required=True)
+    result.add_argument("--verifier", choices=("agent", "user"), required=True)
     result.add_argument("--outcome", choices=("pass", "fail"), required=True)
     result.set_defaults(route="acceptance-result", mutation=True)
 
@@ -143,6 +154,8 @@ def _run(
     skill_dir: Path,
 ) -> CommandResult:
     route = args.route
+    if route == "version":
+        return CommandResult(True, {})
     if route == "pin-status":
         assert repo is not None
         return pin_status(repo.worktree_root, skill_dir)
@@ -166,7 +179,9 @@ def _run(
     if route == "integration-create":
         return integration_create(repo, args.task_id)
     if route == "lane-create":
-        return lane_create(repo, args.task_id, args.lane_id, args.group)
+        return lane_create(repo, args.task_id, args.lane_id, args.comment)
+    if route == "lane-comment":
+        return lane_comment(repo, args.task_id, args.lane_id, args.text, args.clear)
     if route == "lane-check":
         return lane_check(repo, args.task_id, args.lane_id)
     if route == "lane-sync":
@@ -176,9 +191,9 @@ def _run(
     if route == "integration-collect":
         return integration_collect(repo, args.task_id, args.lane_id)
     if route == "acceptance-start":
-        return acceptance_start(repo, args.task_id)
+        return acceptance_start(repo, args.task_id, args.sha)
     if route == "acceptance-result":
-        return acceptance_result(repo, args.task_id, args.outcome)
+        return acceptance_result(repo, args.task_id, args.outcome, args.verifier)
     if route == "integration-reconcile":
         return integration_reconcile(repo, args.task_id, args.lane_id, args.persist)
     if route == "integration-land":
@@ -200,6 +215,7 @@ def _run(
 _AUTO_RESUME_OPERATIONS = frozenset(
     {
         "lane-create",
+        "lane-comment",
         "lane-check",
         "lane-sync",
         "lane-drop",
@@ -216,7 +232,7 @@ _AUTO_RESUME_OPERATIONS = frozenset(
 def _event_context(args: argparse.Namespace) -> dict[str, object]:
     return {
         key: getattr(args, key)
-        for key in ("lane_id", "persist")
+        for key in ("lane_id", "persist", "sha", "verifier")
         if getattr(args, key, None) is not None
     }
 
@@ -230,6 +246,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         parser = build_parser()
         args = parser.parse_args(argv)
+        if getattr(args, "version_query", False):
+            if getattr(args, "command", None) is not None:
+                raise OrchestrateError("--version cannot be used with a command", "cli_usage")
+            args.route = "version"
+            args.mutation = False
+        elif getattr(args, "command", None) is None:
+            raise OrchestrateError("a command is required", "cli_usage")
         operation = _operation(args)
         selected = Path(args.skill_dir).resolve()
         if selected != skill_dir:
@@ -252,7 +275,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             repo = RepositoryContext.discover(discovery_path)
         except OrchestrateError:
-            if operation in {"doctor", "doctor-diff", "release"}:
+            if operation in {"version", "doctor", "doctor-diff", "release"}:
                 repo = None
             else:
                 raise

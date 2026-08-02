@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 from typing import Any
 
-from tests._orchestrate_cli_support import OrchestrateCliRepositoryTestCase, run_git
+from tests._orchestrate_cli_support import OrchestrateCliRepositoryTestCase, run_cli, run_git
 
 
 class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTestCase):
@@ -26,6 +27,9 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
 
     def accepted_ref(self, task_id: str) -> str:
         return f"refs/orchestrate/{task_id}/accepted"
+
+    def user_accepted_ref(self, task_id: str) -> str:
+        return f"refs/orchestrate/{task_id}/user-accepted"
 
     def landed_ref(self, task_id: str) -> str:
         return f"refs/orchestrate/{task_id}/landed"
@@ -52,31 +56,42 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
         )
         return self.integration_path(task_id)
 
-    def start_acceptance(self, task_id: str) -> dict[str, Any]:
+    def start_acceptance(
+        self, task_id: str, sha: str | None = None
+    ) -> dict[str, Any]:
+        argv = ["acceptance", "start", "--task-id", task_id]
+        if sha is not None:
+            argv.extend(("--sha", sha))
         return self.mutation_success(
-            self.cli(
-                self.nested,
-                "acceptance",
-                "start",
-                "--task-id",
-                task_id,
-            ),
+            self.cli(self.nested, *argv),
             "acceptance-start",
         )
 
-    def acceptance_result(self, task_id: str, outcome: str) -> dict[str, Any]:
-        return self.mutation_success(
+    def acceptance_result(
+        self, task_id: str, outcome: str, verifier: str = "agent"
+    ) -> dict[str, Any]:
+        payload = self.success(
             self.cli(
                 self.nested,
                 "acceptance",
                 "result",
                 "--task-id",
                 task_id,
+                "--verifier",
+                verifier,
                 "--outcome",
                 outcome,
-            ),
-            "acceptance-result",
+            )
         )
+        self.assertEqual(payload["ok"], True)
+        self.assertEqual(payload["operation"], "acceptance-result")
+        self.assertEqual(payload["orchestrate_version"], self.orchestrate_version)
+        self.assertEqual(payload["verifier"], verifier)
+        self.assertEqual(
+            payload["subject_sha"],
+            self.git(self.acceptance_path(task_id), "rev-parse", "HEAD"),
+        )
+        return payload
 
     def accept_current(self, task_id: str) -> str:
         self.start_acceptance(task_id)
@@ -94,8 +109,6 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
                 "--task-id",
                 task_id,
                 "--lane-id",
-                lane_id,
-                "--group",
                 lane_id,
             ),
             "lane-create",
@@ -216,6 +229,13 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
         acceptance_help = self.assert_help_surface(
             ("acceptance",), commands=("start", "result")
         )
+        start_help = self.assert_help_surface(
+            ("acceptance", "start"), long_options=("--task-id", "--sha")
+        )
+        result_help = self.assert_help_surface(
+            ("acceptance", "result"),
+            long_options=("--task-id", "--outcome", "--verifier"),
+        )
         land_help = self.assert_help_surface(
             ("integration", "land"),
             long_options=("--task-id", "--persist", "--message"),
@@ -224,11 +244,12 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
             ("integration", "reconcile"),
             long_options=("--task-id", "--lane-id", "--persist"),
         )
-        all_help = "\n".join((integration_help, acceptance_help, land_help, reconcile_help))
+        all_help = "\n".join(
+            (integration_help, acceptance_help, start_help, result_help, land_help, reconcile_help)
+        )
         for retired in (
             "candidate",
             "rejected",
-            "--sha",
             "--accepted",
             "--final",
             "--squash",
@@ -269,6 +290,171 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
         self.assertFalse((acceptance / "runtime.bin").exists())
         self.assertEqual((acceptance / "base.txt").read_bytes(), b"base\n")
         self.assert_no_retired_delivery_state(task_id)
+
+    def test_01b_start_sha_uses_commit_authority_not_integration_worktree(self) -> None:
+        task_id = "explicit-subject"
+        integration = self.create_task(task_id)
+        first = self.commit_file(
+            integration, "first.txt", b"first exact subject\n", "First exact subject"
+        )
+        second = self.commit_file(
+            integration, "second.txt", b"second exact subject\n", "Second exact subject"
+        )
+        (integration / "base.txt").write_bytes(b"uncommitted integration dirt\n")
+
+        self.start_acceptance(task_id)
+        self.assertEqual(self.git(self.acceptance_path(task_id), "rev-parse", "HEAD"), second)
+        self.git(self.root, "worktree", "remove", "--force", str(integration))
+        self.start_acceptance(task_id, first)
+        self.assertEqual(self.git(self.acceptance_path(task_id), "rev-parse", "HEAD"), first)
+
+        outside = self.commit_file(
+            self.root, "outside.txt", b"outside integration history\n", "Outside task"
+        )
+        before = self.authority_snapshot()
+        for subject in (first[:12], f"{first}^", outside):
+            with self.subTest(subject=subject):
+                self.operational_failure(
+                    self.cli(
+                        self.nested,
+                        "acceptance",
+                        "start",
+                        "--task-id",
+                        task_id,
+                        "--sha",
+                        subject,
+                    ),
+                    "acceptance-start",
+                    "acceptance_subject_invalid",
+                )
+                self.assertEqual(self.authority_snapshot(), before)
+
+        with tempfile.TemporaryDirectory(prefix="orchestrate-sha256-") as temporary:
+            sha256_root = Path(temporary)
+            run_git(sha256_root, "init", "-q", "--object-format=sha256", "-b", "main")
+            run_git(sha256_root, "config", "user.name", "Contract Test")
+            run_git(sha256_root, "config", "user.email", "contract@example.invalid")
+            (sha256_root / ".gitignore").write_text("/.agent_state/\n", encoding="utf-8")
+            (sha256_root / "base.txt").write_text("base\n", encoding="utf-8")
+            sha256_nested = sha256_root / "nested"
+            sha256_nested.mkdir()
+            run_git(sha256_root, "add", ".gitignore", "base.txt")
+            run_git(sha256_root, "commit", "-qm", "base")
+            self.success(
+                run_cli(
+                    sha256_nested,
+                    "integration",
+                    "create",
+                    "--task-id",
+                    "sha256-subject",
+                )
+            )
+            sha256_integration = (
+                sha256_root
+                / ".agent_state/worktrees/sha256-subject/integration"
+            )
+            historical = self.commit_file(
+                sha256_integration,
+                "historical.txt",
+                b"historical sha256 subject\n",
+                "Historical SHA-256 subject",
+            )
+            self.commit_file(
+                sha256_integration,
+                "current.txt",
+                b"current sha256 subject\n",
+                "Current SHA-256 subject",
+            )
+            self.success(
+                run_cli(
+                    sha256_nested,
+                    "acceptance",
+                    "start",
+                    "--task-id",
+                    "sha256-subject",
+                    "--sha",
+                    historical,
+                )
+            )
+            self.assertEqual(len(historical), 64)
+            self.assertEqual(
+                self.git(
+                    sha256_root
+                    / ".agent_state/worktrees/sha256-subject/acceptance",
+                    "rev-parse",
+                    "HEAD",
+                ),
+                historical,
+            )
+
+    def test_01c_verifier_refs_are_independent_and_may_regress(self) -> None:
+        task_id = "verifier-authority"
+        integration = self.create_task(task_id)
+        first = self.commit_file(
+            integration, "first.txt", b"first verifier subject\n", "First verifier subject"
+        )
+        self.start_acceptance(task_id)
+
+        self.operational_failure(
+            self.cli(
+                self.nested,
+                "acceptance",
+                "result",
+                "--task-id",
+                task_id,
+                "--outcome",
+                "pass",
+            ),
+            "cli",
+            "cli_usage",
+        )
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), "")
+        self.assertEqual(self.ref_value(self.user_accepted_ref(task_id)), "")
+
+        agent = self.acceptance_result(task_id, "pass", "agent")
+        self.assertEqual(
+            {key: agent[key] for key in (
+                "previous_sha", "current_sha", "ref_updated", "regressed"
+            )},
+            {
+                "previous_sha": None,
+                "current_sha": first,
+                "ref_updated": True,
+                "regressed": False,
+            },
+        )
+        self.acceptance_result(task_id, "pass", "user")
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), first)
+        self.assertEqual(self.ref_value(self.user_accepted_ref(task_id)), first)
+
+        second = self.commit_file(
+            integration, "second.txt", b"second verifier subject\n", "Second verifier subject"
+        )
+        self.start_acceptance(task_id)
+        self.acceptance_result(task_id, "pass", "user")
+        self.assertEqual(self.ref_value(self.user_accepted_ref(task_id)), second)
+        self.start_acceptance(task_id, first)
+        regressed = self.acceptance_result(task_id, "pass", "user")
+        self.assertIs(regressed["regressed"], True)
+        self.assertTrue(regressed["warnings"])
+        self.assertEqual(self.ref_value(self.user_accepted_ref(task_id)), first)
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), first)
+
+        failed = self.acceptance_result(task_id, "fail", "user")
+        self.assertIs(failed["ref_updated"], True)
+        self.assertIsNone(failed["current_sha"])
+        self.assertEqual(self.ref_value(self.user_accepted_ref(task_id)), "")
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), first)
+        results = [
+            event
+            for event in self.telemetry_events(task_id)
+            if event["operation"] == "acceptance-result"
+        ]
+        self.assertEqual([event["verifier"] for event in results], ["agent", "user", "user", "user", "user"])
+        self.assertIn("previous_sha", results[0])
+        self.assertIsNone(results[0]["previous_sha"])
+        self.assertIn("current_sha", results[-1])
+        self.assertIsNone(results[-1]["current_sha"])
 
     def test_02_newer_start_preserves_older_accepted_and_records_supersession(self) -> None:
         task_id = "accepted-supersession"
@@ -409,6 +595,8 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
                     task_id,
                     "--outcome",
                     "pass",
+                    "--verifier",
+                    "agent",
                 )
                 after = self.authority_snapshot()
                 self.operational_failure(
@@ -489,6 +677,51 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
         )
         self.assertEqual(self.ref_value(self.accepted_ref(task_id)), first)
         self.assert_no_retired_delivery_state(task_id)
+
+    def test_06b_user_authority_projects_reports_and_cleans_without_blocking(self) -> None:
+        task_id = "user-report-cleanup"
+        integration = self.create_task(task_id)
+        subject = self.commit_file(
+            integration, "delivery.txt", b"reported user evidence\n", "Reported user evidence"
+        )
+        self.start_acceptance(task_id)
+        self.acceptance_result(task_id, "pass", "agent")
+        self.acceptance_result(task_id, "pass", "user")
+
+        status = self.success(
+            self.cli(self.nested, "status", "--task-id", task_id)
+        )
+        self.assertEqual(status["accepted"], subject)
+        self.assertEqual(status["user_accepted"], subject)
+        self.mutation_success(self.land(task_id), "integration-land")
+
+        output = self.root / "user-authority-report"
+        self.mutation_success(
+            self.cli(
+                self.nested,
+                "integration",
+                "remove",
+                "--task-id",
+                task_id,
+                "--output-dir",
+                str(output),
+            ),
+            "integration-remove",
+        )
+        self.assertEqual(self.ref_value(self.user_accepted_ref(task_id)), "")
+        report = json.loads(
+            (output / "orchestrate-report.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            report["authorities"],
+            {"accepted": subject, "landed": subject, "user_accepted": subject},
+        )
+        verifier_spans = [
+            entry["verifier"]
+            for entry in report["timeline"]
+            if entry["kind"] == "acceptance"
+        ]
+        self.assertEqual(verifier_spans, ["agent", "user"])
 
     def test_07_land_requires_accepted_and_exact_single_persistence_checkout(self) -> None:
         no_accepted = "land-no-accepted"
@@ -1158,6 +1391,8 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
                     accepted_task,
                     "--outcome",
                     "pass",
+                    "--verifier",
+                    "agent",
                 ),
                 "acceptance-result",
                 "task_state_invalid",

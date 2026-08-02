@@ -15,6 +15,7 @@ _EVENT_OPERATIONS = frozenset(
     {
         "integration-create",
         "lane-create",
+        "lane-comment",
         "lane-check",
         "lane-sync",
         "lane-drop",
@@ -40,7 +41,14 @@ def _event_bytes(
         "operation": operation,
         "outcome": outcome,
     }
-    event.update({key: value for key, value in extra.items() if value is not None})
+    nullable = {"previous_sha", "current_sha", "comment"}
+    event.update(
+        {
+            key: value
+            for key, value in extra.items()
+            if value is not None or key in nullable
+        }
+    )
     return (json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n").encode()
 
 
@@ -170,14 +178,23 @@ def _recorded_seconds(
     return max(0.0, _seconds(start, end) - paused)
 
 
-def _marker(event: Mapping[str, object], kind: str, identity: str) -> dict[str, object]:
-    return {
+def _marker(
+    event: Mapping[str, object],
+    kind: str,
+    identity: str,
+    *,
+    include_comment: bool = False,
+) -> dict[str, object]:
+    marker: dict[str, object] = {
         "type": "marker",
         "kind": kind,
         "identity": identity,
         "outcome": event["outcome"],
         "at": event["at"],
     }
+    if include_comment and "comment" in event:
+        marker["comment"] = event["comment"]
+    return marker
 
 
 def compute_report(
@@ -229,6 +246,8 @@ def compute_report(
         elif operation == "lane-create" and outcome == "success" and isinstance(lane_id, str):
             counts["lanes_created"] += 1
             lane_starts[lane_id] = (at, at_text)
+            if isinstance(event.get("comment"), str):
+                timeline.append(_marker(event, "comment", lane_id, include_comment=True))
         elif operation == "lane-drop" and outcome == "success" and isinstance(lane_id, str):
             counts["lanes_dropped"] += 1
             start = lane_starts.pop(lane_id, None)
@@ -240,6 +259,8 @@ def compute_report(
                     "elapsed_seconds": elapsed,
                     "recorded_seconds": _recorded_seconds(start[0], at, pauses),
                 })
+        elif operation == "lane-comment" and isinstance(lane_id, str):
+            timeline.append(_marker(event, "comment", lane_id, include_comment=True))
         elif operation == "lane-sync":
             counts["sync_attempts"] += 1
             if outcome == "conflict":
@@ -271,16 +292,20 @@ def compute_report(
             elif outcome == "fail":
                 counts["acceptance_failures"] += 1
             if outcome in {"pass", "fail"} and isinstance(subject, str):
-                start = acceptance_starts.pop(subject, None)
+                start = acceptance_starts.get(subject)
                 if start is not None:
                     elapsed = _seconds(start[0], at)
-                    timeline.append({
+                    entry = {
                         "type": "span", "kind": "acceptance", "identity": subject,
                         "outcome": "success" if outcome == "pass" else "fail",
                         "started_at": start[1], "ended_at": at_text,
                         "elapsed_seconds": elapsed,
                         "recorded_seconds": _recorded_seconds(start[0], at, pauses),
-                    })
+                    }
+                    verifier = event.get("verifier")
+                    if isinstance(verifier, str):
+                        entry["verifier"] = verifier
+                    timeline.append(entry)
         elif operation == "integration-reconcile":
             counts["reconciliation_attempts"] += 1
             if outcome == "noop":
@@ -367,6 +392,7 @@ def compute_report(
         "counts": counts,
         "rates": rates,
         "integration_diff": diff,
+        "authorities": dict(snapshot.get("authorities", {})),
         "timeline": timeline,
     }
     if timing is not None:
@@ -374,72 +400,35 @@ def compute_report(
     return report
 
 
-LANE_GROUP_THRESHOLD = 6
+def lane_comments(task: TaskResources) -> dict[str, str | None]:
+    """Return the latest annotation event for each lane id.
 
-
-def lane_groups(task: TaskResources) -> dict[str, list[str]]:
-    """Every lane ever created for this task, grouped by the `--group` it declared.
-
-    The group is recorded data, not a naming convention: lane ids drift as a need
-    is recut (`b51b-host-root` becomes `r3-readmit` becomes `r5b-proof-capture`),
-    and a key inferred from them counts a single need as eight.
-
-    Read from append-only telemetry rather than from live refs, because a lane
-    that was collected, dropped, or abandoned during a recut has no refs left —
-    and those are exactly the lanes a recut would otherwise erase from the count.
+    Telemetry is the sole current annotation store. A successful lane create
+    starts a fresh annotation lifetime, comment set/clear appends a replacement,
+    and terminal lane events retire that lifetime. Status still filters this
+    map through its live projected lane inventory.
     """
     try:
         raw = task.telemetry_path.read_bytes()
     except OSError:
         raw = b""
     events, _invalid = _decode_events(raw)
-    groups: dict[str, list[str]] = {}
+    comments: dict[str, str | None] = {}
     for event in events:
-        if event["operation"] != "lane-create" or event["outcome"] != "success":
-            continue
+        operation = event["operation"]
+        outcome = event["outcome"]
         lane_id = event.get("lane_id")
-        group = event.get("group")
         if not isinstance(lane_id, str) or not lane_id:
             continue
-        if not isinstance(group, str) or not group:
-            # Lanes created before v144 declared no group; each stands alone
-            # rather than being folded into a guess.
-            group = lane_id
-        members = groups.setdefault(group, [])
-        if lane_id not in members:
-            members.append(lane_id)
-    return dict(sorted(groups.items()))
-
-
-def lane_consumption(task: TaskResources) -> dict[str, Any]:
-    """The lane count per need, and which needs have reached the threshold."""
-    groups = lane_groups(task)
-    if not groups:
-        return {}
-    consumption: dict[str, Any] = {
-        "threshold": LANE_GROUP_THRESHOLD,
-        "groups": {name: {"count": len(members), "lanes": members} for name, members in groups.items()},
-    }
-    reached = [name for name, members in groups.items() if len(members) >= LANE_GROUP_THRESHOLD]
-    if reached:
-        consumption["at_threshold"] = reached
-    return consumption
-
-
-def lane_consumption_warnings(task: TaskResources, group: str) -> tuple[str, ...]:
-    """What a mutation command says when a group has reached the threshold.
-
-    Mutation commands return no payload, so the count reaches Root through the
-    warning channel or not at all — and reaching Root is the entire point: the
-    field failure was ten lanes on one need with the number recorded nowhere.
-    """
-    members = lane_groups(task).get(group, [])
-    if len(members) < LANE_GROUP_THRESHOLD:
-        return ()
-    return (
-        f"lane group {group!r} has consumed {len(members)} lanes "
-        f"({', '.join(members)}); recut the need or rebind its oracle rather than adding another",
-    )
+        if operation == "lane-create" and outcome == "success":
+            value = event.get("comment")
+            comments[lane_id] = value if isinstance(value, str) else None
+        elif operation == "lane-comment" and outcome == "success":
+            value = event.get("comment")
+            comments[lane_id] = value if isinstance(value, str) else None
+        elif operation in {"lane-drop", "integration-collect"} and outcome == "success":
+            comments.pop(lane_id, None)
+    return comments
 
 
 def timing_state(task: TaskResources) -> str:
@@ -518,11 +507,21 @@ def _report_inputs(
     events, invalid = _decode_events(raw)
     if invalid:
         warnings.append(f"ignored {invalid} invalid telemetry line(s)")
+    authorities = {
+        key: value
+        for key, value in (
+            ("accepted", task.ref(task.accepted_ref)),
+            ("user_accepted", task.ref(task.user_accepted_ref)),
+            ("landed", task.ref(task.landed_ref)),
+        )
+        if value is not None
+    }
     snapshot: dict[str, object] = {
         "task_id": task.task_id,
         "warnings": warnings,
         "invalid_telemetry_lines": invalid,
         "integration_diff": _integration_diff(task),
+        "authorities": authorities,
     }
     now = datetime.now(UTC)
     if project_terminal_remove:

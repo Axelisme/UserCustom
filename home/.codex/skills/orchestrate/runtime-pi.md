@@ -1,102 +1,82 @@
 # Orchestrate — Pi runtime binding
 
-See [dispatch.md](references/dispatch.md) for the runtime-neutral dispatch contract, evidence, acceptance, and
-authority rules shared by every runtime. This file states only Pi's own delta.
+## Dispatch
 
-Pi Root dispatches an admitted implementation lane through the native `subagent` tool. Orchestrate ships
-no Pi-specific adapter: transport, control, and evidence are the runtime's own, and Root reads them
-directly. Root launches `lane-worker` with fresh context in async mode.
+See [dispatch.md](references/dispatch.md) for the runtime-neutral dispatch contract, exact Git
+binding, evidence, acceptance, and authority rules shared by every runtime. This file states only
+Pi's own delta.
 
-## Budgets
+Pi Root dispatches an admitted implementation lane through Pi Subagents' native `subagent` tool.
+Orchestrate ships no Pi-specific adapter: transport, control, and evidence are the runtime's own,
+and Root reads them directly. Root launches `lane-worker` with fresh context in async mode.
 
-Pass `turnBudget` on every async writer lane and on every resume — the recovery descriptor restores
-`toolBudget` but not the turn budget, so a resume that omits it runs unbounded. Any sufficient ceiling
-will do (80, 160, 300); the number is not a safety property, because safety comes from the worker's
-per-cycle commit discipline. Set no hard `toolBudget`.
+## Writer execution
 
-This deliberately overrides upstream `pi-subagents/skills/pi-subagents/SKILL.md:93`, which advises
-against passing `turnBudget` *or* a hard `toolBudget` to an implementation worker. The two are not the
-same kind of limit and upstream's single warning conflates them:
+Normal writer launch and resume omit `turnBudget`; no hard `toolBudget` is supplied. An exceptional
+budget choice retains one caution: Pi gives the child no approaching-limit warning, so a budget can
+hard-cut the child before it can hand off cleanly. The worker's per-cycle commit discipline remains
+the controllable protection against an interrupted turn.
 
-- **`toolBudget` degrades.** Exhausting it blocks read and search tools but leaves mutation tools
-  available, producing a worker that can write but cannot see. Upstream's warning holds here.
-- **`turnBudget` stops.** It is a soft ceiling — `maxTurns` plus `graceTurns` (default 1) — after
-  which the supervisor aborts the process and returns partial output. The worker is told its budget
-  **once, at launch**, in its system prompt; process-mode execution has no live steering, so nothing
-  warns it as the ceiling approaches and it must track its own turns to wrap up in time. Expect a stop
-  it failed to prepare for, and a lane left dirty.
+Writer launch and resume never use `subagent_wait`. In ordinary interactive mode, Root reports the
+run id, completed evidence, and next action, then ends the turn. In goal-active mode, if the only
+blocker is the background writer, Root reports the same concise progress and calls one `yield_goal`.
+Neither mode polls or forms a repeated wait loop.
 
-The override is a question of who pays. An unprepared stop costs Root one `resume`. Upstream's
-alternative — a narrow task scope, an elapsed deadline, and requested checkpoints instead of a ceiling
-— costs Root continuous coordination: 84 `status` and 155 `yield_goal` calls in one observed session.
+## Recovery
 
-`status` reports `turnBudgetExceeded`, which is how Root tells a budget stop from any other stop.
+Before every resume Root reruns `lane check` and `status`, then rebinds the exact lane SHA, cwd,
+Git root/common-dir, branch, and lane identity. Resume preserves the session and launch contract
+but returns a fresh run id; the prior run id no longer identifies the live run. An `interrupt`
+leaves a run paused and resumable. A `stop` is terminal. `steer` is advisory and never proves
+compliance, readiness, collection, or completion.
 
-### When a budget stops a lane
+After the runtime accepts a resume, use a five-minute minimum quiet window: do not call `status`,
+resume again, or poll during that window. Process completion, process-terminal, or needs-attention
+events are handled immediately. If no such event arrives, make one status confirmation no earlier
+than five minutes after acceptance while leaving the parent turn unblocked. A resume that overlaps
+child compaction may otherwise take unusually long.
 
-Root chooses; these are the available moves, not a decision procedure.
+Use this four-row recovery matrix:
 
-| | worker context | lane and its commits | Contract | re-admission |
-|---|---|---|---|---|
-| `resume` the same run with a larger `turnBudget` | kept | kept | unchanged | no |
-| `resume` the same run unchanged (after an `interrupt`) | kept | kept | unchanged | no |
-| dispatch a new run into the **same lane** | lost | kept | unchanged | no |
-| recut the Slice into a new lane | lost | lost | changed | yes |
-| `lane drop` | lost | lost | — | — |
+| trusted state | Root action |
+| --- | --- |
+| Contract and session context are trusted | Resume the same session. |
+| Contract is unchanged but old context is not trusted | Start a fresh run in the same lane. |
+| Contract or observable behavior changed | Re-admit and recut. |
+| The lane is no longer needed | `lane drop`. |
 
-Changing the run is not changing the lane: a lane is a branch and a worktree, a run is the agent
-working in it. Reusing the worker's context is the cheapest of these moves — prefer a resume while the
-worker's understanding of the Contract is still sound, and take a fresh run once it has drifted.
-
-## Continuation
-
-A `paused`, `completed`, or `failed` run may be resumed with `action: "resume"` under the conditions
-`dispatch.md` states; a change in any of them requires Root re-admission and a fresh dispatch instead.
-
-Resume keeps the session and launch contract but **not the run id**: `resumeAsyncRun` mints a fresh one
-on every revival (`randomUUID().slice(0, 8)`). Root uses the id `resume` returns for the next status,
-evidence, or continuation call — the old id inspects a dead run. Before every resume Root reruns
-`lane check` and `status` and rebinds the exact SHA.
-
-`action: "interrupt"` softly interrupts the current child turn and leaves the run `paused`; it is the
-resumable pause. `action: "stop"` is terminal and a stopped run can never be resumed, so it is reserved
-for abandoning a run. `action: "steer"` only delivers guidance: its reply reports that Pi accepted the
-input, never that the model complied, so steering is never readiness, compliance, collect, or terminal
-evidence.
-
-Root may use a Contract checkpoint on a risky Slice: the worker reports and ends its run after
-committing the Contract tests, Root reviews the Contract diff and the exact red evidence, and the same
-run is resumed for implementation. The admission standard alone decides when Root must personally rerun
-a focused red command.
+A provider, cwd, lane identity, public Interface, or observable Contract change also requires fresh
+admission. A new lane always receives a fresh child session, even when its ticket and profile are
+shared; session context never crosses lane identity, cwd, branch, or write scope.
 
 ## Evidence
 
-Only the run's `process-terminal` artifact and exact Git checks constitute readiness or terminal
-evidence; everything else the runtime exposes is diagnostic.
-
-## Turn boundaries
-
-Long interactive background work returns control after dispatch rather than defaulting to
-`subagent_wait`; holding the parent turn delays a compactable boundary and raises context-exhaustion
-risk. Before ending an interactive turn or calling `yield_goal`, Root reports concise progress naming
-completed evidence, the active run or prerequisite, and the next action or blocker. In goal mode Root
-calls `yield_goal` only when work is blocked solely on an external or background prerequisite; outside
-goal mode Root ends the turn and Pi wakes the session when background work completes. A bounded
-same-turn `subagent_wait` is reasonable only when the current turn must receive the result before it can
-finish, the run is expected to finish shortly, and the wait stays within a small explicit bound. Do not
-sleep, poll, or repeatedly wait to manufacture same-turn completion.
+Writer terminal/readiness evidence requires public Pi `process-terminal.json` proof whose state is
+`observed`, together with exact Git checks. `lane check` and the exact identity checks must agree on
+the expected branch, HEAD/base, first-parent topology, clean tree, cwd, Git root/common-dir, and
+lane binding. Async `complete`, timestamps such as `endedAt`, result/output files, PID disappearance,
+private candidate proof, and public `unknown` are diagnostic only; none substitutes for the public
+`observed` proof.
 
 ## Runtime dependency
 
-This binding depends on upstream pi-subagents providing `resume`, `interrupt`, `steer`, `turnBudget`, the
-`process-terminal` artifact, and the async status fields named above. It was verified against upstream
-0.38.0. Root runs a read-only `subagent action: "doctor"` once at the start of a task to confirm runtime
-paths, agent and skill discovery, sessions, and intercom. No further capability probe exists: an
-interface change outside that report surfaces at the first failing dispatch, and Root then judges against
-this dependency list rather than retrying.
+Bind this runtime to capabilities rather than a version string. Pi Subagents must provide:
+
+- async writer dispatch;
+- `resume`, `interrupt`, `steer`, and terminal `stop`;
+- persisted sessions and a fresh run id after resume;
+- lifecycle/status projection; and
+- public process-terminal proof with the `observed` state.
+
+At task start Root runs one read-only `subagent doctor` to confirm runtime paths, agent and skill
+discovery, sessions, and intercom. Stop when a required capability is missing or its behavior does
+not match this binding; a different version string alone is not a rejection. Pi Subagents `0.40.0`
+is the last verified version, not a version pin or a standalone refusal condition.
 
 ## Authority
 
-Beyond the shared authority in [dispatch.md](references/dispatch.md), Root also owns Slice admission, Contract
-semantics and amendments, the S2.4 pre-collect test review, primary-checkout dirt, `lane check`, and
-`lane sync`.
+Beyond the shared authority in [dispatch.md](references/dispatch.md), Root owns Slice admission,
+Contract semantics and amendments, validation-mode choice, the S2.4 pre-collect review, primary
+checkout dirt, `lane check`, `lane sync`, recovery, collection, acceptance, landing, reporting,
+removal, setup, and pin decisions. This runtime binding grants no implicit admission, collection,
+acceptance, persistence, setup, pin, cleanup, or task-narrative authority.

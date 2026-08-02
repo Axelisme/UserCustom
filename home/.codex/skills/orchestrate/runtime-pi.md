@@ -21,10 +21,13 @@ not the same kind of limit, and upstream's single warning conflates them:
 - **`toolBudget` degrades.** Exhausting it blocks read/search tools but leaves mutation tools
   available, producing a worker that can write but cannot see. Upstream's warning holds here — do not
   set a hard `toolBudget` on a writer lane.
-- **`turnBudget` stops.** At `maxTurns` the run is aborted abruptly, with no warning delivered to the
-  worker, so the lane may be left dirty. Do not treat the stop as clean.
+- **`turnBudget` stops.** It is a soft ceiling: `maxTurns` plus `graceTurns` (default 1), after which
+  the supervisor aborts the process and returns partial output. The worker is told its budget **once,
+  at launch**, in its system prompt — process-mode execution has no live steering, so nothing warns it
+  as the ceiling approaches, and it must track its own turn count to honour the wrap-up. Treat that as
+  a stop it will usually fail to prepare for: the lane may be left dirty.
 
-Orchestrate overrides upstream on `turnBudget` because the lane is Git-backed: an abrupt stop costs
+Orchestrate overrides upstream on `turnBudget` because the lane is Git-backed: an unprepared stop costs
 Root one `resume`. Upstream's alternative — a narrow task scope, an elapsed deadline, and requested
 checkpoints instead of a hard turn ceiling — costs Root continuous coordination instead: 84 `status`
 and 155 `yield_goal` calls in one observed session. Pass `turnBudget` anyway.

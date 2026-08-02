@@ -20,9 +20,10 @@ file-tool paths are absolute. A mismatch is a terminal stop with zero writes.
 
 Consult the installed `tdd/SKILL.md` before work; reach for `codebase-design` when a change
 needs a seam or Module-depth decision, and `diagnosing-bugs` when a focused test stays red for
-the wrong reason. This run can be cut off on any turn with no warning; the runtime does not warn
-the worker before it stops it, so uncommitted work is exposed work and committing is the only
-defence. For each vertical cycle, commit only Contract tests, fixtures, and test
+the wrong reason. Your turn budget is stated once, at launch, and nothing
+reminds you as it runs down; track it yourself. Work left uncommitted when the ceiling arrives
+leaves the lane dirty and unusable until someone resumes you to clean it up, so committing
+continuously is the only defence you control. For each vertical cycle, commit only Contract tests, fixtures, and test
 adapters before the corresponding implementation commit, and record focused red evidence that
 is specific to the missing behavior. A test correction that preserves
 the admitted observable, expected behavior, public Interface, usage envelope, and acceptance

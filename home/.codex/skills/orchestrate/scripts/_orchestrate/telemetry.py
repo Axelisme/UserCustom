@@ -374,6 +374,74 @@ def compute_report(
     return report
 
 
+LANE_GROUP_THRESHOLD = 6
+
+
+def lane_groups(task: TaskResources) -> dict[str, list[str]]:
+    """Every lane ever created for this task, grouped by the `--group` it declared.
+
+    The group is recorded data, not a naming convention: lane ids drift as a need
+    is recut (`b51b-host-root` becomes `r3-readmit` becomes `r5b-proof-capture`),
+    and a key inferred from them counts a single need as eight.
+
+    Read from append-only telemetry rather than from live refs, because a lane
+    that was collected, dropped, or abandoned during a recut has no refs left —
+    and those are exactly the lanes a recut would otherwise erase from the count.
+    """
+    try:
+        raw = task.telemetry_path.read_bytes()
+    except OSError:
+        raw = b""
+    events, _invalid = _decode_events(raw)
+    groups: dict[str, list[str]] = {}
+    for event in events:
+        if event["operation"] != "lane-create" or event["outcome"] != "success":
+            continue
+        lane_id = event.get("lane_id")
+        group = event.get("group")
+        if not isinstance(lane_id, str) or not lane_id:
+            continue
+        if not isinstance(group, str) or not group:
+            # Lanes created before v144 declared no group; each stands alone
+            # rather than being folded into a guess.
+            group = lane_id
+        members = groups.setdefault(group, [])
+        if lane_id not in members:
+            members.append(lane_id)
+    return dict(sorted(groups.items()))
+
+
+def lane_consumption(task: TaskResources) -> dict[str, Any]:
+    """The lane count per need, and which needs have reached the threshold."""
+    groups = lane_groups(task)
+    if not groups:
+        return {}
+    consumption: dict[str, Any] = {
+        "threshold": LANE_GROUP_THRESHOLD,
+        "groups": {name: {"count": len(members), "lanes": members} for name, members in groups.items()},
+    }
+    reached = [name for name, members in groups.items() if len(members) >= LANE_GROUP_THRESHOLD]
+    if reached:
+        consumption["at_threshold"] = reached
+    return consumption
+
+
+def lane_consumption_warnings(task: TaskResources, group: str) -> tuple[str, ...]:
+    """What a mutation command says when a group has reached the threshold.
+
+    Mutation commands return no payload, so the count reaches Root through the
+    warning channel or not at all — and reaching Root is the entire point: the
+    field failure was ten lanes on one need with the number recorded nowhere.
+    """
+    members = lane_groups(task).get(group, [])
+    if len(members) < LANE_GROUP_THRESHOLD:
+        return ()
+    return (
+        f"lane group {group!r} has consumed {len(members)} lanes "
+        f"({', '.join(members)}); recut the need or rebind its oracle rather than adding another",
+    )
+
+
 def timing_state(task: TaskResources) -> str:
     try:
         raw = task.telemetry_path.read_bytes()

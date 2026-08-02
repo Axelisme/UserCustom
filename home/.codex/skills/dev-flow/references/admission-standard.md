@@ -1,5 +1,8 @@
 # Admission standard
 
+`standard_version: 1`. Cite this number when reporting which checks a task was admitted under; it
+is maintained by hand, so a report that needs certainty cites the Git subject as well.
+
 These are the sole normative S0–S5 checks for dev-flow. Every check is decided from artifacts,
 not persuasion. Routing skills, runtime bindings, planners and reviewers reference this file and
 do not restate its policy.
@@ -67,9 +70,16 @@ after frequency, impact or a real resumed scenario makes it part of a current mi
 
 ## S1 — Slice admission
 
-- **S1.1 Observable sentence.** Record one sentence: “the user does X at `<production entrypoint>`
-  and sees Y.” If it cannot be written without naming internal objects, refuse the Slice. Name the
-  verifier, `user` or `agent`; Root records why.
+- **S1.1 Observable sentence, bound to its oracle.** Record one sentence: “the user does X at
+  `<production entrypoint>` and sees Y.” If it cannot be written without naming internal objects,
+  refuse the Slice. Name the verifier, `user` or `agent`; Root records why.
+
+  Then say how the Slice's oracle reaches that entrypoint. Naming an entrypoint is free; the check
+  is whether the evidence will be taken there. An oracle that proves a **stand-in** — a factory
+  rather than the production composition that ships, a message substring rather than the exact type,
+  a decoded value rather than the bytes that actually cross the boundary — passes while the shipped
+  path stays broken, and the gap surfaces only after the Contract is written and the rework budget
+  is half spent. Refuse the Slice when the binding cannot be stated.
 - **S1.2 Named deletion.** Name at least one existing production `file:symbol` deleted by the
   Slice. A first seam may say `deletes: none` once per task and names the predecessor's deleting
   Slice.
@@ -84,7 +94,9 @@ after frequency, impact or a real resumed scenario makes it part of a current mi
   the invariant is violated. An internal-only difference is hardening and is not Contract work.
 - **S2.2 Red evidence.** A focused test must be red without the device and red for that specific
   missing behavior. Record the command and observed reason.
-- **S2.3 Envelope.** The violating scenario must be inside the frozen usage envelope.
+- **S2.3 Envelope.** The violating scenario must be inside the frozen usage envelope. A test that is
+  red against a stand-in rather than against the production path is not S1.1 evidence, whatever it
+  proves about the stand-in.
 - **S2.4 Lane-ready test review.** Before collect, Root binds the exact clean lane-ready SHA and
   reads each Contract commit's test, fixture and adapter diff plus its red evidence before reading
   implementation. For timing, locking, retention, replay, security, data-loss and concurrency
@@ -102,6 +114,27 @@ after frequency, impact or a real resumed scenario makes it part of a current mi
 - A proposed third production correction is a scope event. Recut at S1 or report it; never dispatch
   `Machine rework: 3/2` and never add another counter store.
 
+Recutting resets that counter, because the recut Slice is a new ticket. The count that a recut must
+not reset is the one below.
+
+- **Lane consumption.** Every lane declares the need it serves, and orchestrate counts the lanes a
+  need has consumed across every recut and re-admission. At six it says so on the next `lane create`.
+  The count lives in append-only telemetry, so a recut cannot clear it and a dropped lane still
+  counts: a need that has been re-cut five times has spent five lanes, whatever its current ticket
+  says.
+- **What six means.** Six lanes on one need is not a budget that has run out; it is evidence that
+  the need was admitted in the wrong shape. Exactly two shapes produce it, and the next act is
+  whichever one applies:
+  - **Merge.** Neighbouring Slices each fail to give the user something they could not do before, so
+    each lane pays a full admission, Contract and review cycle to deliver a fragment. Combine them
+    and cut once.
+  - **Rebind.** The oracle is bound to a stand-in. It proves the same stand-in correct every time
+    while the production path stays broken, so each lane rediscovers the same gap. Rebind to the
+    production entrypoint under S1.1 and cut again.
+- Record which one applied and continue. Only when neither fits does the count go to the user, in
+  the record's `Current`, and the work continues meanwhile — the count exists to redirect the work,
+  not to halt it.
+
 Blocking is a closed enum: `spec_violation | data_loss | security |
 reproducible_behavior_failure` within the frozen envelope. Every blocker has `contract_basis`;
 without one it is backlog. A missing product or policy decision is `blocked_on_decision`. A bounded
@@ -116,6 +149,11 @@ delta is reviewed by one reviewer on its originating axis.
   or mutate.
 - Before candidate mutation Root rechecks the same binding; any mismatch requires fresh review.
 - A bounded delta uses only its originating axis.
+
+Each accepted increment closes by bringing the task record with it: update `INDEX.md`'s `Current`
+and `Next` to the accepted state, then run `refresh`. The record is the only authority a compacted
+session inherits, and a `Current` naming a frontier three increments behind reads as correct while
+being wrong — the failure mode that made this step explicit.
 
 User validation is an ordinary generic ticket depending on delivered implementation. It remains
 open until explicit successful exercise, then closes with an exact evidence pointer. Failure leaves

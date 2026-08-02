@@ -124,8 +124,10 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             self.assert_help_surface(("status",), long_options=("--task-id",)),
             self.assert_help_surface(("timing", "pause"), long_options=("--task-id",)),
             self.assert_help_surface(("timing", "resume"), long_options=("--task-id",)),
+            # `create` alone takes --group: the need a lane serves is declared
+            # once, when the lane is cut, and read from telemetry thereafter.
             self.assert_help_surface(
-                ("lane", "create"), long_options=("--task-id", "--lane-id")
+                ("lane", "create"), long_options=("--task-id", "--lane-id", "--group")
             ),
             self.assert_help_surface(
                 ("lane", "check"), long_options=("--task-id", "--lane-id")
@@ -498,6 +500,8 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 self.task_id,
                 "--lane-id",
                 self.lane_id,
+                "--group",
+                self.lane_id,
             ),
             "lane-create",
         )
@@ -664,6 +668,13 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "task_id": self.task_id,
                 "integration": integration_tip,
                 "lanes": {},
+                # `lanes` is what still exists; `lane_consumption` is what the
+                # task has ever spent. The collected lane is gone from the first
+                # and still counted in the second — that gap is the whole point.
+                "lane_consumption": {
+                    "threshold": 6,
+                    "groups": {"clean-lane": {"count": 1, "lanes": ["clean-lane"]}},
+                },
                 "acceptance": integration_tip,
                 "accepted": integration_tip,
                 "landed": integration_tip,
@@ -1086,6 +1097,8 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 self.task_id,
                 "--lane-id",
                 self.lane_id,
+                "--group",
+                self.lane_id,
             ),
             "lane-create",
         )
@@ -1151,6 +1164,8 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "--task-id",
                 self.task_id,
                 "--lane-id",
+                self.lane_id,
+                "--group",
                 self.lane_id,
             ),
             "lane-create",
@@ -1259,6 +1274,8 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                     "--task-id",
                     self.task_id,
                     "--lane-id",
+                    lane_id,
+                    "--group",
                     lane_id,
                 ),
                 "lane-create",
@@ -1391,6 +1408,8 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 self.task_id,
                 "--lane-id",
                 change_lane_id,
+                "--group",
+                change_lane_id,
             ),
             "lane-create",
         )
@@ -1430,6 +1449,8 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "--task-id",
                 self.task_id,
                 "--lane-id",
+                revert_lane_id,
+                "--group",
                 revert_lane_id,
             ),
             "lane-create",
@@ -1690,6 +1711,8 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                         "--task-id",
                         task_id,
                         "--lane-id",
+                        lane_id,
+                        "--group",
                         lane_id,
                     ),
                     "lane-create",

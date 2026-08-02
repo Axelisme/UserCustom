@@ -60,6 +60,8 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
                 task_id,
                 "--lane-id",
                 lane_id,
+                "--group",
+                lane_id,
             ),
             "lane-create",
         )
@@ -243,7 +245,12 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
         self,
     ) -> None:
         invocations: tuple[tuple[str, tuple[str, ...], int, str], ...] = (
-            ("lane-create", ("lane", "create", "--lane-id", "writer"), 0, "success"),
+            (
+                "lane-create",
+                ("lane", "create", "--lane-id", "writer", "--group", "writer"),
+                0,
+                "success",
+            ),
             ("lane-check", ("lane", "check", "--lane-id", "missing"), 1, "failure"),
             ("lane-sync", ("lane", "sync", "--lane-id", "missing"), 2, "failure"),
             ("lane-drop", ("lane", "drop", "--lane-id", "missing"), 2, "failure"),
@@ -352,6 +359,8 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
             "--task-id",
             task_id,
             "--lane-id",
+            "writer",
+            "--group",
             "writer",
         )
         self.mutation_success(lane, "lane-create", warnings=True)

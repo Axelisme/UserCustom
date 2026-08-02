@@ -18,10 +18,13 @@ authority; Root reads its current S0 before creating the first lane.
 1. `integration create --task-id <task>` creates the append-only task integration branch and
    worktree at the current repository subject. Done when the integration branch and worktree exist.
 
-2. `lane create --task-id <task> --lane-id <lane>` creates one managed writer branch and worktree
-   at the recorded task base. A lane is one admitted Contract, one worktree, one branch, and one
-   `lane-worker` call. Root dispatches the exact canonical cwd and Git identity and preserves
-   primary-checkout dirt. Done when the lane branch and worktree exist at the recorded base.
+2. `lane create --task-id <task> --lane-id <lane> --group <need>` creates one managed writer branch
+   and worktree at the recorded task base. A lane is one admitted Contract, one worktree, one
+   branch, and one `lane-worker` call. `--group` names the need the lane serves and is the only
+   thing that survives a recut: lane ids are recreated, the group is what counts across them. Reuse
+   the same group when re-cutting or re-admitting the same need, and give a new need a new one.
+   Root dispatches the exact canonical cwd and Git identity and preserves primary-checkout dirt.
+   Done when the lane branch and worktree exist at the recorded base.
 
 3. The worker commits Contract tests before implementation and reports focused red evidence plus
    its exact clean tip. Contract paths remain protected by normalized `Immutable:` trailers. Done
@@ -83,6 +86,12 @@ paths, and user dirt.
 `status` is the only task discovery and state projection. Without a task ID it lists known tasks;
 with `--task-id` it reports the exact base, integration, lanes, acceptance, accepted, landed,
 telemetry, and closeability slots that exist. It does not synthesize missing authority.
+
+`lane_consumption` is the exception to "what exists": it reports, per `--group`, every lane the need
+has ever been given, including lanes already collected or dropped, and names them. A need at the
+threshold is also reported on the next `lane create`, because that is the moment the number can
+still change what Root does. The [admission standard](../dev-flow/references/admission-standard.md)
+owns what a group at the threshold means and what to do about it.
 
 `report --task-id <task> --output-dir <dir>` atomically writes the two fixed report artifacts from
 Git and append-only telemetry. `timing pause --task-id <task>` closes active timing before an

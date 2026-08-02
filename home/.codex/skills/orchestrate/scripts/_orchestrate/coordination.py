@@ -28,7 +28,7 @@ from .resources import (
     resolved_path,
     worktree_state,
 )
-from .telemetry import record_event, write_report
+from .telemetry import lane_consumption, lane_consumption_warnings, record_event, write_report
 
 
 def _task(repo: RepositoryContext, task_id: str) -> TaskResources:
@@ -123,6 +123,9 @@ def status(repo: RepositoryContext, task_id: str | None = None) -> CommandResult
         value = _ref(repo, ref)
         if value is not None:
             data[key] = value
+    consumption = lane_consumption(task)
+    if consumption:
+        data["lane_consumption"] = consumption
     if warnings:
         data["warnings"] = warnings[:20]
     return CommandResult(True, data)
@@ -204,15 +207,12 @@ def _create_lane_resources(
     return lane
 
 
-def lane_create(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandResult:
+def lane_create(repo: RepositoryContext, task_id: str, lane_id: str, group: str) -> CommandResult:
     task = _task(repo, task_id)
     integration = _active_integration_tip(repo, task)
     lane = _create_lane_resources(repo, task, lane_id, integration)
-    return CommandResult(
-        True,
-        {},
-        record_event(task, "lane-create", "success", lane_id=lane.lane_id),
-    )
+    warnings = record_event(task, "lane-create", "success", lane_id=lane.lane_id, group=group)
+    return CommandResult(True, {}, (*warnings, *lane_consumption_warnings(task, group)))
 
 
 @dataclass(frozen=True)

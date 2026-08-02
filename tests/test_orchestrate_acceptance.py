@@ -95,6 +95,8 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
                 task_id,
                 "--lane-id",
                 lane_id,
+                "--group",
+                lane_id,
             ),
             "lane-create",
         )

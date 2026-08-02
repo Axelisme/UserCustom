@@ -1,6 +1,7 @@
 ---
 name: dev-flow
 description: Durable task record for work that must survive compaction and handoff. Use when starting multi-session work, resuming or archiving an existing task record, asking what a task's current state is, or when another skill needs the shared plan-directory record. Not for single-session edits that need no durable record.
+skill_version: 1
 ---
 
 # Dev Flow

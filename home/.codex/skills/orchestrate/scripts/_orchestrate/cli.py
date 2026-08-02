@@ -65,6 +65,8 @@ def build_parser() -> argparse.ArgumentParser:
         op = lane_commands.add_parser(name)
         op.add_argument("--task-id", required=True)
         op.add_argument("--lane-id", required=True)
+        if name == "create":
+            op.add_argument("--group", required=True)
         op.set_defaults(route=f"lane-{name}", mutation=True)
 
     integration = commands.add_parser("integration")
@@ -164,7 +166,7 @@ def _run(
     if route == "integration-create":
         return integration_create(repo, args.task_id)
     if route == "lane-create":
-        return lane_create(repo, args.task_id, args.lane_id)
+        return lane_create(repo, args.task_id, args.lane_id, args.group)
     if route == "lane-check":
         return lane_check(repo, args.task_id, args.lane_id)
     if route == "lane-sync":

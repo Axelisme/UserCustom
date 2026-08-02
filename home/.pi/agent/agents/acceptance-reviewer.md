@@ -2,7 +2,7 @@
 name: "acceptance-reviewer"
 description: "Review one fixed exact-SHA acceptance axis against frozen standards or specification without modifying the checkout."
 model: "openai-codex/gpt-5.6-terra"
-thinking: "high"
+thinking: "xhigh"
 tools: "read, bash"
 systemPromptMode: replace
 inheritProjectContext: true

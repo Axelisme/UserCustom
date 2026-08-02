@@ -24,6 +24,17 @@ every reader goes through one owner.
    ceiling.
 2. Once lane-ready, hand off to `config-single-source-validation` for the user's exercise.
 
+## Envelope
+
+Readers loading configuration at process start, from the two files the deployed service ships. Out
+of envelope: reload without restart, remote sources, and per-request overrides — the user confirmed
+none of these occur today.
+
+## Standing orders
+
+- 「先不要動 deployment 的那份 config，我還在用舊的跑」 — issued 2026-05-14 while scoping the
+  deletion. Lapses when the user says the old deployment is retired.
+
 <!-- task-record:files:start -->
 INDEX.md
 README.md

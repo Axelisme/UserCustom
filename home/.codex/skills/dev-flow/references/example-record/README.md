@@ -11,6 +11,8 @@ moment "in progress": `Goal`, `Current` (including `Current stage`), and `Next` 
 and the fenced block at the bottom is a mechanical projection of this directory's own file tree —
 compare it against the actual files here as a sanity check, not as something to imitate by hand in
 a real record (a real record gets that block from `scripts/plan.py refresh`).
+`Envelope` and `Standing orders` show the two shapes those slots take: a frozen boundary written out
+in full, and one instruction quoted in the user's own words with the date it was issued.
 `tickets/config-single-source.md` is a rich, dispatched implementation ticket.
 `tickets/config-single-source-validation.md` is thin on purpose: it is blocked, so there is nothing
 yet to say. `decisions.md` holds the standing decisions that both tickets rely on but never restate.

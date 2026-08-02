@@ -202,11 +202,11 @@
       "sha256": "56ef111cc62ee213945ea115516c4462586a395946fb5ea27fdcbc877096951f"
     },
     "references/package-admin.md": {
-      "bytes": 1292,
+      "bytes": 1357,
       "sections": {
-        "Orchestrate \u2014 Package administration": "22fcd1151a5a59cf76ac143dad884a914ab8509dd73e91eaf6c76b94663d2f51"
+        "Orchestrate \u2014 Package administration": "7d9101469a8a72edea7f8ae037ef6525d390a57e4e955cd0f24908c02a02f10f"
       },
-      "sha256": "daafff5e27fe24550941728fb115d74800bb6e6294bb9a45d64c967e4b041a53"
+      "sha256": "66800cb25961419ed94bd6c231eb62d928458675458572a72fac84c8aed186db"
     },
     "runtime-claude.md": {
       "bytes": 435,
@@ -223,17 +223,18 @@
       "sha256": "31d55df8c8d149393c6a3026b398c518bd2ae61bd6ec4387b9237b5a2da5e871"
     },
     "runtime-pi.md": {
-      "bytes": 7203,
+      "bytes": 6276,
       "sections": {
         "Authority": "0c8b33b902878dba01839e184c95992430e61d9b59f9c52806dca7a1ea2aeee6",
-        "Continuation": "53d20b538ae8c4b792f778ef4f3e7350b63df2fdbdb43e7b496bdb6a9b5b1cb6",
-        "Evidence": "ccbf1729706e1c7d2690acf37ccd482a84694b04d5ae482b7bbaebcff1a766c7",
-        "Orchestrate \u2014 Pi runtime binding": "e22c6838abcbe2371faf9e5e9abeb06305d1080afc66fcc8a0198a4cf915899f",
+        "Budgets": "25664c7a855ae1e6be415382853fa85368711a0261cab657cc93fee3ad385da0",
+        "Continuation": "1f81760d1d5d19d316431a2066d3421088886c893fee30263b7afe012d18d2a5",
+        "Evidence": "754c80e203a5025f88555cfa27fb6b92bc93610edf0d00315e8a0485f6ef6df9",
+        "Orchestrate \u2014 Pi runtime binding": "a7491b881b9663ae495e6e337e45fc97f0a6dc3c9bcfae9e5eebfc7a3aa8d24b",
         "Runtime dependency": "0c11a62f480ed173c1383a4a74f14e56d92a56b48ee44d0628c75740c2626b73",
         "Turn boundaries": "585b5dac0871e04c9b4089289a5534f75038b90f78402e8582db9d36da1bfc80",
-        "When a budget stops a lane": "b94a513baf6969525b562ac23ed41512e791ff1cf0554aed34b9460f7ca4e5ba"
+        "When a budget stops a lane": "4e1ac0417c2d0fd4c89f0ebad518a44e1fd69c892090d7e4fbbd2942e972dbdb"
       },
-      "sha256": "62e1f8d0f6ecb9138d974bb894095dc66ce100edb953c2f4a4f5aa326325232d"
+      "sha256": "3fb49772fcf3671970f60d66a54ce703feaa0cb547663a428330e3b115c4e22d"
     },
     "scripts/_orchestrate/__init__.py": {
       "bytes": 55,
@@ -358,9 +359,15 @@
         "`lane_consumption`",
         "dev-flow (unversioned, same subject)"
       ],
+      "references/package-admin.md": [
+        "Orchestrate \u2014 Package administration"
+      ],
       "runtime-pi.md": [
+        "Budgets",
         "Continuation",
-        "Orchestrate \u2014 Pi runtime binding"
+        "Evidence",
+        "Orchestrate \u2014 Pi runtime binding",
+        "When a budget stops a lane"
       ],
       "scripts/_orchestrate/cli.py": [
         "__file__"
@@ -376,6 +383,7 @@
     "must_reread": [
       "SKILL.md",
       "migrations/144.md",
+      "references/package-admin.md",
       "runtime-pi.md"
     ]
   },

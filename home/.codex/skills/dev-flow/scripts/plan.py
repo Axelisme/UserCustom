@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Workflow-neutral durable task-record v2 command line kernel."""
+"""Workflow-neutral durable task-record command line kernel."""
 
 from __future__ import annotations
 
@@ -9,14 +9,28 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import NoReturn
 
-CURRENT_VERSION = 2
+CURRENT_VERSION = 3
+VALIDATED_VERSION = 3
+SUPPORTED_VERSIONS = (2, 3)
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 VERSION_ROW = re.compile(r"^\|\s*record_version\s*\|\s*([^|\r\n]*)\s*\|\s*$", re.MULTILINE)
 START = "<!-- task-record:files:start -->"
 END = "<!-- task-record:files:end -->"
+REFRESHED_MARKER = re.compile(r"<!-- task-record:refreshed-at:([^>\r\n]*) -->")
+
+# Ticket status is exactly this closed enum. It replaces harness Task-tool vocabulary
+# (`pending`, `in_progress`, `completed`, ...) which is a non-authoritative projection and must
+# never enter a ticket. See dev-flow/SKILL.md "Never create a second ticket store".
+TICKET_STATUSES = frozenset({"open", "active", "closed"})
+# Required exactly when status is `closed`; distinguishes a resolved ticket from one ruled out of
+# scope, superseded, or hard-stopped after its rework budget was exhausted.
+TICKET_DISPOSITIONS = frozenset({"resolved", "superseded", "out-of-scope", "hard-stop"})
+TICKET_STATUS_ROW = re.compile(r"^\|\s*status\s*\|\s*([^|\r\n]*)\|\s*$", re.MULTILINE)
+TICKET_DISPOSITION_ROW = re.compile(r"^\|\s*disposition\s*\|\s*([^|\r\n]*)\|\s*$", re.MULTILINE)
 
 
 class Refusal(RuntimeError):
@@ -144,6 +158,89 @@ def version_from_text(text: str) -> int | None:
         return None
 
 
+def single_row_value(text: str, pattern: re.Pattern[str]) -> str | None:
+    rows = pattern.findall(text)
+    if len(rows) != 1:
+        return None
+    return rows[0].strip()
+
+
+def validate_ticket_records(root: Path, directory: Path) -> None:
+    """Hold v3 tickets to the closed status enum and the disposition rule (D-012).
+
+    Grandfathered records (version < VALIDATED_VERSION) never reach this function.
+    """
+    tickets_directory = directory / "tickets"
+    if not tickets_directory.is_dir():
+        return
+    for path in sorted(tickets_directory.glob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        rel = relative(root, path)
+        status = single_row_value(text, TICKET_STATUS_ROW)
+        if status not in TICKET_STATUSES:
+            raise Refusal(
+                "invalid_ticket_status",
+                f"ticket status must be one of open, active, closed: {rel} has status {status!r}",
+                (rel,),
+                VALIDATED_VERSION,
+            )
+        disposition = single_row_value(text, TICKET_DISPOSITION_ROW)
+        if status == "closed":
+            if disposition not in TICKET_DISPOSITIONS:
+                raise Refusal(
+                    "invalid_ticket_disposition",
+                    "closed ticket requires a disposition of resolved, superseded, out-of-scope, "
+                    f"or hard-stop: {rel} has disposition {disposition!r}",
+                    (rel,),
+                    VALIDATED_VERSION,
+                )
+        elif disposition is not None:
+            raise Refusal(
+                "invalid_ticket_disposition",
+                f"disposition is only allowed when status is closed: {rel} has status {status!r} "
+                f"and disposition {disposition!r}",
+                (rel,),
+                VALIDATED_VERSION,
+            )
+
+
+def newest_ticket_mutation(directory: Path) -> dict[Path, float]:
+    tickets_directory = directory / "tickets"
+    if not tickets_directory.is_dir():
+        return {}
+    return {path: path.stat().st_mtime for path in sorted(tickets_directory.glob("*.md"))}
+
+
+def staleness(root: Path, directory: Path, previous_stamp: str | None) -> dict[str, object] | None:
+    """Compare the stamp left by the previous `refresh` against ticket file mtimes.
+
+    Returns None when the record is not known to be stale (including the first-ever refresh,
+    where there is nothing yet to compare the stamp against).
+    """
+    if previous_stamp is None:
+        return None
+    try:
+        previous = datetime.fromisoformat(previous_stamp)
+    except ValueError:
+        return None
+    newer = [
+        relative(root, path)
+        for path, mtime in sorted(newest_ticket_mutation(directory).items())
+        if datetime.fromtimestamp(mtime, tz=timezone.utc) > previous
+    ]
+    if not newer:
+        return None
+    return {"stamped_at": previous_stamp, "newer_ticket_files": newer}
+
+
+def set_refreshed_marker(text: str, value: str, separator: str) -> str:
+    marker = f"<!-- task-record:refreshed-at:{value} -->"
+    if REFRESHED_MARKER.search(text):
+        return REFRESHED_MARKER.sub(lambda _match: marker, text, count=1)
+    index = text.index(START)
+    return text[:index] + marker + separator + text[index:]
+
+
 def files_projection(directory: Path) -> str:
     entries = sorted(directory.rglob("*"), key=lambda path: path.relative_to(directory).parts)
     lines = []
@@ -169,7 +266,7 @@ def load_for_refresh(root: Path, task_id: str) -> RefreshRecord:
 
     # The version boundary is deliberately checked before the generated-block markers.
     version = version_from_text(text)
-    if version != CURRENT_VERSION:
+    if version not in SUPPORTED_VERSIONS:
         detail = "missing" if version is None else repr(version)
         raise Refusal(
             "unsupported_record_version",
@@ -244,19 +341,36 @@ def command_create(root: Path, arguments: argparse.Namespace) -> None:
 def command_refresh(root: Path, arguments: argparse.Namespace) -> None:
     validate_task_id(arguments.task_id)
     record = load_for_refresh(root, arguments.task_id)
+
+    stale: dict[str, object] | None = None
+    if record.version == VALIDATED_VERSION:
+        validate_ticket_records(root, record.directory)
+        previous_stamp = single_row_value(record.text, REFRESHED_MARKER)
+        stale = staleness(root, record.directory, previous_stamp)
+
     start = record.text.index(START) + len(START)
     end = record.text.index(END, start)
     separator = "\r\n" if record.text[start:].startswith("\r\n") else "\n"
     projection = files_projection(record.directory).replace("\n", separator)
     updated = record.text[:start] + separator + projection + separator + record.text[end:]
+
+    if record.version == VALIDATED_VERSION:
+        now = datetime.now(timezone.utc).isoformat()
+        updated = set_refreshed_marker(updated, now, separator)
+
     if updated != record.text:
         atomic_write(record.index, updated)
+
+    extra: dict[str, object] = {}
+    if record.version == VALIDATED_VERSION:
+        extra["stale"] = stale
     emit(
         "refresh",
         ok=True,
         version=record.version,
         task_id=arguments.task_id,
         paths=[relative(root, record.index)],
+        **extra,
     )
 
 

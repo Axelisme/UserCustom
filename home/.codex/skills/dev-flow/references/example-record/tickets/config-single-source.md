@@ -6,6 +6,10 @@
 | status | open |
 | depends_on | none |
 
+<!-- status is exactly open | active | closed. When status becomes closed, add a `disposition` row
+     directly below it — resolved | superseded | out-of-scope | hard-stop; omit the row while status
+     is open or active. -->
+
 **Resolve by:** Implement the admitted Contract-first slice and return one clean exact SHA; user
 presence is not required unless a product decision is reached.
 

@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -30,6 +31,18 @@ def record(root: Path, task_id: str = "demo") -> Path:
     return root / ".agent_state" / "plans" / task_id
 
 
+def ticket_text(ticket_id: str, status: str, disposition: str | None = None, depends_on: str = "none") -> str:
+    rows = [
+        f"| id | {ticket_id} |",
+        f"| status | {status} |",
+    ]
+    if disposition is not None:
+        rows.append(f"| disposition | {disposition} |")
+    rows.append(f"| depends_on | {depends_on} |")
+    header = "\n".join(rows)
+    return f"# {ticket_id} — test ticket\n\n| Ticket field | Value |\n|---|---|\n{header}\n\n## Current\n"
+
+
 def snapshot(directory: Path) -> dict[str, tuple[str, bytes | str | None]]:
     result: dict[str, tuple[str, bytes | str | None]] = {}
     for path in sorted(directory.rglob("*")):
@@ -43,13 +56,13 @@ def snapshot(directory: Path) -> dict[str, tuple[str, bytes | str | None]]:
     return result
 
 
-class TaskRecordV2Tests(unittest.TestCase):
+class TaskRecordTests(unittest.TestCase):
     def assert_ok(
         self,
         done: subprocess.CompletedProcess[str],
         operation: str,
         *,
-        version: int | None = 2,
+        version: int | None = 3,
     ) -> dict[str, object]:
         self.assertEqual(done.returncode, 0, done.stderr or done.stdout)
         body = payload(done)
@@ -88,7 +101,7 @@ class TaskRecordV2Tests(unittest.TestCase):
         command_line = next(line for line in done.stdout.splitlines() if "{create," in line)
         for command in ("create", "refresh", "archive", "resume"):
             self.assertIn(command, command_line)
-        for retired in ("ticket-create", "check", "init", "status", "show", "set", "phase", "log", "checkpoint", "migrate"):
+        for retired in ("ticket-create", "check", "init", "status", "show", "set", "phase", "log", "checkpoint", "migrate", "validate"):
             self.assertNotIn(retired, command_line)
 
     def test_create_and_refresh_project_the_complete_file_tree(self) -> None:
@@ -101,26 +114,30 @@ class TaskRecordV2Tests(unittest.TestCase):
             )
             task = record(root)
             index = task / "INDEX.md"
-            self.assertIn("| record_version | 2 |", index.read_text(encoding="utf-8"))
+            self.assertIn("| record_version | 3 |", index.read_text(encoding="utf-8"))
             self.assertIn("<!-- task-record:files:start -->\nINDEX.md\ntickets/\n<!-- task-record:files:end -->", index.read_text(encoding="utf-8"))
             (task / "decisions.md").write_text("arbitrary decision content\n", encoding="utf-8")
-            (task / "tickets" / "T001-any-name.md").write_text("unparsed ticket content\n", encoding="utf-8")
+            (task / "tickets" / "T001-any-name.md").write_text(
+                ticket_text("T001-any-name", "open") + "unparsed prose after the header\n",
+                encoding="utf-8",
+            )
             (task / "evidence").mkdir()
             (task / "evidence" / "raw.bin").write_bytes(b"\x00\xff")
-            before = index.read_text(encoding="utf-8")
+            goal_before = index.read_text(encoding="utf-8").split("## Goal")[1].split("## Current")[0]
             refreshed = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
             self.assertEqual(refreshed["paths"], [".agent_state/plans/demo/INDEX.md"])
+            # A record with no prior stamp has nothing to compare against yet.
+            self.assertIsNone(refreshed["stale"])
             after = index.read_text(encoding="utf-8")
-            start = "<!-- task-record:files:start -->\n"
-            end = "<!-- task-record:files:end -->"
-            self.assertEqual(before.split(start)[0], after.split(start)[0])
-            self.assertEqual(before.split(end)[1], after.split(end)[1])
+            self.assertEqual(goal_before, after.split("## Goal")[1].split("## Current")[0])
             self.assertIn(
                 "INDEX.md\ndecisions.md\nevidence/\n  raw.bin\ntickets/\n  T001-any-name.md",
                 after,
             )
-            self.assertEqual(run_plan(root, "refresh", "demo").returncode, 0)
-            self.assertEqual(after, index.read_text(encoding="utf-8"))
+            # Refresh always re-stamps, so a second call still exits clean even though the stamp
+            # itself advances (it is not byte-for-byte idempotent, by design: see (b) staleness).
+            second = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
+            self.assertIsNone(second["stale"])
 
     def test_refresh_is_content_blind_except_version_and_markers(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -132,7 +149,7 @@ class TaskRecordV2Tests(unittest.TestCase):
                 "<!-- task-record:files:start -->\nstale\n<!-- task-record:files:end -->\n",
                 encoding="utf-8",
             )
-            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
+            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
             self.assertIn("INDEX.md\ntickets/", index.read_text(encoding="utf-8"))
 
     def test_refresh_preserves_crlf_outside_its_generated_block(self) -> None:
@@ -146,7 +163,7 @@ class TaskRecordV2Tests(unittest.TestCase):
                 b"<!-- task-record:files:end -->\r\noutside after\r\n"
             )
             index.write_bytes(original)
-            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
+            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
             updated = index.read_bytes()
             start = b"<!-- task-record:files:start -->"
             end = b"<!-- task-record:files:end -->"
@@ -257,6 +274,112 @@ class TaskRecordV2Tests(unittest.TestCase):
             plans.parent.mkdir(parents=True)
             plans.write_text("not a directory", encoding="utf-8")
             self.assert_refusal(run_plan(root, "create", "demo", "--goal", "g"), "create", "unsafe_path")
+
+    def test_v3_ticket_with_foreign_status_fails_naming_file_and_value(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            task = record(root)
+            ticket = task / "tickets" / "T001-foreign-status.md"
+            # `in_progress` is the harness Task-tool vocabulary, not dev-flow's — the exact
+            # substitution D-012 documents.
+            ticket.write_text(ticket_text("T001-foreign-status", "in_progress"), encoding="utf-8")
+            refused = self.assert_refusal(
+                run_plan(root, "refresh", "demo"), "refresh", "invalid_ticket_status", version=3
+            )
+            message = refused["error"]["message"]
+            self.assertIn(".agent_state/plans/demo/tickets/T001-foreign-status.md", message)
+            self.assertIn("in_progress", message)
+            self.assertEqual(refused["error"]["paths"], [".agent_state/plans/demo/tickets/T001-foreign-status.md"])
+
+    def test_v3_closed_ticket_without_disposition_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            task = record(root)
+            ticket = task / "tickets" / "T001-closed.md"
+            ticket.write_text(ticket_text("T001-closed", "closed"), encoding="utf-8")
+            refused = self.assert_refusal(
+                run_plan(root, "refresh", "demo"), "refresh", "invalid_ticket_disposition", version=3
+            )
+            self.assertIn(".agent_state/plans/demo/tickets/T001-closed.md", refused["error"]["message"])
+            self.assertEqual(refused["error"]["paths"], [".agent_state/plans/demo/tickets/T001-closed.md"])
+
+    def test_v3_disposition_present_when_not_closed_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            task = record(root)
+            ticket = task / "tickets" / "T001-open-with-disposition.md"
+            ticket.write_text(ticket_text("T001-open-with-disposition", "open", disposition="resolved"), encoding="utf-8")
+            self.assert_refusal(run_plan(root, "refresh", "demo"), "refresh", "invalid_ticket_disposition", version=3)
+
+    def test_v3_valid_status_and_disposition_combinations_refresh_cleanly(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            task = record(root)
+            (task / "tickets" / "T001-open.md").write_text(ticket_text("T001-open", "open"), encoding="utf-8")
+            (task / "tickets" / "T002-active.md").write_text(ticket_text("T002-active", "active"), encoding="utf-8")
+            (task / "tickets" / "T003-closed.md").write_text(
+                ticket_text("T003-closed", "closed", disposition="hard-stop"), encoding="utf-8"
+            )
+            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
+
+    def test_v2_record_with_foreign_status_still_refreshes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            task = record(root)
+            (task / "tickets").mkdir(parents=True)
+            (task / "tickets" / "T001-legacy.md").write_text(ticket_text("T001-legacy", "pending"), encoding="utf-8")
+            index = task / "INDEX.md"
+            index.write_text(
+                "| record_version | 2 |\n"
+                "<!-- task-record:files:start -->\nstale\n<!-- task-record:files:end -->\n",
+                encoding="utf-8",
+            )
+            refreshed = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
+            self.assertNotIn("stale", refreshed)
+            self.assertIn("T001-legacy.md", index.read_text(encoding="utf-8"))
+
+    def test_staleness_is_reported_after_hand_edit(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            task = record(root)
+            ticket = task / "tickets" / "T001-open.md"
+            ticket.write_text(ticket_text("T001-open", "open"), encoding="utf-8")
+
+            first = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
+            self.assertIsNone(first["stale"])
+            index = task / "INDEX.md"
+            self.assertRegex(index.read_text(encoding="utf-8"), r"<!-- task-record:refreshed-at:[^>]+ -->")
+
+            # Hand-edit the ticket after the stamp `refresh` just left, without running `refresh`
+            # again in between — the scenario this instrument exists to catch. The rewrite alone
+            # bumps the file's mtime past the stamp already on disk.
+            ticket.write_text(ticket_text("T001-open", "active"), encoding="utf-8")
+
+            second = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
+            self.assertIsNotNone(second["stale"])
+            self.assertIn(".agent_state/plans/demo/tickets/T001-open.md", second["stale"]["newer_ticket_files"])
+
+            # Once refreshed again, the stamp catches up and staleness clears.
+            third = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
+            self.assertIsNone(third["stale"])
+
+    def test_v3_refresh_leaves_v2_and_v1_content_untouched_by_new_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            task = record(root)
+            (task / "tickets").mkdir(parents=True)
+            index = task / "INDEX.md"
+            index.write_text(
+                "| record_version | 2 |\n<!-- task-record:files:start --><!-- task-record:files:end -->",
+                encoding="utf-8",
+            )
+            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
+            self.assertNotIn("task-record:refreshed-at", index.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

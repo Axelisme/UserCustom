@@ -2,7 +2,7 @@
 
 | Record field | Value |
 |---|---|
-| record_version | 2 |
+| record_version | 3 |
 | task_id | example-record |
 
 ## Goal

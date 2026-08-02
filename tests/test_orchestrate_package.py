@@ -1279,7 +1279,16 @@ class SourcePublicationContractTests(unittest.TestCase):
             git("add", "base.txt")
             git("commit", "-qm", "base")
             cli("integration", "create", "--task-id", "installed-contract")
-            cli("lane", "create", "--task-id", "installed-contract", "--lane-id", "tracer")
+            cli(
+            "lane",
+            "create",
+            "--task-id",
+            "installed-contract",
+            "--lane-id",
+            "tracer",
+            "--group",
+            "tracer",
+        )
             lane = repository / ".agent_state/worktrees/installed-contract/lanes/tracer"
             (lane / "delivered.txt").write_text("delivered\n", encoding="utf-8")
             subprocess.run(["git", "add", "delivered.txt"], cwd=lane, check=True)

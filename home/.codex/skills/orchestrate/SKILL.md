@@ -100,7 +100,7 @@ idempotent warnings. Reports and status remain read-only.
 
 ## Package administration
 
-Doctor, doctor diff, pin, and release are covered in [package-admin.md](package-admin.md); read it
+Doctor, doctor diff, pin, and release are covered in [package-admin.md](references/package-admin.md); read it
 before a release or pin change.
 
 Every command prints one JSON object with `orchestrate_version`. Success is on stdout with exit 0;

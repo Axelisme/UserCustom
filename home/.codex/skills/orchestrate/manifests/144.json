@@ -1,16 +1,16 @@
 {
   "documents": {
     "SKILL.md": {
-      "bytes": 7187,
+      "bytes": 7198,
       "sections": {
         "Exceptions to the main sequence": "48f9e9eab79fa24b6fa1ab7da8a9e7136c28dd295c17ab81f449b4755d6c54a1",
         "Minimum complete lifecycle": "62d870c80d3b443b30c9f8e9a084787580814537acc86abb77d585e0928eac81",
         "Observation and timing": "05ab1ecc02607f7e609efd879dc16555e52e3c32bb5faa022aaa481e18fba3d3",
         "Orchestrate": "45b4271129fa3cfb019dd5e03f18aafa18164e3db80d391fbadbc4d5cbe04212",
-        "Package administration": "eb506279dbc14b0e708f79fee3ac5adccefbe6523f4a697e351759c62733ed07",
+        "Package administration": "65d62c190363acfb4757c7361037b125266b94e17024392ef498af85db721bff",
         "Runtime and authority boundaries": "097a97eafdc8282fda42aaf6bcd15485665aca8a8acac56733dcd0f91268c30f"
       },
-      "sha256": "d11466b5269d875e518695e273a6aad407f1ba9a1649896295521cb65952ceb7"
+      "sha256": "8e1e0a2b307d8fb9acadfbe677bc5795b980bc4e80998d824905a16cdfd59ef4"
     },
     "migrations/131.md": {
       "bytes": 1062,
@@ -315,7 +315,7 @@
     },
     ".claude/agents/lane-worker.md": {
       "agent_name": "lane-worker",
-      "prompt_sha256": "08835493a4949ce8e76f5790d77958868d412c44d536fa1b8c0b1516ac49311e"
+      "prompt_sha256": "a30bf01d7a168e952dd0afcbf63c3491162795d0c66bae9fad46d73a4437ec98"
     },
     ".codex/agents/acceptance-reviewer.toml": {
       "agent_name": "acceptance-reviewer",
@@ -323,7 +323,7 @@
     },
     ".codex/agents/lane-worker.toml": {
       "agent_name": "lane-worker",
-      "prompt_sha256": "08835493a4949ce8e76f5790d77958868d412c44d536fa1b8c0b1516ac49311e"
+      "prompt_sha256": "a30bf01d7a168e952dd0afcbf63c3491162795d0c66bae9fad46d73a4437ec98"
     },
     ".pi/agent/APPEND_SYSTEM.md": {
       "agent_name": "APPEND_SYSTEM",
@@ -335,7 +335,7 @@
     },
     ".pi/agent/agents/lane-worker.md": {
       "agent_name": "lane-worker",
-      "prompt_sha256": "08835493a4949ce8e76f5790d77958868d412c44d536fa1b8c0b1516ac49311e"
+      "prompt_sha256": "a30bf01d7a168e952dd0afcbf63c3491162795d0c66bae9fad46d73a4437ec98"
     }
   },
   "release_delta": {
@@ -349,7 +349,8 @@
     "changed_sections": {
       "SKILL.md": [
         "Minimum complete lifecycle",
-        "Observation and timing"
+        "Observation and timing",
+        "Package administration"
       ],
       "migrations/144.md": [
         "Breaking: `lane create` requires `--group`",

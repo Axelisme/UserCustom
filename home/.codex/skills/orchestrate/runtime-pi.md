@@ -10,12 +10,29 @@ directly.
 Root launches `lane-worker` with fresh context in async mode. Root records the returned run id, which is
 the handle for every later status, evidence, and continuation call.
 
-Root normally passes `turnBudget` for an async writer lane with `maxTurns` no lower than 80 and
-`graceTurns` at least 1; a lower ceiling requires a stated reason. At `maxTurns` the child is asked to wrap up, and after
-`graceTurns` further assistant turns it is aborted with partial output returned, so a budget bounds a
-lane without cutting a write in half. **A budget is not inherited by a continuation:** the recovery
-descriptor restores `toolBudget` but not the initial turn budget, so a `resume` that omits
-`turnBudget` runs unbounded. Pass it on every resume.
+Root passes `turnBudget` for every async writer lane, and on every resume: the recovery descriptor
+restores `toolBudget` but not the initial turn budget, so a `resume` that omits `turnBudget` runs
+unbounded.
+
+This is a deliberate override of upstream `pi-subagents/skills/pi-subagents/SKILL.md:93`, which
+advises against passing `turnBudget` *or* a hard `toolBudget` to an implementation worker. The two are
+not the same kind of limit, and upstream's single warning conflates them:
+
+- **`toolBudget` degrades.** Exhausting it blocks read/search tools but leaves mutation tools
+  available, producing a worker that can write but cannot see. Upstream's warning holds here — do not
+  set a hard `toolBudget` on a writer lane.
+- **`turnBudget` stops.** At `maxTurns` the run is aborted abruptly, with no warning delivered to the
+  worker, so the lane may be left dirty. Do not treat the stop as clean.
+
+Orchestrate overrides upstream on `turnBudget` because the lane is Git-backed: an abrupt stop costs
+Root one `resume`. Upstream's alternative — a narrow task scope, an elapsed deadline, and requested
+checkpoints instead of a hard turn ceiling — costs Root continuous coordination instead: 84 `status`
+and 155 `yield_goal` calls in one observed session. Pass `turnBudget` anyway.
+
+`maxTurns >= 80` is a note, not a safety property: a larger ceiling (160, 300) is fine, because safety
+comes from commit cadence, not budget size — see `lane-worker`'s per-cycle commit discipline. The
+number's only job is that `resume` without a value runs unbounded, so some value must always be
+passed; a lower ceiling than 80 requires a stated reason.
 
 `status` reports `turnBudgetExceeded`, which is how Root tells a budget stop from any other stop.
 
@@ -42,8 +59,12 @@ fresh run when it has drifted.
 
 A `paused`, `completed`, or `failed` run may be resumed with `action: "resume"` under the conditions
 `dispatch.md` states; a change in any of them requires Root re-admission and a fresh dispatch instead.
-Resume keeps the run id, session, and launch contract, so continuation preserves the worker's context.
-Before every resume Root reruns `lane check` and `status` and rebinds the exact SHA.
+Resume keeps the session and launch contract but not the run id: `resumeAsyncRun` mints a fresh one on
+every resume (`randomUUID().slice(0, 8)`), so a lineage of resumes carries a new id each time —
+observed in the field as `de0fa2c3 → 3e338ba2 → 377f770b → 71dff2c0`. Root must take the run id
+`resume` returns and use it for the next status, evidence, or continuation call; reusing the old id
+inspects a dead run. Before every resume Root reruns `lane check` and `status` and rebinds the exact
+SHA.
 
 `action: "interrupt"` softly interrupts the current child turn and leaves the run `paused`; it is the
 resumable pause. `action: "stop"` is terminal and a stopped run can never be resumed, so it is reserved

@@ -8,15 +8,16 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import tomllib
 import unittest
 from pathlib import Path
 from typing import Any
 
+import tomllib
+
 from tests import _setup_support as setup_support
 from tests._orchestrate_cli_support import (
-    OrchestrateCliRepositoryTestCase,
     VERIFIED_SKILL,
+    OrchestrateCliRepositoryTestCase,
     json_object,
     release,
 )
@@ -125,9 +126,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             self.assert_help_surface(
                 ("doctor",), commands=("diff",), long_options=("--path",)
             ),
-            self.assert_help_surface(
-                ("doctor", "diff"), long_options=("--runtime",)
-            ),
+            self.assert_help_surface(("doctor", "diff"), long_options=("--runtime",)),
             self.assert_help_surface(("release",), long_options=("--version",)),
         ]
         all_help = "\n".join(help_texts)
@@ -221,9 +220,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         self.mutation_success(self.cli(self.nested, "pin", "set"), "pin-set")
         pin = json.loads(self.pin_path().read_text(encoding="utf-8"))
         pin["skill_version"] = self.current() - 1
-        self.pin_path().write_text(
-            json.dumps(pin, sort_keys=True), encoding="utf-8"
-        )
+        self.pin_path().write_text(json.dumps(pin, sort_keys=True), encoding="utf-8")
         expected_package = self.package_projection()
 
         unaligned = self.success(self.cli(self.nested, "doctor"))
@@ -281,9 +278,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         self.mutation_success(self.cli(self.nested, "pin", "set"), "pin-set")
         pin = json.loads(self.pin_path().read_text(encoding="utf-8"))
         pin["skill_version"] = self.current() - 1
-        self.pin_path().write_text(
-            json.dumps(pin, sort_keys=True), encoding="utf-8"
-        )
+        self.pin_path().write_text(json.dumps(pin, sort_keys=True), encoding="utf-8")
         runtime = self.skill / "runtime-claude.md"
         runtime.write_bytes(runtime.read_bytes() + b"\npackage drift\n")
 
@@ -379,9 +374,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         runtime_doc = self.skill / "runtime-codex.md"
         runtime_doc.write_bytes(runtime_doc.read_bytes() + b"\nlive drift\n")
         self.assertEqual(
-            self.success(
-                self.cli(self.nested, "doctor", "diff", str(old), str(new))
-            ),
+            self.success(self.cli(self.nested, "doctor", "diff", str(old), str(new))),
             result,
         )
 
@@ -402,9 +395,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                         runtime,
                     )
                 )
-                self.assertEqual(
-                    set(filtered), {*set(result), "runtime"}
-                )
+                self.assertEqual(set(filtered), {*set(result), "runtime"})
                 self.assertEqual(filtered["runtime"], runtime)
                 self.assertTrue(
                     all(
@@ -414,7 +405,9 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                     )
                 )
                 self.assertTrue(
-                    all(path.startswith(prefix) for path in filtered["changed_profiles"])
+                    all(
+                        path.startswith(prefix) for path in filtered["changed_profiles"]
+                    )
                 )
                 self.assertTrue(
                     all(
@@ -455,24 +448,18 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         for target in (current, current - 1, current + 2):
             with self.subTest(target=target):
                 self.assert_package_failure(
-                    self.cli(
-                        self.nested, "release", "--version", str(target)
-                    ),
+                    self.cli(self.nested, "release", "--version", str(target)),
                     "release",
                     "invalid_release_target",
                 )
-                self.assertEqual(
-                    (self.skill / "SKILL.md").read_bytes(), skill_before
-                )
+                self.assertEqual((self.skill / "SKILL.md").read_bytes(), skill_before)
                 self.assertFalse(target_manifest.exists())
 
         current_manifest = self.skill / "manifests" / f"{current}.json"
         manifest_bytes = current_manifest.read_bytes()
         current_manifest.unlink()
         self.assert_package_failure(
-            self.cli(
-                self.nested, "release", "--version", str(current + 1)
-            ),
+            self.cli(self.nested, "release", "--version", str(current + 1)),
             "release",
             "package_unhealthy",
         )
@@ -485,9 +472,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         binding_bytes = binding.read_bytes()
         binding.unlink()
         self.assert_package_failure(
-            self.cli(
-                self.nested, "release", "--version", str(current + 1)
-            ),
+            self.cli(self.nested, "release", "--version", str(current + 1)),
             "release",
             "package_unhealthy",
         )
@@ -499,9 +484,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         guide.write_text("# Disposable next release\n", encoding="utf-8")
         # No reseal: publication must proceed from a package whose bytes have
         # already moved past the current manifest, which is every real release.
-        result = self.cli(
-            self.nested, "release", "--version", str(current + 1)
-        )
+        result = self.cli(self.nested, "release", "--version", str(current + 1))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, "")
         released = json_object(result.stdout)
@@ -541,9 +524,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         skill_before = skill_md.read_bytes()
         target = self.skill / "manifests" / f"{current + 1}.json"
         self.assert_package_failure(
-            self.cli(
-                self.nested, "release", "--version", str(current + 1)
-            ),
+            self.cli(self.nested, "release", "--version", str(current + 1)),
             "release",
             "release_failed",
         )
@@ -566,14 +547,10 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             self.skill / "SKILL.md",
             self.skill / "scripts" / "_orchestrate" / "cli.py",
         )
-        source_bytes_before = {
-            path: path.read_bytes() for path in version_sources
-        }
+        source_bytes_before = {path: path.read_bytes() for path in version_sources}
         target_before = target.read_bytes()
 
-        result = self.cli(
-            self.nested, "release", "--version", str(current + 1)
-        )
+        result = self.cli(self.nested, "release", "--version", str(current + 1))
 
         self.assert_package_failure(result, "release", "release_failed")
         self.assertIn("doctor", result.stderr.lower())
@@ -615,9 +592,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                 skill_before = skill_md.read_bytes()
                 skill_inode = skill_md.stat().st_ino
 
-                result = self.cli(
-                    self.nested, "release", "--version", str(current + 1)
-                )
+                result = self.cli(self.nested, "release", "--version", str(current + 1))
 
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertEqual(result.stdout, "")
@@ -704,9 +679,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                     document.pop("sections")
                 else:
                     document["sections"] = {"Fixture section": None}
-                path.write_text(
-                    json.dumps(manifest, sort_keys=True), encoding="utf-8"
-                )
+                path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
                 manifest_before = path.read_bytes()
                 skill_before = (self.skill / "SKILL.md").read_bytes()
                 state_before = self.managed_state_snapshot()
@@ -736,13 +709,9 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                         self.assertIsInstance(diagnostic["message"], str)
                         self.assertTrue(diagnostic["message"])
                 with self.subTest(command="doctor-diff"):
-                    self.assert_package_failure(
-                        diff, "doctor-diff", "manifest_invalid"
-                    )
+                    self.assert_package_failure(diff, "doctor-diff", "manifest_invalid")
                 self.assertEqual(path.read_bytes(), manifest_before)
-                self.assertEqual(
-                    (self.skill / "SKILL.md").read_bytes(), skill_before
-                )
+                self.assertEqual((self.skill / "SKILL.md").read_bytes(), skill_before)
                 self.assertEqual(self.managed_state_snapshot(), state_before)
 
     def test_12_profile_manifest_projects_only_identity_and_prompt(self) -> None:
@@ -805,43 +774,6 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             hashlib.sha256(append.read_bytes()).hexdigest(),
         )
 
-    def test_12a_lane_worker_profiles_replace_one_bounded_rolling_handoff(
-        self,
-    ) -> None:
-        home = release.source_home(self.skill)
-        for relative in (
-            ".codex/agents/lane-worker.toml",
-            ".claude/agents/lane-worker.md",
-            ".pi/agent/agents/lane-worker.md",
-        ):
-            with self.subTest(profile=relative):
-                text = (home / relative).read_text(encoding="utf-8")
-                self.assertIn("stable `Handoff path`", text)
-                self.assertIn("create its parent directory when absent", text)
-                self.assertIn("<Handoff path>.tmp", text)
-                self.assertIn("`mv -f`", text)
-                self.assertIn("150 lines and 8 KiB", text)
-                self.assertIn("leave the existing handoff unchanged", text)
-                self.assertNotIn("acceptance-reviewer", text)
-
-    def test_12b_pi_rework_transfers_writer_context_but_resumes_reviewers(
-        self,
-    ) -> None:
-        runtime = (self.skill / "runtime-pi.md").read_text(encoding="utf-8")
-        self.assertIn(
-            "Start a fresh run there with the same `Handoff path`.", runtime
-        )
-        self.assertRegex(
-            runtime, r"resumes the same\s+Standards or Spec reviewer session"
-        )
-        self.assertIn("reviewers never maintain the writer handoff", runtime)
-
-        reviewer = (
-            release.source_home(self.skill)
-            / ".pi/agent/agents/acceptance-reviewer.md"
-        ).read_text(encoding="utf-8")
-        self.assertNotIn("Handoff path", reviewer)
-
     def test_13_profile_manifest_ignores_runtime_metadata_but_tracks_name_and_prompt(
         self,
     ) -> None:
@@ -849,9 +781,8 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         baseline = release.build_manifest(self.skill, self.current())["profiles"]
 
         codex = home / ".codex" / "agents" / "lane-worker.toml"
-        def regex_substitute_once(
-            text: str, pattern: str, replacement: str
-        ) -> str:
+
+        def regex_substitute_once(text: str, pattern: str, replacement: str) -> str:
             updated, count = re.subn(
                 pattern, replacement, text, count=1, flags=re.MULTILINE
             )
@@ -888,7 +819,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         codex_text = exact_substitute_once(
             codex_text,
             "developer_instructions = '''",
-            'runtime_metadata = "metadata-only"\n\ndeveloper_instructions = \'\'\'',
+            "runtime_metadata = \"metadata-only\"\n\ndeveloper_instructions = '''",
         )
         codex.write_text(codex_text, encoding="utf-8")
 
@@ -896,22 +827,22 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         claude_text = claude.read_text(encoding="utf-8")
         claude_text = regex_substitute_once(
             claude_text,
-            r'^description:\s*.+$',
+            r"^description:\s*.+$",
             "description: metadata-only description",
         )
         claude_text = regex_substitute_once(
             claude_text,
-            r'^model:\s*.+$',
+            r"^model:\s*.+$",
             "model: metadata-only-model",
         )
         claude_text = regex_substitute_once(
             claude_text,
-            r'^color:\s*.+$',
+            r"^color:\s*.+$",
             "color: metadata-only-color",
         )
         claude_text = regex_substitute_once(
             claude_text,
-            r'^skills:\s*.+$',
+            r"^skills:\s*.+$",
             "skills: [metadata-only-skill]",
         )
         claude_text = exact_substitute_once(
@@ -925,27 +856,27 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         pi_text = pi.read_text(encoding="utf-8")
         pi_text = regex_substitute_once(
             pi_text,
-            r'^description:\s*.+$',
+            r"^description:\s*.+$",
             "description: metadata-only description",
         )
         pi_text = regex_substitute_once(
             pi_text,
-            r'^model:\s*.+$',
+            r"^model:\s*.+$",
             "model: metadata-only-model",
         )
         pi_text = regex_substitute_once(
             pi_text,
-            r'^thinking:\s*.+$',
+            r"^thinking:\s*.+$",
             "thinking: low",
         )
         pi_text = regex_substitute_once(
             pi_text,
-            r'^tools:\s*.+$',
+            r"^tools:\s*.+$",
             "tools: read",
         )
         pi_text = regex_substitute_once(
             pi_text,
-            r'^async:\s*.+$',
+            r"^async:\s*.+$",
             "async: false",
         )
         pi_text = exact_substitute_once(
@@ -966,9 +897,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         codex.write_text(renamed, encoding="utf-8")
         name_changed = release.build_manifest(self.skill, self.current())["profiles"]
         codex_entry = ".codex/agents/lane-worker.toml"
-        self.assertEqual(
-            name_changed[codex_entry]["agent_name"], "renamed-lane-worker"
-        )
+        self.assertEqual(name_changed[codex_entry]["agent_name"], "renamed-lane-worker")
         self.assertEqual(
             name_changed[codex_entry]["prompt_sha256"],
             baseline[codex_entry]["prompt_sha256"],
@@ -1080,9 +1009,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
 
                 for operation, result, state, pin_bytes, inode in observed:
                     with self.subTest(malformed=malformed, command=operation):
-                        self.assert_package_failure(
-                            result, operation, "pin_invalid"
-                        )
+                        self.assert_package_failure(result, operation, "pin_invalid")
                         self.assertEqual(state, before)
                         self.assertEqual(pin_bytes, malformed)
                         self.assertEqual(inode, pin_inode)
@@ -1190,7 +1117,14 @@ class SourcePublicationContractTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             help_text.append(result.stdout)
         all_help = "\n".join(help_text)
-        for retired in ("commit-check", "candidate", "--root", "--base", "--sha", "--final"):
+        for retired in (
+            "commit-check",
+            "candidate",
+            "--root",
+            "--base",
+            "--sha",
+            "--final",
+        ):
             self.assertNotIn(retired, all_help)
 
     def test_11_setup_is_replacement_first_and_idempotent(self) -> None:
@@ -1226,7 +1160,10 @@ class SourcePublicationContractTests(unittest.TestCase):
             )
 
         for logical in ("codex",):
-            with self.subTest(corrupt_logical=logical), tempfile.TemporaryDirectory() as temporary:
+            with (
+                self.subTest(corrupt_logical=logical),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
                 base = Path(temporary)
                 source, home = setup_support.seed_source(base)
                 retired = setup_support.seed_managed_retired_links(source, home)
@@ -1249,13 +1186,17 @@ class SourcePublicationContractTests(unittest.TestCase):
                     self.assertTrue(path.is_symlink(), path)
 
     def test_12_installed_help_and_lifecycle_match_source(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="orchestrate-v137-installed-") as temporary:
+        with tempfile.TemporaryDirectory(
+            prefix="orchestrate-v137-installed-"
+        ) as temporary:
             base = Path(temporary)
             source, home = setup_support.seed_source(base)
             setup = setup_support.run_setup(source, home)
             self.assertEqual(setup.returncode, 0, setup.stderr)
 
-            source_script = source / "home/.codex/skills/orchestrate/scripts/orchestrate.py"
+            source_script = (
+                source / "home/.codex/skills/orchestrate/scripts/orchestrate.py"
+            )
             installed_script = home / ".codex/skills/orchestrate/scripts/orchestrate.py"
             self.assertTrue(os.path.samefile(source_script, installed_script))
             source_help = subprocess.run(
@@ -1274,7 +1215,14 @@ class SourcePublicationContractTests(unittest.TestCase):
             )
             self.assertEqual(installed_help.returncode, 0, installed_help.stderr)
             self.assertEqual(installed_help.stdout, source_help.stdout)
-            for retired in ("commit-check", "candidate", "--root", "--base", "--sha", "--final"):
+            for retired in (
+                "commit-check",
+                "candidate",
+                "--root",
+                "--base",
+                "--sha",
+                "--final",
+            ):
                 self.assertNotIn(retired, installed_help.stdout)
 
             repository = base / "repository"
@@ -1319,13 +1267,13 @@ class SourcePublicationContractTests(unittest.TestCase):
             git("commit", "-qm", "base")
             cli("integration", "create", "--task-id", "installed-contract")
             cli(
-            "lane",
-            "create",
-            "--task-id",
-            "installed-contract",
-            "--lane-id",
-            "tracer",
-        )
+                "lane",
+                "create",
+                "--task-id",
+                "installed-contract",
+                "--lane-id",
+                "tracer",
+            )
             lane = repository / ".agent_state/worktrees/installed-contract/lanes/tracer"
             (lane / "delivered.txt").write_text("delivered\n", encoding="utf-8")
             subprocess.run(["git", "add", "delivered.txt"], cwd=lane, check=True)
@@ -1335,8 +1283,24 @@ class SourcePublicationContractTests(unittest.TestCase):
                 env=git_env,
                 check=True,
             )
-            cli("lane", "check", "--task-id", "installed-contract", "--lane-id", "tracer")
-            cli("integration", "collect", "--task-id", "installed-contract", "--lane-id", "tracer")
+            cli(
+                "lane",
+                "check",
+                "--task-id",
+                "installed-contract",
+                "--lane-id",
+                "tracer",
+            )
+            cli(
+                "integration",
+                "collect",
+                "--task-id",
+                "installed-contract",
+                "--lane-id",
+                "tracer",
+                "--ticket",
+                "installed-contract-ticket",
+            )
             cli("acceptance", "start", "--task-id", "installed-contract")
             cli(
                 "acceptance",
@@ -1348,17 +1312,275 @@ class SourcePublicationContractTests(unittest.TestCase):
                 "--outcome",
                 "pass",
             )
-            cli("integration", "land", "--task-id", "installed-contract", "--persist", "main")
-            cli("integration", "remove", "--task-id", "installed-contract", "--no-report")
+            cli(
+                "integration",
+                "land",
+                "--task-id",
+                "installed-contract",
+                "--persist",
+                "main",
+            )
+            cli(
+                "integration",
+                "remove",
+                "--task-id",
+                "installed-contract",
+                "--no-report",
+            )
             self.assertEqual((repository / "delivered.txt").read_text(), "delivered\n")
             self.assertEqual(
-                git("for-each-ref", "--format=%(refname)", "refs/orchestrate/installed-contract/"),
+                git(
+                    "for-each-ref",
+                    "--format=%(refname)",
+                    "refs/orchestrate/installed-contract/",
+                ),
                 "",
             )
             self.assertEqual(
-                git("for-each-ref", "--format=%(refname)", "refs/heads/wave/installed-contract/"),
+                git(
+                    "for-each-ref",
+                    "--format=%(refname)",
+                    "refs/heads/wave/installed-contract/",
+                ),
                 "",
             )
 
             rerun = setup_support.run_setup(source, home)
             self.assertEqual(rerun.returncode, 0, rerun.stderr)
+
+    def test_13_current_authority_is_persistent_and_installed_exact(self) -> None:
+        current_documents = (
+            "SKILL.md",
+            "references/dispatch.md",
+            "runtime-pi.md",
+        )
+        worker_profiles = (
+            ".codex/agents/lane-worker.toml",
+            ".claude/agents/lane-worker.md",
+            ".pi/agent/agents/lane-worker.md",
+        )
+        reviewer_profiles = (
+            ".codex/agents/acceptance-reviewer.toml",
+            ".claude/agents/acceptance-reviewer.md",
+            ".pi/agent/agents/acceptance-reviewer.md",
+        )
+        skill_layouts = (
+            ".codex/skills",
+            ".pi/agent/skills",
+            ".claude/skills",
+        )
+        worker_protocol = (
+            "Handoff path",
+            "custody",
+            ".tmp",
+            "mv -f",
+            "150 lines",
+            "8 KiB",
+            "one active writer",
+            "rolling handoff",
+        )
+        active_lane_reminder = (
+            "- **Active lane reminder.** Orchestrate's ninth warning counts only current active lanes whose\n"
+            "  projected `uncollected` count is greater than zero. Untouched lanes and pending lanes with\n"
+            "  `uncollected == 0`, plus collected, closed, dropped, and historical lanes, do not count. Pending\n"
+            "  remains independent and unbounded; creation still succeeds, and this factual warning is not a\n"
+            "  durable admission or closeability policy."
+        )
+
+        with tempfile.TemporaryDirectory(
+            prefix="orchestrate-v153-current-authority-"
+        ) as temporary:
+            base = Path(temporary)
+            source, home = setup_support.seed_source(base)
+            setup = setup_support.run_setup(source, home)
+            self.assertEqual(setup.returncode, 0, setup.stderr)
+
+            source_skill = source / "home/.codex/skills/orchestrate"
+            installed_skills = [
+                (layout, home / layout / "orchestrate") for layout in skill_layouts
+            ]
+            skill_roots = [("repository", CODEX_SKILL), ("source", source_skill)]
+            skill_roots.extend(installed_skills)
+
+            # The setup boundary must preserve the exact source package bytes in
+            # every installed skill layout, not merely the executable behavior.
+            for relative in current_documents:
+                expected = (CODEX_SKILL / relative).read_bytes()
+                self.assertEqual((source_skill / relative).read_bytes(), expected)
+                for label, skill in installed_skills:
+                    with self.subTest(kind="document", path=relative, origin=label):
+                        self.assertEqual((skill / relative).read_bytes(), expected)
+
+            for relative in (*worker_profiles, *reviewer_profiles):
+                expected = (ROOT / "home" / relative).read_bytes()
+                self.assertEqual((source / "home" / relative).read_bytes(), expected)
+                self.assertEqual((home / relative).read_bytes(), expected)
+
+            # These are the current worker-authority paths. In particular,
+            # migration 148 is deliberately not in this list: it is a
+            # historical receipt.
+            current_worker_texts: list[tuple[str, str]] = []
+            for label, skill in skill_roots:
+                for relative in current_documents:
+                    current_worker_texts.append(
+                        (
+                            f"{label}:{relative}",
+                            (skill / relative).read_text(encoding="utf-8"),
+                        )
+                    )
+            for label, root in (
+                ("repository", ROOT / "home"),
+                ("source", source / "home"),
+                ("installed", home),
+            ):
+                for relative in worker_profiles:
+                    current_worker_texts.append(
+                        (
+                            f"{label}:{relative}",
+                            (root / relative).read_text(encoding="utf-8"),
+                        )
+                    )
+
+            # Every current worker-authority path drops the worker handoff
+            # protocol. Common lane semantics belong to SKILL and profiles;
+            # runtime-pi is a provider binding and may defer to dispatch.
+            for path, text in current_worker_texts:
+                with self.subTest(current_authority=path):
+                    for marker in worker_protocol:
+                        self.assertNotIn(marker, text, f"{path}: {marker}")
+
+            common_texts: list[tuple[str, str]] = []
+            for label, skill in skill_roots:
+                common_texts.append(
+                    (
+                        f"{label}:SKILL.md",
+                        (skill / "SKILL.md").read_text(encoding="utf-8"),
+                    )
+                )
+            for label, root in (
+                ("repository", ROOT / "home"),
+                ("source", source / "home"),
+                ("installed", home),
+            ):
+                for relative in worker_profiles:
+                    common_texts.append(
+                        (
+                            f"{label}:{relative}",
+                            (root / relative).read_text(encoding="utf-8"),
+                        )
+                    )
+            for path, text in common_texts:
+                with self.subTest(common_authority=path):
+                    self.assertRegex(text, r"(?is)lane.{0,100}persistent")
+                    self.assertRegex(
+                        text,
+                        r"(?is)ticket.{0,100}owns?.{0,40}Contract|Contract.{0,100}ticket",
+                    )
+                    self.assertRegex(
+                        text,
+                        r"(?is)same lane.{0,140}(?:multiple|more than one).{0,60}worker calls?",
+                    )
+
+            dispatch = (CODEX_SKILL / "references/dispatch.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertRegex(dispatch, r"(?is)ticket.{0,140}(?:Contract|admission)")
+            self.assertRegex(
+                dispatch,
+                r"(?is)asset.{0,100}resume.{0,60}same session",
+            )
+            self.assertRegex(
+                dispatch,
+                r"(?is)(?:debt|context debt).{0,100}fresh.{0,80}same lane",
+            )
+            self.assertRegex(
+                dispatch,
+                r"(?is)(?:unnecessary|no longer needed).{0,100}lane drop",
+            )
+
+            for label, skill in skill_roots:
+                runtime = (skill / "runtime-pi.md").read_text(encoding="utf-8")
+                with self.subTest(root_context=label):
+                    epoch = runtime.split("## Root context epochs", 1)[1].split(
+                        "## Recovery", 1
+                    )[0]
+                    for marker in (
+                        "HANDOFF.md",
+                        "task: <task-id>",
+                        "run:",
+                        "why:",
+                        "open:",
+                    ):
+                        self.assertIn(marker, epoch)
+
+            runtime = (CODEX_SKILL / "runtime-pi.md").read_text(encoding="utf-8")
+            recovery = runtime.split("Use this writer recovery matrix:", 1)[1]
+            recovery = recovery.split("\n\nAcceptance re-review", 1)[0]
+            table_rows = [
+                line for line in recovery.splitlines() if line.startswith("|")
+            ]
+            self.assertEqual(len(table_rows), 5, table_rows)
+            self.assertRegex(
+                table_rows[2], r"(?is)(asset|trusted).*resume.*same session"
+            )
+            self.assertRegex(
+                table_rows[3],
+                r"(?is)(debt|untrusted|not trusted).*fresh.*same lane",
+            )
+            self.assertRegex(
+                table_rows[4],
+                r"(?is)(unnecessary|no longer needed).*lane drop",
+            )
+            for marker in (
+                "newly admitted lane",
+                "rolling handoff",
+                "same `Handoff path`",
+            ):
+                self.assertNotIn(marker, runtime)
+
+            for label, root in (
+                ("repository", ROOT / "home"),
+                ("source", source / "home"),
+                ("installed", home),
+            ):
+                for relative in reviewer_profiles:
+                    text = (root / relative).read_text(encoding="utf-8")
+                    with self.subTest(reviewer=f"{label}:{relative}"):
+                        for marker in (
+                            "Report path",
+                            "<Report path>.tmp",
+                            "`mv -f`",
+                            "Never append, rotate, back up",
+                        ):
+                            self.assertIn(marker, text)
+
+            historical = (CODEX_SKILL / "migrations/148.md").read_bytes()
+            self.assertEqual(
+                hashlib.sha256(historical).hexdigest(),
+                "0921410dad697b8f7b71079ed9546932cee1433b441d95e690c2a15631ec69dd",
+            )
+            self.assertIn(b"Rolling writer handoff", historical)
+            for label, skill in skill_roots[1:]:
+                with self.subTest(historical_receipt=label):
+                    self.assertEqual(
+                        (skill / "migrations/148.md").read_bytes(), historical
+                    )
+
+            source_admission = (
+                ROOT / "home/.codex/skills/dev-flow/references/admission-standard.md"
+            )
+            installed_admission = [
+                home / layout / "dev-flow/references/admission-standard.md"
+                for layout in skill_layouts
+            ]
+            for path in installed_admission:
+                with self.subTest(admission_bytes=path):
+                    self.assertEqual(path.read_bytes(), source_admission.read_bytes())
+            standard = source_admission.read_text(encoding="utf-8")
+            s4 = standard.split("## S4 — Review and validation", 1)[1].split(
+                "## S5 — Landing and close-out", 1
+            )[0]
+            self.assertRegex(s4, r"(?is)automatic.{0,100}clean.*clos")
+            self.assertRegex(s4, r"(?is)retain.{0,100}warn")
+            self.assertNotIn("Drop the lanes this increment finished with.", s4)
+            self.assertIn(active_lane_reminder, standard)

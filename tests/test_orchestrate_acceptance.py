@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import shlex
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -115,7 +118,13 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
         )
         return self.lane_path(task_id, lane_id)
 
-    def collect_lane(self, task_id: str, lane_id: str) -> None:
+    def collect_lane(
+        self,
+        task_id: str,
+        lane_id: str,
+        ticket: str | None = None,
+    ) -> None:
+        bounded_ticket = ticket or f"ticket-{task_id}-{lane_id}"
         self.mutation_success(
             self.cli(
                 self.nested,
@@ -125,8 +134,44 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
                 task_id,
                 "--lane-id",
                 lane_id,
+                "--ticket",
+                bounded_ticket,
             ),
             "integration-collect",
+        )
+
+    def assert_lane_closed(self, task_id: str, lane_id: str) -> None:
+        lane = self.lane_path(task_id, lane_id)
+        self.assertFalse(lane.exists())
+        self.assertEqual(self.ref_value(self.lane_ref(task_id, lane_id)), "")
+        self.assertEqual(self.ref_value(self.lane_base_ref(task_id, lane_id)), "")
+        worktrees = self.git(self.root, "worktree", "list", "--porcelain")
+        self.assertNotIn(str(lane), worktrees)
+        self.assertNotIn(f"branch {self.lane_ref(task_id, lane_id)}", worktrees)
+
+    def assert_lane_retained(
+        self,
+        task_id: str,
+        lane_id: str,
+        original_base: str,
+    ) -> None:
+        lane = self.lane_path(task_id, lane_id)
+        self.assertTrue(lane.is_dir())
+        lane_tip = self.git(lane, "rev-parse", "HEAD")
+        self.assertEqual(self.ref_value(self.lane_ref(task_id, lane_id)), lane_tip)
+        self.assertEqual(
+            self.ref_value(self.lane_base_ref(task_id, lane_id)), original_base
+        )
+        worktrees = self.git(self.root, "worktree", "list", "--porcelain")
+        self.assertIn(str(lane), worktrees)
+        self.assertIn(f"branch {self.lane_ref(task_id, lane_id)}", worktrees)
+
+    def assert_named_warning(self, payload: dict[str, Any], lane_id: str) -> None:
+        warnings = payload.get("warnings", [])
+        self.assertIsInstance(warnings, list)
+        self.assertTrue(
+            any(lane_id in warning for warning in warnings),
+            warnings,
         )
 
     def land(self, task_id: str, persist: str | None = None, message: str | None = None):
@@ -1698,3 +1743,311 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
         self.assertEqual(self.ref_value(self.landed_ref(task_id)), accepted)
         self.assertTrue((self.root / "accepted-only.txt").is_file())
         self.assertFalse((self.root / "persistence-only.txt").exists())
+
+    def test_20_agent_pass_with_absent_accepted_closes_clean_named_lane(self) -> None:
+        task_id = "cycle-b-clean-close"
+        integration = self.create_task(task_id)
+        lane_id = "clean-close"
+        lane = self.create_lane(task_id, lane_id)
+        original_base = self.ref_value(self.lane_base_ref(task_id, lane_id))
+        self.assertEqual(original_base, self.base)
+        self.commit_file(
+            lane,
+            "clean.txt",
+            b"ready for acceptance closure\n",
+            "Clean lane delivery",
+        )
+        self.collect_lane(task_id, lane_id, "cycle-b-clean-ticket")
+        subject = self.git(integration, "rev-parse", "HEAD")
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), "")
+
+        self.start_acceptance(task_id)
+        payload = self.acceptance_result(task_id, "pass", "agent")
+
+        self.assertIsNone(payload["previous_sha"])
+        self.assertEqual(payload["current_sha"], subject)
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), subject)
+        self.assert_lane_closed(task_id, lane_id)
+
+    def test_21_lagging_agent_pass_closes_only_collects_in_forward_interval(self) -> None:
+        task_id = "cycle-b-lagging-interval"
+        integration = self.create_task(task_id)
+        accepted_subject = self.commit_file(
+            integration,
+            "accepted.txt",
+            b"accepted interval lower bound\n",
+            "Accepted interval lower bound",
+        )
+        self.start_acceptance(task_id)
+        self.acceptance_result(task_id, "pass", "agent")
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), accepted_subject)
+
+        lanes: list[tuple[str, str]] = []
+        for index in range(1, 5):
+            lane_id = f"interval-{index:02d}"
+            lane = self.create_lane(task_id, lane_id)
+            original_base = self.ref_value(self.lane_base_ref(task_id, lane_id))
+            self.assertIsNotNone(original_base)
+            self.commit_file(
+                lane,
+                f"{lane_id}.txt",
+                f"{lane_id}\n".encode(),
+                f"Collect {lane_id}",
+            )
+            self.collect_lane(task_id, lane_id, f"cycle-b-interval-{index:02d}")
+            lanes.append((lane_id, original_base))
+
+        subject = self.git(integration, "rev-parse", "HEAD")
+        subject_three = self.git(
+            integration,
+            "rev-parse",
+            "HEAD~1",
+        )
+        self.start_acceptance(task_id, subject_three)
+        payload = self.acceptance_result(task_id, "pass", "agent")
+
+        self.assertEqual(payload["previous_sha"], accepted_subject)
+        self.assertEqual(payload["current_sha"], subject_three)
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), subject_three)
+        for lane_id, _original_base in lanes[:3]:
+            self.assert_lane_closed(task_id, lane_id)
+        self.assert_lane_retained(task_id, lanes[3][0], lanes[3][1])
+        self.assertNotEqual(subject, subject_three)
+
+    def test_22_agent_pass_retains_tracked_and_untracked_dirty_named_lanes(self) -> None:
+        task_id = "cycle-b-dirty-retain"
+        integration = self.create_task(task_id)
+        lane_ids = ("tracked-dirty", "untracked-dirty")
+        original_bases: dict[str, str] = {}
+        for lane_id in lane_ids:
+            lane = self.create_lane(task_id, lane_id)
+            original_base = self.ref_value(self.lane_base_ref(task_id, lane_id))
+            assert original_base is not None
+            original_bases[lane_id] = original_base
+            self.commit_file(
+                lane,
+                f"{lane_id}.txt",
+                f"{lane_id}\n".encode(),
+                f"Collect {lane_id}",
+            )
+            self.collect_lane(task_id, lane_id, f"cycle-b-dirty-{lane_id}")
+
+        subject = self.git(integration, "rev-parse", "HEAD")
+        tracked = self.lane_path(task_id, "tracked-dirty")
+        untracked = self.lane_path(task_id, "untracked-dirty")
+        (tracked / "tracked-dirty.txt").write_bytes(b"tracked dirt\n")
+        (untracked / "operator-output.bin").write_bytes(b"untracked dirt\x00\xff")
+
+        self.start_acceptance(task_id)
+        payload = self.acceptance_result(task_id, "pass", "agent")
+
+        self.assertTrue(payload["ref_updated"])
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), subject)
+        for lane_id in lane_ids:
+            self.assert_lane_retained(task_id, lane_id, original_bases[lane_id])
+            self.assert_named_warning(payload, lane_id)
+
+    def test_23_agent_pass_retains_named_lane_with_new_uncollected_work(self) -> None:
+        task_id = "cycle-b-new-work"
+        integration = self.create_task(task_id)
+        accepted_subject = self.commit_file(
+            integration,
+            "accepted.txt",
+            b"accepted before lane work\n",
+            "Accepted before lane work",
+        )
+        self.start_acceptance(task_id)
+        self.acceptance_result(task_id, "pass", "agent")
+
+        lane_id = "new-work"
+        lane = self.create_lane(task_id, lane_id)
+        original_base = self.ref_value(self.lane_base_ref(task_id, lane_id))
+        assert original_base is not None
+        self.commit_file(lane, "initial.txt", b"initial\n", "Initial lane work")
+        self.collect_lane(task_id, lane_id, "cycle-b-new-work-collect")
+        subject = self.git(integration, "rev-parse", "HEAD")
+        self.commit_file(lane, "rework.txt", b"new uncollected work\n", "New lane work")
+
+        self.start_acceptance(task_id, subject)
+        payload = self.acceptance_result(task_id, "pass", "agent")
+
+        self.assertEqual(payload["current_sha"], subject)
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), subject)
+        self.assert_lane_retained(task_id, lane_id, original_base)
+        self.assert_named_warning(payload, lane_id)
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), subject)
+        self.assertNotEqual(accepted_subject, subject)
+
+    def test_24_agent_pass_retains_lane_with_newer_collect_beyond_subject(self) -> None:
+        task_id = "cycle-b-newer-collect"
+        integration = self.create_task(task_id)
+        accepted_subject = self.commit_file(
+            integration,
+            "accepted.txt",
+            b"accepted before collect history\n",
+            "Accepted before collect history",
+        )
+        self.start_acceptance(task_id)
+        self.acceptance_result(task_id, "pass", "agent")
+
+        lane_id = "newer-collect"
+        lane = self.create_lane(task_id, lane_id)
+        original_base = self.ref_value(self.lane_base_ref(task_id, lane_id))
+        assert original_base is not None
+        self.commit_file(lane, "first.txt", b"first\n", "First collect")
+        self.collect_lane(task_id, lane_id, "cycle-b-first-collect")
+        accepted_interval_subject = self.git(integration, "rev-parse", "HEAD")
+        self.commit_file(lane, "second.txt", b"second\n", "Second collect")
+        self.collect_lane(task_id, lane_id, "cycle-b-second-collect")
+        latest = self.git(integration, "rev-parse", "HEAD")
+
+        self.start_acceptance(task_id, accepted_interval_subject)
+        payload = self.acceptance_result(task_id, "pass", "agent")
+
+        self.assertEqual(payload["current_sha"], accepted_interval_subject)
+        self.assertEqual(
+            self.ref_value(self.accepted_ref(task_id)), accepted_interval_subject
+        )
+        self.assert_lane_retained(task_id, lane_id, original_base)
+        self.assert_named_warning(payload, lane_id)
+        self.assertNotEqual(accepted_subject, accepted_interval_subject)
+        self.assertNotEqual(latest, accepted_interval_subject)
+
+    def test_25_user_pass_never_closes_a_named_lane(self) -> None:
+        task_id = "cycle-b-user-no-close"
+        integration = self.create_task(task_id)
+        lane_id = "user-keeps"
+        lane = self.create_lane(task_id, lane_id)
+        original_base = self.ref_value(self.lane_base_ref(task_id, lane_id))
+        assert original_base is not None
+        self.commit_file(lane, "user.txt", b"user verifier lane\n", "User verifier lane")
+        self.collect_lane(task_id, lane_id, "cycle-b-user-ticket")
+        subject = self.git(integration, "rev-parse", "HEAD")
+
+        self.start_acceptance(task_id)
+        payload = self.acceptance_result(task_id, "pass", "user")
+
+        self.assertEqual(payload["verifier"], "user")
+        self.assertEqual(self.ref_value(self.user_accepted_ref(task_id)), subject)
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), "")
+        self.assert_lane_retained(task_id, lane_id, original_base)
+
+    def test_26_agent_regression_preserves_warning_and_never_reopens_closed_lane(self) -> None:
+        task_id = "cycle-b-regression-no-reopen"
+        integration = self.create_task(task_id)
+        older = self.commit_file(
+            integration,
+            "older.txt",
+            b"older accepted subject\n",
+            "Older accepted subject",
+        )
+        self.start_acceptance(task_id)
+        self.acceptance_result(task_id, "pass", "agent")
+
+        lane_id = "regression-closed"
+        lane = self.create_lane(task_id, lane_id)
+        self.commit_file(lane, "closed.txt", b"close me\n", "Close on agent pass")
+        self.collect_lane(task_id, lane_id, "cycle-b-regression-ticket")
+        newer = self.git(integration, "rev-parse", "HEAD")
+
+        self.start_acceptance(task_id)
+        self.acceptance_result(task_id, "pass", "agent")
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), newer)
+
+        self.start_acceptance(task_id, older)
+        payload = self.acceptance_result(task_id, "pass", "agent")
+
+        self.assertTrue(payload["regressed"])
+        self.assertTrue(any("regressed" in warning for warning in payload["warnings"]))
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), older)
+        self.assert_lane_closed(task_id, lane_id)
+
+    def test_27_agent_pass_retains_clean_lane_when_later_cleanup_step_fails(self) -> None:
+        task_id = "cycle-c-cleanup-failure"
+        integration = self.create_task(task_id)
+        lane_id = "cleanup-failure"
+        lane = self.create_lane(task_id, lane_id)
+        original_base = self.ref_value(self.lane_base_ref(task_id, lane_id))
+        self.assertEqual(original_base, self.base)
+        self.commit_file(
+            lane,
+            "retained.bin",
+            b"lane bytes before cleanup failure\x00\xff\n",
+            "Clean lane ready for failure-safe closure",
+        )
+        self.collect_lane(task_id, lane_id, "cycle-c-cleanup-failure-ticket")
+        subject = self.git(integration, "rev-parse", "HEAD")
+        lane_tip = self.git(lane, "rev-parse", "HEAD")
+        lane_status = run_git(
+            lane, "status", "--porcelain=v1", "--untracked-files=all"
+        ).stdout.encode()
+        lane_index = run_git(lane, "ls-files", "--stage").stdout.encode()
+        lane_bytes = {
+            path.relative_to(lane).as_posix(): path.read_bytes()
+            for path in sorted(lane.rglob("*"))
+            if path.is_file() and path.relative_to(lane).as_posix() != ".git"
+        }
+        before_worktrees = self.git(self.root, "worktree", "list", "--porcelain")
+        before_lane_entry = next(
+            entry
+            for entry in before_worktrees.split("\n\n")
+            if f"worktree {lane}" in entry
+        )
+
+        self.start_acceptance(task_id)
+        real_git = shutil.which("git")
+        self.assertIsNotNone(real_git)
+        assert real_git is not None
+        with tempfile.TemporaryDirectory(prefix="orchestrate-git-wrapper-") as wrapper_root:
+            wrapper = Path(wrapper_root) / "git"
+            branch = self.lane_ref(task_id, lane_id).removeprefix("refs/heads/")
+            wrapper.write_text(
+                "#!/bin/sh\n"
+                f'if [ "$#" -eq 3 ] && [ "$1" = "branch" ] && [ "$2" = "-D" ] && [ "$3" = {shlex.quote(branch)} ]; then\n'
+                '  printf "%s\\n" "forced branch deletion failure" >&2\n'
+                "  exit 71\n"
+                "fi\n"
+                f"exec {shlex.quote(real_git)} \"$@\"\n",
+                encoding="utf-8",
+            )
+            wrapper.chmod(0o755)
+            result = run_cli(
+                self.nested,
+                "acceptance",
+                "result",
+                "--task-id",
+                task_id,
+                "--verifier",
+                "agent",
+                "--outcome",
+                "pass",
+                env={"PATH": f"{wrapper_root}{os.pathsep}{os.environ['PATH']}"},
+            )
+
+        payload = self.success(result)
+        self.assertEqual(payload["operation"], "acceptance-result")
+        self.assertEqual(payload["verifier"], "agent")
+        self.assertEqual(payload["subject_sha"], subject)
+        self.assertTrue(payload["ref_updated"])
+        self.assertEqual(self.ref_value(self.accepted_ref(task_id)), subject)
+        self.assert_named_warning(payload, lane_id)
+
+        self.assertTrue(lane.is_dir())
+        self.assertEqual(self.ref_value(self.lane_ref(task_id, lane_id)), lane_tip)
+        self.assertEqual(self.ref_value(self.lane_base_ref(task_id, lane_id)), original_base)
+        self.assertEqual(self.git(lane, "rev-parse", "HEAD"), lane_tip)
+        self.assertEqual(
+            run_git(lane, "status", "--porcelain=v1", "--untracked-files=all").stdout.encode(),
+            lane_status,
+        )
+        self.assertEqual(run_git(lane, "ls-files", "--stage").stdout.encode(), lane_index)
+        self.assertEqual(
+            {
+                path.relative_to(lane).as_posix(): path.read_bytes()
+                for path in sorted(lane.rglob("*"))
+                if path.is_file() and path.relative_to(lane).as_posix() != ".git"
+            },
+            lane_bytes,
+        )
+        after_worktrees = self.git(self.root, "worktree", "list", "--porcelain")
+        self.assertIn(before_lane_entry, after_worktrees)

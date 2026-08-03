@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -112,17 +113,22 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         )
 
     def collect(
-        self, task_id: str | None = None, lane_id: str | None = None
+        self,
+        task_id: str | None = None,
+        lane_id: str | None = None,
+        ticket: str | None = "contract-ticket",
     ):
-        return self.cli(
-            self.nested,
+        argv = [
             "integration",
             "collect",
             "--task-id",
             task_id or self.task_id,
             "--lane-id",
             lane_id or self.lane_id,
-        )
+        ]
+        if ticket is not None:
+            argv.extend(("--ticket", ticket))
+        return self.cli(self.nested, *argv)
 
     def commit_file(
         self,
@@ -206,14 +212,26 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         return snapshot
 
     def immutable_trailers(self, cwd: Path, sha: str = "HEAD") -> list[str]:
-        raw = self.git(
-            cwd,
-            "show",
-            "-s",
-            "--format=%(trailers:key=Immutable,valueonly,unfold)",
-            sha,
-        )
-        return raw.splitlines() if raw else []
+        """Read Immutable declarations with v150's per-paragraph unfolding."""
+        raw = self.git(cwd, "show", "-s", "--format=%B", sha)
+        values: list[str] = []
+        for paragraph in re.split(r"\n(?:[ \t]*\n)+", raw):
+            pending: str | None = None
+            for line in paragraph.splitlines():
+                if pending is not None and line[:1].isspace():
+                    pending = f"{pending} {line.strip()}".strip()
+                    continue
+                if pending is not None:
+                    values.append(pending)
+                pending = None
+                if line[:1].isspace():
+                    continue
+                key, separator, value = line.partition(":")
+                if separator and key.strip().casefold() == "immutable":
+                    pending = value.strip()
+            if pending is not None:
+                values.append(pending)
+        return values
 
     def test_lane_create_requires_task_and_uses_current_integration_tip(self) -> None:
         before = self.managed_state_snapshot()
@@ -399,6 +417,58 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         before_collect = self.managed_resource_snapshot()
         self.operational_failure(self.collect(), "integration-collect", "lane_not_ready")
         self.assertEqual(self.managed_resource_snapshot(), before_collect)
+
+    def test_immutable_declarations_preserve_paragraph_tolerance_and_unfolding(
+        self,
+    ) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        self.commit_file(
+            lane, "tests/contract.py", "ROUND = 0\n", "Freeze Contract",
+            ("Immutable: tests/contract.py",),
+        )
+        (lane / "tests" / "contract.py").write_text("ROUND = 1\n", encoding="utf-8")
+        (lane / "docs").mkdir()
+        (lane / "docs" / "contract.md").write_text("contract\n", encoding="utf-8")
+        self.git(lane, "add", "tests/contract.py", "docs/contract.md")
+        self.git(
+            lane, "commit", "-q", "-m", "Redeclare from an earlier paragraph",
+            "-m", "Immutable: tests/contract.py", "-m", "Narrative paragraph",
+            "-m", "Immutable: docs/contract.md",
+        )
+
+        for round_, declaration in enumerate(
+            ("immutable: tests/contract.py", "IMMUTABLE: tests/contract.py", "Immutable:tests/contract.py"),
+            start=2,
+        ):
+            self.commit_file(
+                lane, "tests/contract.py", f"ROUND = {round_}\n",
+                "Redeclare with v150 key tolerance", (declaration,),
+            )
+
+        self.commit_file(
+            lane, "src/a continuation", "ROUND = 0\n", "Freeze unfolded path",
+            ("Immutable: src/a continuation",),
+        )
+        (lane / "src" / "a continuation").write_text("ROUND = 1\n", encoding="utf-8")
+        (lane / "docs" / "unfolded.md").write_text("unfolded\n", encoding="utf-8")
+        self.git(lane, "add", "src/a continuation", "docs/unfolded.md")
+        self.git(
+            lane, "commit", "-q", "-m", "Redeclare with Git continuation unfolding",
+            "-m", "Immutable: src/a\n continuation", "-m", "Narrative paragraph",
+            "-m", "Immutable: docs/unfolded.md",
+        )
+        lane_tip = self.git(lane, "rev-parse", "HEAD")
+        self.assertEqual(self.immutable_trailers(lane, lane_tip), [
+            "src/a continuation", "docs/unfolded.md",
+        ])
+        self.mutation_success(self.lane_command("check"), "lane-check")
+        self.mutation_success(self.collect(), "integration-collect")
+        collected = self.git(self.root, "rev-parse", self.integration_branch())
+        self.assertEqual(
+            self.git(self.root, "show", "-s", "--format=%P", collected).split()[1],
+            lane_tip,
+        )
 
     def test_later_undeclared_protected_change_fails_both_shared_validators(self) -> None:
         self.create_task()
@@ -758,7 +828,10 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         )
         lane_tree = self.git(self.root, "rev-parse", f"{lane_tip}^{{tree}}")
 
-        self.mutation_success(self.collect(), "integration-collect")
+        ticket = "topology-ticket"
+        self.mutation_success(
+            self.collect(ticket=ticket), "integration-collect"
+        )
         collected = self.git(self.root, "rev-parse", self.integration_branch())
 
         self.assertEqual(
@@ -801,6 +874,16 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
             ),
             self.lane_id,
         )
+        self.assertEqual(
+            self.git(
+                self.root,
+                "show",
+                "-s",
+                "--format=%(trailers:key=Ticket,valueonly)",
+                collected,
+            ),
+            ticket,
+        )
         if not stale:
             self.assertEqual(
                 self.git(self.root, "rev-parse", f"{collected}^{{tree}}"), lane_tree
@@ -813,18 +896,55 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
                 (self.integration_path_for() / "integration.txt").read_bytes(),
                 b"integration\n",
             )
-        self.assertFalse(self.lane_path_for().exists())
+        self.assertTrue(self.lane_path_for().is_dir())
         self.assertEqual(
-            self.ref_value(f"refs/heads/{self.lane_branch()}"), ""
+            self.ref_value(f"refs/heads/{self.lane_branch()}"), lane_tip
         )
-        self.assertEqual(self.ref_value(self.lane_base_ref()), "")
+        self.assertEqual(self.ref_value(self.lane_base_ref()), self.base)
         worktrees = self.git(self.root, "worktree", "list", "--porcelain")
-        self.assertNotIn(str(self.lane_path_for()), worktrees)
+        self.assertIn(str(self.lane_path_for()), worktrees)
+        self.assertIn(
+            f"branch refs/heads/{self.lane_branch()}",
+            worktrees,
+        )
 
-    def test_current_collect_is_one_fixed_parent_no_ff_commit_and_cleans_lane(self) -> None:
+    def test_collect_requires_ticket_before_mutating_lane_resources(self) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        lane_tip = self.commit_file(
+            lane, "lane.txt", "lane\n", "Lane-owned change"
+        )
+        before = self.managed_resource_snapshot()
+
+        self.operational_failure(self.collect(ticket=None), "cli", "cli_usage")
+
+        self.assertEqual(self.managed_resource_snapshot(), before)
+        self.assertEqual(self.ref_value(self.lane_base_ref()), self.base)
+        self.assertEqual(
+            self.ref_value(f"refs/heads/{self.lane_branch()}"), lane_tip
+        )
+        self.assertEqual(
+            self.git(self.root, "rev-parse", self.integration_branch()), self.base
+        )
+
+    def test_collect_rejects_an_unbounded_ticket_without_mutation(self) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        self.commit_file(lane, "lane.txt", "lane\n", "Lane-owned change")
+        before = self.managed_resource_snapshot()
+
+        self.operational_failure(
+            self.collect(ticket="Ticket/with/slash"),
+            "integration-collect",
+            "invalid_identifier",
+        )
+
+        self.assertEqual(self.managed_resource_snapshot(), before)
+
+    def test_collect_is_non_destructive_and_keeps_trailers(self) -> None:
         self.assert_collect_topology(stale=False)
 
-    def test_stale_clean_collect_merges_directly_without_rewriting_lane(self) -> None:
+    def test_stale_clean_collect_keeps_lane_and_merges_without_rewriting_lane(self) -> None:
         self.assert_collect_topology(stale=True)
 
     def test_collect_conflict_aborts_shared_integration_exactly(self) -> None:

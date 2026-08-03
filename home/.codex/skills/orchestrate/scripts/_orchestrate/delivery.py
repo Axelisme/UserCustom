@@ -3,17 +3,20 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 
+from .coordination import collect_lane_id, task_projection
 from .git_ops import (
     changed_paths,
     direct_commit_ref,
     exact_commit,
+    first_parent_range,
     run_git,
     worktree_records,
 )
 from .primitives import CommandResult, OrchestrateError
-from .resources import RepositoryContext, TaskResources, worktree_state
+from .resources import LaneResources, RepositoryContext, TaskResources, worktree_state
 from .telemetry import record_event
 
 
@@ -152,6 +155,362 @@ def _acceptance_tracked_state_is_clean(path: Path) -> bool:
     return True
 
 
+@dataclass(frozen=True)
+class _CollectRecord:
+    commit: str
+    second_parent: str | None
+
+
+def _collect_records(
+    repo: RepositoryContext,
+    task: TaskResources,
+    commits: list[str],
+) -> dict[str, _CollectRecord]:
+    records: dict[str, _CollectRecord] = {}
+    for sha in commits:
+        lane_id = collect_lane_id(repo, task, sha)
+        if lane_id is None:
+            continue
+        parents = run_git(
+            repo.worktree_root,
+            "show",
+            "-s",
+            "--format=%P",
+            sha,
+        ).stdout.split()
+        records[lane_id] = _CollectRecord(
+            sha,
+            parents[1] if len(parents) >= 2 else None,
+        )
+    return records
+
+
+def _lane_warning(lane_id: str, reason: str) -> str:
+    return f"lane {lane_id} retained: {reason}"
+
+
+@dataclass(frozen=True)
+class _LaneClosureSnapshot:
+    tip: str
+    base: str
+
+
+def _failure_detail(error: BaseException) -> str:
+    detail = str(error).strip()
+    return detail or error.__class__.__name__
+
+
+def _lane_branch_records(
+    repo: RepositoryContext, lane: LaneResources
+) -> list[dict[str, object]]:
+    return [
+        record
+        for record in worktree_records(repo.worktree_root)
+        if record.get("branch") == f"refs/heads/{lane.branch}"
+    ]
+
+
+def _verify_lane_resources(
+    repo: RepositoryContext,
+    lane: LaneResources,
+    snapshot: _LaneClosureSnapshot,
+) -> tuple[str, ...]:
+    failures: list[str] = []
+    try:
+        branch_tip = _ref(repo, lane.branch)
+    except (OSError, OrchestrateError) as error:
+        failures.append(f"cannot inspect branch tip: {_failure_detail(error)}")
+    else:
+        if branch_tip != snapshot.tip:
+            failures.append("branch tip is not the saved lane tip")
+    try:
+        base_tip = _ref(repo, lane.base_ref)
+    except (OSError, OrchestrateError) as error:
+        failures.append(f"cannot inspect base ref: {_failure_detail(error)}")
+    else:
+        if base_tip != snapshot.base:
+            failures.append("base ref is not the original lane base")
+
+    try:
+        branch_records = _lane_branch_records(repo, lane)
+    except (OSError, OrchestrateError) as error:
+        failures.append(f"cannot inspect worktree registration: {_failure_detail(error)}")
+        branch_records = []
+    if len(branch_records) != 1:
+        failures.append("managed branch does not have exactly one worktree registration")
+    else:
+        raw_path = branch_records[0].get("worktree")
+        registered_path = (
+            Path(os.path.abspath(raw_path)) if isinstance(raw_path, str) else None
+        )
+        if registered_path != lane.path.absolute():
+            failures.append("worktree registration is not at the managed lane path")
+
+    try:
+        state = worktree_state(repo, lane.path)
+    except (OSError, OrchestrateError) as error:
+        failures.append(f"cannot inspect restored worktree: {_failure_detail(error)}")
+    else:
+        if not state["exists"]:
+            failures.append("managed worktree is missing")
+        else:
+            if state["branch"] != lane.branch:
+                failures.append("managed worktree is not attached to the lane branch")
+            if state["head"] != snapshot.tip:
+                failures.append("managed worktree tip is not the saved lane tip")
+            if not state["clean"]:
+                failures.append("restored worktree is dirty")
+    return tuple(failures)
+
+
+def _restore_lane_resources(
+    repo: RepositoryContext,
+    lane: LaneResources,
+    snapshot: _LaneClosureSnapshot,
+    failed_stage: str,
+    error: BaseException,
+) -> str:
+    failures: list[str] = []
+    expected_refs = (
+        (f"refs/heads/{lane.branch}", snapshot.tip, "branch"),
+        (lane.base_ref, snapshot.base, "base ref"),
+    )
+    for ref, target, label in expected_refs:
+        try:
+            current = _ref(repo, ref)
+        except (OSError, OrchestrateError) as inspect_error:
+            failures.append(
+                f"{label} inspection failed: {_failure_detail(inspect_error)}"
+            )
+            continue
+        if current == target:
+            continue
+        try:
+            run_git(repo.worktree_root, "update-ref", ref, target)
+        except (OSError, OrchestrateError) as restore_error:
+            failures.append(
+                f"{label} restoration failed: {_failure_detail(restore_error)}"
+            )
+
+    try:
+        records = worktree_records(repo.worktree_root)
+        branch_records = [
+            record
+            for record in records
+            if record.get("branch") == f"refs/heads/{lane.branch}"
+        ]
+        path_records = [
+            record
+            for record in records
+            if isinstance(record.get("worktree"), str)
+            and Path(os.path.abspath(str(record["worktree"])))
+            == lane.path.absolute()
+        ]
+        if not path_records and not branch_records:
+            if os.path.lexists(lane.path):
+                failures.append("managed lane path is occupied and cannot be replaced")
+            else:
+                try:
+                    lane.path.parent.mkdir(parents=True, exist_ok=True)
+                    run_git(
+                        repo.worktree_root,
+                        "worktree",
+                        "add",
+                        str(lane.path),
+                        lane.branch,
+                    )
+                except (OSError, OrchestrateError) as restore_error:
+                    failures.append(
+                        f"worktree re-registration failed: {_failure_detail(restore_error)}"
+                    )
+        elif not path_records:
+            failures.append("managed branch is registered at an unexpected worktree path")
+    except (OSError, OrchestrateError) as restore_error:
+        failures.append(
+            f"cannot inspect worktree registration for compensation: {_failure_detail(restore_error)}"
+        )
+
+    failures.extend(_verify_lane_resources(repo, lane, snapshot))
+    if failures:
+        detail = "; ".join(dict.fromkeys(failures))
+        return _lane_warning(
+            lane.lane_id,
+            f"{failed_stage} failed; compensation failed: {detail}; "
+            f"recoverable resources retained ({_failure_detail(error)})",
+        )
+    return _lane_warning(
+        lane.lane_id,
+        f"{failed_stage} failed; compensation restored the exact clean lane resources "
+        f"({_failure_detail(error)})",
+    )
+
+
+def _close_lane_resources(
+    repo: RepositoryContext,
+    lane: LaneResources,
+    snapshot: _LaneClosureSnapshot,
+) -> tuple[str, ...]:
+    try:
+        run_git(repo.worktree_root, "worktree", "remove", str(lane.path))
+    except (OSError, OrchestrateError) as error:
+        try:
+            verification = _verify_lane_resources(repo, lane, snapshot)
+        except (OSError, OrchestrateError) as verify_error:
+            return (
+                _lane_warning(
+                    lane.lane_id,
+                    "worktree removal failed; resource verification failed: "
+                    f"{_failure_detail(verify_error)}; recoverable resources retained",
+                ),
+            )
+        if verification:
+            try:
+                warning = _restore_lane_resources(
+                    repo, lane, snapshot, "worktree removal", error
+                )
+            except (OSError, OrchestrateError) as compensation_error:
+                warning = _lane_warning(
+                    lane.lane_id,
+                    "worktree removal failed; compensation failed: "
+                    f"{_failure_detail(compensation_error)}; recoverable resources retained",
+                )
+            return (warning,)
+        return (
+            _lane_warning(
+                lane.lane_id,
+                f"worktree removal failed; lane resources retained ({_failure_detail(error)})",
+            ),
+        )
+
+    try:
+        run_git(repo.worktree_root, "branch", "-D", lane.branch)
+    except (OSError, OrchestrateError) as error:
+        try:
+            warning = _restore_lane_resources(repo, lane, snapshot, "branch deletion", error)
+        except (OSError, OrchestrateError) as compensation_error:
+            warning = _lane_warning(
+                lane.lane_id,
+                "branch deletion failed; compensation failed: "
+                f"{_failure_detail(compensation_error)}; recoverable resources retained",
+            )
+        return (warning,)
+
+    try:
+        run_git(repo.worktree_root, "update-ref", "-d", lane.base_ref)
+    except (OSError, OrchestrateError) as error:
+        try:
+            warning = _restore_lane_resources(repo, lane, snapshot, "base-ref deletion", error)
+        except (OSError, OrchestrateError) as compensation_error:
+            warning = _lane_warning(
+                lane.lane_id,
+                "base-ref deletion failed; compensation failed: "
+                f"{_failure_detail(compensation_error)}; recoverable resources retained",
+            )
+        return (warning,)
+    return ()
+
+
+def _close_forward_lanes(
+    repo: RepositoryContext,
+    task: TaskResources,
+    previous: str | None,
+    head: str,
+) -> tuple[str, ...]:
+    integration_base = _ref(repo, task.integration_base_ref)
+    if integration_base is None:
+        return ()
+    lower = previous or integration_base
+    interval = first_parent_range(repo.worktree_root, lower, head)
+    if not interval:
+        return ()
+
+    interval_records = _collect_records(repo, task, interval)
+    if not interval_records:
+        return ()
+    integration = _ref(repo, task.integration_branch)
+    if integration is None:
+        return ()
+    all_commits = first_parent_range(
+        repo.worktree_root,
+        integration_base,
+        integration,
+    )
+    all_records = (
+        _collect_records(repo, task, all_commits)
+        if all_commits is not None
+        else {}
+    )
+    projection = task_projection(repo, task)
+    warnings: list[str] = []
+    for lane_id, accepted_record in interval_records.items():
+        current_record = all_records.get(lane_id)
+        if current_record is None:
+            warnings.append(_lane_warning(lane_id, "collect identity is unavailable"))
+            continue
+        if current_record.commit != accepted_record.commit:
+            warnings.append(_lane_warning(lane_id, "a newer collect is outside the accepted interval"))
+            continue
+        if accepted_record.second_parent is None:
+            warnings.append(_lane_warning(lane_id, "collect has no lane second parent"))
+            continue
+        lane_projection = projection.lanes.get(lane_id)
+        if lane_projection is None:
+            warnings.append(_lane_warning(lane_id, "managed lane resources are incomplete"))
+            continue
+        lane = lane_projection.lane
+        branch_tip = _ref(repo, lane.branch)
+        base_tip = _ref(repo, lane.base_ref)
+        if branch_tip != lane_projection.sha or base_tip is None:
+            warnings.append(_lane_warning(lane_id, "managed refs do not match the lane"))
+            continue
+        if lane_projection.sha != accepted_record.second_parent:
+            reason = (
+                "uncollected work"
+                if lane_projection.uncollected > 0
+                else "lane tip does not match the accepted collect"
+            )
+            warnings.append(_lane_warning(lane_id, reason))
+            continue
+        try:
+            branch_records = [
+                record
+                for record in worktree_records(repo.worktree_root)
+                if record.get("branch") == f"refs/heads/{lane.branch}"
+            ]
+            state = worktree_state(repo, lane.path)
+        except (OSError, OrchestrateError):
+            warnings.append(_lane_warning(lane_id, "worktree resources cannot be inspected"))
+            continue
+        registered_path = (
+            Path(str(branch_records[0]["worktree"]))
+            if len(branch_records) == 1 and isinstance(branch_records[0].get("worktree"), str)
+            else None
+        )
+        if (
+            registered_path is None
+            or registered_path.absolute() != lane.path.absolute()
+            or not state["exists"]
+            or state["branch"] != lane.branch
+            or state["head"] != lane_projection.sha
+        ):
+            warnings.append(_lane_warning(lane_id, "worktree resources do not match the lane"))
+            continue
+        if not state["clean"]:
+            warnings.append(_lane_warning(lane_id, "worktree is dirty"))
+            continue
+        try:
+            warnings.extend(
+                _close_lane_resources(
+                    repo,
+                    lane,
+                    _LaneClosureSnapshot(lane_projection.sha, base_tip),
+                )
+            )
+        except (OSError, OrchestrateError):
+            warnings.append(_lane_warning(lane_id, "lane resource removal failed"))
+    return tuple(warnings)
+
+
 def acceptance_result(
     repo: RepositoryContext,
     task_id: str,
@@ -226,6 +585,14 @@ def acceptance_result(
         ref_updated=ref_updated,
         regressed=regressed,
     )
+    closure_warnings: tuple[str, ...] = ()
+    if outcome == "pass" and verifier == "agent" and ref_updated:
+        try:
+            closure_warnings = _close_forward_lanes(repo, task, previous, head)
+        except (OSError, OrchestrateError):
+            closure_warnings = (
+                "agent acceptance lane closure skipped: managed projection unavailable",
+            )
     return CommandResult(
         True,
         {
@@ -236,7 +603,7 @@ def acceptance_result(
             "ref_updated": ref_updated,
             "regressed": regressed,
         },
-        (*warnings, *telemetry_warnings),
+        (*warnings, *telemetry_warnings, *closure_warnings),
     )
 
 

@@ -69,6 +69,24 @@ class CliStatusContractTests(OrchestrateCliRepositoryTestCase):
         self.mutation_success(self.cli(self.nested, *argv), "lane-create")
         return self.lane_path(task, lane)
 
+    def collect(
+        self,
+        task_id: str | None = None,
+        lane_id: str | None = None,
+        ticket: str | None = "status-ticket",
+    ):
+        argv = [
+            "integration",
+            "collect",
+            "--task-id",
+            task_id or self.task_id,
+            "--lane-id",
+            lane_id or self.lane_id,
+        ]
+        if ticket is not None:
+            argv.extend(("--ticket", ticket))
+        return self.cli(self.nested, *argv)
+
     def comment_command(
         self,
         task_id: str | None = None,
@@ -161,8 +179,15 @@ class CliStatusContractTests(OrchestrateCliRepositoryTestCase):
         created = self.status()
         self.assertEqual(
             created["lanes"],
-            {self.lane_id: {"sha": self.base, "comment": "initial 🧭"}},
+            {
+                self.lane_id: {
+                    "sha": self.base,
+                    "comment": "initial 🧭",
+                    "uncollected": 0,
+                }
+            },
         )
+        self.assertEqual(created["pending"], 0)
         self.assertNotIn("acceptance", created)
         self.assertNotIn("lane_consumption", created)
 
@@ -182,7 +207,13 @@ class CliStatusContractTests(OrchestrateCliRepositoryTestCase):
         self.assertEqual(self.git(lane, "rev-parse", "HEAD"), self.base)
         self.assertEqual(
             self.status()["lanes"],
-            {self.lane_id: {"sha": self.base, "comment": "blocked: waiting"}},
+            {
+                self.lane_id: {
+                    "sha": self.base,
+                    "comment": "blocked: waiting",
+                    "uncollected": 0,
+                }
+            },
         )
 
         self.mutation_success(
@@ -190,7 +221,10 @@ class CliStatusContractTests(OrchestrateCliRepositoryTestCase):
             "lane-comment",
         )
         cleared = self.status()
-        self.assertEqual(cleared["lanes"], {self.lane_id: {"sha": self.base}})
+        self.assertEqual(
+            cleared["lanes"],
+            {self.lane_id: {"sha": self.base, "uncollected": 0}},
+        )
         self.assertNotIn("lane_comments", cleared)
         self.assertEqual(self.git(lane, "status", "--porcelain"), "")
 
@@ -307,14 +341,63 @@ class CliStatusContractTests(OrchestrateCliRepositoryTestCase):
         self.git(self.root, "worktree", "add", "-q", "--detach", str(acceptance), accepted)
 
         payload = self.status()
-        self.assertEqual(payload["lanes"], {self.lane_id: {"sha": accepted}})
+        self.assertEqual(
+            payload["lanes"],
+            {self.lane_id: {"sha": accepted, "uncollected": 0}},
+        )
+        self.assertEqual(payload["pending"], 0)
         self.assertNotIn("acceptance", payload)
         self.assertEqual(payload["accepted"], accepted)
         self.assertEqual(payload["user_accepted"], accepted)
         self.assertEqual(payload["landed"], accepted)
         self.assertEqual(self.git(lane, "rev-parse", "HEAD"), accepted)
 
-    def test_ninth_active_lane_warns_and_history_does_not_count(self) -> None:
+    def test_status_derives_uncollected_and_pending_from_real_collect_history(self) -> None:
+        self.create_task()
+        lane = self.create_lane()
+
+        untouched = self.status()
+        self.assertEqual(
+            untouched["lanes"],
+            {self.lane_id: {"sha": self.base, "uncollected": 0}},
+        )
+        self.assertEqual(untouched["pending"], 0)
+
+        self.commit_file(
+            lane, "first.txt", "first\n", "First lane commit"
+        )
+        second = self.commit_file(
+            lane, "second.txt", "second\n", "Second lane commit"
+        )
+        with_commits = self.status()
+        self.assertEqual(with_commits["lanes"][self.lane_id]["sha"], second)
+        self.assertEqual(with_commits["lanes"][self.lane_id]["uncollected"], 2)
+        self.assertEqual(with_commits["pending"], 0)
+
+        self.mutation_success(
+            self.collect(ticket="status-history-ticket"), "integration-collect"
+        )
+        after_collect = self.status()
+        self.assertEqual(
+            after_collect["lanes"][self.lane_id],
+            {"sha": second, "uncollected": 0},
+        )
+        self.assertEqual(after_collect["pending"], 1)
+        self.assertNotIn("accepted", after_collect)
+        self.assertEqual(self.ref_value(self.lane_ref()), second)
+        self.assertEqual(
+            self.ref_value(self.lane_base_ref()), self.base
+        )
+
+        third = self.commit_file(
+            lane, "third.txt", "third\n", "Third lane commit"
+        )
+        after_rework = self.status()
+        self.assertEqual(after_rework["lanes"][self.lane_id]["sha"], third)
+        self.assertEqual(after_rework["lanes"][self.lane_id]["uncollected"], 1)
+        self.assertEqual(after_rework["pending"], 0)
+
+    def test_ninth_warning_counts_only_uncollected_lanes(self) -> None:
         self.create_task()
         for index in range(1, 9):
             result = self.cli(
@@ -337,28 +420,13 @@ class CliStatusContractTests(OrchestrateCliRepositoryTestCase):
             "--lane-id",
             "lane-09",
         )
-        payload = self.mutation_success(ninth, "lane-create", warnings=True)
-        self.assertEqual(len(payload["warnings"]), 1)
-        self.assertIn("9", payload["warnings"][0])
-        self.assertIn("collect/drop", payload["warnings"][0].lower())
+        self.mutation_success(ninth, "lane-create")
+        self.assertEqual(self.status()["pending"], 0)
 
-        self.mutation_success(
-            self.cli(
-                self.nested,
-                "lane",
-                "drop",
-                "--task-id",
-                self.task_id,
-                "--lane-id",
-                "lane-09",
-            ),
-            "lane-drop",
-        )
-        eighth_active = self.status()
-        self.assertEqual(len(eighth_active["lanes"]), 8)
-
-        # A historical create and drop do not count. This create is active #9
-        # only because eight other managed lane inventories remain.
+        # One lane with new work is still below the ninth-warning threshold;
+        # active lane count alone must not trigger it.
+        lane = self.lane_path(self.task_id, "lane-09")
+        self.commit_file(lane, "lane.txt", "lane\n", "Uncollected lane work")
         no_warning = self.cli(
             self.nested,
             "lane",
@@ -368,10 +436,71 @@ class CliStatusContractTests(OrchestrateCliRepositoryTestCase):
             "--lane-id",
             "lane-10",
         )
-        warning_payload = self.mutation_success(no_warning, "lane-create", warnings=True)
-        self.assertIn("9", warning_payload["warnings"][0])
-        self.assertEqual(len(self.status()["lanes"]), 9)
+        self.mutation_success(no_warning, "lane-create")
+        self.assertEqual(self.status()["lanes"]["lane-09"]["uncollected"], 1)
+        self.assertEqual(self.status()["pending"], 0)
+
+        for index in range(1, 9):
+            self.commit_file(
+                self.lane_path(self.task_id, f"lane-{index:02d}"),
+                f"late-{index:02d}.txt",
+                f"late {index}\n",
+                f"Uncollected lane-{index:02d} work",
+            )
+        warning = self.cli(
+            self.nested,
+            "lane",
+            "create",
+            "--task-id",
+            self.task_id,
+            "--lane-id",
+            "lane-11",
+        )
+        warning_payload = self.mutation_success(warning, "lane-create", warnings=True)
+        self.assertEqual(len(warning_payload["warnings"]), 1)
+        self.assertIn("collect/drop", warning_payload["warnings"][0].lower())
         self.assertNotIn("lane_consumption", self.status())
+
+    def test_pending_lanes_are_reported_separately_from_ninth_warning(self) -> None:
+        self.create_task()
+        lanes: list[tuple[str, Path]] = []
+        for index in range(1, 10):
+            lane_id = f"pending-{index:02d}"
+            lane = self.create_lane(lane_id=lane_id)
+            self.commit_file(
+                lane,
+                f"{lane_id}.txt",
+                f"{lane_id}\n",
+                f"Collect {lane_id}",
+            )
+            lanes.append((lane_id, lane))
+
+        for index, (lane_id, _lane) in enumerate(lanes, start=1):
+            self.mutation_success(
+                self.collect(
+                    lane_id=lane_id,
+                    ticket=f"pending-ticket-{index:02d}",
+                ),
+                "integration-collect",
+            )
+
+        pending = self.status()
+        self.assertEqual(pending["pending"], 9)
+        self.assertTrue(
+            all(item["uncollected"] == 0 for item in pending["lanes"].values())
+        )
+
+        no_warning = self.cli(
+            self.nested,
+            "lane",
+            "create",
+            "--task-id",
+            self.task_id,
+            "--lane-id",
+            "lane-10",
+        )
+        self.mutation_success(no_warning, "lane-create")
+        self.assertEqual(self.status()["pending"], 9)
 
 
 if __name__ == "__main__":

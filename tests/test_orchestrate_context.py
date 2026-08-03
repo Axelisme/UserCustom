@@ -164,7 +164,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             ),
             self.assert_help_surface(
                 ("integration", "collect"),
-                long_options=("--task-id", "--lane-id"),
+                long_options=("--task-id", "--lane-id", "--ticket"),
             ),
             self.assert_help_surface(
                 ("integration", "reconcile"),
@@ -308,9 +308,10 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "task_id": task_id,
                 "integration": self.base,
                 "lanes": {
-                    "api": {"sha": self.base},
-                    "docs": {"sha": self.base},
+                    "api": {"sha": self.base, "uncollected": 0},
+                    "docs": {"sha": self.base, "uncollected": 0},
                 },
+                "pending": 0,
             },
         )
         self.assertEqual(list(payload["lanes"]), ["api", "docs"])
@@ -343,9 +344,10 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "task_id": task_id,
                 "integration": self.base,
                 "lanes": {
-                    "api": {"sha": self.base},
-                    "docs": {"sha": self.base},
+                    "api": {"sha": self.base, "uncollected": 0},
+                    "docs": {"sha": self.base, "uncollected": 0},
                 },
+                "pending": 0,
                 "accepted": self.base,
                 "landed": self.base,
             },
@@ -372,10 +374,12 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "task_id",
                 "integration",
                 "lanes",
+                "pending",
                 "warnings",
             },
         )
         self.assertEqual(payload["lanes"], {})
+        self.assertEqual(payload["pending"], 0)
         self.assertIsInstance(payload["warnings"], list)
         self.assertGreater(len(payload["warnings"]), 0)
         self.assertLessEqual(len(payload["warnings"]), 20)
@@ -397,6 +401,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             "task_id",
             "integration",
             "lanes",
+            "pending",
             "warnings",
         }
         with self.subTest(assertion="exact-schema"):
@@ -405,6 +410,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             self.assertEqual(payload.get("task_id"), task_id)
             self.assertEqual(payload.get("integration"), self.base)
             self.assertEqual(payload.get("lanes"), {})
+            self.assertEqual(payload.get("pending"), 0)
         for optional in ("acceptance", "accepted", "landed", "lane_consumption"):
             with self.subTest(assertion="optional-slot-omitted", slot=optional):
                 self.assertNotIn(optional, payload)
@@ -513,6 +519,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "task_id": self.task_id,
                 "integration": self.base,
                 "lanes": {},
+                "pending": 0,
             },
         )
 
@@ -565,6 +572,8 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 self.task_id,
                 "--lane-id",
                 self.lane_id,
+                "--ticket",
+                "context-clean-ticket",
             ),
             "integration-collect",
         )
@@ -580,16 +589,25 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             self.git(self.root, "rev-parse", f"{integration_tip}^{{tree}}"),
             self.git(self.root, "rev-parse", f"{lane_tip}^{{tree}}"),
         )
-        self.assertFalse(self.lane_path.exists())
+        collect_trailers = self.git(
+            self.root,
+            "show",
+            "-s",
+            "--format=%(trailers:only,unfold)",
+            integration_tip,
+        ).splitlines()
+        self.assertIn(f"Task: {self.task_id}", collect_trailers)
+        self.assertIn(f"Lane: {self.lane_id}", collect_trailers)
+        self.assertIn("Ticket: context-clean-ticket", collect_trailers)
+        self.assertTrue(self.lane_path.is_dir())
         self.assertEqual(
             self.git(
                 self.root,
                 "show-ref",
                 "--verify",
                 f"refs/heads/wave/{self.task_id}/{self.lane_id}",
-                check=False,
             ),
-            "",
+            f"{lane_tip} refs/heads/wave/{self.task_id}/{self.lane_id}",
         )
         self.assertEqual(
             self.git(
@@ -597,9 +615,22 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "show-ref",
                 "--verify",
                 f"refs/orchestrate/{self.task_id}/{self.lane_id}/base",
-                check=False,
             ),
-            "",
+            f"{self.base} refs/orchestrate/{self.task_id}/{self.lane_id}/base",
+        )
+        self.assertEqual(
+            self.success(self.cli(self.nested, "status", "--task-id", self.task_id)),
+            {
+                "ok": True,
+                "operation": "status",
+                "orchestrate_version": self.orchestrate_version,
+                "task_id": self.task_id,
+                "integration": integration_tip,
+                "lanes": {
+                    self.lane_id: {"sha": lane_tip, "uncollected": 0},
+                },
+                "pending": 1,
+            },
         )
 
         self.mutation_success(
@@ -634,6 +665,29 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 f"refs/orchestrate/{self.task_id}/accepted",
             ),
             integration_tip,
+        )
+        # Agent acceptance closes the clean persistent lane before any later
+        # landing or task cleanup command runs.
+        self.assertFalse(self.lane_path.exists())
+        self.assertEqual(
+            self.git(
+                self.root,
+                "show-ref",
+                "--verify",
+                f"refs/heads/wave/{self.task_id}/{self.lane_id}",
+                check=False,
+            ),
+            "",
+        )
+        self.assertEqual(
+            self.git(
+                self.root,
+                "show-ref",
+                "--verify",
+                f"refs/orchestrate/{self.task_id}/{self.lane_id}/base",
+                check=False,
+            ),
+            "",
         )
 
         before_land = self.git(self.root, "rev-parse", "main")
@@ -684,6 +738,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "task_id": self.task_id,
                 "integration": integration_tip,
                 "lanes": {},
+                "pending": 0,
                 "accepted": integration_tip,
                 "landed": integration_tip,
             },
@@ -1335,6 +1390,8 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 self.task_id,
                 "--lane-id",
                 change_lane_id,
+                "--ticket",
+                "context-add-change-ticket",
             ),
             "integration-collect",
         )
@@ -1376,6 +1433,8 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 self.task_id,
                 "--lane-id",
                 revert_lane_id,
+                "--ticket",
+                "context-revert-change-ticket",
             ),
             "integration-collect",
         )
@@ -1388,6 +1447,17 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             self.git(self.root, "rev-parse", f"{integration_tip}^{{tree}}"),
             self.git(self.root, "rev-parse", f"{self.base}^{{tree}}"),
         )
+        self.mutation_success(
+            self.cli(
+                self.nested,
+                "acceptance",
+                "start",
+                "--task-id",
+                self.task_id,
+            ),
+            "acceptance-start",
+        )
+        self.agent_acceptance_result(self.task_id)
 
         self.mutation_success(
             self.cli(

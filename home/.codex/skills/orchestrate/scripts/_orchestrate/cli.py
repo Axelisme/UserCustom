@@ -36,7 +36,7 @@ from .release import (
 from .resources import RepositoryContext, TaskResources
 from .telemetry import auto_resume, record_event, timing_transition, write_report
 
-ORCHESTRATE_VERSION = 150
+ORCHESTRATE_VERSION = 153
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
@@ -86,6 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
     collect = integration_commands.add_parser("collect")
     collect.add_argument("--task-id", required=True)
     collect.add_argument("--lane-id", required=True)
+    collect.add_argument("--ticket", required=True)
     collect.set_defaults(route="integration-collect", mutation=True)
     reconcile = integration_commands.add_parser("reconcile")
     reconcile.add_argument("--task-id", required=True)
@@ -189,7 +190,7 @@ def _run(
     if route == "lane-drop":
         return lane_drop(repo, args.task_id, args.lane_id)
     if route == "integration-collect":
-        return integration_collect(repo, args.task_id, args.lane_id)
+        return integration_collect(repo, args.task_id, args.lane_id, args.ticket)
     if route == "acceptance-start":
         return acceptance_start(repo, args.task_id, args.sha)
     if route == "acceptance-result":

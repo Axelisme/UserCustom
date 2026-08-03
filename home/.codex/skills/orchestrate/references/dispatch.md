@@ -29,28 +29,26 @@ resume` bracket external waits without granting lifecycle authority.
 
 The current CLI has no lane group or consumption policy: `lane create` accepts an optional bounded
 annotation, `lane comment --text|--clear` overwrites or clears it, and status projects active lanes
-as `{sha, comment?}` objects while omitting the managed acceptance checkout field. The ninth and
-later active-lane creates warn factually but remain successful.
+as `{sha, comment?, uncollected}` objects with top-level `pending` while omitting the managed
+acceptance checkout field. `uncollected` is Git-derived first-parent work outside integration;
+pending independently counts collected lanes awaiting agent acceptance. The ninth and later active
+lane creates warn factually when projected `uncollected > 0` but remain successful.
 
-Continuation is admissible only while the frozen Contract, provider, cwd, and lane identity all remain
-unchanged. A semantic Contract, observable behavior, public Interface, liveness, or identity change
-requires fresh dispatch and Root re-admission.
+The ticket carries the admitted Contract and validation mode. Continuation keeps the same persistent
+lane: a semantic Contract change requires fresh admission, while rework does not automatically change
+lane or session. Provider and liveness recovery use the worker context classification below; exact
+cwd, Git identity, branch, HEAD, and write scope remain hard-bound and an identity mismatch fast-fails.
 
-A fresh writer that succeeds an earlier writer receives one stable `Handoff path` outside the
-managed lane worktrees. The path belongs to that logical ticket stream, has one active writer, and
-is the only dispatch-authorized write outside the lane. After identity attestation the worker
-creates its parent directory when absent and reads the handoff when present. At a terminal exact
-clean SHA the worker rewrites the current snapshot through the fixed sibling `<path>.tmp`, then
-uses `mv -f` to replace `<path>`; it never appends, rotates, or keeps the old handoff. The snapshot
-is at most 150 lines and 8 KiB and retains only Completed, Decisions,
-Validation, Outstanding, Next, and Risks plus its exact clean subject SHA. A run that cannot bind a
-clean subject leaves the prior handoff unchanged and reports its blocker normally. The handoff
-carries context only; Root still proves every Git and admission fact.
+| worker context | Root action |
+| --- | --- |
+| context is an asset | Resume the same session. |
+| context is debt | Start a fresh run in the same lane. |
+| lane is unnecessary | `lane drop`. |
 
-The terminal lane-ready handoff is mode-specific: TDD names every Contract commit SHA with its
-exact red command, observed red reason, and green result; direct mode names the frozen Contract
-pointer, changed and protected paths, direct validation commands/results, and the final exact clean
-SHA.
+The worker's terminal lane-ready report is normal runtime output: TDD names every Contract commit SHA
+with its exact red command, observed red reason, and green result; direct mode names the frozen Contract
+pointer, changed and protected paths, direct validation commands/results, and final exact clean SHA.
+Root proves the public process-terminal result and Git facts; no external worker artifact is required.
 
 ## Authority
 

@@ -9,17 +9,20 @@ from typing import Any
 
 from .git_ops import (
     changed_paths,
+    commit_subject,
+    commit_trailer_values,
     first_parent_changed_paths,
     first_parent_range,
+    immutable_declarations,
     merge_in_progress,
+    reachable_commits,
     ref_exists,
     ref_namespace_collision,
     run_git,
-    trailer_values,
     worktree_for,
     worktree_records,
 )
-from .primitives import CommandResult, OrchestrateError
+from .primitives import CommandResult, OrchestrateError, require_identifier
 from .resources import (
     LaneResources,
     RepositoryContext,
@@ -49,19 +52,53 @@ def _error(message: str, code: str) -> None:
     raise OrchestrateError(message, code)
 
 
-def status(repo: RepositoryContext, task_id: str | None = None) -> CommandResult:
-    if task_id is None:
-        return CommandResult(True, {"tasks": active_task_ids(repo)})
-    task = _task(repo, task_id)
+@dataclass(frozen=True)
+class _LaneProjection:
+    lane: LaneResources
+    sha: str
+    uncollected: int
+
+
+@dataclass(frozen=True)
+class _TaskProjection:
+    integration: str
+    lanes: dict[str, _LaneProjection]
+    pending: int
+    warnings: tuple[str, ...]
+
+
+def collect_lane_id(
+    repo: RepositoryContext,
+    task: TaskResources,
+    sha: str,
+) -> str | None:
+    """Recognize one production collect commit without introducing state."""
+    task_values = commit_trailer_values(repo.worktree_root, sha, "Task")
+    lane_values = commit_trailer_values(repo.worktree_root, sha, "Lane")
+    ticket_values = commit_trailer_values(repo.worktree_root, sha, "Ticket")
+    if len(task_values) != 1 or task_values[0] != task.task_id:
+        return None
+    if len(lane_values) != 1 or len(ticket_values) != 1:
+        return None
+    try:
+        lane = task.lane(lane_values[0])
+        require_identifier(ticket_values[0], label="ticket")
+    except OrchestrateError:
+        return None
+    if commit_subject(repo.worktree_root, sha) != f"Collect lane {lane.lane_id}":
+        return None
+    return lane.lane_id
+
+
+def task_projection(repo: RepositoryContext, task: TaskResources) -> _TaskProjection:
+    """Derive lane state, pending work, and warning inputs from Git."""
     base = _ref(repo, task.integration_base_ref)
     if base is None:
         _error("task integration base is missing", "task_not_found")
     integration = _ref(repo, task.integration_branch)
     if integration is None:
         _error("task integration branch is missing", "task_state_invalid")
-    lanes: dict[str, dict[str, object]] = {}
-    comments = lane_comments(task)
-    warnings: list[str] = []
+
     lane_ids: set[str] = set()
     base_ids: set[str] = set()
     branch_ids: set[str] = set()
@@ -108,20 +145,67 @@ def status(repo: RepositoryContext, task_id: str | None = None) -> CommandResult
         if path.parent == lanes_root:
             add_lane_id(path.name, worktree_ids)
 
+    reachable = reachable_commits(repo.worktree_root, integration)
+    warnings: list[str] = []
+    lanes: dict[str, _LaneProjection] = {}
     for lane_id in sorted(lane_ids):
         lane = task.lane(lane_id)
         base_value = _ref(repo, lane.base_ref) if lane_id in base_ids else None
         branch_value = _ref(repo, lane.branch) if lane_id in branch_ids else None
-        if base_value is not None and branch_value is not None:
-            lane_status: dict[str, object] = {"sha": branch_value}
-            comment = comments.get(lane_id)
-            if comment is not None:
-                lane_status["comment"] = comment
-            lanes[lane_id] = lane_status
-        else:
+        if base_value is None or branch_value is None:
             warnings.append(f"lane resource is incomplete: {lane_id}")
+            continue
+        commits = first_parent_range(repo.worktree_root, base_value, branch_value)
+        if commits is None:
+            warnings.append(f"lane base is not on first-parent history: {lane_id}")
+            continue
+        uncollected = sum(commit not in reachable for commit in commits)
+        lanes[lane_id] = _LaneProjection(lane, branch_value, uncollected)
 
-    data: dict[str, Any] = {"task_id": task.task_id, "integration": integration, "lanes": dict(sorted(lanes.items()))}
+    accepted = _ref(repo, task.accepted_ref)
+    lower = accepted if accepted is not None else base
+    collect_commits = first_parent_range(repo.worktree_root, lower, integration)
+    collected_lanes: set[str] = set()
+    if collect_commits is not None:
+        for sha in collect_commits:
+            lane_id = collect_lane_id(repo, task, sha)
+            if lane_id is not None:
+                collected_lanes.add(lane_id)
+    pending = sum(
+        projection.uncollected == 0 and lane_id in collected_lanes
+        for lane_id, projection in lanes.items()
+    )
+    return _TaskProjection(
+        integration=integration,
+        lanes=lanes,
+        pending=pending,
+        warnings=tuple(warnings),
+    )
+
+
+def status(repo: RepositoryContext, task_id: str | None = None) -> CommandResult:
+    if task_id is None:
+        return CommandResult(True, {"tasks": active_task_ids(repo)})
+    task = _task(repo, task_id)
+    projection = task_projection(repo, task)
+    comments = lane_comments(task)
+    lanes: dict[str, dict[str, object]] = {}
+    for lane_id, lane in projection.lanes.items():
+        lane_status: dict[str, object] = {
+            "sha": lane.sha,
+            "uncollected": lane.uncollected,
+        }
+        comment = comments.get(lane_id)
+        if comment is not None:
+            lane_status["comment"] = comment
+        lanes[lane_id] = lane_status
+
+    data: dict[str, Any] = {
+        "task_id": task.task_id,
+        "integration": projection.integration,
+        "lanes": lanes,
+        "pending": projection.pending,
+    }
     for key, ref in (
         ("accepted", task.accepted_ref),
         ("user_accepted", task.user_accepted_ref),
@@ -130,8 +214,8 @@ def status(repo: RepositoryContext, task_id: str | None = None) -> CommandResult
         value = _ref(repo, ref)
         if value is not None:
             data[key] = value
-    if warnings:
-        data["warnings"] = warnings[:20]
+    if projection.warnings:
+        data["warnings"] = list(projection.warnings[:20])
     return CommandResult(True, data)
 
 
@@ -222,11 +306,6 @@ def _annotation(value: str) -> str:
     return normalized
 
 
-def _active_lane_count(repo: RepositoryContext, task: TaskResources) -> int:
-    projected = status(repo, task.task_id).data.get("lanes", {})
-    return len(projected) if isinstance(projected, dict) else 0
-
-
 def lane_create(
     repo: RepositoryContext,
     task_id: str,
@@ -241,13 +320,16 @@ def lane_create(
     if normalized is not None:
         event_extra["comment"] = normalized
     event_warnings = record_event(task, "lane-create", "success", **event_extra)
-    active_count = _active_lane_count(repo, task)
+    projection = task_projection(repo, task)
+    uncollected_count = sum(
+        lane.uncollected > 0 for lane in projection.lanes.values()
+    )
     count_warnings = (
         (
-            f"task has {active_count} active lanes; Root should collect/drop "
-            "unneeded lanes",
+            f"task has {uncollected_count} lanes with uncollected work; Root "
+            "should collect/drop unneeded lanes",
         )
-        if active_count >= 9
+        if uncollected_count >= 9
         else ()
     )
     return CommandResult(True, {}, (*event_warnings, *count_warnings))
@@ -359,7 +441,7 @@ def _lane_validation(
         immutable_invalid = False
         immutable_violation = False
         for sha in commits:
-            declared = trailer_values(repo.worktree_root, sha, "Immutable")
+            declared = immutable_declarations(repo.worktree_root, sha)
             valid = [value for value in declared if _normalized_immutable_path(value)]
             if len(valid) != len(declared):
                 immutable_invalid = True
@@ -432,8 +514,14 @@ def _integration_state_ready(repo: RepositoryContext, task: TaskResources) -> No
         _error("integration branch is invalid", "task_state_invalid")
 
 
-def integration_collect(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandResult:
+def integration_collect(
+    repo: RepositoryContext,
+    task_id: str,
+    lane_id: str,
+    ticket: str,
+) -> CommandResult:
     task = _task(repo, task_id)
+    bounded_ticket = require_identifier(ticket, label="ticket")
     validation = _lane_validation(repo, task, lane_id)
     if not validation.ready:
         _raise_lane_refusal(validation)
@@ -455,12 +543,10 @@ def integration_collect(repo: RepositoryContext, task_id: str, lane_id: str) -> 
     message = (
         f"Collect lane {lane.lane_id}\n\n"
         f"Task: {task.task_id}\n"
-        f"Lane: {lane.lane_id}"
+        f"Lane: {lane.lane_id}\n"
+        f"Ticket: {bounded_ticket}"
     )
     run_git(task.integration_path, "commit", "-m", message)
-    run_git(repo.worktree_root, "worktree", "remove", str(lane.path))
-    run_git(repo.worktree_root, "branch", "-D", lane.branch)
-    run_git(repo.worktree_root, "update-ref", "-d", lane.base_ref)
     warnings = record_event(
         task,
         "integration-collect",

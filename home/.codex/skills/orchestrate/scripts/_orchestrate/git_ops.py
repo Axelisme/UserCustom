@@ -155,20 +155,70 @@ def first_parent_range(root: Path, base: str, tip: str) -> list[str] | None:
     )
 
 
-def trailer_values(root: Path, sha: str, key: str) -> list[str]:
-    """Read repeatable values from Git's interpreted final trailer block."""
+def reachable_commits(root: Path, tip: str) -> frozenset[str]:
+    """Return every commit reachable from tip through all parent edges."""
+    return frozenset(run_git(root, "rev-list", tip).stdout.splitlines())
+
+
+def commit_subject(root: Path, sha: str) -> str:
+    """Return one commit's subject line from Git's object database."""
+    return run_git(root, "show", "-s", "--format=%s", sha).stdout.rstrip("\n")
+
+
+def commit_trailer_values(root: Path, sha: str, key: str) -> tuple[str, ...]:
+    """Return non-empty values for one conventional commit trailer key."""
     raw = run_git(
         root,
         "show",
         "-s",
-        "--format=%(trailers:only,unfold)",
+        f"--format=%(trailers:key={key},valueonly)",
         sha,
     ).stdout
+    return tuple(line.strip() for line in raw.splitlines() if line.strip())
+
+
+def _unfold_immutable_paragraph(paragraph: str) -> list[str]:
+    """Unfold Immutable trailer values within one message paragraph."""
     values: list[str] = []
-    for line in raw.splitlines():
+    pending: str | None = None
+    for line in paragraph.splitlines():
+        if pending is not None and line[:1].isspace():
+            pending = f"{pending} {line.strip()}".strip()
+            continue
+        if pending is not None:
+            values.append(pending.strip())
+            pending = None
+        if line[:1].isspace():
+            continue
         trailer_key, separator, value = line.partition(":")
-        if separator and trailer_key.casefold() == key.casefold():
-            values.append(value.strip())
+        if separator and trailer_key.strip().casefold() == "immutable":
+            pending = value.strip()
+    if pending is not None:
+        values.append(pending.strip())
+    return values
+
+
+def immutable_declarations(root: Path, sha: str) -> list[str]:
+    """Read a commit's Immutable declarations from every message paragraph.
+
+    Orchestrate does not borrow Git's "only the final continuous trailer
+    paragraph counts" rule for this private key: each paragraph is scanned,
+    while an Immutable value keeps Git's v150 continuation-line unfolding.
+    A commit made with several ``-m`` paragraphs — each carrying its own
+    ``Immutable:`` line — is common, and Git's own
+    ``%(trailers:only,unfold)`` reader silently drops every paragraph but
+    the last one.
+
+    Key matching keeps the tolerance the deleted ``trailer_values`` reader
+    had: the key is matched case-insensitively and the separator is a bare
+    ``:`` (so ``immutable: x``, ``IMMUTABLE: x`` and ``Immutable:x`` are all
+    recognized declarations, same as before). Only which paragraphs are
+    read changed, not which lines within a paragraph count.
+    """
+    raw = run_git(root, "show", "-s", "--format=%B", sha).stdout
+    values: list[str] = []
+    for paragraph in re.split(r"\n(?:[ \t]*\n)+", raw):
+        values.extend(_unfold_immutable_paragraph(paragraph))
     return values
 
 

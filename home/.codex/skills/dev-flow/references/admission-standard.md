@@ -117,12 +117,11 @@ Recutting resets that counter, because the recut Slice is a new ticket. Nothing 
 reset: a need re-cut five times has spent five admission and dispatch cycles, and no check in this
 standard fires on it. Whoever notices reads the lane history and notices it themselves.
 
-- **Active lane reminder.** Orchestrate reports a factual warning when a task's current active
-  projected lane count reaches nine. Creation still succeeds; Root collects or drops unneeded
-  lanes. Collected, dropped, and historical telemetry do not count, so the warning measures
-  concurrent uncleared lanes and never sequential recut churn — a need re-cut serially holds one
-  active lane throughout and never reaches the threshold. It is not a durable admission or
-  closeability policy.
+- **Active lane reminder.** Orchestrate's ninth warning counts only current active lanes whose
+  projected `uncollected` count is greater than zero. Untouched lanes and pending lanes with
+  `uncollected == 0`, plus collected, closed, dropped, and historical lanes, do not count. Pending
+  remains independent and unbounded; creation still succeeds, and this factual warning is not a
+  durable admission or closeability policy.
 
 Blocking is a closed enum: `spec_violation | data_loss | security |
 reproducible_behavior_failure` within the frozen envelope. Every blocker has `contract_basis`;
@@ -150,7 +149,9 @@ actions, in order:
 1. Update `INDEX.md`'s `Current` and `Next` to the accepted state, then run `refresh`.
 2. Move the receipts `refresh` names out of `Current` and `Next`, into the artifact of the gate
    that produced them.
-3. Drop the lanes this increment finished with.
+3. Verify automatic clean closure for every named lane attempted by agent acceptance. Any retained
+   lane and its warning remain an active current-task finding and require explicit correction or
+   `lane drop` before closeout; do not unconditionally drop lanes.
 4. Clear the temporary directories and test basetemps this increment created.
 
 **What this stage owes is named by `refresh` and the locating output, not by a list written here.**

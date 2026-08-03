@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Git lanes for dispatched task work. Use when dispatching implementation to worker agents, integrating or landing completed lanes, checking task or lane state, or when a runtime binding needs the lane dispatch contract. Not for work one agent completes in a single context.
-skill_version: 150
+skill_version: 153
 ---
 
 # Orchestrate
@@ -19,8 +19,9 @@ authority; Root reads its current S0 before creating the first lane.
    worktree at the current repository subject. Done when the integration branch and worktree exist.
 
 2. `lane create --task-id <task> --lane-id <lane> [--comment <text>]` creates one managed writer
-   branch and worktree at the recorded task base. A lane is one admitted Contract, one worktree,
-   branch, and one `lane-worker` call. The optional comment is a bounded annotation only; use
+   branch and worktree at the recorded task base. A lane is a persistent writer workstation for the
+   task; the ticket owns the admitted Contract and validation mode. The same lane may serve multiple
+   worker calls and collect/rework cycles. The optional comment is a bounded annotation only; use
    `lane comment --task-id <task> --lane-id <lane> --text <text>` to overwrite it or `--clear` to
    remove it. Root dispatches the exact canonical cwd and Git identity and preserves primary-checkout
    dirt. Done when the lane branch and worktree exist at the recorded base.
@@ -47,9 +48,10 @@ authority; Root reads its current S0 before creating the first lane.
 6. Root reruns the gates (return to step 4) until `lane check` exits 0 against the current
    integration tip.
 
-7. `integration collect --task-id <task> --lane-id <lane>` creates one fixed-parent no-ff collect
-   commit and removes the managed lane worktree. Done when the collect commit exists and the lane
-   worktree is gone.
+7. `integration collect --task-id <task> --lane-id <lane> --ticket <ticket>` creates one
+   fixed-parent no-ff collect commit with `Task:`, `Lane:`, and bounded `Ticket:` trailers. Collection
+   retains the lane worktree, branch, and original base ref; `lane drop` remains the explicit discard
+   operation. Done when the collect commit exists and the persistent lane remains available.
 
 8. `acceptance start --task-id <task> [--sha <exact>]` checks out one managed detached acceptance
    snapshot. Omission selects the managed integration branch tip; an explicit full SHA may select
@@ -83,9 +85,12 @@ reconcile --task-id <task> --lane-id <lane> --persist <branch>`; the writer owns
 no-commit merge, resolution, tests, commit, and normal collection (steps 4–7) before acceptance
 (steps 8–9) is repeated.
 
-An acceptance failure grants no repair by itself. Once Root admits its bounded correction, the
-repair uses a new writer lane and normal collection before the exact replacement snapshot repeats
-acceptance. The matching runtime binding defines how writer context and reviewer context continue.
+An acceptance failure grants no repair by itself. Once Root admits its bounded correction, an
+implementation bug, preserving test correction, or additive-only observable correction resumes the
+same worker context when it remains an asset. Context debt or a wrong observable starts a fresh worker
+run in the same lane. An additive-only observable opens a new ticket and repeats S1; a lane no longer
+needed uses `lane drop`. The matching runtime binding defines how writer context and reviewer context
+continue.
 
 Destructive `--abandon` on `integration remove` is exceptional current-user authority, not an
 automatic recovery path. It reports unlanded and uncollected state while preserving unrelated refs,
@@ -96,15 +101,17 @@ paths, and user dirt.
 `orchestrate.py --version` is the top-level version query and returns the normal JSON envelope; there
 is no `version` subcommand. `status` is the only task discovery and state projection. Without a task
 ID it lists known tasks; with `--task-id` it reports the exact integration SHA, active lanes as
-`{sha, comment?}` objects,
-accepted, `user_accepted`, landed, and real inventory warnings that exist. The managed acceptance
-worktree and historical lane/comment data are not synthesized into current status.
+`{sha, comment?, uncollected}` objects, top-level `pending`, accepted, `user_accepted`, landed, and
+real inventory warnings. `uncollected` is the Git-derived first-parent work not reachable from
+integration; `pending` independently counts collected lanes awaiting agent acceptance. The managed
+acceptance worktree and historical lane/comment data are not synthesized into current status.
 
 Lane comments are append-only annotations and never grant lifecycle, acceptance, landing, or cleanup
 authority. They project only while the lane is active. After a successful create, the current
-task-wide active lane count is factual; the ninth and later active lane creates warn Root to collect/drop
-unneeded lanes, but never block creation. Historical telemetry and collected/dropped lanes do not
-count.
+ninth-lane warning is factual: it counts only active lanes with projected `uncollected > 0`; pending
+lanes with zero uncollected work do not count, and creation never blocks. Historical, closed, dropped,
+and collected lanes do not count. Agent acceptance records authority first, then automatically closes
+clean named lanes; anomalies retain the lane and warn Root for explicit correction or drop.
 
 `report --task-id <task> --output-dir <dir>` atomically writes the two fixed report artifacts from
 Git and append-only telemetry. `timing pause --task-id <task>` closes active timing before an
@@ -127,5 +134,6 @@ Read the matching [Codex runtime](runtime-codex.md), [Claude runtime](runtime-cl
 [Pi runtime](runtime-pi.md) before dispatch. Runtime bindings transport the frozen dispatch and
 exact-run evidence; they do not grant admission, collect, acceptance, persistence, setup, pin, or
 cleanup authority. Root owns Contract semantics, pre-collect test review, primary dirt, collection,
-acceptance coordination, landing, and recovery. A provider, cwd, lane identity, Interface, or
-observable Contract change requires fresh admission rather than continuation.
+acceptance coordination, landing, and recovery. A semantic change to the ticket's Contract requires
+fresh admission; persistent-lane rework does not automatically change its lane or session. Provider
+and liveness recovery follows the context asset/debt routing in dispatch.

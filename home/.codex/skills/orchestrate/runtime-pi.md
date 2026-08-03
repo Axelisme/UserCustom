@@ -6,18 +6,17 @@ See [dispatch.md](references/dispatch.md) for the runtime-neutral dispatch contr
 binding, evidence, acceptance, and authority rules shared by every runtime. This file states only
 Pi's own delta.
 
-Pi Root dispatches an admitted implementation lane through Pi Subagents' native `subagent` tool.
+Pi Root dispatches an admitted ticket Contract through Pi Subagents' native `subagent` tool.
 Orchestrate ships no Pi-specific adapter: transport, control, and evidence are the runtime's own,
-and Root reads them directly. Root launches `lane-worker` with fresh context in async mode and
-supplies the logical ticket stream's stable absolute `Handoff path`. The normal custody location is
-`<task-record>/artifacts/handoffs/<ticket-id>-worker.md`; a different location must remain outside
-the disposable managed worktrees and keep the same cleanup owner.
+and Root reads them directly. The lane is persistent during the task; Pi supplies the same canonical
+cwd and exact identity on every worker call. The neutral ticket, Contract, and context-routing rules
+are defined by [dispatch.md](references/dispatch.md); this file states only Pi's transport delta.
 
 ## Writer execution
 
 Normal writer launch and resume omit `turnBudget`; no hard `toolBudget` is supplied. An exceptional
 budget choice retains one caution: Pi gives the child no approaching-limit warning, so a budget can
-hard-cut the child before it can hand off cleanly. The worker's per-cycle commit discipline remains
+hard-cut the child before it can commit and report cleanly. The worker's per-cycle commit discipline remains
 the controllable protection against an interrupted turn.
 
 Writer launch and resume never use `subagent_wait`. In ordinary interactive mode, Root reports the
@@ -78,25 +77,23 @@ child compaction may otherwise take unusually long.
 
 Use this writer recovery matrix:
 
-| trusted state | Root action |
+| context state | Root action |
 | --- | --- |
-| Contract, lane identity, cwd, and session context are trusted | Resume the same session. |
-| Contract and lane are unchanged but old context is not trusted | Start a fresh run in the same lane. |
-| A collected delivery needs rework in a newly admitted lane | Start a fresh run there with the same `Handoff path`. |
-| Contract or observable behavior changed | Re-admit and recut. |
-| The lane is no longer needed | `lane drop`. |
+| context is an asset / trusted | Resume the same session. |
+| context is debt / untrusted | Start a fresh run in the same lane. |
+| lane is unnecessary | `lane drop`. |
 
-A provider, cwd, lane identity, public Interface, or observable Contract change also requires fresh
-admission. A new lane always receives a fresh child session, even when its ticket and profile are
-shared; its worker recovers task context from the rolling handoff after attesting the new identity.
-Session context never crosses lane identity, cwd, branch, or write scope.
+Provider and liveness recovery stays with the same role, profile, and persistent lane. A semantic
+Contract change still requires admission; recovery remains in the same lane. Before every resume
+Root rebinds the exact cwd, Git root/common-dir, branch, HEAD, base, lane identity, and write scope;
+any mismatch fast-fails. Session context never crosses lane identity, cwd, branch, or write scope.
 
 Acceptance re-review is different: `acceptance start` removes and recreates the checkout at the
 same canonical lexical cwd. After the prior reviewer process is terminal and the replacement
 checkout is complete, Root rebinds its detached, tracked-clean exact SHA and resumes the same
 Standards or Spec reviewer session with the prior subject, new subject, and correction range. Each
 axis resumes its own session. If that reviewer context is not trusted, Root starts a fresh reviewer
-with the prior terminal report supplied explicitly; reviewers never maintain the writer handoff.
+with the prior terminal report supplied explicitly; reviewers use their external `Report path` only.
 
 ## Evidence
 

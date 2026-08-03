@@ -75,6 +75,8 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
                 task_id,
                 "--lane-id",
                 lane_id,
+                "--ticket",
+                f"ticket-{task_id}-{lane_id}",
             ),
             "integration-collect",
         )
@@ -256,7 +258,14 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
             ("lane-drop", ("lane", "drop", "--lane-id", "missing"), 2, "failure"),
             (
                 "integration-collect",
-                ("integration", "collect", "--lane-id", "missing"),
+                (
+                    "integration",
+                    "collect",
+                    "--lane-id",
+                    "missing",
+                    "--ticket",
+                    "missing-collect-ticket",
+                ),
                 2,
                 "failure",
             ),
@@ -842,6 +851,9 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
             self.git(self.root, "rev-parse", f"{current}^{{tree}}"),
             self.git(self.root, "rev-parse", f"{self.base}^{{tree}}"),
         )
+        # Persistent collect leaves the lane active; agent acceptance closes it
+        # before normal integration removal can proceed.
+        self.accept_current(task_id)
         self.mutation_success(
             self.cli(
                 self.nested,

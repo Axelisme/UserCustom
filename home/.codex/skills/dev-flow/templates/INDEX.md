@@ -24,6 +24,7 @@ Not yet recorded.
 ## Standing orders
 <!-- In-force orders only. An entry is the verbatim quote, the date it was issued, an optional pointer, and a lapse condition — nothing else.
      A ratification ("agreed", "option A") points at the durable text it approved, frozen as of the assent.
+     Admit a sentence only if it still binds once the requested act is done: a spent instruction ("go ahead", "collect that") is not a standing order.
      Scope and interpretation go to decisions.md; lapsed entries move verbatim to standing-orders-lapsed.md.
      Do not paraphrase, do not merge overlapping orders, do not grant authority the user did not give.
 

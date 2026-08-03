@@ -23,12 +23,20 @@ those checks.
 ## Custody
 
 The record holds no authority of its own. It is **custody** of the user's — what they froze and what
-they granted, and nothing else. Five things follow.
+they granted, and nothing else. Six things follow.
 
 **A held item is the original.** A standing order is the user's own sentence, **quoted verbatim**,
 stamped with when it was issued and when it lapses. A paraphrase is the agent's understanding
 wearing the user's name. List new entries in the same reply, so the user can disown them on the
 spot.
+
+**An order is what the user granted, not what they asked for.** Most instructions are spent by
+being carried out — "go ahead", "collect that", "start the next ticket" — and the record of them is
+the work itself. Admit a sentence only if it still binds the decision after the requested act is
+done; ask it plainly: *doing this, does the sentence go away?* A one-off instruction that enters the
+list never leaves it on its own, and arrives wearing the same authority as a real grant. One
+sentence often carries both — "collect this, you don't need to ask me for collect" — so admit it on
+its binding clause and hold the whole sentence; **never quote half of one**.
 
 **A quote must resolve.** Most grants are ratifications — "agreed", "option A", "do it your way" —
 whose content lives in the proposal they answer. Hold them by address, never by retelling: write the

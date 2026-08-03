@@ -535,7 +535,15 @@ class TaskRecordTests(unittest.TestCase):
                 "Current": ("verified", "authority", "do not"),
                 "Next": ("next", "owner", "do not"),
                 "Envelope": ("minimum", "out-of-envelope", "do not"),
-                "Standing orders": ("verbatim", "issued", "do not", "ratifi", "decisions.md", "lapse"),
+                "Standing orders": (
+                    "verbatim",
+                    "issued",
+                    "do not",
+                    "ratifi",
+                    "decisions.md",
+                    "lapse",
+                    "instruction",
+                ),
             }
             comments: list[str] = []
             for heading, (following, initial_fact) in sections.items():

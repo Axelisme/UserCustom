@@ -132,7 +132,10 @@ delta is reviewed by one reviewer on its originating axis.
 - Root binds the exact clean detached acceptance path, HEAD, tree and base…subject diff. Integration
   may advance without changing or invalidating that snapshot.
 - Standards and Spec reviewers are read-only, report their axis and exact SHA, and never mutate the
-  acceptance checkout.
+  acceptance checkout. Each writes that same report to one `Report path` Root binds to its axis and
+  exact SHA outside that checkout; the file is its only write and becomes evidence when Root accepts
+  it. Root records the verdict, counts and both paths in the receipt it already writes, and does not
+  restate the reviews — an axis is heard in its own words or not at all.
 - A passing agent-verifier result records ReviewGate authority for that exact snapshot. A bounded
   delta uses only its originating axis.
 

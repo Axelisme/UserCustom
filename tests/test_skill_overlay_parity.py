@@ -1,41 +1,81 @@
 from __future__ import annotations
 
+import hashlib
+import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CODEX_SKILLS = ROOT / "home" / ".codex" / "skills"
-PI_SKILLS = ROOT / "home" / ".pi" / "agent" / "skills"
+HOME = ROOT / "home"
+CODEX_SKILLS = HOME / ".codex" / "skills"
+OVERLAY_SKILLS = (
+    HOME / ".claude" / "skills",
+    HOME / ".pi" / "agent" / "skills",
+)
+PROFILES = {
+    "acceptance-reviewer": (
+        HOME / ".claude/agents/acceptance-reviewer.md",
+        HOME / ".pi/agent/agents/acceptance-reviewer.md",
+        HOME / ".codex/agents/acceptance-reviewer.toml",
+    ),
+    "lane-worker": (
+        HOME / ".claude/agents/lane-worker.md",
+        HOME / ".pi/agent/agents/lane-worker.md",
+        HOME / ".codex/agents/lane-worker.toml",
+    ),
+}
 
-
-def codex_skills_with_scripts() -> list[str]:
-    return sorted(
-        skill_dir.name
-        for skill_dir in CODEX_SKILLS.iterdir()
-        if skill_dir.is_dir() and (skill_dir / "scripts").exists()
-    )
+sys.path.insert(0, str(CODEX_SKILLS / "orchestrate" / "scripts"))
+from _orchestrate import release  # noqa: E402
 
 
 class SkillOverlayParityTests(unittest.TestCase):
-    def test_pi_scripts_dirs_are_symlinks_to_the_codex_owner(self) -> None:
-        skills = codex_skills_with_scripts()
-        self.assertTrue(skills, "expected at least one codex skill with a scripts/ dir")
+    """The codex tree owns every skill; the other runtimes only point at it.
+
+    Agent profiles cannot follow that rule. Their frontmatter is deliberately
+    runtime-specific — model, tools, and the codex copy is TOML — so only the
+    prompt body is shared, and that half is asserted here instead of by a link.
+    """
+
+    def test_codex_owns_every_skill_directory(self) -> None:
+        skills = sorted(path.name for path in CODEX_SKILLS.iterdir() if path.is_dir())
+        self.assertTrue(skills, "expected at least one codex skill")
         for name in skills:
             with self.subTest(skill=name):
-                codex_scripts = CODEX_SKILLS / name / "scripts"
-                pi_scripts = PI_SKILLS / name / "scripts"
-                self.assertTrue(
-                    pi_scripts.exists(), f"{name}: missing pi scripts dir {pi_scripts}"
+                self.assertFalse(
+                    (CODEX_SKILLS / name).is_symlink(),
+                    f"{name}: codex skill is not the owner",
                 )
-                self.assertTrue(
-                    pi_scripts.is_symlink(),
-                    f"{name}: pi scripts dir is not a symlink: {pi_scripts}",
-                )
-                self.assertEqual(
-                    pi_scripts.resolve(),
-                    codex_scripts.resolve(),
-                    f"{name}: pi scripts symlink does not resolve to the codex owner",
-                )
+
+    def test_overlay_skills_are_symlinks_to_the_codex_owner(self) -> None:
+        for overlay in OVERLAY_SKILLS:
+            self.assertTrue(overlay.is_dir(), f"missing overlay: {overlay}")
+            for entry in sorted(overlay.iterdir()):
+                with self.subTest(overlay=overlay.name, skill=entry.name):
+                    self.assertTrue(
+                        entry.is_symlink(),
+                        f"{entry} is not a symlink to the codex owner",
+                    )
+                    owner = CODEX_SKILLS / entry.name
+                    self.assertTrue(owner.is_dir(), f"no codex owner: {owner}")
+                    self.assertEqual(entry.resolve(), owner.resolve())
+
+    def test_dispatched_profiles_share_one_prompt_across_runtimes(self) -> None:
+        for name, paths in PROFILES.items():
+            digests: dict[str, str] = {}
+            for path in paths:
+                with self.subTest(profile=path):
+                    self.assertTrue(path.is_file(), f"missing profile: {path}")
+                    agent_name, prompt = release.profile_identity_prompt(path)
+                    self.assertEqual(agent_name, name)
+                    digests[path.name] = hashlib.sha256(
+                        prompt.encode("utf-8")
+                    ).hexdigest()
+            self.assertEqual(
+                len(set(digests.values())),
+                1,
+                f"{name}: runtime copies disagree on the prompt: {digests}",
+            )
 
 
 if __name__ == "__main__":

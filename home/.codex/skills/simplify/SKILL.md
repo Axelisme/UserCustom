@@ -1,142 +1,81 @@
 ---
 name: simplify
-description: Review the current code changes for reuse, quality, and efficiency, then apply straightforward fixes. Use when the user asks to simplify, clean up, reduce duplication, improve changed code, or review git changes with an optional focus such as performance, memory use, React rerenders, SQL queries, or other project-specific concerns.
+description: Review the changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only — it does not hunt for bugs; use /code-review for that.
+argument-hint: "[<target>]"
 ---
 
 # Simplify
 
-Review the current working changes, identify avoidable complexity, and directly fix issues that are clear, low-risk, and aligned with the repository's existing style.
+You are improving the quality of the changed code, not hunting for bugs. Review
+it for reuse, simplification, efficiency, and altitude issues, then fix what you
+find. Do not look for correctness bugs — that is what `/code-review` is for.
 
-This skill is adapted from the `/simplify` workflow: identify changed code, run three focused reviews, then aggregate the findings into concrete edits.
+## Phase 0 — Gather the diff
 
-## Inputs
+Run `git diff @{upstream}...HEAD` (or `git diff main...HEAD` / `git diff HEAD~1`
+if there's no upstream) to get the unified diff under review. If there are
+uncommitted changes, or the range diff is empty, also run `git diff HEAD` and
+include the working-tree changes in scope — the review often runs before the
+commit. If a PR number, branch name, or file path was passed as an argument,
+review that target instead. Treat this diff as the review scope.
 
-The user may provide an additional focus after the request, for example:
+## Phase 1 — Review (4 cleanup angles in parallel)
 
-```text
-simplify this, focus on memory usage
-simplify the changed files and pay attention to React rerenders
-simplify with extra attention to SQL query efficiency
-```
+Launch **4 independent review agents** through this harness's sub-agent tool,
+all in a single message so they run concurrently. Pass each agent the diff and
+one of the four angles below. Each returns its findings with `file`, `line`, a
+one-line `summary`, and the concrete cost (what is duplicated, wasted, or
+harder to maintain).
 
-Treat that text as **Additional Focus**. Apply it to every review pass, but do not let it replace the core reuse, quality, and efficiency checks.
+If no sub-agent tool is available, work through all four angles yourself, in
+this same context, in one pass — do not skip an angle for lack of fan-out, and
+say so in the summary. State clearly that this was a single-pass review without
+the 4-agent fan-out, so whoever reads it isn't misled about what actually ran.
 
-## Process
+### Reuse
 
-### 1. Identify Changes
+Flag new code that re-implements something the codebase already has — Grep
+shared/utility modules and files adjacent to the change, and name the existing
+helper to call instead. Tests count: duplicated assertions, and hand-rolled
+fixtures or helpers that shadow ones the suite already provides.
 
-Find the code under review before making any judgement.
+### Simplification
 
-Prefer git state:
+Flag unnecessary complexity the diff adds: redundant or derivable state,
+copy-paste with slight variation, deep nesting, dead code left behind. Name the
+simpler form that does the same job. Tests carry their own version of this: a
+test that cannot fail for its own specific reason, a test left behind for
+behaviour the diff removed, fixture sprawl, and a test layout that no longer
+mirrors the production one.
 
-- Use `git diff` for unstaged changes.
-- Use `git diff --staged` for staged changes.
-- If the user asks for a specific base, use that explicit diff range instead.
-- If both staged and unstaged changes exist, inspect both and keep them conceptually separate.
-- When earlier work has already passed a formal review, start from that reviewed SHA. Re-reading an accepted diff cannot find new hygiene problems and costs the same as reading new code.
+### Efficiency
 
-If there are no git changes, fall back to recently modified files only when that is useful and safe. Tell the user that no git diff was present.
+Flag wasted work the diff introduces: redundant computation or repeated I/O,
+independent operations run sequentially, blocking work added to startup or
+hot paths. Also flag long-lived objects built from closures or captured
+environments — they keep the entire enclosing scope alive for the object's
+lifetime (a memory leak when that scope holds large values); prefer a
+class/struct that copies only the fields it needs. Name the cheaper
+alternative.
 
-Do not review generated artifacts, dependency lock churn, vendored code, build output, or large data files unless the user explicitly asks.
+Disposable resources are waste when nothing reclaims them: a temp directory,
+virtualenv, cache, or test basetemp created somewhere with no owner and no
+removal path. `/tmp` is usually tmpfs, so what is left there is held in RAM
+until reboot. Name where it should live instead — a location whose lifetime
+already ends when the work does.
 
-### 2. Run Two Focused Reviews
+### Altitude
 
-Review the relevant diff from two angles. For a large diff, use parallel sub-agents if available; otherwise run both passes yourself in separate notes before editing.
+Check that each change is implemented at the right depth, not as a fragile
+bandaid. Special cases layered on shared infrastructure are a sign the fix
+isn't deep enough — prefer generalizing the underlying mechanism over adding
+special cases.
 
-Each pass receives:
+## Phase 2 — Apply the fixes
 
-- The relevant diff or changed-file set.
-- The user's Additional Focus, if any.
-- The repository's local instructions and conventions.
-
-#### Shape and Reuse
-
-Look for:
-
-- Duplicated logic or copy-paste control flow.
-- Hand-rolled helpers that duplicate existing project utilities.
-- Similar functions or branches that can be collapsed without hiding important differences.
-- New abstractions that are shallower than the duplication they replace.
-- Redundant state, unnecessary parameters, and parameter sprawl.
-- Leaky abstractions or call sites forced to know implementation details.
-- Stringly typed code where a stronger local type or enum already exists.
-- Unclear naming, surprising control flow, or low-value comments.
-- Excessive nesting, especially JSX or UI layout nesting.
-- Error handling that hides failures instead of failing fast.
-- Test hygiene in the changed set: duplicated assertions, tests that cannot fail for their own specific reason, leftover tests for removed behavior, fixture sprawl, and test files whose structure no longer mirrors the production layout.
-
-#### Efficiency
-
-Look for:
-
-- Avoidable repeated work, missed batching, or missed concurrency.
-- Hot-path allocations or computations that can move out of loops.
-- Recurring no-op updates or unnecessary rerenders.
-- TOCTOU existence checks where the operation itself can report failure.
-- Memory leaks, unbounded caches, or overly broad data fetches.
-- Synchronous work that blocks a user-facing path without need.
-
-### 3. Decide What To Fix
-
-Fix issues directly when all of these are true:
-
-- The issue is in the changed code, supported by the diff or nearby code.
-- The fix is local, low-risk, and roughly 30 lines or fewer.
-- An existing test already covers the behavior the fix touches.
-- The repository already has a clear pattern to follow.
-- The change improves simplicity without broadening scope.
-
-Skip or report issues instead of editing when:
-
-- The finding is subjective and the current code is defensible.
-- The fix requires an architectural decision not already made.
-- The fix needs product, API, schema, or compatibility judgement.
-- The change would alter behavior beyond the user's request.
-- The finding would remove a load-bearing mechanism — authority, lifecycle, lock ordering, retention, or cross-process sequencing — on source reading alone. Such machinery reads as accidental complexity and often is not, so removal needs a minimal executable reproduction: reading has argued for deleting timing that held the system together. Report it rather than guessing. This cuts both ways — when nobody can produce the failing test that justifies such a mechanism, record that as its own finding, because an unjustified mechanism is a defect, not a fixture.
-- The change would alter a frozen public contract or an immutable acceptance surface (e.g. Oracle-owned contract tests in dev-flow): report it for routing to a contract correction or the candidate backlog. Never edit a test to match code you just changed — that silently rewrites what was accepted. Internal shape is always yours to simplify; the promised interface is not.
-- The apparent problem is in generated, vendored, or intentionally duplicated code.
-
-### 4. Apply Edits
-
-Keep edits tight. Prefer existing helpers and local conventions over new abstractions.
-
-When replacing duplication, preserve the visible behavior and tests. When improving efficiency, make the before/after behavior explicit enough that a reviewer can tell what changed.
-
-Do not mix unrelated cleanup into the patch. If you notice larger cleanup opportunities, report them separately.
-
-### 5. Verify
-
-Run the narrowest useful verification first, then broader checks when the blast radius justifies it.
-
-Use the repository's documented test, typecheck, lint, and formatting commands. If a command cannot be run, say why.
-
-### 6. Summarize
-
-Report findings in three groups so the caller triages once, not per finding:
-
-- **Applied**: what changed and what checks ran, with results.
-- **Needs a contract or a reproduction**: real but out of scope here — the danger categories above, and anything whose evidence is source reading alone.
-- **Backlog**: subjective or low-priority cleanup, and false positives worth recording.
-
-If no changes are needed, say the changed code already looks clean and mention any verification performed.
-
-## Sub-Agent Prompt Template
-
-When sub-agents are available, launch both in parallel with prompts shaped like this:
-
-```text
-Review the following diff for <Shape and Reuse | Efficiency>.
-
-Additional Focus:
-<user focus or "None">
-
-Repository conventions:
-<brief local instructions or paths to read>
-
-Report only concrete findings that are supported by the diff or nearby code.
-For each finding, include file/path, why it matters, and the smallest safe fix.
-Skip style issues that tooling will handle.
-Keep the report under 400 words.
-```
-
-Aggregate the reports before editing. Do not apply a suggested fix until you have independently confirmed it against the codebase.
+Wait for all four agents to complete, dedup findings that point at the same
+line or mechanism, and fix each remaining one directly. Skip any finding whose
+fix would change intended behavior, require changes well outside the reviewed
+diff, or that you judge to be a false positive — note the skip rather than
+arguing with it. Finish with a brief summary of what was fixed and what was
+skipped (or confirm the code was already clean).

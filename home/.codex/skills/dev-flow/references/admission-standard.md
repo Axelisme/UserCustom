@@ -1,6 +1,6 @@
 # Admission standard
 
-`standard_version: 2`. Cite this number when reporting which checks a task was admitted under; it
+`standard_version: 3`. Cite this number when reporting which checks a task was admitted under; it
 is maintained by hand, so a report that needs certainty cites the Git subject as well.
 
 These are the sole normative S0–S5 checks for dev-flow. Every check is decided from artifacts,
@@ -139,10 +139,24 @@ delta is reviewed by one reviewer on its originating axis.
 - A passing agent-verifier result records ReviewGate authority for that exact snapshot. A bounded
   delta uses only its originating axis.
 
-Each accepted increment closes by bringing the task record with it: update `INDEX.md`'s `Current`
-and `Next` to the accepted state, then run `refresh`. The record is the only authority a compacted
-session inherits, and a `Current` naming a frontier three increments behind reads as correct while
-being wrong — the failure mode that made this step explicit.
+Each accepted increment closes by bringing the task record with it. The record is the only
+authority a compacted session inherits, and a `Current` naming a frontier three increments behind
+reads as correct while being wrong — the failure mode that made this step explicit. Four mechanical
+actions, in order:
+
+1. Update `INDEX.md`'s `Current` and `Next` to the accepted state, then run `refresh`.
+2. Move the receipts `refresh` names out of `Current` and `Next`, into the artifact of the gate
+   that produced them.
+3. Drop the lanes this increment finished with.
+4. Clear the temporary directories and test basetemps this increment created.
+
+**What this stage owes is named by `refresh` and the locating output, not by a list written here.**
+That is deliberate: a hand-kept checklist in this file would grow with every remembered incident
+and still miss the one that mattered, while the instruments report the actual record in front of
+you. If they name nothing, there is nothing to move.
+
+Steps 3 and 4 are orchestrate's and the repo's own contracts; run them there and do not restate
+their policy in the task record.
 
 ## S5 — Landing and close-out
 

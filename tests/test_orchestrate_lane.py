@@ -867,6 +867,36 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         self.assertTrue(lane.is_dir())
         self.assertEqual(self.ref_value(self.lane_base_ref()), self.base)
 
+    def test_dropped_lane_span_is_reported_apart_from_collected_time(self) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        self.commit_file(lane, "lane.txt", "committed\n", "Lane commit")
+
+        self.mutation_success(self.lane_command("drop"), "lane-drop")
+
+        output_dir = self.root / "drop-report"
+        self.success(
+            self.cli(
+                self.root, "report", "--task-id", self.task_id, "--output-dir", str(output_dir)
+            )
+        )
+        report = json_object(
+            (output_dir / "orchestrate-report.json").read_text(encoding="utf-8")
+        )
+        spans = [
+            entry
+            for entry in report["timeline"]
+            if entry.get("kind") == "lane" and entry.get("identity") == self.lane_id
+        ]
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(spans[0]["disposition"], "dropped")
+        durations = report["lane_durations"]
+        self.assertEqual(durations["dropped"]["lanes"], 1.0)
+        # The drop must not land in the collected bucket, which is the number a reader takes for
+        # how long real lane work costs.
+        self.assertEqual(durations["collected"]["lanes"], 0.0)
+        self.assertEqual(durations["collected"]["elapsed_seconds"], 0.0)
+
     def test_drop_force_removes_dirty_exact_inventory(self) -> None:
         self.create_task()
         lane = self.create_lane()

@@ -460,13 +460,22 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
             report["integration_diff"],
             {"files": 2, "binary_files": 0, "additions": 12, "deletions": 3, "churn": 15},
         )
+        # A dropped lane's time is kept out of the collected total: the two numbers answer
+        # different questions and summing them inflates "how long a lane takes".
+        self.assertEqual(
+            report["lane_durations"],
+            {
+                "collected": {"lanes": 1.0, "elapsed_seconds": 300.0, "recorded_seconds": 300.0},
+                "dropped": {"lanes": 1.0, "elapsed_seconds": 300.0, "recorded_seconds": 300.0},
+            },
+        )
         timeline = report["timeline"]
         self.assertEqual(
             timeline,
             [
                 {"type": "span", "kind": "task", "identity": "alpha", "outcome": "success", "started_at": "2026-07-30T12:00:00+00:00", "ended_at": "2026-07-30T12:30:00+00:00", "elapsed_seconds": 1800.0, "recorded_seconds": 1500.0},
-                {"type": "span", "kind": "lane", "identity": "docs", "outcome": "success", "started_at": "2026-07-30T12:02:00+00:00", "ended_at": "2026-07-30T12:07:00+00:00", "elapsed_seconds": 300.0, "recorded_seconds": 300.0},
-                {"type": "span", "kind": "lane", "identity": "api", "outcome": "success", "started_at": "2026-07-30T12:03:00+00:00", "ended_at": "2026-07-30T12:08:00+00:00", "elapsed_seconds": 300.0, "recorded_seconds": 300.0},
+                {"type": "span", "kind": "lane", "identity": "docs", "outcome": "success", "disposition": "collected", "started_at": "2026-07-30T12:02:00+00:00", "ended_at": "2026-07-30T12:07:00+00:00", "elapsed_seconds": 300.0, "recorded_seconds": 300.0},
+                {"type": "span", "kind": "lane", "identity": "api", "outcome": "success", "disposition": "dropped", "started_at": "2026-07-30T12:03:00+00:00", "ended_at": "2026-07-30T12:08:00+00:00", "elapsed_seconds": 300.0, "recorded_seconds": 300.0},
                 {"type": "marker", "kind": "sync", "identity": "docs", "outcome": "conflict", "at": "2026-07-30T12:04:00+00:00"},
                 {"type": "marker", "kind": "collect", "identity": "docs", "outcome": "conflict", "at": "2026-07-30T12:05:00+00:00"},
                 {"type": "marker", "kind": "sync", "identity": "docs", "outcome": "success", "at": "2026-07-30T12:06:00+00:00"},

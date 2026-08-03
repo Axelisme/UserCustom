@@ -31,15 +31,44 @@ _EVENT_OPERATIONS = frozenset(
 )
 
 
+_PIN_CACHE: dict[Path, int | None] = {}
+
+
+def _repo_pin(task: TaskResources) -> int | None:
+    """The pin in force while this event was written, or None when the repo has none.
+
+    Cached per control root: a pin cannot change inside one process without the pin command, which
+    ends the process. Any read failure answers None — telemetry is observational and never fails
+    the operation it is describing.
+    """
+    root = task.repo.control_root
+    if root not in _PIN_CACHE:
+        from .release import read_version_pin
+
+        try:
+            payload = read_version_pin(root)
+        except (OSError, UnicodeError, OrchestrateError):
+            payload = None
+        _PIN_CACHE[root] = payload.get("skill_version") if payload else None
+    return _PIN_CACHE[root]
+
+
 def _event_bytes(
     task: TaskResources, operation: str, outcome: str, **extra: Any
 ) -> bytes:
+    # Deferred: cli imports this module, so the constant is only reachable once cli has loaded.
+    from .cli import ORCHESTRATE_VERSION
+
     event: dict[str, Any] = {
         "event_version": 1,
         "at": datetime.now(UTC).isoformat(),
         "task_id": task.task_id,
         "operation": operation,
         "outcome": outcome,
+        # Which code wrote this line, and which version the repo was pinned to at the time. A
+        # report that mixes versions can otherwise not say which behaviour produced which number.
+        "orchestrate_version": ORCHESTRATE_VERSION,
+        "repo_pin": _repo_pin(task),
     }
     nullable = {"previous_sha", "current_sha", "comment"}
     event.update(
@@ -197,6 +226,28 @@ def _marker(
     return marker
 
 
+def _lane_durations(timeline: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
+    """Total lane time, kept apart by how the lane ended.
+
+    A dropped lane's span is the wall time from creation to the batch drop that cleared it, which
+    is mostly time nobody was working on it. Summed together with collected lanes it inflates the
+    figure a reader takes for "how long a lane takes"; kept apart, both numbers stay usable.
+    """
+    totals: dict[str, dict[str, float]] = {
+        "collected": {"lanes": 0.0, "elapsed_seconds": 0.0, "recorded_seconds": 0.0},
+        "dropped": {"lanes": 0.0, "elapsed_seconds": 0.0, "recorded_seconds": 0.0},
+    }
+    for entry in timeline:
+        disposition = entry.get("disposition")
+        if entry.get("kind") != "lane" or disposition not in totals:
+            continue
+        bucket = totals[str(disposition)]
+        bucket["lanes"] += 1
+        bucket["elapsed_seconds"] += float(entry.get("elapsed_seconds", 0.0))
+        bucket["recorded_seconds"] += float(entry.get("recorded_seconds", 0.0))
+    return totals
+
+
 def compute_report(
     snapshot: Mapping[str, object],
     events: list[dict[str, object]],
@@ -255,7 +306,8 @@ def compute_report(
                 elapsed = _seconds(start[0], at)
                 timeline.append({
                     "type": "span", "kind": "lane", "identity": lane_id,
-                    "outcome": "success", "started_at": start[1], "ended_at": at_text,
+                    "outcome": "success", "disposition": "dropped",
+                    "started_at": start[1], "ended_at": at_text,
                     "elapsed_seconds": elapsed,
                     "recorded_seconds": _recorded_seconds(start[0], at, pauses),
                 })
@@ -280,7 +332,8 @@ def compute_report(
                         elapsed = _seconds(start[0], at)
                         timeline.append({
                             "type": "span", "kind": "lane", "identity": lane_id,
-                            "outcome": "success", "started_at": start[1], "ended_at": at_text,
+                            "outcome": "success", "disposition": "collected",
+                            "started_at": start[1], "ended_at": at_text,
                             "elapsed_seconds": elapsed,
                             "recorded_seconds": _recorded_seconds(start[0], at, pauses),
                         })
@@ -386,6 +439,7 @@ def compute_report(
 
     report: dict[str, Any] = {
         "report_version": 1,
+        "lane_durations": _lane_durations(timeline),
         "task_id": snapshot["task_id"],
         "generated_at": now.isoformat(),
         "warnings": list(snapshot.get("warnings", [])),

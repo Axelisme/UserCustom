@@ -5,6 +5,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from tests._orchestrate_version import SOURCE_SKILL_VERSION
 from tests._orchestrate_cli_support import (
     OrchestrateCliRepositoryTestCase,
     VERIFIED_SKILL,
@@ -482,9 +483,12 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
         event = json.loads(telemetry_lines[0])
         self.assertEqual(
             set(event),
-            {"event_version", "at", "task_id", "operation", "outcome"},
+            {"event_version", "at", "task_id", "operation", "outcome", "orchestrate_version", "repo_pin"},
         )
         self.assertEqual(event["event_version"], 1)
+        self.assertEqual(event["orchestrate_version"], SOURCE_SKILL_VERSION)
+        # This repo fixture carries no pin, and the field says so rather than being absent.
+        self.assertIsNone(event["repo_pin"])
         self.assertEqual(event["task_id"], self.task_id)
         self.assertEqual(event["operation"], "integration-create")
         self.assertEqual(event["outcome"], "success")
@@ -1533,7 +1537,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
         self.assertEqual(len(lines), 1)
         self.assertEqual(
             set(json.loads(lines[0])),
-            {"event_version", "at", "task_id", "operation", "outcome"},
+            {"event_version", "at", "task_id", "operation", "outcome", "orchestrate_version", "repo_pin"},
         )
 
     def test_invalid_slug_refuses_with_exact_error_and_zero_mutation(self) -> None:

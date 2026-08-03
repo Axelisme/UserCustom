@@ -40,14 +40,27 @@ When Root chooses to transition:
 
 3. **Preflight.** Call `handoff_context_status`. Unless it reports an available grant for the exact
    session, leave the current task's `HANDOFF.md` unchanged and remain in the current epoch.
-4. **Seed.** Overwrite that `HANDOFF.md` with only what later work needs: the inspected clean commit
-   SHA, durable artifact pointers, the next ticket or coherent ticket group, the exact next action,
-   and unresolved blockers.
+4. **Seed.** Overwrite that `HANDOFF.md` with exactly this, and nothing else:
+
+   ```
+   task: <task-id>
+   run:
+     plan.py locate <task-id>
+     orchestrate.py status --task-id <task-id>
+     backlog.py list --status inbox
+   why:  <one line: why the handoff>
+   open: <one line: the unresolved question left to the next reader>
+   ```
+
+   List all three commands; "run the locating commands" is not a substitute. A SHA, a tree, a ref
+   name or a user quote must not appear — this file is overwritten between epochs, and a reader
+   arriving mid-window must find missing information rather than confident stale instructions.
+   Quotes live in the record's `Standing orders`, the one place with a retirement mechanism.
 5. **Transition.** Call `handoff_context` with that file as the old epoch's final tool action. Its
    authorization revalidation is authoritative. On `scheduled`, end old-context work.
 
-After transition, reread the active skill, frozen spec, admission standard, and complete task record
-before repeating the required Git and runtime checks.
+After transition, run `plan.py locate` and read what it names, then reread the active skill, frozen
+spec and admission standard before repeating the required Git and runtime checks.
 
 ## Recovery
 

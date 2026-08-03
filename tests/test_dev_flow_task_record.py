@@ -6,7 +6,6 @@ import re
 import subprocess
 import sys
 import tempfile
-import time
 import unittest
 from pathlib import Path
 
@@ -32,12 +31,20 @@ def record(root: Path, task_id: str = "demo") -> Path:
     return root / ".agent_state" / "plans" / task_id
 
 
-def generated_projection(index: Path) -> str:
-    text = index.read_text(encoding="utf-8")
-    start = "<!-- task-record:files:start -->"
-    end = "<!-- task-record:files:end -->"
-    start_index = text.index(start) + len(start)
-    return text[start_index : text.index(end, start_index)].strip("\r\n")
+START = "<!-- task-record:files:start -->"
+END = "<!-- task-record:files:end -->"
+
+
+def listed_files(root: Path, task_id: str = "demo") -> str:
+    """The record inventory as `locate` derives it, which is now the only place it exists."""
+    done = subprocess.run(
+        [sys.executable, str(SCRIPT), "locate", task_id],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return "\n".join(json.loads(done.stdout)["files"])
 
 
 def ticket_text(ticket_id: str, status: str, disposition: str | None = None, depends_on: str = "none") -> str:
@@ -108,12 +115,12 @@ class TaskRecordTests(unittest.TestCase):
         done = run_plan(Path(tempfile.gettempdir()), "--help")
         self.assertEqual(done.returncode, 0, done.stderr)
         command_line = next(line for line in done.stdout.splitlines() if "{create," in line)
-        for command in ("create", "refresh", "archive", "resume"):
+        for command in ("create", "refresh", "archive", "locate"):
             self.assertIn(command, command_line)
-        for retired in ("ticket-create", "check", "init", "status", "show", "set", "phase", "log", "checkpoint", "migrate", "validate"):
+        for retired in ("resume", "ticket-create", "check", "init", "status", "show", "set", "phase", "log", "checkpoint", "migrate", "validate"):
             self.assertNotIn(retired, command_line)
 
-    def test_create_and_refresh_project_the_complete_file_tree(self) -> None:
+    def test_create_and_refresh_leave_no_generated_projection_behind(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             created = self.assert_ok(run_plan(root, "create", "demo", "--goal", "Ship one durable record."), "create")
@@ -124,7 +131,7 @@ class TaskRecordTests(unittest.TestCase):
             task = record(root)
             index = task / "INDEX.md"
             self.assertIn("| record_version | 3 |", index.read_text(encoding="utf-8"))
-            self.assertIn("<!-- task-record:files:start -->\nINDEX.md\ntickets/\n<!-- task-record:files:end -->", index.read_text(encoding="utf-8"))
+            self.assertNotIn(START, index.read_text(encoding="utf-8"))
             (task / "decisions.md").write_text("arbitrary decision content\n", encoding="utf-8")
             (task / "tickets" / "T001-any-name.md").write_text(
                 ticket_text("T001-any-name", "open") + "unparsed prose after the header\n",
@@ -139,16 +146,17 @@ class TaskRecordTests(unittest.TestCase):
             self.assertIsNone(refreshed["stale"])
             after = index.read_text(encoding="utf-8")
             self.assertEqual(goal_before, after.split("## Goal")[1].split("## Current")[0])
-            self.assertIn(
+            self.assertNotIn(START, after)
+            self.assertEqual(
+                listed_files(root),
                 "INDEX.md\ndecisions.md\nevidence/\n  raw.bin\ntickets/\n  T001-any-name.md",
-                after,
             )
             # Refresh always re-stamps, so a second call still exits clean even though the stamp
             # itself advances (it is not byte-for-byte idempotent, by design: see (b) staleness).
             second = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
             self.assertIsNone(second["stale"])
 
-    def test_refresh_bounds_large_file_tree_by_depth_and_direct_file_count(self) -> None:
+    def test_locate_bounds_large_file_tree_by_depth_and_direct_file_count(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
@@ -174,9 +182,8 @@ class TaskRecordTests(unittest.TestCase):
             deeper.mkdir()
             (deeper / "deep-b.md").write_text("deeper\n", encoding="utf-8")
 
-            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
             self.assertEqual(
-                generated_projection(task / "INDEX.md"),
+                listed_files(root),
                 "\n".join(
                     [
                         "INDEX.md",
@@ -211,7 +218,7 @@ class TaskRecordTests(unittest.TestCase):
                 ),
             )
 
-    def test_refresh_omits_zero_file_metadata_for_level_three_directories(self) -> None:
+    def test_locate_omits_zero_file_metadata_for_level_three_directories(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
@@ -223,9 +230,8 @@ class TaskRecordTests(unittest.TestCase):
             empty_subtree.mkdir(parents=True)
             (empty_subtree / "child").mkdir()
 
-            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
             self.assertEqual(
-                generated_projection(task / "INDEX.md"),
+                listed_files(root),
                 "\n".join(
                     [
                         "INDEX.md",
@@ -251,9 +257,13 @@ class TaskRecordTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
-            self.assertIn("INDEX.md\ntickets/", index.read_text(encoding="utf-8"))
+            after = index.read_text(encoding="utf-8")
+            self.assertNotIn(START, after)
+            self.assertNotIn("stale", after)
+            self.assertIn("arbitrary prose", after)
+            self.assertIn("not a record schema", after)
 
-    def test_refresh_preserves_crlf_outside_its_generated_block(self) -> None:
+    def test_refresh_removes_the_generated_block_preserving_crlf_around_it(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
@@ -266,11 +276,10 @@ class TaskRecordTests(unittest.TestCase):
             index.write_bytes(original)
             self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
             updated = index.read_bytes()
-            start = b"<!-- task-record:files:start -->"
-            end = b"<!-- task-record:files:end -->"
-            self.assertEqual(original.split(start)[0], updated.split(start)[0])
-            self.assertEqual(original.split(end)[1], updated.split(end)[1])
-            self.assertIn(b"INDEX.md\r\ntickets/", updated)
+            self.assertEqual(
+                updated,
+                b"outside before\r\n| record_version | 2 |\r\noutside after\r\n",
+            )
 
     def test_refresh_checks_version_before_markers_and_never_migrates(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -298,8 +307,9 @@ class TaskRecordTests(unittest.TestCase):
             root = Path(temporary)
             self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
             index = record(root) / "INDEX.md"
+            index.write_text("| record_version | 2 |\n", encoding="utf-8")
+            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
             for text in (
-                "| record_version | 2 |\n",
                 "| record_version | 2 |\n<!-- task-record:files:end --><!-- task-record:files:start -->",
                 "| record_version | 2 |\n<!-- task-record:files:start --><!-- task-record:files:start --><!-- task-record:files:end -->",
             ):
@@ -320,11 +330,11 @@ class TaskRecordTests(unittest.TestCase):
             self.assert_ok(run_plan(root, "archive", "Demo"), "archive", version=None)
             collision = self.assert_refusal(run_plan(root, "create", "Demo", "--goal", "g"), "create", "record_exists")
             self.assertEqual(collision["error"].get("paths"), [".agent_state/archives/Demo"])
-            self.assert_refusal(run_plan(root, "resume", "missing"), "resume", "record_missing")
+            self.assert_refusal(run_plan(root, "locate", "missing"), "locate", "record_missing")
             self.assert_ok(run_plan(root, "create", "carriage", "--goal", "first\rsecond"), "create")
             self.assertIn(b"first\rsecond", (record(root, "carriage") / "INDEX.md").read_bytes())
 
-    def test_archive_and_resume_preserve_legacy_and_v1_records_without_version_checks(self) -> None:
+    def test_archive_and_undo_preserve_legacy_and_v1_records_without_version_checks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             for task_id, index_text, expected_version in (
@@ -339,7 +349,9 @@ class TaskRecordTests(unittest.TestCase):
                     self.assert_ok(run_plan(root, "archive", task_id), "archive", version=expected_version)
                     archived = root / ".agent_state" / "archives" / task_id
                     self.assertEqual(snapshot(archived), before)
-                    self.assert_ok(run_plan(root, "resume", task_id), "resume", version=expected_version)
+                    self.assert_ok(
+                        run_plan(root, "archive", task_id, "--undo"), "archive", version=None
+                    )
                     self.assertEqual(snapshot(task), before)
 
     def test_move_collisions_report_the_existing_destination(self) -> None:
@@ -352,12 +364,14 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(refused["error"].get("paths"), [".agent_state/archives/ARCHIVE-source"])
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "resume-source", "--goal", "g"), "create")
-            self.assert_ok(run_plan(root, "archive", "resume-source"), "archive", version=None)
-            destination = root / ".agent_state" / "plans" / "RESUME-source"
+            self.assert_ok(run_plan(root, "create", "undo-source", "--goal", "g"), "create")
+            self.assert_ok(run_plan(root, "archive", "undo-source"), "archive", version=None)
+            destination = root / ".agent_state" / "plans" / "UNDO-source"
             destination.mkdir(parents=True)
-            refused = self.assert_refusal(run_plan(root, "resume", "resume-source"), "resume", "record_exists")
-            self.assertEqual(refused["error"].get("paths"), [".agent_state/plans/RESUME-source"])
+            refused = self.assert_refusal(
+                run_plan(root, "archive", "undo-source", "--undo"), "archive", "record_exists"
+            )
+            self.assertEqual(refused["error"].get("paths"), [".agent_state/plans/UNDO-source"])
 
     def test_unsafe_record_trees_fail_closed_without_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -441,7 +455,8 @@ class TaskRecordTests(unittest.TestCase):
             )
             refreshed = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
             self.assertNotIn("stale", refreshed)
-            self.assertIn("T001-legacy.md", index.read_text(encoding="utf-8"))
+            self.assertNotIn(START, index.read_text(encoding="utf-8"))
+            self.assertIn("T001-legacy.md", listed_files(root))
 
     def test_size_reports_sections_and_ignores_the_generated_block(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -532,7 +547,7 @@ class TaskRecordTests(unittest.TestCase):
             }
             guidance = {
                 "Goal": ("user", "goal", "do not"),
-                "Current": ("verified", "authority", "do not"),
+                "Current": ("judgement", "receipts", "sha", "not "),
                 "Next": ("next", "owner", "do not"),
                 "Envelope": ("minimum", "out-of-envelope", "do not"),
                 "Standing orders": (
@@ -548,9 +563,7 @@ class TaskRecordTests(unittest.TestCase):
             comments: list[str] = []
             for heading, (following, initial_fact) in sections.items():
                 start = created.index(f"## {heading}\n") + len(f"## {heading}\n")
-                end = created.index(f"\n## {following}", start) if following else created.index(
-                    "\n<!-- task-record:files:start -->", start
-                )
+                end = created.index(f"\n## {following}", start) if following else len(created)
                 body = created[start:end]
                 matches = re.findall(r"<!--.*?-->", body, flags=re.DOTALL)
                 self.assertEqual(len(matches), 1, heading)
@@ -597,6 +610,89 @@ class TaskRecordTests(unittest.TestCase):
             )
             self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
             self.assertNotIn("task-record:refreshed-at", index.read_text(encoding="utf-8"))
+
+    def test_locate_orients_without_mutating_and_names_the_other_two_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            task = record(root)
+            (task / "tickets" / "T001-first.md").write_text(ticket_text("T001-first", "active"), encoding="utf-8")
+            (task / "tickets" / "T002-next.md").write_text(ticket_text("T002-next", "open", depends_on="T001-first"), encoding="utf-8")
+            (task / "tickets" / "T003-done.md").write_text(ticket_text("T003-done", "closed", "resolved"), encoding="utf-8")
+            before = snapshot(task)
+
+            body = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+
+            self.assertEqual(snapshot(task), before, "locate must not write")
+            self.assertEqual(body["read"], [".agent_state/plans/demo/INDEX.md"])
+            self.assertEqual(
+                body["tickets"],
+                {
+                    "active": [".agent_state/plans/demo/tickets/T001-first.md"],
+                    "open": [".agent_state/plans/demo/tickets/T002-next.md"],
+                    "closed": [".agent_state/plans/demo/tickets/T003-done.md"],
+                },
+            )
+            # The other two skills answer for themselves; locate points and stops there.
+            self.assertEqual(
+                body["then_run"],
+                ["orchestrate.py status --task-id demo", "backlog.py list --status inbox"],
+            )
+            self.assertIn("size", body)
+            self.assertIn("lint", body)
+
+    def test_lint_names_frozen_state_in_current_and_next_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            index = record(root) / "INDEX.md"
+
+            narrative = index.read_text(encoding="utf-8").replace(
+                "Task created.",
+                "Took the adapter route because the direct one needs a decision we have not made; "
+                "skipped the rollout checklist, it belongs to the next slice. Accepted 2026-08-03.",
+            )
+            index.write_text(narrative, encoding="utf-8")
+            clean = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
+            self.assertEqual(clean["lint"], [], "prose, a year and ordinary English must not match")
+
+            index.write_text(
+                narrative.replace("Not yet recorded.", "Frozen at ea508fc by the user.").replace(
+                    "Write or select the first ticket.", "Review 9db09f9 then land it."
+                ),
+                encoding="utf-8",
+            )
+            findings = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")["lint"]
+            # `Next` is scanned; `Envelope` is not — a frozen pointer is legitimate content there.
+            self.assertEqual(findings, [{"section": "Next", "rule": "hex", "match": "9db09f9"}])
+
+            index.write_text(
+                narrative.replace(
+                    "Accepted 2026-08-03.", "Accepted at ea508fc, tree 5a83f10, 402 nodes."
+                ),
+                encoding="utf-8",
+            )
+            findings = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")["lint"]
+            self.assertEqual(
+                findings,
+                [
+                    {"section": "Current", "rule": "hex", "match": "ea508fc"},
+                    {"section": "Current", "rule": "hex", "match": "5a83f10"},
+                ],
+                "the count is a known miss: only the hex rule shipped",
+            )
+
+    def test_refresh_reports_lint_without_refusing_or_editing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            index = record(root) / "INDEX.md"
+            index.write_text(
+                index.read_text(encoding="utf-8").replace("Task created.", "Landed ea508fc."),
+                encoding="utf-8",
+            )
+            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
+            self.assertIn("Landed ea508fc.", index.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

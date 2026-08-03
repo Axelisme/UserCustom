@@ -28,6 +28,14 @@ REFRESHED_MARKER = re.compile(r"<!-- task-record:refreshed-at:([^>\r\n]*) -->")
 AUTHORED_BUDGET = 6000
 SECTION_HEADING = re.compile(r"^## +(.+?)\s*$", re.MULTILINE)
 STANDING_ORDERS_HEADING = "Standing orders"
+HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+
+# Sections that carry a live judgement and nothing else. `Standing orders` and `Envelope` are
+# deliberately not scanned: a verbatim quote and a frozen date are legitimate content there.
+LINTED_SECTIONS = ("Current", "Next")
+# A commit-ish token. Only this rule is shipped: it measured zero false positives on real records,
+# while counts and ref names did not converge (a bare year and ordinary English words match).
+FROZEN_STATE_RULES = (("hex", re.compile(r"\b[0-9a-f]{7,40}\b")),)
 STANDING_ORDER_ENTRY = re.compile(r"^- +\*\*", re.MULTILINE)
 TICKET_STATUSES = frozenset({"open", "active", "closed"})
 # Required exactly when status is `closed`; distinguishes a resolved ticket from one ruled out of
@@ -250,7 +258,7 @@ def authored_region(text: str) -> str:
 def record_size(text: str) -> dict[str, object]:
     """Measure the record against its budget. Reported, never enforced.
 
-    Characters are a proxy for the reread cost every resume pays; the sections are reported so the
+    Characters are a proxy for the reread cost every re-orientation pays; the sections are reported so the
     reader can see where the weight sits, and the standing-order count because that list grows by
     append. This function makes no judgement about what should move.
     """
@@ -274,12 +282,44 @@ def record_size(text: str) -> dict[str, object]:
     }
 
 
+def sections(text: str) -> dict[str, str]:
+    result: dict[str, str] = {}
+    headings = list(SECTION_HEADING.finditer(text))
+    for position, heading in enumerate(headings):
+        end = headings[position + 1].start() if position + 1 < len(headings) else len(text)
+        result[heading.group(1)] = text[heading.end() : end]
+    return result
+
+
+def lint_frozen_state(text: str) -> list[dict[str, str]]:
+    """Name state written where only a live judgement belongs.
+
+    `Current` and `Next` are reread on every re-orientation and are the two sections that go silently
+    wrong: a SHA copied into them still reads as correct long after it stops being true. The
+    receipts belong to the gate artifact that produced them, so this reports the token and the
+    section and stops there — it never edits, and `refresh` never refuses on it.
+    """
+    findings: list[dict[str, str]] = []
+    body = sections(authored_region(text))
+    for name in LINTED_SECTIONS:
+        content = HTML_COMMENT.sub("", body.get(name, ""))
+        for rule, pattern in FROZEN_STATE_RULES:
+            for match in dict.fromkeys(pattern.findall(content)):
+                findings.append({"section": name, "rule": rule, "match": match})
+    return findings
+
+
 def set_refreshed_marker(text: str, value: str, separator: str) -> str:
     marker = f"<!-- task-record:refreshed-at:{value} -->"
     if REFRESHED_MARKER.search(text):
         return REFRESHED_MARKER.sub(lambda _match: marker, text, count=1)
-    index = text.index(START)
-    return text[:index] + marker + separator + text[index:]
+    if START in text:
+        index = text.index(START)
+        return text[:index] + marker + separator + text[index:]
+    # No generated block to sit above: the stamp still has to land, because staleness is measured
+    # against it and a record that never stamps can never report itself stale.
+    tail = "" if text.endswith(separator) else separator
+    return text + tail + marker + separator
 
 
 def files_projection(directory: Path) -> str:
@@ -338,11 +378,12 @@ def load_for_refresh(root: Path, task_id: str) -> RefreshRecord:
             (relative(root, index),),
             version,
         )
-    if text.count(START) != 1 or text.count(END) != 1:
+    # v5 records carry no generated files block; `locate` lists the directory when a reader needs
+    # it. A record that still has one is kept in step rather than rewritten out from under its
+    # reader, so zero markers and one matched pair are both well formed — only a broken pair is not.
+    if text.count(START) != text.count(END) or text.count(START) > 1:
         raise Refusal("malformed_index", "missing or repeated files marker", (relative(root, index),), version)
-    start = text.index(START)
-    end = text.index(END)
-    if start > end:
+    if text.count(START) == 1 and text.index(START) > text.index(END):
         raise Refusal("malformed_index", "files markers are out of order", (relative(root, index),), version)
     return RefreshRecord(directory, index, text, version)
 
@@ -412,11 +453,17 @@ def command_refresh(root: Path, arguments: argparse.Namespace) -> None:
         previous_stamp = single_row_value(record.text, REFRESHED_MARKER)
         stale = staleness(root, record.directory, previous_stamp)
 
-    start = record.text.index(START) + len(START)
-    end = record.text.index(END, start)
-    separator = "\r\n" if record.text[start:].startswith("\r\n") else "\n"
-    projection = files_projection(record.directory).replace("\n", separator)
-    updated = record.text[:start] + separator + projection + separator + record.text[end:]
+    updated = record.text
+    separator = "\r\n" if "\r\n" in record.text else "\n"
+    if START in record.text:
+        # v5 drops the generated block rather than maintaining it. A projection in the file is one
+        # more thing that can be read after it stops being true; `locate` derives the same listing
+        # on demand. Removal happens here so existing records migrate the first time they refresh.
+        start = record.text.index(START)
+        end = record.text.index(END, start) + len(END)
+        head = record.text[:start].rstrip("\r\n")
+        tail = record.text[end:].lstrip("\r\n")
+        updated = head + separator + tail
 
     if record.version == VALIDATED_VERSION:
         now = datetime.now(timezone.utc).isoformat()
@@ -429,6 +476,7 @@ def command_refresh(root: Path, arguments: argparse.Namespace) -> None:
     if record.version == VALIDATED_VERSION:
         extra["stale"] = stale
         extra["size"] = record_size(updated)
+        extra["lint"] = lint_frozen_state(updated)
     emit(
         "refresh",
         ok=True,
@@ -439,10 +487,50 @@ def command_refresh(root: Path, arguments: argparse.Namespace) -> None:
     )
 
 
+def ticket_frontier(root: Path, directory: Path) -> dict[str, list[str]]:
+    """Read ticket state straight from the headers, which are the only authority for it."""
+    tickets_directory = directory / "tickets"
+    grouped: dict[str, list[str]] = {"active": [], "open": [], "closed": []}
+    if tickets_directory.is_dir():
+        for path in sorted(tickets_directory.glob("*.md")):
+            status = single_row_value(path.read_text(encoding="utf-8"), TICKET_STATUS_ROW)
+            grouped.setdefault(status or "unreadable", []).append(relative(root, path))
+    return grouped
+
+
+def command_locate(root: Path, arguments: argparse.Namespace) -> None:
+    """Locate the reader. Derived at read time, dev-flow's own data only.
+
+    This says where to look, never what happened: everything here is recomputed from the record on
+    each call, so there is nothing that can go quietly out of date. The two commands below are
+    printed as literal strings rather than run — orchestrate and candidate-backlog own their own
+    answers, and a repo without them should be missing a section, not broken.
+    """
+    validate_task_id(arguments.task_id)
+    record = load_for_refresh(root, arguments.task_id)
+    body: dict[str, object] = {
+        "task_id": arguments.task_id,
+        "read": [relative(root, record.index)],
+        "files": files_projection(record.directory).splitlines(),
+        "tickets": ticket_frontier(root, record.directory),
+    }
+    if record.version == VALIDATED_VERSION:
+        previous_stamp = single_row_value(record.text, REFRESHED_MARKER)
+        body["stale"] = staleness(root, record.directory, previous_stamp)
+        body["size"] = record_size(record.text)
+        body["lint"] = lint_frozen_state(record.text)
+    body["then_run"] = [
+        f"orchestrate.py status --task-id {arguments.task_id}",
+        "backlog.py list --status inbox",
+    ]
+    emit("locate", ok=True, version=record.version, **body)
+
+
 def command_move(root: Path, arguments: argparse.Namespace, operation: str) -> None:
     validate_task_id(arguments.task_id)
+    undo = bool(getattr(arguments, "undo", False))
     source_location, destination_location = (
-        ("plans", "archives") if operation == "archive" else ("archives", "plans")
+        ("archives", "plans") if undo else ("plans", "archives")
     )
     source = state_dir(root, source_location, arguments.task_id)
     destination = state_dir(root, destination_location, arguments.task_id)
@@ -469,7 +557,14 @@ def command_move(root: Path, arguments: argparse.Namespace, operation: str) -> N
         os.rename(source, destination)
     except OSError as exc:
         raise Refusal("cross_device", f"atomic directory rename refused: {exc}") from exc
-    emit(operation, ok=True, version=None, task_id=arguments.task_id, paths=[relative(root, destination)])
+    emit(
+        operation,
+        ok=True,
+        version=None,
+        task_id=arguments.task_id,
+        undo=undo,
+        paths=[relative(root, destination)],
+    )
 
 
 def parser() -> argparse.ArgumentParser:
@@ -478,9 +573,15 @@ def parser() -> argparse.ArgumentParser:
     create = commands.add_parser("create")
     create.add_argument("task_id")
     create.add_argument("--goal", required=True)
-    for name in ("refresh", "archive", "resume"):
+    for name in ("refresh", "archive", "locate"):
         command = commands.add_parser(name)
         command.add_argument("task_id")
+        if name == "archive":
+            command.add_argument(
+                "--undo",
+                action="store_true",
+                help="move the record back from archives to plans",
+            )
     return result
 
 
@@ -492,6 +593,8 @@ def main() -> None:
             command_create(root, arguments)
         elif arguments.operation == "refresh":
             command_refresh(root, arguments)
+        elif arguments.operation == "locate":
+            command_locate(root, arguments)
         else:
             command_move(root, arguments, arguments.operation)
     except Refusal as refusal:

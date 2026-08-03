@@ -10,7 +10,7 @@
 {{GOAL}}
 
 ## Current
-<!-- Update with verified current facts, progress, blockers, and authority or evidence. Do not record guesses, plans, or unissued decisions. Keep what changes the next action; evidence that a past gate passed belongs to that gate's artifact. -->
+<!-- Write only the judgement: why this route was taken, what was skipped and why. Not the receipts — a SHA, tree, ReviewGate id or count belongs to the artifact of the gate that produced it, and `refresh` reports one written here. Not guesses, plans, or unissued decisions. -->
 Task created.
 
 ## Next
@@ -34,8 +34,3 @@ Not yet recorded.
        Ratifies: <path#anchor of the approved text>
        Lapses: <condition> -->
 None.
-
-<!-- task-record:files:start -->
-INDEX.md
-tickets/
-<!-- task-record:files:end -->

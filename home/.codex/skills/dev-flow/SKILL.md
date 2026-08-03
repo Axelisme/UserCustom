@@ -1,7 +1,7 @@
 ---
 name: dev-flow
 description: Durable task record for work that must survive compaction and handoff. Use when starting multi-session work, resuming or archiving an existing task record, asking what a task's current state is, or when another skill needs the shared plan-directory record. Not for single-session edits that need no durable record.
-skill_version: 4
+skill_version: 5
 ---
 
 # Dev Flow
@@ -68,21 +68,26 @@ its grants and exclusions stay there.
 - Durable work uses the workflow-neutral task record under `.agent_state/plans/<task-id>/`, driven
   by `scripts/plan.py` **inside this skill's own directory** — the same directory as this file, not
   a `scripts/` directory in the repository being worked on.
-- Its public Interface is exactly `create | archive | resume | refresh`.
+- Its public Interface is exactly `create | archive | locate | refresh`. `archive --undo` moves an
+  archived record back; `locate` mutates nothing and orients the reader. Neither name is inherited:
+  `locate` replaced a `resume` that no longer resumed anything, so a stale caller fails loudly
+  instead of silently receiving a different answer.
 - `INDEX.md` holds `Goal`, `Current`, `Next`, `Envelope`, and `Standing orders`.
 - `Current` says where the conditional route stopped or why a stage was skipped, when useful.
-- Its generated files block is a projection of the record directory.
 - `tickets/*.md` hold ordinary generic work; their container is a three-field header, a
   `Resolve by` action, and `Outcome`/`Current`.
 - Decision-making work keeps its decisions in the producer-owned `decisions.md` artifact, not in
   the generic container.
 
-**Never create a second ticket store.** No phase file, no progress file, no acceptance queue, no
-parallel task list. The specific workaround to refuse is the harness's own `TaskCreate` and
-`TaskUpdate` tools: they are a non-authoritative session projection, their state does not survive
-compaction, and their vocabulary — `pending`, `in_progress`, `completed` — does not enter a ticket.
-Mirroring the record into them is still a second store, and the copy that gets believed is whichever
-one the next agent reads first.
+**Never create a second ticket store.** No phase file, no progress file, no acceptance queue that
+**replaces** `.agent_state/plans/<task-id>/`. The failure is two stores competing to be believed:
+when they disagree, the copy that wins is whichever one the next agent reads first, and nothing
+marks which was authoritative.
+
+A live progress display is not that. The record is the authority and the durable one; a session's
+own task list is a projection of the moment, useful while the session lasts and gone with it. They
+coexist. What must not happen is a ticket taking its state *from* the projection — ticket status is
+the closed enum in the header, decided in the record.
 
 Wayfinder, to-spec and to-tickets are independent producers that publish wherever the repo tracks
 work; they know nothing about this record. When their output becomes the durable work, **dev-flow
@@ -95,17 +100,25 @@ generic ticket work too.
 - The frontier, the largest ticket ID, and the complete dependency graph are the ticket headers in
   `tickets/*.md`.
 - Superseded decisions are the `Status` cells in `decisions.md`.
-- The complete record inventory is the generated files block after `refresh`.
+- The complete record inventory is `locate`, which lists the directory when asked and stores
+  nothing.
 
-`refresh` validates ticket status and reports a record that has gone stale. It does not validate the
-dependency graph or the frontier these queries reveal — a record can still contradict them, and the
-reader carries the cost of noticing.
+`refresh` validates ticket status, reports a record that has gone stale, and names frozen state
+written into `Current` or `Next`. It does not validate the dependency graph or the frontier these
+queries reveal — a record can still contradict them, and the reader carries the cost of noticing.
 
 ## Keeping INDEX.md small
 
-`INDEX.md` is reread whole on every resume, so a long one is a cost paid forever and a dense one is
-skimmed exactly where it matters. It holds what changes the next action. Everything else already has
-a home, so compaction is a **move**, never a rewrite:
+`INDEX.md` is reread whole on every re-orientation, so a long one is a cost paid forever and a dense one is
+skimmed exactly where it matters. It holds what changes the next action.
+
+The size problem is downstream of a state problem. **Frozen state has no home here at all** — a SHA,
+a tree, a ReviewGate id, a node count. Not because it is long, but because it is the one kind of
+content that goes wrong silently: it stays readable and confident long after it stops being true,
+and the next session acts on it. `refresh` names such tokens in `Current` and `Next`; move them to
+the artifact of the gate that produced them rather than rewording them.
+
+Everything else already has a home too, so compaction is a **move**, never a rewrite:
 
 - The scope of a standing order — what it authorizes, what it excludes, what it supersedes — is the
   agent's own conclusion, so it belongs in `decisions.md` where a later decision can supersede it.
@@ -113,8 +126,8 @@ a home, so compaction is a **move**, never a rewrite:
 - Lapsed orders move to `standing-orders-lapsed.md`, whole and verbatim.
 - Evidence that a past gate passed — counts, SHAs, baselines — belongs to that gate's artifact. The
   record keeps the frontier, not the receipts.
-- The artifact inventory is the generated files block and `artifacts/README.md`. A hand-kept list
-  beside them is a second copy that drifts.
+- The artifact inventory is `locate` and `artifacts/README.md`. A hand-kept list beside them is a
+  second copy that drifts.
 
 `refresh` measures the authored region against a budget and reports it; it never refuses on size,
 because the one moment the record must open is the moment a compacted session needs it. Compact at
@@ -140,6 +153,7 @@ read out of Git state as absent, not as a second opinion.
 
 `archive` is a neutral directory move and never implies completion, but use it only after
 implementation completes or the task is explicitly abandoned; a handoff alone does not qualify.
-Final close-out follows S5. After compaction, reread this skill, the frozen spec, the admission
-standard, and the task record — including its `Envelope` and `Standing orders`, which carry what the
-user froze and granted and are the first things a compacted session loses.
+Final close-out follows S5. After compaction, run `locate` and read what it names — it derives the
+record's health, its frontier and where to look, all at read time. Then read this skill and the
+`Envelope` and `Standing orders` it points you at: those carry what the user froze and granted, and
+are the first things a compacted session loses.

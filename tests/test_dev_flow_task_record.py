@@ -443,6 +443,53 @@ class TaskRecordTests(unittest.TestCase):
             self.assertNotIn("stale", refreshed)
             self.assertIn("T001-legacy.md", index.read_text(encoding="utf-8"))
 
+    def test_size_reports_sections_and_ignores_the_generated_block(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            task = record(root)
+            index = task / "INDEX.md"
+            index.write_text(
+                index.read_text(encoding="utf-8").replace(
+                    "None.\n", "- **2026-01-01 — User:** 「a」\n- **2026-01-02 — User:** 「b」\n"
+                ),
+                encoding="utf-8",
+            )
+            for name in range(40):
+                (task / "tickets" / f"T{name:03d}-filler.md").write_text(
+                    ticket_text(f"T{name:03d}-filler", "open"), encoding="utf-8"
+                )
+            size = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")["size"]
+            self.assertIsInstance(size, dict)
+            assert isinstance(size, dict)
+            self.assertEqual(size["standing_orders"], 2)
+            self.assertEqual(size["over_budget"], False)
+            sections = size["sections"]
+            assert isinstance(sections, dict)
+            self.assertEqual(
+                list(sections), ["Goal", "Current", "Next", "Envelope", "Standing orders"]
+            )
+            # The projected tree is machine-owned, so growing it must not consume the budget.
+            authored = size["authored_chars"]
+            assert isinstance(authored, int)
+            self.assertLess(authored, len(index.read_text(encoding="utf-8")))
+
+    def test_size_reports_over_budget_without_refusing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            index = record(root) / "INDEX.md"
+            index.write_text(
+                index.read_text(encoding="utf-8").replace("Task created.", "x" * 7000),
+                encoding="utf-8",
+            )
+            size = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")["size"]
+            assert isinstance(size, dict)
+            self.assertEqual(size["over_budget"], True)
+            sections = size["sections"]
+            assert isinstance(sections, dict)
+            self.assertGreater(sections["Current"], 7000)
+
     def test_staleness_is_reported_after_hand_edit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -488,7 +535,7 @@ class TaskRecordTests(unittest.TestCase):
                 "Current": ("verified", "authority", "do not"),
                 "Next": ("next", "owner", "do not"),
                 "Envelope": ("minimum", "out-of-envelope", "do not"),
-                "Standing orders": ("verbatim", "issued", "do not"),
+                "Standing orders": ("verbatim", "issued", "do not", "ratifi", "decisions.md", "lapse"),
             }
             comments: list[str] = []
             for heading, (following, initial_fact) in sections.items():

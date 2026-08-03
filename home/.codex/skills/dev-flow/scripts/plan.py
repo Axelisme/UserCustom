@@ -25,6 +25,10 @@ REFRESHED_MARKER = re.compile(r"<!-- task-record:refreshed-at:([^>\r\n]*) -->")
 # Ticket status is exactly this closed enum. It replaces harness Task-tool vocabulary
 # (`pending`, `in_progress`, `completed`, ...) which is a non-authoritative projection and must
 # never enter a ticket. See dev-flow/SKILL.md "Never create a second ticket store".
+AUTHORED_BUDGET = 6000
+SECTION_HEADING = re.compile(r"^## +(.+?)\s*$", re.MULTILINE)
+STANDING_ORDERS_HEADING = "Standing orders"
+STANDING_ORDER_ENTRY = re.compile(r"^- +\*\*", re.MULTILINE)
 TICKET_STATUSES = frozenset({"open", "active", "closed"})
 # Required exactly when status is `closed`; distinguishes a resolved ticket from one ruled out of
 # scope, superseded, or hard-stopped after its rework budget was exhausted.
@@ -233,6 +237,43 @@ def staleness(root: Path, directory: Path, previous_stamp: str | None) -> dict[s
     return {"stamped_at": previous_stamp, "newer_ticket_files": newer}
 
 
+def authored_region(text: str) -> str:
+    """Drop the machine-owned parts, which the agent is not free to trim."""
+    start = text.find(START)
+    if start != -1:
+        end = text.find(END, start)
+        tail = "" if end == -1 else text[end + len(END) :]
+        text = text[:start] + tail
+    return REFRESHED_MARKER.sub("", text)
+
+
+def record_size(text: str) -> dict[str, object]:
+    """Measure the record against its budget. Reported, never enforced.
+
+    Characters are a proxy for the reread cost every resume pays; the sections are reported so the
+    reader can see where the weight sits, and the standing-order count because that list grows by
+    append. This function makes no judgement about what should move.
+    """
+    authored = authored_region(text)
+    sections: dict[str, int] = {}
+    standing_orders: int | None = None
+    headings = list(SECTION_HEADING.finditer(authored))
+    for position, heading in enumerate(headings):
+        end = headings[position + 1].start() if position + 1 < len(headings) else len(authored)
+        body = authored[heading.start() : end]
+        name = heading.group(1)
+        sections[name] = len(body)
+        if name == STANDING_ORDERS_HEADING:
+            standing_orders = len(STANDING_ORDER_ENTRY.findall(body))
+    return {
+        "authored_chars": len(authored),
+        "budget": AUTHORED_BUDGET,
+        "over_budget": len(authored) > AUTHORED_BUDGET,
+        "sections": sections,
+        "standing_orders": standing_orders,
+    }
+
+
 def set_refreshed_marker(text: str, value: str, separator: str) -> str:
     marker = f"<!-- task-record:refreshed-at:{value} -->"
     if REFRESHED_MARKER.search(text):
@@ -387,6 +428,7 @@ def command_refresh(root: Path, arguments: argparse.Namespace) -> None:
     extra: dict[str, object] = {}
     if record.version == VALIDATED_VERSION:
         extra["stale"] = stale
+        extra["size"] = record_size(updated)
     emit(
         "refresh",
         ok=True,

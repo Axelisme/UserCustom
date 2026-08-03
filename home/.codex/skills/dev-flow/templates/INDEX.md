@@ -10,7 +10,7 @@
 {{GOAL}}
 
 ## Current
-<!-- Update with verified current facts, progress, blockers, and authority or evidence. Do not record guesses, plans, or unissued decisions. -->
+<!-- Update with verified current facts, progress, blockers, and authority or evidence. Do not record guesses, plans, or unissued decisions. Keep what changes the next action; evidence that a past gate passed belongs to that gate's artifact. -->
 Task created.
 
 ## Next
@@ -22,7 +22,16 @@ Write or select the first ticket.
 Not yet recorded.
 
 ## Standing orders
-<!-- Add only current-user instructions verbatim, with when issued and when they lapse. Do not paraphrase, fabricate, or grant authority the user did not give. -->
+<!-- In-force orders only. An entry is the verbatim quote, the date it was issued, an optional pointer, and a lapse condition — nothing else.
+     A ratification ("agreed", "option A") points at the durable text it approved, frozen as of the assent.
+     Scope and interpretation go to decisions.md; lapsed entries move verbatim to standing-orders-lapsed.md.
+     Do not paraphrase, do not merge overlapping orders, do not grant authority the user did not give.
+
+     - **YYYY-MM-DD — User:** 「<verbatim>」
+       Lapses: <the user's own condition, or explicit revocation / task archive>
+     - **YYYY-MM-DD — User:** 「<verbatim ratification>」
+       Ratifies: <path#anchor of the approved text>
+       Lapses: <condition> -->
 None.
 
 <!-- task-record:files:start -->

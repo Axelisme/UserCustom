@@ -113,13 +113,16 @@ after frequency, impact or a real resumed scenario makes it part of a current mi
 - A proposed third production correction is a scope event. Recut at S1 or report it; never dispatch
   `Machine rework: 3/2` and never add another counter store.
 
-Recutting resets that counter, because the recut Slice is a new ticket. The count that a recut must
-not reset is the one below.
+Recutting resets that counter, because the recut Slice is a new ticket. Nothing here survives that
+reset: a need re-cut five times has spent five admission and dispatch cycles, and no check in this
+standard fires on it. Whoever notices reads the lane history and notices it themselves.
 
 - **Active lane reminder.** Orchestrate reports a factual warning when a task's current active
   projected lane count reaches nine. Creation still succeeds; Root collects or drops unneeded
-  lanes. Collected, dropped, and historical telemetry do not count, and the count is not a durable
-  admission or closeability policy.
+  lanes. Collected, dropped, and historical telemetry do not count, so the warning measures
+  concurrent uncleared lanes and never sequential recut churn — a need re-cut serially holds one
+  active lane throughout and never reaches the threshold. It is not a durable admission or
+  closeability policy.
 
 Blocking is a closed enum: `spec_violation | data_loss | security |
 reproducible_behavior_failure` within the frozen envelope. Every blocker has `contract_basis`;

@@ -22,6 +22,30 @@ run id, completed evidence, and next action, then ends the turn. In goal-active 
 blocker is the background writer, Root reports the same concise progress and calls one `yield_goal`.
 Neither mode polls or forms a repeated wait loop.
 
+## Root context epochs
+
+A Context Epoch renews Pi Root's context; it does not continue a writer session or change admission,
+Contract, lane, persistence, or cleanup authority. At each ticket boundary:
+
+1. **Reconcile.** Bring the durable task record to the exact boundary required by the admission
+   standard, including its required refresh. Done when `Current`, `Next`, and the ticket frontier
+   agree.
+2. **Decide.** An epoch is expected to span roughly one to three tickets, not as a limit. Keep
+   related work in the current epoch while its context remains useful.
+
+When Root chooses to transition:
+
+3. **Preflight.** Call `handoff_context_status`. Unless it reports an available grant for the exact
+   session, leave the current task's `HANDOFF.md` unchanged and remain in the current epoch.
+4. **Seed.** Overwrite that `HANDOFF.md` with only what later work needs: the inspected clean commit
+   SHA, durable artifact pointers, the next ticket or coherent ticket group, the exact next action,
+   and unresolved blockers.
+5. **Transition.** Call `handoff_context` with that file as the old epoch's final tool action. Its
+   authorization revalidation is authoritative. On `scheduled`, end old-context work.
+
+After transition, reread the active skill, frozen spec, admission standard, and complete task record
+before repeating the required Git and runtime checks.
+
 ## Recovery
 
 Before every resume Root reruns `lane check` and `status`, then rebinds the exact lane SHA, cwd,

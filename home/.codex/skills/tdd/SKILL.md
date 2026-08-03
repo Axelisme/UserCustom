@@ -9,7 +9,7 @@ TDD is the red → green loop. This skill is the reference that makes that loop 
 
 When exploring the codebase, read the module README / domain glossary (`docs/glossary.md` or `CONTEXT.md`, whichever the repo uses) so test names and interface vocabulary match the project's domain language, and respect ADRs in the area you're touching.
 
-**Scope**: test-first pays off at logic seams — state machines, schemas, pure computation, wire contracts. At GUI or hardware edges where behavior is only observable through rendering or instruments, follow the repo's documented test conventions instead of forcing the loop.
+**Scope — where the loop applies.** Test-first earns its cost at logic seams: state machines, schemas, pure computation, wire contracts. A GUI or hardware edge is a boundary, not one of those seams — behaviour there is observable only through rendering or an instrument, and building that observation costs more than the bug it would have caught. **If the seam under test sits at one of those edges, the loop does not apply**: follow the repo's documented test conventions instead, and name the convention you followed. Declining the loop there is a scoping call, not a shortcut — forcing it is the worse failure, because the tests it produces still read as coverage while nobody keeps them.
 
 ## What a good test is
 
@@ -21,22 +21,9 @@ See [tests.md](tests.md) for examples and [mocking.md](mocking.md) for mocking g
 
 A **seam** is the public boundary you test at: the interface where you observe behavior without reaching inside. Tests live at seams, never against internals.
 
-**Test only at pre-agreed seams.** Before writing any test, write down the seams under test and confirm them. In an interactive session, confirm with the user ("What's the public interface, and which seams should we test?"). Inside an orchestrated task, the seams come from the frozen spec/contract — to-spec already confirmed them with the user; do not re-open them mid-implementation. A missing seam there is a contract gap to report (`Scope changes requested`), not a question to improvise. No test is written at an unconfirmed seam — agreeing seams up front is how testing effort lands on critical paths instead of every edge case.
+**Test only at pre-agreed seams.** Before writing any test, write down the seams under test and confirm them with the user. No test is written at an unconfirmed seam. You can't test everything — agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
 
-## Ownership in orchestrated work
-
-Root or the contract planner freezes the seams, acceptance examples, independent oracles,
-and dangerous failure modes. The implementer owns the permanent executable tests and works
-vertically through test → implementation cycles; do not create a parallel test-writer lane
-that collides on the same interface, fixture, or files. A reviewer contributes an independent
-adversarial matrix or temporary reproducer. When review finds missing behavior, the finding
-returns to the implementer, who first adds the failing permanent regression test and then the
-fix.
-
-A TDD cycle is smaller than an orchestration slice. One slice may contain several cycles and
-reports their compact red/green evidence only at its clean checkpoint, not after every test.
-Green behavior evidence never overrides an orchestrator's structural stop condition or
-mandatory critical review.
+Ask: "What's the public interface, and which seams should we test?"
 
 ## Anti-patterns
 
@@ -48,7 +35,4 @@ mandatory critical review.
 
 - **Red before green.** Write the failing test first, then only enough code to pass it. Don't anticipate future tests or add speculative features.
 - **One cycle at a time.** One seam, one test, one minimal implementation per cycle.
-- **Local cleanup after green.** The implementer may refactor implementation details while
-  the same interface behavior stays green. A change to the seam, ownership, contract, or
-  lifecycle is not local cleanup: stop and return it for design/review rather than hiding it
-  inside the TDD cycle.
+- **Refactoring is not part of the loop.** Green ends the cycle. **If you are about to reshape code that already passes — rename, extract, move, deduplicate — stop: that is review work**, and it belongs to `/code-review`. Folding it into the cycle is the failure this rule exists to prevent — the change lands as another passing green, so nothing afterwards distinguishes the behaviour you proved from the structure you altered on the way past.

@@ -61,8 +61,11 @@ compaction, and their vocabulary — `pending`, `in_progress`, `completed` — d
 Mirroring the record into them is still a second store, and the copy that gets believed is whichever
 one the next agent reads first.
 
-Wayfinder, to-spec and to-tickets may use these ordinary generic tickets when they select the
-plan-directory backend. Unfinished implementation and repair are generic ticket work too.
+Wayfinder, to-spec and to-tickets are independent producers that publish wherever the repo tracks
+work; they know nothing about this record. When their output becomes the durable work, **dev-flow
+transcribes it** into these ordinary generic tickets and keeps a pointer back to the producer's
+artifact — the producers are never asked to write here. Unfinished implementation and repair are
+generic ticket work too.
 
 ## Reading the record
 
@@ -77,9 +80,10 @@ reader carries the cost of noticing.
 
 ## Conditional route
 
-Wayfinder, to-spec, and to-tickets are independently usable producers; dev-flow only records their
-chosen plan-directory work. Use wayfinder while the route to a durable destination is not yet clear.
-Use to-spec before a landed change, unless it inherits a frozen contract (mark it inherited, refined,
+Wayfinder, to-spec, and to-tickets are independently usable producers; dev-flow transcribes what they
+produce and never drives them from inside their own backend. **Wayfinder is user-invoked** — while
+the route to a durable destination is not yet clear, say so and ask the user to run `/wayfinder`;
+do not attempt to start it on their behalf. Use to-spec before a landed change, unless it inherits a frozen contract (mark it inherited, refined,
 or contradicted) or the delivery itself is text. Use to-tickets when work will be dispatched through
 an admission gate; Root completing work in one context still records a generic ticket but does not
 need to-tickets. A handoff is a decision-authority transfer event, not a route stage, and the record

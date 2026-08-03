@@ -1,1 +1,0 @@
-../../../../.codex/skills/orchestrate/SKILL.md

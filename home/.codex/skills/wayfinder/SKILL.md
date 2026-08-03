@@ -1,6 +1,7 @@
 ---
 name: wayfinder
-description: Plan a huge chunk of work — more than one agent session can hold — as a shared map of decision tickets in the repo's plan directory or on its issue tracker, and resolve them one at a time until the way to the destination is clear.
+description: Plan a huge chunk of work — more than one agent session can hold — as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear.
+disable-model-invocation: true
 ---
 
 A loose idea has arrived — too big for one agent session, and wrapped in fog: the way from here to the **destination** isn't visible yet. Wayfinding is about finding that way, not charging at the destination. This skill charts the way as a **shared map** on the repo's issue tracker, then works its **decision tickets** — questions whose resolution is a decision, not slices of a build to execute — one at a time until the route is clear.
@@ -17,31 +18,11 @@ Every map and ticket is an issue, so it has a **name** — its title. In everyth
 
 ## The Map
 
-The map is the canonical artifact of the effort. On a tracker backend it is a single issue labelled `wayfinder:map` whose tickets are child issues; on a plan-directory backend it is a single file (see below).
+The map is a single issue on this repo's issue tracker, labelled `wayfinder:map` — the canonical artifact. Its tickets are child issues of the map.
 
-The map is a **route narrative**, not a decision store. It records how each closed ticket changed
-the route and links to that work; the decision details live in the producer-owned `decisions.md`, so
-the map never restates them.
+The map is an **index**, not a store. It lists the decisions made and points at the tickets that hold their detail; a decision lives in exactly one place — its ticket — so the map never restates it, only gists it and links.
 
-**Where the map, its tickets, blocking, and frontier queries physically live depends on the repo:**
-
-- **Plan-directory repo** (CLAUDE.md / AGENTS.md documents dev-flow task records under `.agent_state/plans/`): use the plan-directory backend below. Never create tracker issues or a parallel workflow state file in such a repo.
-- **Tracker repo** (an issue tracker is documented, e.g. `docs/agents/issue-tracker.md`): follow that doc's conventions for issues, labels, and native blocking links.
-- **Neither**: default to a local-markdown map at `.scratch/wayfinder/<effort-slug>.md`, same shape as the plan-directory backend.
-
-### Plan-directory backend
-
-Initialize the plan-directory backend with dev-flow `scripts/plan.py create`. The map is the
-artifact `.agent_state/plans/<task-id>/wayfinder-map.md`. Write generic `tickets/*.md` directly:
-use the shared three-field header, `Resolve by` action, and `Outcome`/`Current` container; record
-blocking in its `depends_on` header field. Do not embed a second status, claim, blocking or ticket
-store in `wayfinder-map.md`.
-
-Claiming means changing the owning generic ticket from `open` to `active` before work. The frontier
-is the open tickets whose dependencies are closed. Wayfinder decisions belong in the producer-owned
-`decisions.md`; closing a ticket records the route outcome there, then adds a one-line linked route
-narrative to the map's `Decisions so far` section. Research notes and prototypes remain domain
-artifacts and are linked from their owning generic ticket and from INDEX prose when useful.
+**Where the map, its child tickets, blocking, and frontier queries physically live is repo-specific.** If CLAUDE.md / AGENTS.md documents an issue tracker, follow its conventions for issues, labels, and native blocking links. If it documents none, default to a local-markdown map at `.scratch/wayfinder/<effort-slug>.md`, with its tickets as numbered files beside it and blocking recorded in each ticket's body.
 
 ### The map body
 
@@ -64,9 +45,9 @@ The whole map at low resolution, loaded once per session. Open tickets are **not
 
 ## Decisions so far
 
-<!-- route narrative — one line per closed ticket saying how that resolution changed the route -->
+<!-- the index — one line per closed ticket: enough to judge relevance, then zoom the link for the detail the ticket holds -->
 
-- [<closed ticket title>](link) — <one-line description of the route change>
+- [<closed ticket title>](link) — <one-line gist of the answer>
 
 ## Not yet specified
 
@@ -129,7 +110,7 @@ Ruling something out of scope is a scoping act, not a step on the route. When a 
 
 A destination says where the effort ends. It says nothing about whether the user sees anything before then — and an effort that shows its user nothing until the end is one the user cannot steer. So the map also carries a **staircase**: the ordered list of states between here and the destination that a user could look at and accept.
 
-Each step is one sentence in the user's terms — *"the user does X and sees Y"* — not a layer, a module, or a phase of construction. Five to nine steps for a large effort; if a step is too coarse to write that way, it is two steps. Downstream, `to-spec` refines each step into Slices and `to-tickets` refuses tickets that don't inherit the sentence, so a vague staircase quietly becomes a vague build.
+Each step is one sentence in the user's terms — *"the user does X and sees Y"* — not a layer, a module, or a phase of construction. Five to nine steps for a large effort; if a step is too coarse to write that way, it is two steps. Downstream, `to-spec` refines each step into tickets and `to-tickets` refuses tickets that don't inherit the sentence, so a vague staircase quietly becomes a vague build.
 
 The staircase is coarse and it is revisable — a resolution that changes the route rewrites the affected steps. What it may never become is a single step that only completes at the destination. **If the staircase cannot be written, the map is not charted**, whatever else is on it: the effort has a destination and no way for anyone to tell, before the end, whether it is heading there.
 

@@ -1,1 +1,0 @@
-../../../../.codex/skills/simplify/SKILL.md

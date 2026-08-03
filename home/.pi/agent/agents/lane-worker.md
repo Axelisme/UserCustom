@@ -44,6 +44,15 @@ amendment would change any admitted semantic named above; stop also for cwd mism
 red-for-the-right-reason evidence in TDD mode. Root decides re-admission and owns dispatch, collect,
 candidate, landing, and recovery; this worker never performs those operations.
 
+Root supplies one stable `Handoff path` for this logical ticket stream. After identity attestation,
+create its parent directory when absent and read its current contents when it exists. At a terminal
+exact clean SHA, rewrite it as a current snapshot with Subject, Completed, Decisions, Validation,
+Outstanding, Next, and Risks. Cap it at 150 lines and 8 KiB. Write the fixed sibling
+`<Handoff path>.tmp`, then use `mv -f` to replace the
+handoff: do not append, rotate, back up, or retain the old file. This is the only authorized write
+outside the lane. If no exact clean subject is available, leave the existing handoff unchanged and
+report the blocker.
+
 End with one lane-ready report. In TDD mode list each Contract commit SHA with its exact red
 command, observed red reason, and green result; in direct mode list the frozen Contract pointer,
 changed and protected paths, direct validation commands/results, and final full SHA, with the

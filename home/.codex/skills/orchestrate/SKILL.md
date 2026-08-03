@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Git lanes for dispatched task work. Use when dispatching implementation to worker agents, integrating or landing completed lanes, checking task or lane state, or when a runtime binding needs the lane dispatch contract. Not for work one agent completes in a single context.
-skill_version: 147
+skill_version: 148
 ---
 
 # Orchestrate
@@ -82,6 +82,10 @@ If persistence moved before landing, create an admitted reconciliation lane and 
 reconcile --task-id <task> --lane-id <lane> --persist <branch>`; the writer owns the resulting
 no-commit merge, resolution, tests, commit, and normal collection (steps 4–7) before acceptance
 (steps 8–9) is repeated.
+
+An acceptance failure grants no repair by itself. Once Root admits its bounded correction, the
+repair uses a new writer lane and normal collection before the exact replacement snapshot repeats
+acceptance. The matching runtime binding defines how writer context and reviewer context continue.
 
 Destructive `--abandon` on `integration remove` is exceptional current-user authority, not an
 automatic recovery path. It reports unlanded and uncollected state while preserving unrelated refs,

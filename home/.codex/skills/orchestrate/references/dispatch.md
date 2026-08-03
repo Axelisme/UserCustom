@@ -36,6 +36,17 @@ Continuation is admissible only while the frozen Contract, provider, cwd, and la
 unchanged. A semantic Contract, observable behavior, public Interface, liveness, or identity change
 requires fresh dispatch and Root re-admission.
 
+A fresh writer that succeeds an earlier writer receives one stable `Handoff path` outside the
+managed lane worktrees. The path belongs to that logical ticket stream, has one active writer, and
+is the only dispatch-authorized write outside the lane. After identity attestation the worker
+creates its parent directory when absent and reads the handoff when present. At a terminal exact
+clean SHA the worker rewrites the current snapshot through the fixed sibling `<path>.tmp`, then
+uses `mv -f` to replace `<path>`; it never appends, rotates, or keeps the old handoff. The snapshot
+is at most 150 lines and 8 KiB and retains only Completed, Decisions,
+Validation, Outstanding, Next, and Risks plus its exact clean subject SHA. A run that cannot bind a
+clean subject leaves the prior handoff unchanged and reports its blocker normally. The handoff
+carries context only; Root still proves every Git and admission fact.
+
 The terminal lane-ready handoff is mode-specific: TDD names every Contract commit SHA with its
 exact red command, observed red reason, and green result; direct mode names the frozen Contract
 pointer, changed and protected paths, direct validation commands/results, and the final exact clean

@@ -8,7 +8,10 @@ Pi's own delta.
 
 Pi Root dispatches an admitted implementation lane through Pi Subagents' native `subagent` tool.
 Orchestrate ships no Pi-specific adapter: transport, control, and evidence are the runtime's own,
-and Root reads them directly. Root launches `lane-worker` with fresh context in async mode.
+and Root reads them directly. Root launches `lane-worker` with fresh context in async mode and
+supplies the logical ticket stream's stable absolute `Handoff path`. The normal custody location is
+`<task-record>/artifacts/handoffs/<ticket-id>-worker.md`; a different location must remain outside
+the disposable managed worktrees and keep the same cleanup owner.
 
 ## Writer execution
 
@@ -48,11 +51,11 @@ before repeating the required Git and runtime checks.
 
 ## Recovery
 
-Before every resume Root reruns `lane check` and `status`, then rebinds the exact lane SHA, cwd,
-Git root/common-dir, branch, and lane identity. Resume preserves the session and launch contract
-but returns a fresh run id; the prior run id no longer identifies the live run. An `interrupt`
-leaves a run paused and resumable. A `stop` is terminal. `steer` is advisory and never proves
-compliance, readiness, collection, or completion.
+Before every writer resume Root reruns `lane check` and `status`, then rebinds the exact lane SHA,
+cwd, Git root/common-dir, branch, and lane identity. Resume preserves the session and launch
+contract but returns a fresh run id; the prior run id no longer identifies the live run. An
+`interrupt` leaves a run paused and resumable. A `stop` is terminal. `steer` is advisory and never
+proves compliance, readiness, collection, or completion.
 
 After the runtime accepts a resume, use a five-minute minimum quiet window: do not call `status`,
 resume again, or poll during that window. Process completion, process-terminal, or needs-attention
@@ -60,18 +63,27 @@ events are handled immediately. If no such event arrives, make one status confir
 than five minutes after acceptance while leaving the parent turn unblocked. A resume that overlaps
 child compaction may otherwise take unusually long.
 
-Use this four-row recovery matrix:
+Use this writer recovery matrix:
 
 | trusted state | Root action |
 | --- | --- |
-| Contract and session context are trusted | Resume the same session. |
-| Contract is unchanged but old context is not trusted | Start a fresh run in the same lane. |
+| Contract, lane identity, cwd, and session context are trusted | Resume the same session. |
+| Contract and lane are unchanged but old context is not trusted | Start a fresh run in the same lane. |
+| A collected delivery needs rework in a newly admitted lane | Start a fresh run there with the same `Handoff path`. |
 | Contract or observable behavior changed | Re-admit and recut. |
 | The lane is no longer needed | `lane drop`. |
 
 A provider, cwd, lane identity, public Interface, or observable Contract change also requires fresh
 admission. A new lane always receives a fresh child session, even when its ticket and profile are
-shared; session context never crosses lane identity, cwd, branch, or write scope.
+shared; its worker recovers task context from the rolling handoff after attesting the new identity.
+Session context never crosses lane identity, cwd, branch, or write scope.
+
+Acceptance re-review is different: `acceptance start` removes and recreates the checkout at the
+same canonical lexical cwd. After the prior reviewer process is terminal and the replacement
+checkout is complete, Root rebinds its detached, tracked-clean exact SHA and resumes the same
+Standards or Spec reviewer session with the prior subject, new subject, and correction range. Each
+axis resumes its own session. If that reviewer context is not trusted, Root starts a fresh reviewer
+with the prior terminal report supplied explicitly; reviewers never maintain the writer handoff.
 
 ## Evidence
 

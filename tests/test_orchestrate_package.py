@@ -805,6 +805,43 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             hashlib.sha256(append.read_bytes()).hexdigest(),
         )
 
+    def test_12a_lane_worker_profiles_replace_one_bounded_rolling_handoff(
+        self,
+    ) -> None:
+        home = release.source_home(self.skill)
+        for relative in (
+            ".codex/agents/lane-worker.toml",
+            ".claude/agents/lane-worker.md",
+            ".pi/agent/agents/lane-worker.md",
+        ):
+            with self.subTest(profile=relative):
+                text = (home / relative).read_text(encoding="utf-8")
+                self.assertIn("stable `Handoff path`", text)
+                self.assertIn("create its parent directory when absent", text)
+                self.assertIn("<Handoff path>.tmp", text)
+                self.assertIn("`mv -f`", text)
+                self.assertIn("150 lines and 8 KiB", text)
+                self.assertIn("leave the existing handoff unchanged", text)
+                self.assertNotIn("acceptance-reviewer", text)
+
+    def test_12b_pi_rework_transfers_writer_context_but_resumes_reviewers(
+        self,
+    ) -> None:
+        runtime = (self.skill / "runtime-pi.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "Start a fresh run there with the same `Handoff path`.", runtime
+        )
+        self.assertRegex(
+            runtime, r"resumes the same\s+Standards or Spec reviewer session"
+        )
+        self.assertIn("reviewers never maintain the writer handoff", runtime)
+
+        reviewer = (
+            release.source_home(self.skill)
+            / ".pi/agent/agents/acceptance-reviewer.md"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("Handoff path", reviewer)
+
     def test_13_profile_manifest_ignores_runtime_metadata_but_tracks_name_and_prompt(
         self,
     ) -> None:

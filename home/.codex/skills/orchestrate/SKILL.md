@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Git lanes for dispatched task work. Use when dispatching implementation to worker agents, integrating or landing completed lanes, checking task or lane state, or when a runtime binding needs the lane dispatch contract. Not for work one agent completes in a single context.
-skill_version: 153
+skill_version: 154
 ---
 
 # Orchestrate
@@ -36,45 +36,40 @@ authority; Root reads its current S0 before creating the first lane.
    downgrade TDD to direct; if execution changes the mode judgment, stop and return to Root for
    re-admission. Done when Root holds the mode-appropriate evidence and exact clean tip SHA.
 
-4. Before collection, use `lane check --task-id <task> --lane-id <lane>` to apply the shared
-   first-parent, cleanliness, topology, and declaration predicates without mutation. Done when
-   `lane check` exits 0.
-
-5. If another collect advanced the integration tip, `lane sync --task-id <task> --lane-id <lane>`
+4. If another collect advanced the integration tip, `lane sync --task-id <task> --lane-id <lane>`
    performs the writer-owned no-commit merge in that lane; the writer resolves and commits any
    conflict there. Done when the lane tip carries the merge (or is unchanged, if no sync was
    needed).
 
-6. Root reruns the gates (return to step 4) until `lane check` exits 0 against the current
-   integration tip.
+5. `integration collect --task-id <task> --lane-id <lane> --ticket <ticket>` applies the shared
+   first-parent, cleanliness, topology, and declaration predicates and refuses before any repository
+   change when one fails, then creates one fixed-parent no-ff collect commit with `Task:`, `Lane:`,
+   and bounded `Ticket:` trailers. Collection retains the lane worktree, branch, and original base
+   ref; `lane drop` remains the explicit discard operation. Done when the collect commit exists and
+   the persistent lane remains available.
 
-7. `integration collect --task-id <task> --lane-id <lane> --ticket <ticket>` creates one
-   fixed-parent no-ff collect commit with `Task:`, `Lane:`, and bounded `Ticket:` trailers. Collection
-   retains the lane worktree, branch, and original base ref; `lane drop` remains the explicit discard
-   operation. Done when the collect commit exists and the persistent lane remains available.
-
-8. `acceptance start --task-id <task> [--sha <exact>]` checks out one managed detached acceptance
+6. `acceptance start --task-id <task> [--sha <exact>]` checks out one managed detached acceptance
    snapshot. Omission selects the managed integration branch tip; an explicit full SHA may select
    any commit on its first-parent history. Integration worktree state is irrelevant because the
    subject is a commit. Done when the acceptance worktree holds the selected exact subject.
 
-9. Run canonical tests and the read-only Standards/Spec ReviewGate on that managed acceptance
+7. Run canonical tests and the read-only Standards/Spec ReviewGate on that managed acceptance
    checkout. `acceptance result --task-id <task> --verifier agent|user --outcome pass|fail` records
    the exact result. Agent pass moves `refs/orchestrate/<task>/accepted`; user pass moves
    `refs/orchestrate/<task>/user-accepted`, and either may move backward explicitly. Failure revokes
    only the same verifier's equal ref. User evidence does not affect landing or closeability. Done
    when the result, ref state and telemetry agree.
 
-10. Landing requires an accepted snapshot and exactly one local checkout of the named persistence
-    branch. `integration land --task-id <task> --persist <branch>` creates one canonical squash
-    commit with `Task:` and `Landed:` trailers, then records the accepted subject in
-    `refs/orchestrate/<task>/landed`. Orchestrate never pushes or reads remote refs. Done when the
-    landed ref points at the accepted subject.
+8. Landing requires an accepted snapshot and exactly one local checkout of the named persistence
+   branch. `integration land --task-id <task> --persist <branch>` creates one canonical squash
+   commit with `Task:` and `Landed:` trailers, then records the accepted subject in
+   `refs/orchestrate/<task>/landed`. Orchestrate never pushes or reads remote refs. Done when the
+   landed ref points at the accepted subject.
 
-11. `integration remove --task-id <task> --output-dir <dir>` writes the final report, including
-    agent and user acceptance evidence, and removes only a closeable task's exact managed inventory. `--no-report` explicitly omits report output.
-    Done when the report is written (unless `--no-report`) and the closeable managed inventory is
-    removed.
+9. `integration remove --task-id <task> --output-dir <dir>` writes the final report, including
+   agent and user acceptance evidence, and removes only a closeable task's exact managed inventory. `--no-report` explicitly omits report output.
+   Done when the report is written (unless `--no-report`) and the closeable managed inventory is
+   removed.
 
 ### Exceptions to the main sequence
 
@@ -82,8 +77,8 @@ A clean unwanted lane is removed with `lane drop` instead of being collected.
 
 If persistence moved before landing, create an admitted reconciliation lane and run `integration
 reconcile --task-id <task> --lane-id <lane> --persist <branch>`; the writer owns the resulting
-no-commit merge, resolution, tests, commit, and normal collection (steps 4–7) before acceptance
-(steps 8–9) is repeated.
+no-commit merge, resolution, tests, commit, and normal collection (steps 4–5) before acceptance
+(steps 6–7) is repeated.
 
 An acceptance failure grants no repair by itself. Once Root admits its bounded correction, an
 implementation bug, preserving test correction, or additive-only observable correction resumes the
@@ -112,6 +107,11 @@ ninth-lane warning is factual: it counts only active lanes with projected `uncol
 lanes with zero uncollected work do not count, and creation never blocks. Historical, closed, dropped,
 and collected lanes do not count. Agent acceptance records authority first, then automatically closes
 clean named lanes; anomalies retain the lane and warn Root for explicit correction or drop.
+
+`lane check --task-id <task> --lane-id <lane>` applies the same predicates collection enforces,
+without mutation, and reports the lane `sha`, `base`, and `protected_paths`. It is how Root reads a
+lane — most usefully to bind the dispatch envelope — not a gate collection needs run first; a lane
+that fails it fails collection identically, with the same diagnostics.
 
 `report --task-id <task> --output-dir <dir>` atomically writes the two fixed report artifacts from
 Git and append-only telemetry. `timing pause --task-id <task>` closes active timing before an

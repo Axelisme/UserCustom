@@ -219,6 +219,35 @@ class OrchestrateCliRepositoryTestCase(unittest.TestCase):
             self.assertEqual(payload, required)
         return payload
 
+    def lane_check_success(
+        self,
+        result: subprocess.CompletedProcess[str],
+    ) -> dict[str, Any]:
+        """`lane check` reports the lane it measured, not a bare envelope."""
+        payload = self.success(result)
+        self.assertEqual(
+            set(payload),
+            {
+                "ok",
+                "operation",
+                "orchestrate_version",
+                "sha",
+                "base",
+                "protected_paths",
+            },
+        )
+        self.assertIs(payload["ok"], True)
+        self.assertEqual(payload["operation"], "lane-check")
+        self.assertEqual(payload["orchestrate_version"], self.orchestrate_version)
+        self.assertRegex(payload["sha"], r"^[0-9a-f]{40}$")
+        self.assertRegex(payload["base"], r"^[0-9a-f]{40}$")
+        self.assertIsInstance(payload["protected_paths"], list)
+        self.assertEqual(payload["protected_paths"], sorted(payload["protected_paths"]))
+        for entry in payload["protected_paths"]:
+            self.assertIsInstance(entry, str)
+            self.assertTrue(entry)
+        return payload
+
     def operational_failure(
         self,
         result: subprocess.CompletedProcess[str],

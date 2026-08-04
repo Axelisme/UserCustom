@@ -349,7 +349,7 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
             "Implement without an Immutable declaration",
         )
 
-        self.mutation_success(self.lane_command("check"), "lane-check")
+        self.lane_check_success(self.lane_command("check"))
         integration_before = self.git(
             self.root, "rev-parse", self.integration_branch()
         )
@@ -392,7 +392,7 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
             ("Immutable: tests/contract.py", "Immutable: docs/contract.md"),
         )
 
-        self.mutation_success(self.lane_command("check"), "lane-check")
+        self.lane_check_success(self.lane_command("check"))
         self.mutation_success(self.collect(), "integration-collect")
         collected = self.git(self.root, "rev-parse", self.integration_branch())
         self.assertEqual(
@@ -462,7 +462,7 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         self.assertEqual(self.immutable_trailers(lane, lane_tip), [
             "src/a continuation", "docs/unfolded.md",
         ])
-        self.mutation_success(self.lane_command("check"), "lane-check")
+        self.lane_check_success(self.lane_command("check"))
         self.mutation_success(self.collect(), "integration-collect")
         collected = self.git(self.root, "rev-parse", self.integration_branch())
         self.assertEqual(
@@ -1200,7 +1200,7 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         )
         self.assertEqual(self.immutable_trailers(lane, merge_tip), [])
 
-        self.mutation_success(self.lane_command("check"), "lane-check")
+        self.lane_check_success(self.lane_command("check"))
         self.mutation_success(self.collect(), "integration-collect")
 
     def test_first_parent_validation_checks_effective_merge_commit_change(self) -> None:

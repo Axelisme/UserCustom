@@ -97,11 +97,9 @@ after frequency, impact or a real resumed scenario makes it part of a current mi
 - **S2.3 Envelope.** The violating scenario must be inside the frozen usage envelope. A test that is
   red against a stand-in rather than against the production path is not S1.1 evidence, whatever it
   proves about the stand-in.
-- **S2.4 Lane-ready test review.** Before collect, Root binds the exact clean lane-ready SHA and
-  reads each Contract commit's test, fixture and adapter diff plus its red evidence before reading
-  implementation. A test correction that preserves observable behavior, public Interface, envelope
-  and acceptance surface uses an independent amendment commit; a semantic change requires lane
-  re-admission. Which of the two a correction is, the originating axis reviewer decides — never the
+- **S2.4 Lane-ready binding.** Before collect, Root binds the exact clean lane-ready SHA. A test
+  correction that preserves observable behavior, public Interface, envelope and acceptance surface
+  uses an independent amendment commit; a semantic change requires lane re-admission. Which of the two a correction is, the originating axis reviewer decides — never the
   party proposing it. That party is the one the preserving answer releases, and S3 already exempts
   contract-only correction from its counter, so nothing else prices the choice.
 - **S2.5 Root's mechanical guarantee.** Root proves two states by executing them at an exact bound

@@ -63,8 +63,10 @@ spec and admission standard before repeating the required Git and runtime checks
 
 ## Recovery
 
-Before every writer resume Root reruns `lane check` and `status`, then rebinds the exact lane SHA,
-cwd, Git root/common-dir, branch, and lane identity. Resume preserves the session and launch
+Before every writer resume Root reruns `lane check`, which reports the exact lane SHA and base it
+just measured, and rebinds that SHA. A resume into a session that already attested its cwd, Git
+root/common-dir and branch rebinds only that SHA and the scope of the call; a fresh run in the lane
+rebinds the full identity. Resume preserves the session and launch
 contract but returns a fresh run id; the prior run id no longer identifies the live run. An
 `interrupt` leaves a run paused and resumable. A `stop` is terminal. `steer` is advisory and never
 proves compliance, readiness, collection, or completion.

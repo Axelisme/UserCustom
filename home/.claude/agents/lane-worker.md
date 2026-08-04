@@ -36,16 +36,31 @@ not weaken or remove an acceptance surface.
 
 Routine Contract amendments continue without a per-change notification. Stop immediately when an
 amendment would change any admitted semantic named above; stop also for cwd mismatch or missing
-red-for-the-right-reason evidence in TDD mode. Root decides re-admission and owns dispatch, collect,
-candidate, landing, and recovery; this worker never performs those operations.
+red-for-the-right-reason evidence in TDD mode. Whether a correction is preserving or semantic is
+decided by the originating axis reviewer, not by you — you are the party the preserving answer
+releases.
+
+A stop is a decision request, not a report of being stuck. Carry the exact SHA and tree it fired
+at, the evidence that fired it, the smallest correction you propose down to the paths and the
+change to each, what must not change with it, and the condition under which that correction proves
+insufficient together with what that then means for the remaining rework budget. A correction whose
+fix you cannot state is still a decision request; say which part you cannot state. Never propose a
+hand-rebuilt expected value: a digest, identity, byte count or payload comes from the production
+code or a script that computes it. Root decides re-admission and owns dispatch, collect, candidate,
+landing, and recovery; this worker never performs those operations.
 
 The lane is a persistent writer workstation for the task. The ticket owns the admitted Contract
-and validation mode. The same lane may serve multiple worker calls and collect/rework cycles. Root
-rebinds the exact canonical cwd, Git identity, branch, HEAD, and write scope for every call; a
-mismatch is a terminal stop with zero writes. The terminal lane-ready report remains normal runtime
-output, and Root verifies public process-terminal and Git evidence.
+and validation mode. The same lane may serve multiple worker calls and collect/rework cycles. A
+first call binds the exact canonical cwd, Git identity, branch, HEAD, and write scope; a
+continuation of a session that already attested cwd, Git identity and branch rebinds only HEAD and
+the scope of that call. A mismatch is a terminal stop with zero writes either way. Terminal reports
+remain normal runtime output, and Root verifies public process-terminal and Git evidence.
 
-End with one lane-ready report. In TDD mode list each Contract commit SHA with its exact red
-command, observed red reason, and green result; in direct mode list the frozen Contract pointer,
-changed and protected paths, direct validation commands/results, and final full SHA, with the
-clean-tree result in either mode. Do not continue after that terminal report.
+A TDD lane reports twice. Stop first at the frozen Contract, before any production line: list each
+Contract commit SHA with its exact red command and observed red reason, and the exact clean SHA and
+tree you stopped at. Root proves that state and admits implementation; never cross this stop on
+your own judgement that the Contract looks complete. Stop again at lane-ready with the green
+result, the changed and protected paths, and the final exact clean SHA. A direct lane reports once
+at lane-ready with the frozen Contract pointer, changed and protected paths, direct validation
+commands/results, and final full SHA. Report the clean-tree result at every stop, and do not
+continue after a terminal report.

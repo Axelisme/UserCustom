@@ -494,9 +494,16 @@ def lane_check(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandRe
             },
             diagnostics=validation.diagnostics,
         )
+    lane_tip = validation.tip
+    lane_base = validation.base
+    assert lane_tip is not None and lane_base is not None
     return CommandResult(
         True,
-        {},
+        {
+            "sha": lane_tip,
+            "base": lane_base,
+            "protected_paths": list(validation.protected_paths),
+        },
         record_event(task, "lane-check", "success", lane_id=lane_id),
     )
 

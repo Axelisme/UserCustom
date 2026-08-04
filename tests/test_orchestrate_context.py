@@ -551,7 +551,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
         )
 
         lane_tip = self.commit_lane(self.lane_path)
-        self.mutation_success(
+        self.lane_check_success(
             self.cli(
                 self.nested,
                 "lane",
@@ -560,8 +560,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 self.task_id,
                 "--lane-id",
                 self.lane_id,
-            ),
-            "lane-check",
+            )
         )
         self.mutation_success(
             self.cli(
@@ -1369,7 +1368,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             "lane-create",
         )
         self.commit_lane(change_lane)
-        self.mutation_success(
+        self.lane_check_success(
             self.cli(
                 self.nested,
                 "lane",
@@ -1378,8 +1377,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 self.task_id,
                 "--lane-id",
                 change_lane_id,
-            ),
-            "lane-check",
+            )
         )
         self.mutation_success(
             self.cli(
@@ -1412,7 +1410,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
         )
         self.git(revert_lane, "rm", "delivered.txt")
         self.git(revert_lane, "commit", "-q", "-m", "Revert delivered tree")
-        self.mutation_success(
+        self.lane_check_success(
             self.cli(
                 self.nested,
                 "lane",
@@ -1421,8 +1419,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 self.task_id,
                 "--lane-id",
                 revert_lane_id,
-            ),
-            "lane-check",
+            )
         )
         self.mutation_success(
             self.cli(

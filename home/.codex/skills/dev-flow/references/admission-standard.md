@@ -1,10 +1,10 @@
 # Admission standard
 
-`standard_version: 3`. Cite this number when reporting which checks a task was admitted under; it
+`standard_version: 4`. Cite this number when reporting which checks a task was admitted under; it
 is maintained by hand, so a report that needs certainty cites the Git subject as well.
 
 These are the sole normative S0–S5 checks for dev-flow. Every check is decided from artifacts,
-not persuasion. Routing skills, runtime bindings, planners and reviewers reference this file and
+not persuasion. Routing skills, runtime bindings, workers and reviewers reference this file and
 do not restate its policy.
 
 ## S0 — Design admission: Need → Design → Slicing → Triage
@@ -99,11 +99,35 @@ after frequency, impact or a real resumed scenario makes it part of a current mi
   proves about the stand-in.
 - **S2.4 Lane-ready test review.** Before collect, Root binds the exact clean lane-ready SHA and
   reads each Contract commit's test, fixture and adapter diff plus its red evidence before reading
-  implementation. For timing, locking, retention, replay, security, data-loss and concurrency
-  invariants, Root personally reruns the focused red command at the exact pre-implementation
-  Contract SHA in an isolated checkout. A test correction that preserves observable behavior,
-  public Interface, envelope and acceptance surface uses an independent amendment commit; a
-  semantic change requires lane re-admission.
+  implementation. A test correction that preserves observable behavior, public Interface, envelope
+  and acceptance surface uses an independent amendment commit; a semantic change requires lane
+  re-admission. Which of the two a correction is, the originating axis reviewer decides — never the
+  party proposing it. That party is the one the preserving answer releases, and S3 already exempts
+  contract-only correction from its counter, so nothing else prices the choice.
+- **S2.5 Root's mechanical guarantee.** Root proves two states by executing them at an exact bound
+  SHA in an isolated checkout, and holds the result rather than the diff that produced it:
+
+  | stop | proven state |
+  | --- | --- |
+  | Contract frozen | the focused command is red, red for the named missing behavior, and free of collection, import, type and environment failure |
+  | lane-ready | the declared selection is green and static checks over the changed paths are clean |
+
+  Neither depends on the invariant class. A green focused selection is not the lane-ready state:
+  the broader affected selection and the static checks belong inside the declared one, because a
+  focused green has passed while both were failing.
+- **S2.6 No hand-derived expected value.** A digest, identity, byte count, payload or protected
+  path that a Contract asserts is produced by the production code or by a script that computes it,
+  never rebuilt by hand — Root included. A hand-built expectation is indistinguishable from a
+  correct one until something recomputes it, so it enters the Contract wearing the authority of the
+  check it was supposed to be.
+- **S2.7 Contract review.** When more than 1000 test lines freeze before the first production
+  commit, the Contract is read on its own axis before implementation is admitted. The oracle is
+  what every later gate measures against and no later gate re-examines it, so a wrong oracle makes
+  every green after it meaningless. That reviewer is read-only at the exact Contract SHA and owes
+  an applicable correction, not a complaint. **The threshold is provisional** — it comes from three
+  Slices whose frozen depth ordered their rework monotonically (604 lines / 18 min, 1071 / 43,
+  1664 / 71) — so report what it cost or saved on this increment and propose a better one. The
+  instrument that measures the depth belongs to the repo.
 
 ## S3 — Machine rework admission
 
@@ -131,8 +155,11 @@ delta is reviewed by one reviewer on its originating axis.
 ## S4 — Review and validation
 
 - The shared gate order is **canonical tests → ReviewGate** on one managed acceptance snapshot.
-- Root binds the exact clean detached acceptance path, HEAD, tree and base…subject diff. Integration
-  may advance without changing or invalidating that snapshot.
+- Root binds the exact clean detached acceptance path, HEAD, tree, exercised selection and
+  base…subject diff. Integration may advance without changing or invalidating that snapshot.
+- A result that changes under a different selection of the same tree is not evidence about that
+  tree; that instability is a current-task finding resolved before any verdict, never by preferring
+  the passing selection. The mechanism that makes selection irrelevant belongs to the repo.
 - Standards and Spec reviewers are read-only, report their axis and exact SHA, and never mutate the
   acceptance checkout. Each writes that same report to one `Report path` Root binds to its axis and
   exact SHA outside that checkout; the file is its only write and becomes evidence when Root accepts

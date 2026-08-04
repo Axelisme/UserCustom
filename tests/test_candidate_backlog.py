@@ -136,6 +136,31 @@ class CandidateBacklogTests(unittest.TestCase):
             )
             self.assertEqual(len(items_of(body)), 1)
 
+    def test_list_summarises_by_default_and_full_restores_every_field(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            self.assert_ok(run_backlog(root, *add_args(root, "Detail mode item")), "add")
+
+            summary = self.assert_ok(
+                run_backlog(root, "--root", str(root), "list"), "list"
+            )
+            self.assertEqual(summary["detail"], "summary")
+            [item] = items_of(summary)
+            self.assertEqual(
+                set(item),
+                {"id", "title", "kind", "area", "status", "priority_hint"},
+            )
+
+            full = self.assert_ok(
+                run_backlog(root, "--root", str(root), "list", "--full"), "list"
+            )
+            self.assertNotIn("detail", full)
+            [detailed] = items_of(full)
+            for field in ("observation", "evidence", "impact", "desired_outcome"):
+                self.assertIn(field, detailed)
+            self.assertEqual(detailed["id"], item["id"])
+
     def test_bind_and_close_envelope_shape(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

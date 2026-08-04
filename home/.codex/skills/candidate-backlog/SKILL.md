@@ -1,7 +1,7 @@
 ---
 name: candidate-backlog
 description: Capture evidence-backed discoveries that are valuable but outside the current task into a repo-local candidate backlog, without expanding scope or avoiding current-task obligations. Also use when planning work in an area (check its inbox first) or when the user asks what is worth doing next.
-skill_version: 4
+skill_version: 5
 ---
 
 # Candidate Backlog
@@ -38,7 +38,7 @@ skill_version: 4
 
 ```text
 <repo-python> <skill-dir>/scripts/backlog.py add --kind <kind> --area <area> --source-task <task-id> --title <title> --observation <text> --evidence <text> --impact <text> --desired-outcome <text>
-<repo-python> <skill-dir>/scripts/backlog.py list [--status inbox|planned|resolved|closed] [--kind <kind>] [--area <area>]
+<repo-python> <skill-dir>/scripts/backlog.py list [--status inbox|planned|resolved|closed] [--kind <kind>] [--area <area>] [--full]
 <repo-python> <skill-dir>/scripts/backlog.py bind <id> --task-id <task-id>
 <repo-python> <skill-dir>/scripts/backlog.py close <id> --resolution implemented --task-id <task-id> --commit <sha> --validation <text>
 <repo-python> <skill-dir>/scripts/backlog.py close <id> --resolution duplicate --duplicate-of <canonical-id>
@@ -46,6 +46,11 @@ skill_version: 4
 
 CLI 使用 UTC timestamp、UTF-8 與 atomic replace；輸出恆為單行 JSON envelope（成功與錯誤皆印到
 stdout，`ok`/`operation`/`backlog_version` 固定欄位）。不要繞過 transition 或直接覆寫 metadata。
+
+`list` 預設只回 `id`／`title`／`kind`／`area`／`status`／`priority_hint`，並標記 `detail: summary`。
+四個散文欄位（`observation`／`evidence`／`impact`／`desired_outcome`）才是一筆 item 的全部重量，
+而定位與查重都用不到它們——一次 24 筆的 inbox 全文是 33 KB，摘要是 6 KB。要全文用 `--full`，
+或先用 `--area`／`--kind` 收斂再取；單筆內容也可直接讀 `.agent_state/backlog/<status>/<id>.md`。
 
 ## 消費時刻（防 inbox rot）
 

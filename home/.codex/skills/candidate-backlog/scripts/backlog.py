@@ -323,6 +323,9 @@ def command_add(args: argparse.Namespace, base: Path) -> dict[str, Any]:
     return meta
 
 
+SUMMARY_FIELDS = ("id", "title", "kind", "area", "status", "priority_hint")
+
+
 def command_list(args: argparse.Namespace, base: Path) -> dict[str, Any]:
     items = [item for _, item in all_items(base)]
     if args.status:
@@ -331,7 +334,18 @@ def command_list(args: argparse.Namespace, base: Path) -> dict[str, Any]:
         items = [item for item in items if item["kind"] == args.kind]
     if args.area:
         items = [item for item in items if args.area in item["area"]]
-    return {"items": items}
+    if args.full:
+        return {"items": items}
+    # An inbox is read to orient, and the four prose fields are the whole weight
+    # of an item. Summarising by default keeps a routine listing from spending a
+    # session's opening context on evidence nobody asked for yet.
+    return {
+        "items": [
+            {field: item[field] for field in SUMMARY_FIELDS if field in item}
+            for item in items
+        ],
+        "detail": "summary",
+    }
 
 
 def command_bind(args: argparse.Namespace, base: Path) -> dict[str, Any]:
@@ -414,6 +428,7 @@ def parser() -> argparse.ArgumentParser:
     listing.add_argument("--status", choices=STATUSES)
     listing.add_argument("--kind", choices=KINDS)
     listing.add_argument("--area")
+    listing.add_argument("--full", action="store_true")
     bind = sub.add_parser("bind")
     bind.add_argument("item_id")
     bind.add_argument("--task-id", required=True)

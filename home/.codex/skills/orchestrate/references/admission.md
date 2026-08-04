@@ -53,8 +53,10 @@ there — S2.5 proves only its lane-ready state and S2.8 never fires.
   party is the one the preserving answer releases, and S3 already exempts contract-only correction
   from its counter, so nothing else prices the choice.
 - **S2.5 Root's mechanical guarantee.** Root proves each stop the lane has by executing it at an
-  exact bound SHA in an isolated checkout, and holds the result rather than the diff that produced
-  it:
+  exact bound SHA, and holds the result rather than the diff that produced it. What runs is the
+  repository's own [gate script](gate.md) at `.agent_state/orchestrate/<task-id>/gate.sh`, so the
+  check set is written down once rather than reassembled from memory at each stop; only the
+  exit-code direction below is this standard's:
 
   | stop | mode | proven state |
   | --- | --- | --- |

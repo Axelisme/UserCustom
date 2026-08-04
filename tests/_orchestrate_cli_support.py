@@ -225,7 +225,20 @@ class OrchestrateCliRepositoryTestCase(unittest.TestCase):
     ) -> dict[str, Any]:
         """`lane check` reports the lane it measured, not a bare envelope."""
         payload = self.success(result)
-        self.assertEqual(
+        self.assertLessEqual(
+            set(payload),
+            {
+                "ok",
+                "operation",
+                "orchestrate_version",
+                "sha",
+                "base",
+                "protected_paths",
+                "contract_commits",
+                "warnings",
+            },
+        )
+        self.assertGreaterEqual(
             set(payload),
             {
                 "ok",

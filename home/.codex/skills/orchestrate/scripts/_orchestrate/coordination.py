@@ -503,6 +503,15 @@ def lane_check(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandRe
     lane_tip = validation.tip
     lane_base = validation.base
     assert lane_tip is not None and lane_base is not None
+    warnings = list(record_event(task, "lane-check", "success", lane_id=lane_id))
+    gate = repo.worktree_root / ".agent_state" / "orchestrate" / task.task_id / "gate.sh"
+    if gate.is_file():
+        # Factual like the ninth-lane warning: the reminder fires, the check
+        # still succeeds, and a repository with no gate script is never nagged.
+        warnings.append(
+            f"gate script present at {gate.relative_to(repo.worktree_root)}; "
+            "S2.5 evidence comes from running it"
+        )
     return CommandResult(
         True,
         {
@@ -511,7 +520,7 @@ def lane_check(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandRe
             "protected_paths": list(validation.protected_paths),
             "contract_commits": list(validation.contract_commits),
         },
-        record_event(task, "lane-check", "success", lane_id=lane_id),
+        tuple(warnings),
     )
 
 

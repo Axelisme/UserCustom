@@ -1183,6 +1183,27 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         self.git(lane, "commit", "-q", "-m", "Merge external history")
         return lane
 
+    def test_lane_check_reminds_about_a_present_gate_script_without_refusing(
+        self,
+    ) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        self.commit_file(lane, "feature.txt", "feature\n", "Implement the feature")
+
+        quiet = self.lane_check_success(self.lane_command("check"))
+        self.assertNotIn("warnings", quiet)
+
+        gate = (
+            self.root / ".agent_state" / "orchestrate" / self.task_id / "gate.sh"
+        )
+        gate.parent.mkdir(parents=True, exist_ok=True)
+        gate.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+
+        reminded = self.lane_check_success(self.lane_command("check"))
+        self.assertEqual(len(reminded["warnings"]), 1)
+        self.assertIn("gate.sh", reminded["warnings"][0])
+        self.assertIn("S2.5", reminded["warnings"][0])
+
     def test_first_parent_validation_ignores_second_parent_only_protected_change(
         self,
     ) -> None:

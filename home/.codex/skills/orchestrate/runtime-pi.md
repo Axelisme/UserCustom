@@ -7,10 +7,7 @@ binding, evidence, acceptance, and authority rules shared by every runtime. This
 Pi's own delta.
 
 Pi Root dispatches an admitted ticket Contract through Pi Subagents' native `subagent` tool.
-Orchestrate ships no Pi-specific adapter: transport, control, and evidence are the runtime's own,
-and Root reads them directly. The lane is persistent during the task; Pi supplies the same canonical
-cwd and exact identity on every worker call. The neutral ticket, Contract, and context-routing rules
-are defined by [dispatch.md](references/dispatch.md); this file states only Pi's transport delta.
+Orchestrate ships no Pi-specific adapter; transport, control, and evidence are the runtime's own.
 
 ## Writer execution
 
@@ -26,20 +23,20 @@ Neither mode polls or forms a repeated wait loop.
 
 ## Root context epochs
 
-A Context Epoch renews Pi Root's context; it does not continue a writer session or change admission,
-Contract, lane, persistence, or cleanup authority. At each ticket boundary:
+A Context Epoch changes Pi Root's model-context projection; it does not continue a writer session
+or change admission, Contract, lane, persistence, or cleanup authority. At each ticket boundary:
 
 1. **Reconcile.** Bring the durable task record to the exact boundary required by the admission
    standard, including its required refresh. Done when `Current`, `Next`, and the ticket frontier
    agree.
-2. **Decide.** An epoch is expected to span roughly one to three tickets, not as a limit. Keep
-   related work in the current epoch while its context remains useful.
+2. **Decide.** Keep related work in the current epoch while its context remains useful; this usually
+   spans one to three tickets, not as a limit.
 
 When Root chooses to transition:
 
 3. **Preflight.** Call `handoff_context_status`. Unless it reports an available grant for the exact
-   session, leave the current task's `HANDOFF.md` unchanged and remain in the current epoch.
-4. **Seed.** Overwrite that `HANDOFF.md` with exactly this, and nothing else:
+   session, remain in the current epoch.
+4. **Seed.** Prepare exactly this inline handoff, and nothing else:
 
    ```
    task: <task-id>
@@ -51,12 +48,11 @@ When Root chooses to transition:
    open: <one line: the unresolved question left to the next reader>
    ```
 
-   List all three commands; "run the locating commands" is not a substitute. A SHA, a tree, a ref
-   name or a user quote must not appear — this file is overwritten between epochs, and a reader
-   arriving mid-window must find missing information rather than confident stale instructions.
-   Quotes live in the record's `Standing orders`, the one place with a retirement mechanism.
-5. **Transition.** Call `handoff_context` with that file as the old epoch's final tool action. Its
-   authorization revalidation is authoritative. On `scheduled`, end old-context work.
+   Do not replace the three commands with prose. A SHA, tree, ref name or user quote must not
+   appear; the seed is a locator, and those values can become stale. Quotes live in the record's
+   `Standing orders`, the one place with a retirement mechanism.
+5. **Transition.** Call `handoff_context` with the complete inline seed as the old epoch's final tool
+   action. Its authorization revalidation is authoritative. On `scheduled`, end old-context work.
 
 After transition, run `plan.py locate` and read what it names, then reread the active skill, frozen
 spec and admission before repeating the required Git and runtime checks.
@@ -77,32 +73,20 @@ events are handled immediately. If no such event arrives, make one status confir
 than five minutes after acceptance while leaving the parent turn unblocked. A resume that overlaps
 child compaction may otherwise take unusually long.
 
-Use this writer recovery matrix:
+Use the worker context routing in [dispatch.md](references/dispatch.md).
 
-| context state | Root action |
-| --- | --- |
-| context is an asset / trusted | Resume the same session. |
-| context is debt / untrusted | Start a fresh run in the same lane. |
-| lane is unnecessary | `lane drop`. |
-
-Provider and liveness recovery stays with the same role, profile, and persistent lane. A semantic
-Contract change still requires admission; recovery remains in the same lane. Before every resume Root rebinds the identity binding;
-any mismatch fast-fails. Session context never crosses lane identity, cwd, branch, or write scope.
-
-Acceptance re-review is different: `acceptance start` removes and recreates the checkout at the
-same canonical lexical cwd. After the prior reviewer process is terminal and the replacement
-checkout is complete, Root rebinds its detached, tracked-clean exact SHA and resumes the same
-Standards or Spec reviewer session with the prior subject, new subject, and correction range. Each
-axis resumes its own session. If that reviewer context is not trusted, Root starts a fresh reviewer
-with the prior terminal report supplied explicitly; reviewers use their external `Report path` only.
+For acceptance re-review, after the prior reviewer process is terminal and `acceptance start`
+recreates the checkout, resume each trusted axis reviewer session with the prior subject, new
+subject, and correction range. If its context is untrusted, start a fresh reviewer with the prior
+terminal report supplied explicitly. The shared checkout binding and report rules remain in
+[admission.md](references/admission.md).
 
 ## Evidence
 
 Writer terminal/readiness evidence requires public Pi `process-terminal.json` proof whose state is
-`observed`, together with exact Git checks. `lane check` and the exact identity checks must agree on
-the expected branch, HEAD/base, first-parent topology, clean tree, cwd, Git root/common-dir, and
-lane binding. Async `complete`, timestamps such as `endedAt`, result/output files, PID disappearance,
-private candidate proof, and public `unknown` are diagnostic only; none substitutes for the public
+`observed`, together with the identity checks required by [dispatch.md](references/dispatch.md).
+Async `complete`, timestamps such as `endedAt`, result/output files, PID disappearance, private
+candidate proof, and public `unknown` are diagnostic only; none substitutes for the public
 `observed` proof.
 
 ## Runtime dependency
@@ -117,12 +101,10 @@ Bind this runtime to capabilities rather than a version string. Pi Subagents mus
 
 At task start Root runs one read-only `subagent doctor` to confirm runtime paths, agent and skill
 discovery, sessions, and intercom. Stop when a required capability is missing or its behavior does
-not match this binding; a different version string alone is not a rejection. Pi Subagents `0.40.0`
-is the last verified version, not a version pin or a standalone refusal condition.
+not match this binding.
 
 ## Authority
 
-Beyond the shared authority in [dispatch.md](references/dispatch.md), Root owns Slice admission,
-Contract semantics and amendments, validation-mode choice, the S2.5 mechanical guarantee, primary
-checkout dirt, `lane check`, `lane sync`, setup, and pin decisions. This runtime binding grants no implicit admission, collection,
-acceptance, persistence, setup, pin, cleanup, or task-narrative authority.
+Shared authority remains defined by [this skill](SKILL.md) and
+[dispatch.md](references/dispatch.md); Pi runtime capabilities grant no additional lifecycle or
+persistence authority.

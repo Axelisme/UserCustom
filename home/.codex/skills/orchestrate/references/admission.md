@@ -18,8 +18,8 @@ envelope, and the task record those land in. S1 starts once there is something t
   is whether the evidence will be taken there. An oracle that proves a **stand-in** — a factory
   rather than the production composition that ships, a message substring rather than the exact type,
   a decoded value rather than the bytes that actually cross the boundary — passes while the shipped
-  path stays broken, and the gap surfaces only after the Contract is written and the rework budget
-  is half spent. Refuse the Slice when the binding cannot be stated.
+  path stays broken, and the gap surfaces only after the Contract is written and several corrections
+  have been spent against it. Refuse the Slice when the binding cannot be stated.
 - **S1.2 Named deletion.** Name at least one existing production `file:symbol` deleted by the
   Slice. A first seam may say `deletes: none` once per task and names the predecessor's deleting
   Slice.
@@ -88,21 +88,27 @@ there — S2.5 proves only its lane-ready state and S2.8 never fires.
   A correction returns to the same reviewer on the same axis, which reads only the bounded delta
   and retains its prior verdicts — a correction is not self-validating, and one has already
   introduced the defect that superseded it. A Contract that fails this axis a second time is an S1
-  signal, not a third correction: recut, or report why the observable sentence survives. Nothing
-  here opens a new counter; the same first-parent range already carries the pre-production
-  amendments this produces.
+  signal, not a third correction: report it, naming whether the observable sentence survives, and
+  keep that report with the Slice. Nothing here opens a new counter or stops the lane; the same
+  first-parent range already carries the pre-production amendments this produces.
 
 ## S3 — Machine rework admission
 
-- Root keeps one monotonic `Machine rework: N/2` prose line in the active Slice ticket's Current
-  section before a Standards or Spec production correction.
+- Root keeps one monotonic `Machine rework: N` prose line in the active Slice ticket's Current
+  section before a Standards or Spec production correction. It is an instrument, not a gate: no
+  count blocks a dispatch, invalidates a Slice or requires re-admission, and there is never another
+  counter store.
 - Contract-only correction, backlog, decision blocking and rollout correction do not increment it.
-- A proposed third production correction is a scope event. Recut at S1 or report it; never dispatch
-  `Machine rework: 3/2` and never add another counter store.
+- Two is the advisory point, not a limit. From the third increment on, Root adds one line naming
+  what the preceding corrections' diagnosis missed. The count alone cannot separate four
+  independent defects found by successively deeper gates from one misdiagnosis corrected four
+  times, and those two read identically afterwards while calling for opposite handling. The line is
+  written where it is cheapest to write, which is not at review.
+- The count and those lines travel into the Slice's acceptance receipt, where a later reader meets
+  them.
 
-Recutting resets that counter, because the recut Slice is a new ticket. Nothing here survives that
-reset: a need re-cut five times has spent five admission and dispatch cycles, and no check in this
-file fires on it. Whoever notices reads the lane history and notices it themselves.
+Nothing here bounds the loop mechanically. A Slice corrected eight times is visible only in that
+receipt, and whoever reads it is who notices.
 
 Blocking is a closed enum: `spec_violation | data_loss | security |
 reproducible_behavior_failure` within the frozen envelope. Every blocker has `contract_basis`;

@@ -40,11 +40,12 @@ lane creates warn factually when projected `uncollected > 0` but remain successf
 The ticket carries the admitted Contract and validation mode. Continuation keeps the same persistent
 lane: a semantic Contract change requires fresh admission, while rework does not automatically change
 lane or session. Provider and liveness recovery use the worker context classification below. A first
-dispatch binds the full envelope above. A continuation into a session that already attested its cwd,
-Git root/common-dir and branch rebinds only the exact HEAD and the scope of this call; those
-attestations carry, and restating them each time is where a hand-copied envelope drifts from the
-lane it describes. Exact cwd, Git identity, branch, HEAD, and write scope remain hard-bound either
-way, and an identity mismatch fast-fails on the next path-bound operation.
+dispatch binds the full **identity binding** above — canonical lane cwd, Git root/common-dir,
+branch, HEAD and write scope, the five facts every later path-bound operation is checked against. A
+continuation into a session that already attested its cwd, Git root/common-dir and branch rebinds
+only the exact HEAD and the scope of this call; those attestations carry, and restating an unchanged
+identity binding each time is where a hand-copied one drifts from the lane it describes. Exact cwd, Git identity, branch, HEAD, and write scope remain hard-bound either
+way, and a mismatch in the identity binding fast-fails on the next path-bound operation.
 
 | worker context | Root action |
 | --- | --- |

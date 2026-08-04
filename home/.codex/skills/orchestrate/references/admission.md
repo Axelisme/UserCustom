@@ -28,14 +28,16 @@ envelope, and the task record those land in. S1 starts once there is something t
 
 There is no production-diff line limit. One existed and thresholded the wrong variable: the Slice
 with the largest rework had the smallest production diff, while frozen Contract depth ordered the
-same Slices monotonically. S2.7 thresholds that variable instead, and S1.3 with S0's Slicing stage
+same Slices monotonically. S2.8 thresholds that variable instead, and S1.3 with S0's Slicing stage
 carry what size was standing in for.
 
 ## S2 — Invariant admission
 
-A Contract commit declares `Origin: contract` and normalized `Immutable:` paths; an implementation
-commit declares neither. That pair is what makes the checks below derivable from the lane's
-first-parent range rather than from prose about it.
+In TDD mode a Contract commit declares `Origin: contract` and the normalized `Immutable:` paths it
+protects; an implementation commit declares neither, and `lane check` reports both projections. That
+pair is what makes S2.5's first stop and S2.8 derivable from the lane's first-parent range rather
+than from prose about it. A direct lane freezes no Contract commits, so neither check has a subject
+there — S2.5 proves only its lane-ready state and S2.8 never fires.
 
 - **S2.1 Observability.** Name the difference a user or client outside this Module observes when
   the invariant is violated. An internal-only difference is hardening and is not Contract work.
@@ -50,13 +52,14 @@ first-parent range rather than from prose about it.
   two a correction is, the originating axis reviewer decides — never the party proposing it. That
   party is the one the preserving answer releases, and S3 already exempts contract-only correction
   from its counter, so nothing else prices the choice.
-- **S2.5 Root's mechanical guarantee.** Root proves two states by executing them at an exact bound
-  SHA in an isolated checkout, and holds the result rather than the diff that produced it:
+- **S2.5 Root's mechanical guarantee.** Root proves each stop the lane has by executing it at an
+  exact bound SHA in an isolated checkout, and holds the result rather than the diff that produced
+  it:
 
-  | stop | proven state |
-  | --- | --- |
-  | Contract frozen | the focused command is red, red for the named missing behavior, and free of collection, import, type and environment failure |
-  | lane-ready | the declared selection is green and static checks over the changed paths are clean |
+  | stop | mode | proven state |
+  | --- | --- | --- |
+  | Contract frozen | TDD only | the focused command is red, red for the named missing behavior, and free of collection, import, type and environment failure |
+  | lane-ready | both | the declared selection is green and static checks over the changed paths are clean |
 
   Neither depends on the invariant class. A green focused selection is not the lane-ready state:
   the broader affected selection and the static checks belong inside the declared one, because a
@@ -66,15 +69,19 @@ first-parent range rather than from prose about it.
   never rebuilt by hand — Root included. A hand-built expectation is indistinguishable from a
   correct one until something recomputes it, so it enters the Contract wearing the authority of the
   check it was supposed to be. `lane check` reports the protected paths it measured for this reason.
-- **S2.7 Contract review.** When more than 1000 test lines freeze before the first production
-  commit, the Contract is read on its own axis before implementation is admitted. The oracle is
+- **S2.7 Satisfiable together.** The frozen assertions must be able to hold at once. An
+  unsatisfiable set is not caught by running it: a focused selection that feeds an assertion its own
+  output passes, and only a broader one exposes the contradiction. This is read, not executed, which
+  is why S2.8 sends it to an axis rather than to a command.
+- **S2.8 Contract review.** In a TDD lane, when more than 1000 test lines freeze before the first
+  production commit, the Contract is read on its own axis before implementation is admitted. The oracle is
   what every later gate measures against and no later gate re-examines it, so a wrong oracle makes
   every green after it meaningless. That reviewer is read-only at the exact Contract SHA and owes
   an applicable correction, not a complaint. **The threshold is provisional** — it comes from three
   Slices whose frozen depth ordered their rework monotonically (604 lines / 18 min, 1071 / 43,
   1664 / 71) — so report what it cost or saved on this increment and propose a better one. The
-  depth is the added test lines in `Origin: contract` commits before the first commit that declares
-  neither trailer; no command reports it yet.
+  depth is the added test lines in the `lane check` `contract_commits` that precede the first commit
+  declaring neither trailer; the commit set is reported, the line count is not yet.
 
   A correction returns to the same reviewer on the same axis, which reads only the bounded delta
   and retains its prior verdicts — a correction is not self-validating, and one has already

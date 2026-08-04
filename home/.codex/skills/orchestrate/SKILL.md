@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Git lanes for dispatched task work. Use when dispatching implementation to worker agents, integrating or landing completed lanes, checking task or lane state, or when a runtime binding needs the lane dispatch contract. Not for work one agent completes in a single context.
-skill_version: 155
+skill_version: 156
 ---
 
 # Orchestrate
@@ -133,7 +133,7 @@ unhealthy. Read-only diagnosis remains available.
 Read the matching [Codex runtime](runtime-codex.md), [Claude runtime](runtime-claude.md), or
 [Pi runtime](runtime-pi.md) before dispatch. Runtime bindings transport the frozen dispatch and
 exact-run evidence; they do not grant admission, collect, acceptance, persistence, setup, pin, or
-cleanup authority. Root owns Contract semantics, pre-collect test review, primary dirt, collection,
+cleanup authority. Root owns Contract semantics, the S2.5 mechanical guarantee, primary dirt, collection,
 acceptance coordination, landing, and recovery. A semantic change to the ticket's Contract requires
 fresh admission; persistent-lane rework does not automatically change its lane or session. Provider
 and liveness recovery follows the context asset/debt routing in dispatch.

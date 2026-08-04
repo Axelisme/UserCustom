@@ -29,6 +29,8 @@ PI_SKILL = ROOT / "home/.pi/agent/skills/orchestrate"
 CURRENT_VERSION = release.skill_version(CODEX_SKILL)
 
 
+OLDEST_BUNDLED_VERSION = 141
+
 class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
     """Contract module E through copied packages and the shipped subprocess."""
 
@@ -127,7 +129,9 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                 ("doctor",), commands=("diff",), long_options=("--path",)
             ),
             self.assert_help_surface(("doctor", "diff"), long_options=("--runtime",)),
-            self.assert_help_surface(("release",), long_options=("--version",)),
+            self.assert_help_surface(
+                ("release",), long_options=("--version", "--drop")
+            ),
         ]
         all_help = "\n".join(help_texts)
         for retired in (
@@ -1023,8 +1027,16 @@ class SourcePublicationContractTests(unittest.TestCase):
     ) -> None:
         self.assertGreaterEqual(
             CURRENT_VERSION,
-            140,
-            "source package still identifies a pre-v140 release",
+            OLDEST_BUNDLED_VERSION,
+            "source package identifies a release older than the bundled floor",
+        )
+        self.assertEqual(
+            min(
+                int(path.stem)
+                for path in (CODEX_SKILL / "manifests").glob("*.json")
+            ),
+            OLDEST_BUNDLED_VERSION,
+            "a manifest below the supported floor is still bundled",
         )
         paths = [
             skill / f"manifests/{CURRENT_VERSION}.json"
@@ -1036,7 +1048,9 @@ class SourcePublicationContractTests(unittest.TestCase):
 
         current = json.loads(paths[0].read_text(encoding="utf-8"))
         previous = json.loads(
-            (CODEX_SKILL / "manifests/137.json").read_text(encoding="utf-8")
+            (CODEX_SKILL / f"manifests/{OLDEST_BUNDLED_VERSION}.json").read_text(
+                encoding="utf-8"
+            )
         )
         self.assertEqual(current["skill_version"], CURRENT_VERSION)
         self.assertEqual(current["orchestrate_compat"], CURRENT_VERSION)
@@ -1075,7 +1089,7 @@ class SourcePublicationContractTests(unittest.TestCase):
         )
         self.assertEqual(
             comparison["changed_runtime_assets"],
-            [".pi/agent/extensions/orchestrate-pi.ts"],
+            [],
         )
 
         with tempfile.TemporaryDirectory(prefix="orchestrate-regenerate-") as temporary:

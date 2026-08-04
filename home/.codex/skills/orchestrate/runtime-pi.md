@@ -86,8 +86,7 @@ Use this writer recovery matrix:
 | lane is unnecessary | `lane drop`. |
 
 Provider and liveness recovery stays with the same role, profile, and persistent lane. A semantic
-Contract change still requires admission; recovery remains in the same lane. Before every resume
-Root rebinds the exact cwd, Git root/common-dir, branch, HEAD, base, lane identity, and write scope;
+Contract change still requires admission; recovery remains in the same lane. Before every resume Root rebinds the identity binding;
 any mismatch fast-fails. Session context never crosses lane identity, cwd, branch, or write scope.
 
 Acceptance re-review is different: `acceptance start` removes and recreates the checkout at the
@@ -125,6 +124,5 @@ is the last verified version, not a version pin or a standalone refusal conditio
 
 Beyond the shared authority in [dispatch.md](references/dispatch.md), Root owns Slice admission,
 Contract semantics and amendments, validation-mode choice, the S2.5 mechanical guarantee, primary
-checkout dirt, `lane check`, `lane sync`, recovery, collection, acceptance, landing, reporting,
-removal, setup, and pin decisions. This runtime binding grants no implicit admission, collection,
+checkout dirt, `lane check`, `lane sync`, setup, and pin decisions. This runtime binding grants no implicit admission, collection,
 acceptance, persistence, setup, pin, cleanup, or task-narrative authority.

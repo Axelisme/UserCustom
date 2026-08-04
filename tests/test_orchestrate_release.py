@@ -87,51 +87,6 @@ class RuntimeParityTests(unittest.TestCase):
             ):
                 self.assertIn(f".{runtime}/agents/lane-worker{suffix}", manifest["profiles"])
 
-    def test_profile_contract_hash_is_compare_authority(self) -> None:
-        old = {
-            "skill_version": 130,
-            "orchestrate_compat": 130,
-            "documents": {},
-            "profiles": {
-                ".codex/agents/contract-planner.toml": {
-                    "profile_contract_sha256": "old-contract",
-                    "standing_orders_sha256": "same-standing-orders",
-                }
-            },
-        }
-        new = {
-            "skill_version": 131,
-            "orchestrate_compat": 131,
-            "documents": {},
-            "profiles": {
-                ".codex/agents/contract-planner.toml": {
-                    "profile_contract_sha256": "new-contract",
-                    "standing_orders_sha256": "same-standing-orders",
-                }
-            },
-        }
-        comparison = self.release.compare_manifests(old, new)
-        self.assertEqual(comparison["changed_profiles"], [".codex/agents/contract-planner.toml"])
-
-    def test_old_schema_one_manifest_without_runtime_assets_compares_as_empty(self) -> None:
-        old = {
-            "schema_version": 1,
-            "skill_version": 132,
-            "orchestrate_compat": 132,
-            "documents": {},
-            "profiles": {},
-        }
-        new = {
-            **old,
-            "skill_version": 133,
-            "orchestrate_compat": 133,
-            "runtime_assets": {},
-        }
-
-        comparison = self.release.compare_manifests(old, new)
-
-        self.assertEqual(comparison["changed_runtime_assets"], [])
-
     def test_release_cli_success_reports_newly_installed_version(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary) / "home"
@@ -169,27 +124,63 @@ class RuntimeParityTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(
             self.release.OrchestrateError,
-            r"runtime_assets is not allowed for v138 and later",
+            r"runtime_assets is not allowed",
         ):
             self.release.validate_manifest_structure(
                 payload, Path("/tmp/v138-invalid-manifest.json"), 138
             )
 
-    def test_v137_manifest_requires_runtime_assets(self) -> None:
-        payload = {
-            "schema_version": 1,
-            "skill_version": 137,
-            "orchestrate_compat": 137,
+    def test_prompt_identity_is_compare_authority(self) -> None:
+        base = {
+            "skill_version": 154,
+            "orchestrate_compat": 154,
             "documents": {},
-            "profiles": {},
+            "profiles": {
+                ".codex/agents/lane-worker.toml": {
+                    "agent_name": "lane-worker",
+                    "prompt_sha256": "a" * 64,
+                }
+            },
         }
+        new = {
+            **base,
+            "skill_version": 155,
+            "orchestrate_compat": 155,
+            "profiles": {
+                ".codex/agents/lane-worker.toml": {
+                    "agent_name": "lane-worker",
+                    "prompt_sha256": "b" * 64,
+                }
+            },
+        }
+        comparison = self.release.compare_manifests(base, new)
+        self.assertEqual(
+            comparison["changed_profiles"], [".codex/agents/lane-worker.toml"]
+        )
+
+    def test_release_preflight_requires_a_removal_to_be_declared(self) -> None:
+        skill_dir = CODEX_SKILL
+        version = self.release.skill_version(skill_dir)
+        manifest = self.release.load_manifest(skill_dir, version)
+        present = sorted(
+            name for name in manifest["documents"] if (skill_dir / name).is_file()
+        )
+        self.assertTrue(present)
+        victim = present[-1]
+
         with self.assertRaisesRegex(
-            self.release.OrchestrateError,
-            r"runtime_assets must be an object for v137 and earlier",
+            self.release.OrchestrateError, r"dropped document still exists"
         ):
-            self.release.validate_manifest_structure(
-                payload, Path("/tmp/v137-invalid-manifest.json"), 137
+            self.release.require_intact_package(skill_dir, frozenset({victim}))
+
+        with self.assertRaisesRegex(
+            self.release.OrchestrateError, r"dropped document is not in v"
+        ):
+            self.release.require_intact_package(
+                skill_dir, frozenset({"references/not-a-document.md"})
             )
+
+        self.assertEqual(self.release.require_intact_package(skill_dir), manifest)
 
     def test_doctor_detects_shipped_profile_tamper(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

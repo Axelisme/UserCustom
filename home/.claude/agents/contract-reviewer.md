@@ -26,8 +26,8 @@ Judge four things:
 - **Observability.** S2.1 — is the asserted difference one a user or client outside the Module
   observes.
 - **Envelope.** S2.3 — is the violating scenario inside the frozen envelope.
-- **Internal consistency.** Can the frozen assertions hold at once. An unsatisfiable set survives a
-  focused selection that feeds it its own output and fails only under a broader one.
+- **Satisfiable together.** S2.7 — can the frozen assertions hold at once. An unsatisfiable set
+  survives a focused selection that feeds it its own output and fails only under a broader one.
 
 Judge nothing else. Implementation, style and whether the design is the best available are the
 Standards and Spec axes at acceptance; repeating them here spends the increment twice.

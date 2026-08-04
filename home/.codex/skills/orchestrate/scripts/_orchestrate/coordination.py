@@ -369,6 +369,7 @@ class LaneValidation:
     base: str | None
     first_parent_valid: bool
     protected_paths: tuple[str, ...]
+    contract_commits: tuple[str, ...]
     diagnostics: tuple[dict[str, str], ...]
 
     @property
@@ -409,6 +410,7 @@ def _lane_validation(
             None,
             False,
             (),
+            (),
             (_diagnostic("lane_not_found", "lane worktree does not exist"),),
         )
 
@@ -431,6 +433,7 @@ def _lane_validation(
         )
 
     protected: set[str] = set()
+    contract_commits: list[str] = []
     commits = first_parent_range(repo.worktree_root, base, tip) if base and tip else None
     first_parent_valid = commits is not None
     if base and tip and commits is None:
@@ -441,6 +444,8 @@ def _lane_validation(
         immutable_invalid = False
         immutable_violation = False
         for sha in commits:
+            if "contract" in commit_trailer_values(repo.worktree_root, sha, "Origin"):
+                contract_commits.append(sha)
             declared = immutable_declarations(repo.worktree_root, sha)
             valid = [value for value in declared if _normalized_immutable_path(value)]
             if len(valid) != len(declared):
@@ -471,6 +476,7 @@ def _lane_validation(
         base,
         first_parent_valid,
         tuple(sorted(protected)),
+        tuple(contract_commits),
         tuple(unique[:20]),
     )
 
@@ -503,6 +509,7 @@ def lane_check(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandRe
             "sha": lane_tip,
             "base": lane_base,
             "protected_paths": list(validation.protected_paths),
+            "contract_commits": list(validation.contract_commits),
         },
         record_event(task, "lane-check", "success", lane_id=lane_id),
     )

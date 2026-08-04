@@ -196,7 +196,9 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             self.assert_help_surface(("pin", "status")),
             self.assert_help_surface(("pin", "set")),
             self.assert_help_surface(("doctor", "diff"), long_options=("--runtime",)),
-            self.assert_help_surface(("release",), long_options=("--version",)),
+            self.assert_help_surface(
+                ("release",), long_options=("--version", "--drop")
+            ),
         ]
         all_help = "\n".join(help_texts)
         for retired in (

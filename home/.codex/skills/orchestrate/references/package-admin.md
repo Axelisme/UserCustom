@@ -10,8 +10,11 @@ filters runtime-specific documents, profiles, and assets. `pin status` and the a
 selects the executable or blocks task work merely because it is absent or different.
 
 `release --version <exact-next>` is the sole package publication command. It requires an intact
-current package — its manifest loads and lists no missing document — and an exact-next migration
-guide. It does not require the current package to still match its own hashes, because publication
+current package — its manifest loads and every document it lists is present — and an exact-next
+migration guide. Removing a document requires naming it with a repeatable `--drop <path>`: an
+absent file is the only evidence either way, so a deliberate deletion and a lost file look
+identical and the intent is declared rather than inferred. A `--drop` that names something outside
+the current manifest, or something still on disk, fails the preflight. It does not require the current package to still match its own hashes, because publication
 edits exactly those documents. It updates the source identity, writes the target manifest, verifies
 the published result against it, and restores prior bytes on failure. Apply manifest-hashed
 migration guides in order before a separately authorized setup or pin change.

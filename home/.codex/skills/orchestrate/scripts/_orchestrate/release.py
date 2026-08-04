@@ -147,54 +147,6 @@ def profile_identity_prompt(path: Path) -> tuple[str, str]:
     raise OrchestrateError(f"unsupported profile format: {path}")
 
 
-def profile_standing_orders(text: str, suffix: str) -> str:
-    if suffix == ".toml":
-        match = re.search(
-            r"developer_instructions\s*=\s*'''\s*(.*?)\s*'''",
-            text,
-            flags=re.DOTALL,
-        )
-        return match.group(1) if match else text
-    lines = text.splitlines()
-    if lines and lines[0].strip() == "---":
-        try:
-            return "\n".join(lines[lines.index("---", 1) + 1 :])
-        except ValueError:
-            pass
-    return text
-
-
-def profile_contract(text: str, suffix: str) -> str:
-    """Return behavior/tooling contract while excluding runtime tuning knobs."""
-    ignored = {"model", "model_reasoning_effort", "thinking", "fallbackModels"}
-    lines = text.splitlines()
-    if suffix == ".toml":
-        try:
-            contract = tomllib.loads(text)
-        except tomllib.TOMLDecodeError as exc:
-            raise OrchestrateError(f"invalid TOML profile: {exc}") from exc
-        for key in ignored:
-            contract.pop(key, None)
-        return json.dumps(
-            contract, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-        )
-    if lines and lines[0].strip() == "---":
-        try:
-            end = lines.index("---", 1)
-        except ValueError:
-            return text
-        frontmatter: list[str] = []
-        skip_value = False
-        for line in lines[1:end]:
-            match = re.match(r"^([A-Za-z_][\w-]*):", line)
-            if match:
-                skip_value = match.group(1) in ignored
-            if not skip_value:
-                frontmatter.append(line)
-        return "\n".join(["---", *frontmatter, "---", *lines[end + 1 :]])
-    return text
-
-
 def document_paths(skill_dir: Path) -> list[Path]:
     paths = [skill_dir / "SKILL.md", *sorted(skill_dir.glob("runtime-*.md"))]
     paths.extend(sorted((skill_dir / "references").glob("*.md")))
@@ -241,26 +193,11 @@ def build_manifest(skill_dir: Path, version: int) -> dict[str, Any]:
         if not path.is_file():
             continue
         relative = path.relative_to(home).as_posix()
-        if version >= 137:
-            agent_name, prompt = profile_identity_prompt(path)
-            entry = {
-                "agent_name": agent_name,
-                "prompt_sha256": sha256_bytes(prompt.encode("utf-8")),
-            }
-        else:
-            data = path.read_bytes()
-            text = data.decode("utf-8")
-            entry = {
-                "bytes": len(data),
-                "sha256": sha256_bytes(data),
-                "standing_orders_sha256": normalized_sha256(
-                    profile_standing_orders(text, path.suffix)
-                ),
-                "profile_contract_sha256": normalized_sha256(
-                    profile_contract(text, path.suffix)
-                ),
-            }
-        profiles[relative] = entry
+        agent_name, prompt = profile_identity_prompt(path)
+        profiles[relative] = {
+            "agent_name": agent_name,
+            "prompt_sha256": sha256_bytes(prompt.encode("utf-8")),
+        }
     return {
         "schema_version": MANIFEST_SCHEMA,
         "skill_version": version,
@@ -274,53 +211,27 @@ def manifest_path(skill_dir: Path, version: int) -> Path:
     return skill_dir / "manifests" / f"{version}.json"
 
 
-def _validate_profile_entry(
-    entry: dict[str, Any], name: str, version: int, path: Path
-) -> None:
-    if version >= 137:
-        expected = {"agent_name", "prompt_sha256"}
-        if set(entry) != expected:
-            raise OrchestrateError(
-                f"invalid release manifest structure {path}: profile entry {name!r} "
-                f"must contain exactly {sorted(expected)}"
-            )
-        agent_name = entry["agent_name"]
-        prompt_sha256 = entry["prompt_sha256"]
-        if not isinstance(agent_name, str) or not agent_name.strip():
-            raise OrchestrateError(
-                f"invalid release manifest structure {path}: profile entry {name!r} "
-                "requires non-blank string agent_name"
-            )
-        if not isinstance(prompt_sha256, str) or re.fullmatch(
-            r"[0-9a-f]{64}", prompt_sha256
-        ) is None:
-            raise OrchestrateError(
-                f"invalid release manifest structure {path}: profile entry {name!r} "
-                "requires a SHA-256 prompt_sha256"
-            )
-        return
-    expected = {
-        "bytes",
-        "sha256",
-        "standing_orders_sha256",
-        "profile_contract_sha256",
-    }
+def _validate_profile_entry(entry: dict[str, Any], name: str, path: Path) -> None:
+    expected = {"agent_name", "prompt_sha256"}
     if set(entry) != expected:
         raise OrchestrateError(
-            f"invalid release manifest structure {path}: legacy profile entry "
-            f"{name!r} must contain exactly {sorted(expected)}"
+            f"invalid release manifest structure {path}: profile entry {name!r} "
+            f"must contain exactly {sorted(expected)}"
         )
-    if type(entry["bytes"]) is not int:
+    agent_name = entry["agent_name"]
+    prompt_sha256 = entry["prompt_sha256"]
+    if not isinstance(agent_name, str) or not agent_name.strip():
         raise OrchestrateError(
-            f"invalid release manifest structure {path}: legacy profile entry "
-            f"{name!r} requires integer bytes"
+            f"invalid release manifest structure {path}: profile entry {name!r} "
+            "requires non-blank string agent_name"
         )
-    for field in ("sha256", "standing_orders_sha256", "profile_contract_sha256"):
-        if not isinstance(entry[field], str):
-            raise OrchestrateError(
-                f"invalid release manifest structure {path}: legacy profile entry "
-                f"{name!r} requires string {field}"
-            )
+    if not isinstance(prompt_sha256, str) or re.fullmatch(
+        r"[0-9a-f]{64}", prompt_sha256
+    ) is None:
+        raise OrchestrateError(
+            f"invalid release manifest structure {path}: profile entry {name!r} "
+            "requires a SHA-256 prompt_sha256"
+        )
 
 
 def validate_manifest_structure(
@@ -336,30 +247,20 @@ def validate_manifest_structure(
             f"invalid release manifest structure {path}: "
             "skill_version must be an integer"
         )
-    shape_version = manifest_version if version is None else version
     if type(payload.get("orchestrate_compat")) is not int:
         raise OrchestrateError(
             f"invalid release manifest structure {path}: "
             "orchestrate_compat must be an integer"
         )
-    if shape_version <= 137:
-        runtime_assets = payload.get("runtime_assets")
-        if not isinstance(runtime_assets, dict):
-            raise OrchestrateError(
-                f"invalid release manifest structure {path}: "
-                "runtime_assets must be an object for v137 and earlier"
-            )
-    elif "runtime_assets" in payload:
+    if "runtime_assets" in payload:
         raise OrchestrateError(
             f"invalid release manifest structure {path}: "
-            "runtime_assets is not allowed for v138 and later"
+            "runtime_assets is not allowed"
         )
     categories = [
         ("documents", "sha256"),
         ("profiles", None),
     ]
-    if shape_version <= 137:
-        categories.append(("runtime_assets", "sha256"))
     for category, hash_field in categories:
         entries = payload.get(category)
         if not isinstance(entries, dict):
@@ -379,7 +280,7 @@ def validate_manifest_structure(
                     f"{category} entry {name!r} must be an object"
                 )
             if category == "profiles":
-                _validate_profile_entry(entry, name, shape_version, path)
+                _validate_profile_entry(entry, name, path)
             else:
                 assert hash_field is not None
                 if not isinstance(entry.get(hash_field), str):
@@ -568,16 +469,11 @@ def verify_release(skill_dir: Path) -> dict[str, Any]:
                 observed_entry = observed_items[name]
                 if category == "documents":
                     matches = expected["sha256"] == observed_entry["sha256"]
-                elif version >= 137:
+                else:
                     matches = (
                         expected["agent_name"] == observed_entry["agent_name"]
                         and expected["prompt_sha256"]
                         == observed_entry["prompt_sha256"]
-                    )
-                else:
-                    matches = (
-                        expected["profile_contract_sha256"]
-                        == observed_entry["profile_contract_sha256"]
                     )
                 if not matches:
                     errors.append(f"hash mismatch: {name}")
@@ -653,27 +549,41 @@ def require_verified_release(skill_dir: Path) -> dict[str, Any]:
     return result
 
 
-def require_intact_package(skill_dir: Path) -> dict[str, Any]:
+def require_intact_package(
+    skill_dir: Path, dropped: frozenset[str] = frozenset()
+) -> dict[str, Any]:
     """Publication preflight: the current package must be whole, not unchanged.
 
     Publishing a release necessarily edits documents the current manifest still
     hashes, so hash equality cannot be a precondition for it. Require instead
-    that the current manifest loads and that no document it lists has gone
-    missing; `release_package` verifies the published result against the target
-    manifest and restores prior bytes when that fails.
+    that the current manifest loads and that every document it lists is either
+    still present or named in `dropped`; `release_package` verifies the published
+    result against the target manifest and restores prior bytes when that fails.
+
+    A removal is declared rather than inferred because an absent file is the
+    only evidence either way: a document deleted on purpose and one lost by
+    accident are byte-for-byte the same observation.
     """
     skill_dir = skill_dir.resolve()
     version = skill_version(skill_dir)
     manifest = load_manifest(skill_dir, version)
-    missing = sorted(
-        name
-        for name in manifest.get("documents", {})
+    documents = set(manifest.get("documents", {}))
+    errors = [
+        f"dropped document is not in v{version}: {name}"
+        for name in sorted(dropped - documents)
+    ]
+    errors += [
+        f"dropped document still exists: {name}"
+        for name in sorted(dropped & documents)
+        if (skill_dir / name).is_file()
+    ]
+    errors += [
+        f"missing document: {name}"
+        for name in sorted(documents - dropped)
         if not (skill_dir / name).is_file()
-    )
-    if missing:
-        raise OrchestrateError(
-            "release preflight failed: " + "; ".join(f"missing document: {name}" for name in missing)
-        )
+    ]
+    if errors:
+        raise OrchestrateError("release preflight failed: " + "; ".join(errors))
     return manifest
 
 
@@ -788,32 +698,17 @@ def compare_manifests(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any
             }
         )
     profile_names = sorted(set(old["profiles"]) | set(new["profiles"]))
-    if old["skill_version"] == 136 and new["skill_version"] == 137:
-        # v137 changes the projection schema once, so every shipped profile is
-        # explicitly acknowledged even when its identity and prompt are stable.
-        changed_profiles = profile_names
-    else:
-        changed_profiles = []
-        for name in profile_names:
-            before = old["profiles"].get(name)
-            after = new["profiles"].get(name)
-            if before is None or after is None:
-                changed_profiles.append(name)
-                continue
-            if old["skill_version"] >= 137 and new["skill_version"] >= 137:
-                changed = (
-                    before["agent_name"] != after["agent_name"]
-                    or before["prompt_sha256"] != after["prompt_sha256"]
-                )
-            elif old["skill_version"] < 137 and new["skill_version"] < 137:
-                changed = (
-                    before["profile_contract_sha256"]
-                    != after["profile_contract_sha256"]
-                )
-            else:
-                changed = True
-            if changed:
-                changed_profiles.append(name)
+    changed_profiles = []
+    for name in profile_names:
+        before = old["profiles"].get(name)
+        after = new["profiles"].get(name)
+        if (
+            before is None
+            or after is None
+            or before["agent_name"] != after["agent_name"]
+            or before["prompt_sha256"] != after["prompt_sha256"]
+        ):
+            changed_profiles.append(name)
     old_runtime_assets = old.get("runtime_assets", {})
     new_runtime_assets = new.get("runtime_assets", {})
     changed_runtime_assets = [

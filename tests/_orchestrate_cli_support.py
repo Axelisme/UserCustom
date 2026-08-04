@@ -234,6 +234,7 @@ class OrchestrateCliRepositoryTestCase(unittest.TestCase):
                 "sha",
                 "base",
                 "protected_paths",
+                "contract_commits",
             },
         )
         self.assertIs(payload["ok"], True)
@@ -246,6 +247,9 @@ class OrchestrateCliRepositoryTestCase(unittest.TestCase):
         for entry in payload["protected_paths"]:
             self.assertIsInstance(entry, str)
             self.assertTrue(entry)
+        self.assertIsInstance(payload["contract_commits"], list)
+        for entry in payload["contract_commits"]:
+            self.assertRegex(entry, r"^[0-9a-f]{40}$")
         return payload
 
     def operational_failure(

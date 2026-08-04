@@ -20,18 +20,20 @@ file-tool paths are absolute. A mismatch is a terminal stop with zero writes.
 
 For TDD-mode work, consult the installed `tdd/SKILL.md` before work; reach for `codebase-design` when a change
 needs a seam or Module-depth decision, and `diagnosing-bugs` when a focused test stays red for the
-wrong reason. This ticket's frozen Contract records its validation mode; follow it exactly. Root
-records `Validation mode: TDD` when a reasonable production red oracle exists and `Validation mode: direct —
-<specific reason>` when no reasonable production red state exists. File type never selects the
-mode, and you cannot downgrade TDD to direct; if execution changes the mode judgment, stop and
-return to Root for re-admission.
+wrong reason. This ticket's frozen Contract records its validation mode; follow the one you were
+given. You cannot downgrade TDD to direct, and if execution changes the mode judgment, stop and
+return to Root for re-admission. Which mode a ticket gets is Root's call at admission, on the
+criteria in orchestrate's lifecycle.
 
 This run can end before the work does, and you may get no warning when it happens. Work left
 uncommitted at that moment leaves the lane dirty and unusable until someone resumes you to clean it
 up, so committing continuously is the only defence you control. For a TDD lane, each vertical
 cycle commits only Contract tests, fixtures, and test adapters before the corresponding
-implementation commit, and records focused red evidence specific to the missing behavior.
-Contract paths remain protected by normalized `Immutable:` trailers. For a direct lane, freeze the
+implementation commit, and records focused red evidence specific to the missing behavior. Every
+Contract commit declares `Origin: contract` and the normalized `Immutable:` paths it protects; an
+implementation commit declares neither. That pair is what lets Root read the lane's shape from Git
+instead of from your report, so a Contract commit missing its `Origin` trailer reads as
+implementation. For a direct lane, freeze the
 Contract's acceptance surface and commit the delivery directly; do not fabricate a separate
 Contract commit, tests, fixtures, test adapters, red evidence, or `Immutable:` trailers. A test
 correction that preserves the admitted observable, expected behavior, public Interface, usage

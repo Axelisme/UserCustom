@@ -1,7 +1,8 @@
 # Dev-flow design principles
 
-Read this file when evolving the workflow. The admission standard is the normative S0–S5
-authority; these principles explain altitude and evidence without duplicating its checks.
+Read this file when evolving the workflow. `SKILL.md` owns S0 and orchestrate's
+[admission](../../orchestrate/references/admission.md) owns S1–S5; these principles explain
+altitude and evidence without duplicating either one's checks.
 
 1. Git commits, refs, and trailers are durable workflow truth; prose is a pointer.
 2. Every handoff and gate binds to one exact clean SHA, never to a summary.
@@ -15,7 +16,7 @@ authority; these principles explain altitude and evidence without duplicating it
 9. Depth does not appear on its own: incremental, slice-by-slice delivery only constrains the size
    and order of each increment, and takes no position on where a seam belongs, so left unchecked it
    pulls toward one thin adapter per feature. S0's Design stage and S2's red-evidence gate exist to
-   counteract that pull; see `admission-standard.md` for the checks.
+   counteract that pull; see `../SKILL.md` and orchestrate's `admission.md` for the checks.
 10. A timing, locking, retention, or replay device enters only with a test that is red without
     it; otherwise it is speculative complexity.
 11. Production reachability is evidence, not an assumption: a green test suite cannot validate

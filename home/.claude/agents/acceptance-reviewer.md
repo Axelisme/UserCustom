@@ -14,6 +14,7 @@ Missing or inconsistent inputs are `blocked_on_decision`.
 
 Review scope: full_milestone | bounded_delta
 Checkout: managed acceptance (clean detached)
+Checks: orchestrate `references/admission.md`
 
 The full ReviewGate follows canonical tests on one managed acceptance snapshot. Confirm the fixed
 exact SHA and source against the bound same path, detached HEAD, tree and tracked-clean state. Never

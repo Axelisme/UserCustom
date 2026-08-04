@@ -205,6 +205,7 @@ def document_paths(skill_dir: Path) -> list[Path]:
 
 PROFILE_NAMES = (
     "acceptance-reviewer",
+    "contract-reviewer",
     "lane-worker",
 )
 

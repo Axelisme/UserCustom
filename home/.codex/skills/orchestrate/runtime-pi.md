@@ -59,7 +59,7 @@ When Root chooses to transition:
    authorization revalidation is authoritative. On `scheduled`, end old-context work.
 
 After transition, run `plan.py locate` and read what it names, then reread the active skill, frozen
-spec and admission standard before repeating the required Git and runtime checks.
+spec and admission before repeating the required Git and runtime checks.
 
 ## Recovery
 
@@ -124,7 +124,7 @@ is the last verified version, not a version pin or a standalone refusal conditio
 ## Authority
 
 Beyond the shared authority in [dispatch.md](references/dispatch.md), Root owns Slice admission,
-Contract semantics and amendments, validation-mode choice, the S2.4 pre-collect review, primary
+Contract semantics and amendments, validation-mode choice, the S2.5 mechanical guarantee, primary
 checkout dirt, `lane check`, `lane sync`, recovery, collection, acceptance, landing, reporting,
 removal, setup, and pin decisions. This runtime binding grants no implicit admission, collection,
 acceptance, persistence, setup, pin, cleanup, or task-narrative authority.

@@ -15,7 +15,7 @@ Working inside the canonical lane cwd is the only hard contract; the agent, its 
 mode are recommendations. The worker reports the cwd, Git root/common-dir, branch, HEAD, and clean state
 it observes, and Root judges whether they match the admitted lane. The worker runs no mechanical
 self-check and does not block itself. Every later operation is path-bound. Root verifies identity and
-primary dirt, then holds the mode-appropriate pre-collect evidence the admission standard's S2.5
+primary dirt, then holds the mode-appropriate pre-collect evidence [admission](admission.md) S2.5
 requires — proven by executing it at the exact bound SHA, not read out of the diffs that produced
 it. In direct mode that evidence is the frozen Contract pointer, changed and protected paths, and
 the direct validation results. Root alone invokes `lane sync` or collection.

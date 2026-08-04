@@ -10,15 +10,80 @@ Use this skill for work that needs durable orientation across sessions.
 
 ## Jurisdiction
 
-Dev-flow owns the durable task lifecycle and nothing beyond it. The
-[admission standard](references/admission-standard.md) is the sole normative S0–S5 authority;
-candidate-backlog owns backlog eligibility; orchestrate owns Git and runtime coordination. When
-this skill's work reaches one of those, **point at it and stop there**. A restatement is a second
-copy that drifts from the original, and the reader cannot tell which copy is current — so the
-obligation runs both ways: routing skills point at the admission standard rather than repeating its
-checks. Read it before wayfinding, spec, or ticket admission. When evolving the workflow itself,
-read the [design principles](references/design-principles.md) for the altitude and evidence behind
-those checks.
+Dev-flow owns the durable task lifecycle, the record's structure, the conditional route through
+wayfinder, to-spec and to-tickets, and the S0 design admission below — the stages that run before
+there is anything to dispatch. Candidate-backlog owns backlog eligibility. **Orchestrate owns
+[S1–S5](../orchestrate/references/admission.md)** along with Git and runtime coordination: once
+work is a Slice in a lane, every check that admits it is decided from Git artifacts orchestrate
+holds, and it ships and versions with the machinery that enforces it.
+
+When this skill's work reaches one of those, **point at it and stop there**. A restatement is a
+second copy that drifts from the original, and the reader cannot tell which copy is current — so
+the obligation runs both ways. When evolving the workflow itself, read the
+[design principles](references/design-principles.md) for the altitude and evidence behind these
+checks.
+
+## S0 — Design admission: Need → Design → Slicing → Triage
+
+S0 governs admission of new design work. It runs as a four-stage sequence — Need, Design, Slicing,
+Triage — in that order; each stage's output is what the next stage designs, slices or triages.
+`S0` remains the cross-reference anchor for the whole sequence. Read it before wayfinding, spec, or
+ticket admission.
+
+Purely decision-only tasks (no implementation output) and small corrections completed within
+Root's single context do not need the full sequence. They still owe the Envelope slot in the task
+record a value — see Need below — it is never left blank.
+
+### Need
+
+Before designing, record the smallest current observable user-visible need and its usage envelope,
+and ground the design in that observable rather than in hypothetical robustness. The envelope is
+agreed with the current user, not inferred: confirm the expected behavior, the usage scenarios and
+which cases are out of envelope before designing. If they cannot be confirmed, stop and ask; do not
+design past the gap.
+
+Record the agreed envelope in the task record's `Envelope` section, or point that section at the
+artifact that carries it (for example a frozen `spec.md`). This landing point is the evidence
+downstream stages use to reject an out-of-envelope finding: S3 already requires `contract_basis`
+against a closed blocking enum, but that gate only holds when the envelope has somewhere to point.
+
+### Design
+
+Generate the smallest complete end-to-end design that satisfies the need, starting from the need
+itself rather than from what already exists. Carry forward an existing mechanism only when it is
+the smallest way to satisfy the current need, not because it is already there.
+
+Module depth is a deliverable of this stage, produced deliberately, not a side effect discovered
+during implementation. For the vocabulary and technique for designing a deep Module, see
+[`codebase-design`](../codebase-design/SKILL.md); S0 does not restate it.
+
+### Slicing
+
+Deliver one usable tracer through the whole required path before deepening any one Module, then
+advance slice by slice — never big-bang. Depth on a single Module waits until the tracer shows the
+usable whole cannot be correct without it. A Slice that leaves this stage is admitted by S1.
+
+### Triage
+
+Both questions below are asked about something that has actually been observed. A case that exists
+only as speculation is not triaged at all: it is neither built nor backlogged.
+
+For each admitted requirement, ask two questions:
+
+1. Is it common in the expected usage scenarios?
+2. Did the current user ask for it?
+
+When the answer to both is no, give it the simplest correct handling in the current Contract — a
+clear refusal, a fast-fail or a report all qualify — and send the more elaborate treatment to the
+backlog instead of building it now.
+
+Guardrail: the simplest handling must itself be safe — it must preserve current data and current
+authority. When no safe simple handling exists, the case is not "rare, therefore simple"; it is a
+current correctness gap and stays in the current Contract.
+
+Candidate-backlog's hard gates are the sole authority for backlog eligibility, required fields and
+lifecycle; S0 does not restate them. An edge returns from backlog only through explicit planning,
+after frequency, impact or a real resumed scenario makes it part of a current minimum need.
 
 ## Custody
 
@@ -153,7 +218,7 @@ read out of Git state as absent, not as a second opinion.
 
 `archive` is a neutral directory move and never implies completion, but use it only after
 implementation completes or the task is explicitly abandoned; a handoff alone does not qualify.
-Final close-out follows S5. After compaction, run `locate` and read what it names — it derives the
+Final close-out follows orchestrate's S5. After compaction, run `locate` and read what it names — it derives the
 record's health, its frontier and where to look, all at read time. Then read this skill and the
 `Envelope` and `Standing orders` it points you at: those carry what the user froze and granted, and
 are the first things a compacted session loses.

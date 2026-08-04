@@ -1042,8 +1042,7 @@ class SourcePublicationContractTests(unittest.TestCase):
         self.assertEqual(current["orchestrate_compat"], CURRENT_VERSION)
         self.assertTrue(current["documents"])
         self.assertNotIn("runtime_assets", current)
-        # Since v142 the manifest binds only the profiles orchestrate dispatches,
-        # so the roster is a subset of the historical one rather than equal to it.
+        # The manifest binds exactly the profiles orchestrate dispatches.
         self.assertEqual(
             set(current["profiles"]),
             {
@@ -1052,7 +1051,6 @@ class SourcePublicationContractTests(unittest.TestCase):
                 if path.is_file()
             },
         )
-        self.assertLessEqual(set(current["profiles"]), set(previous["profiles"]))
         for path, entry in current["profiles"].items():
             with self.subTest(profile=path):
                 self.assertEqual(set(entry), {"agent_name", "prompt_sha256"})
@@ -1379,13 +1377,6 @@ class SourcePublicationContractTests(unittest.TestCase):
             "one active writer",
             "rolling handoff",
         )
-        active_lane_reminder = (
-            "- **Active lane reminder.** Orchestrate's ninth warning counts only current active lanes whose\n"
-            "  projected `uncollected` count is greater than zero. Untouched lanes and pending lanes with\n"
-            "  `uncollected == 0`, plus collected, closed, dropped, and historical lanes, do not count. Pending\n"
-            "  remains independent and unbounded; creation still succeeds, and this factual warning is not a\n"
-            "  durable admission or closeability policy."
-        )
 
         with tempfile.TemporaryDirectory(
             prefix="orchestrate-v153-current-authority-"
@@ -1566,21 +1557,3 @@ class SourcePublicationContractTests(unittest.TestCase):
                         (skill / "migrations/148.md").read_bytes(), historical
                     )
 
-            source_admission = (
-                ROOT / "home/.codex/skills/dev-flow/references/admission-standard.md"
-            )
-            installed_admission = [
-                home / layout / "dev-flow/references/admission-standard.md"
-                for layout in skill_layouts
-            ]
-            for path in installed_admission:
-                with self.subTest(admission_bytes=path):
-                    self.assertEqual(path.read_bytes(), source_admission.read_bytes())
-            standard = source_admission.read_text(encoding="utf-8")
-            s4 = standard.split("## S4 — Review and validation", 1)[1].split(
-                "## S5 — Landing and close-out", 1
-            )[0]
-            self.assertRegex(s4, r"(?is)automatic.{0,100}clean.*clos")
-            self.assertRegex(s4, r"(?is)retain.{0,100}warn")
-            self.assertNotIn("Drop the lanes this increment finished with.", s4)
-            self.assertIn(active_lane_reminder, standard)

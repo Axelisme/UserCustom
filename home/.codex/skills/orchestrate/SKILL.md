@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Git lanes for dispatched task work. Use when dispatching implementation to worker agents, integrating or landing completed lanes, checking task or lane state, or when a runtime binding needs the lane dispatch contract. Not for work one agent completes in a single context.
-skill_version: 154
+skill_version: 155
 ---
 
 # Orchestrate
@@ -9,9 +9,9 @@ skill_version: 154
 Orchestrate is the **Git task lane**. It owns managed lane and integration worktrees, exact
 Git-backed task state, acceptance snapshots, local persistence landing, reporting, and runtime
 bindings. Git commits, refs, SHAs, trailers, and worktree state are its durable inputs. It may
-consume dev-flow task IDs but stores no task narrative. The shared
-[admission standard](../dev-flow/references/admission-standard.md) is the sole normative S0–S5
-authority; Root reads its current S0 before creating the first lane.
+consume dev-flow task IDs but stores no task narrative. [Admission](references/admission.md) is the
+normative S1–S5 authority for dispatched work; dev-flow owns the S0 design admission that precedes
+it, and Root reads that S0 before creating the first lane.
 
 ## Minimum complete lifecycle
 

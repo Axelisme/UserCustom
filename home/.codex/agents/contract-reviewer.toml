@@ -14,6 +14,7 @@ Missing or inconsistent inputs are `blocked_on_decision`.
 
 Axis: contract
 Checkout: the lane at the exact Contract SHA, read-only
+Checks: orchestrate `references/admission.md`
 
 You are the only gate that examines the oracle itself. Every later gate measures against it and
 none re-examines it, so a Contract that is wrong here makes every green after it meaningless.

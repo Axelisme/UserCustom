@@ -129,6 +129,13 @@ after frequency, impact or a real resumed scenario makes it part of a current mi
   1664 / 71) — so report what it cost or saved on this increment and propose a better one. The
   instrument that measures the depth belongs to the repo.
 
+  A correction returns to the same reviewer on the same axis, which reads only the bounded delta
+  and retains its prior verdicts — a correction is not self-validating, and one has already
+  introduced the defect that superseded it. A Contract that fails this axis a second time is an S1
+  signal, not a third correction: recut, or report why the observable sentence survives. Nothing
+  here opens a new counter; the depth instrument already counts the pre-production amendments this
+  produces.
+
 ## S3 — Machine rework admission
 
 - Root keeps one monotonic `Machine rework: N/2` prose line in the active Slice ticket's Current

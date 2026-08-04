@@ -58,9 +58,9 @@ landing, and recovery; this worker never performs those operations.
 
 The lane is a persistent writer workstation for the task. The ticket owns the admitted Contract
 and validation mode. The same lane may serve multiple worker calls and collect/rework cycles. A
-first call binds the exact canonical cwd, Git identity, branch, HEAD, and write scope; a
-continuation of a session that already attested cwd, Git identity and branch rebinds only HEAD and
-the scope of that call. A mismatch is a terminal stop with zero writes either way. Terminal reports
+first call binds the full identity binding — canonical cwd, Git identity, branch, HEAD and write
+scope; a continuation of a session that already attested cwd, Git identity and branch rebinds only
+HEAD and the scope of that call. A mismatch is a terminal stop with zero writes either way. Terminal reports
 remain normal runtime output, and Root verifies public process-terminal and Git evidence.
 
 A TDD lane reports twice. Stop first at the frozen Contract, before any production line: list each

@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Git lanes for dispatched task work. Use when dispatching implementation to worker agents, integrating or landing completed lanes, checking task or lane state, or when a runtime binding needs the lane dispatch contract. Not for work one agent completes in a single context.
-skill_version: 157
+skill_version: 158
 ---
 
 # Orchestrate
@@ -109,9 +109,11 @@ and collected lanes do not count. Agent acceptance records authority first, then
 clean named lanes; anomalies retain the lane and warn Root for explicit correction or drop.
 
 `lane check --task-id <task> --lane-id <lane>` applies the same predicates collection enforces,
-without mutation, and reports the lane `sha`, `base`, and `protected_paths`. It is how Root reads a
-lane — most usefully to bind the dispatch envelope — not a gate collection needs run first; a lane
-that fails it fails collection identically, with the same diagnostics.
+without mutation, and reports the lane `sha`, `base`, `protected_paths`, and the `contract_commits`
+declaring `Origin: contract`. When a per-task gate script exists it adds one factual warning naming
+it. This is how Root reads a lane — most usefully to bind the identity binding a dispatch carries —
+not a gate collection needs run first; a lane that fails it fails collection identically, with the
+same diagnostics.
 
 `report --task-id <task> --output-dir <dir>` atomically writes the two fixed report artifacts from
 Git and append-only telemetry. `timing pause --task-id <task>` closes active timing before an
@@ -133,7 +135,7 @@ unhealthy. Read-only diagnosis remains available.
 Read the matching [Codex runtime](runtime-codex.md), [Claude runtime](runtime-claude.md), or
 [Pi runtime](runtime-pi.md) before dispatch. Runtime bindings transport the frozen dispatch and
 exact-run evidence; they do not grant admission, collect, acceptance, persistence, setup, pin, or
-cleanup authority. Root owns Contract semantics, the S2.5 mechanical guarantee, primary dirt, collection,
-acceptance coordination, landing, and recovery. A semantic change to the ticket's Contract requires
+cleanup authority. Beyond the shared authority in [dispatch.md](references/dispatch.md), Root owns Contract
+semantics, the S2.5 mechanical guarantee, and primary dirt. A semantic change to the ticket's Contract requires
 fresh admission; persistent-lane rework does not automatically change its lane or session. Provider
 and liveness recovery follows the context asset/debt routing in dispatch.

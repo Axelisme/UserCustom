@@ -1,15 +1,15 @@
 # Orchestrate — runtime-neutral dispatch contract
 
 Before dispatch Root runs `lane check --task-id <task> --lane-id <lane>`, which must exit 0 and
-reports the exact lane `sha`, `base`, and `protected_paths`. That `sha` is the expected base carried
-in the dispatch, and those `protected_paths` are its immutable paths — both are read from the check
-that just computed them, never rebuilt by hand. The dispatch carries them together with the frozen
+reports the exact lane `sha`, `base`, `protected_paths`, and `contract_commits`. That `sha` is the
+expected base carried in the dispatch, and those `protected_paths` are its immutable paths — both are
+read from the check that just computed them, never rebuilt by hand. The dispatch carries them together with the frozen
 objective, `Validation mode: TDD` or `Validation mode: direct —
 <specific reason>`, canonical lane cwd, expected Git root/common-dir, branch, write scope,
 primary-checkout dirt snapshot, focused commands, evidence, and stop conditions. When the task
 has a durable record, the dispatch also carries its `Envelope` and any `Standing orders`: the worker
 cannot honour a boundary the user froze, or an instruction the user issued, that never reached it.
-Root chooses the mode at admission; a worker cannot downgrade TDD. File type never chooses the mode.
+Root chooses the mode at admission on the lifecycle's criteria; a worker cannot downgrade TDD.
 
 Working inside the canonical lane cwd is the only hard contract; the agent, its skills, and its context
 mode are recommendations. The worker reports the cwd, Git root/common-dir, branch, HEAD, and clean state
@@ -44,8 +44,9 @@ dispatch binds the full **identity binding** above — canonical lane cwd, Git r
 branch, HEAD and write scope, the five facts every later path-bound operation is checked against. A
 continuation into a session that already attested its cwd, Git root/common-dir and branch rebinds
 only the exact HEAD and the scope of this call; those attestations carry, and restating an unchanged
-identity binding each time is where a hand-copied one drifts from the lane it describes. Exact cwd, Git identity, branch, HEAD, and write scope remain hard-bound either
-way, and a mismatch in the identity binding fast-fails on the next path-bound operation.
+identity binding each time is where a hand-copied one drifts from the lane it describes. The
+identity binding stays hard-bound either way, and a mismatch in it fast-fails on the next
+path-bound operation.
 
 | worker context | Root action |
 | --- | --- |

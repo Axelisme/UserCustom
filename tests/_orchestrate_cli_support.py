@@ -235,6 +235,8 @@ class OrchestrateCliRepositoryTestCase(unittest.TestCase):
                 "base",
                 "protected_paths",
                 "contract_commits",
+                "ticket_contract_commits",
+                "ticket_contract_added_lines",
                 "warnings",
             },
         )
@@ -248,6 +250,8 @@ class OrchestrateCliRepositoryTestCase(unittest.TestCase):
                 "base",
                 "protected_paths",
                 "contract_commits",
+                "ticket_contract_commits",
+                "ticket_contract_added_lines",
             },
         )
         self.assertIs(payload["ok"], True)
@@ -263,6 +267,17 @@ class OrchestrateCliRepositoryTestCase(unittest.TestCase):
         self.assertIsInstance(payload["contract_commits"], list)
         for entry in payload["contract_commits"]:
             self.assertRegex(entry, r"^[0-9a-f]{40}$")
+        # The ticket's frozen Contract is the uncollected part of the lane's,
+        # and its depth cannot be negative or measured over commits outside it.
+        self.assertIsInstance(payload["ticket_contract_commits"], list)
+        self.assertLessEqual(
+            set(payload["ticket_contract_commits"]),
+            set(payload["contract_commits"]),
+        )
+        self.assertIsInstance(payload["ticket_contract_added_lines"], int)
+        self.assertGreaterEqual(payload["ticket_contract_added_lines"], 0)
+        if not payload["ticket_contract_commits"]:
+            self.assertEqual(payload["ticket_contract_added_lines"], 0)
         return payload
 
     def operational_failure(

@@ -1,7 +1,7 @@
 ---
 name: candidate-backlog
 description: Capture evidence-backed discoveries that are valuable but outside the current task into a repo-local candidate backlog, without expanding scope or avoiding current-task obligations. Also use when planning work in an area (check its inbox first) or when the user asks what is worth doing next.
-skill_version: 5
+skill_version: 6
 ---
 
 # Candidate Backlog
@@ -16,6 +16,12 @@ skill_version: 5
 - 登記不授權 agent 擴張 scope，也不代表項目已排程。
 - 只記錄有 `Observation`、`Evidence`、`Impact`、`Desired outcome` 的發現；不記個人偏好或無證據猜測。
 - 不寫 credentials、硬體秘密、本機敏感設定、原始量測資料或大量 log。
+
+## 一個容易被丟掉的訊號
+
+同一段 script 被不同 agent 在不同 lane 各自手寫過兩次以上，重複本身就是 `Evidence`，
+`Desired outcome` 是把它收進對應 skill 的 `scripts/`。這種發現只在跨 lane 回看時才成立，
+而回看的那一刻通常正在做別的事。
 
 ## Capture workflow
 

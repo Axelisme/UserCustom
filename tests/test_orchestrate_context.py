@@ -151,7 +151,8 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 long_options=("--task-id", "--lane-id", "--text", "--clear"),
             ),
             self.assert_help_surface(
-                ("lane", "check"), long_options=("--task-id", "--lane-id")
+                ("lane", "check"),
+                long_options=("--task-id", "--lane-id", "--expect-mode"),
             ),
             self.assert_help_surface(
                 ("lane", "sync"), long_options=("--task-id", "--lane-id")

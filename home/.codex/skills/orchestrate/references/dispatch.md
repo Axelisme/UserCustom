@@ -1,7 +1,8 @@
 # Orchestrate — runtime-neutral dispatch contract
 
-Before dispatch Root runs `lane check --task-id <task> --lane-id <lane>`, which must exit 0 and
-reports the exact lane `sha`, `base`, `protected_paths`, and `contract_commits`. That `sha` is the
+Before dispatch Root runs `lane check --task-id <task> --lane-id <lane> --expect-mode <mode>` with
+the ticket's admitted mode, which must exit 0 and reports the exact lane `sha`, `base`,
+`protected_paths`, and `contract_commits`. That `sha` is the
 expected base carried in the dispatch, and those `protected_paths` are its immutable paths — both are
 read from the check that just computed them, never rebuilt by hand. The dispatch carries them together with the frozen
 objective, `Validation mode: TDD` or `Validation mode: direct —
@@ -9,16 +10,13 @@ objective, `Validation mode: TDD` or `Validation mode: direct —
 primary-checkout dirt snapshot, focused commands, evidence, and stop conditions. When the task
 has a durable record, the dispatch also carries its `Envelope` and any `Standing orders`: the worker
 cannot honour a boundary the user froze, or an instruction the user issued, that never reached it.
-Root chooses the mode at admission on the lifecycle's criteria; a worker cannot downgrade TDD.
 
 Working inside the canonical lane cwd is the only hard contract; the agent, its skills, and its context
 mode are recommendations. The worker reports the cwd, Git root/common-dir, branch, HEAD, and clean state
 it observes, and Root judges whether they match the admitted lane. The worker runs no mechanical
 self-check and does not block itself. Every later operation is path-bound. Root verifies identity and
 primary dirt, then holds the mode-appropriate pre-collect evidence [admission](admission.md) S2.5
-requires — proven by executing it at the exact bound SHA, not read out of the diffs that produced
-it. In direct mode that evidence is the frozen Contract pointer, changed and protected paths, and
-the direct validation results. Root alone invokes `lane sync` or collection.
+requires. Root alone invokes `lane sync` or collection.
 The worker resolves and commits a sync conflict in its lane; shared integration is never the conflict
 workspace.
 

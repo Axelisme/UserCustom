@@ -100,6 +100,7 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         command: str,
         task_id: str | None = None,
         lane_id: str | None = None,
+        *extra: str,
     ):
         lane = lane_id or self.lane_id
         return self.cli(
@@ -110,7 +111,22 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
             task_id or self.task_id,
             "--lane-id",
             lane,
+            *extra,
         )
+
+    def mode_mismatch(self, result) -> dict[str, Any]:
+        """A declared mode the lane's Git shape contradicts is a negative predicate."""
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(result.stderr, "")
+        payload = json_object(result.stdout)
+        self.assertEqual(
+            set(payload), {"ok", "operation", "orchestrate_version", "error"}
+        )
+        self.assertIs(payload["ok"], False)
+        self.assertEqual(payload["operation"], "lane-check")
+        self.assertEqual(payload["error"]["code"], "validation_mode_mismatch")
+        self.assertTrue(payload["error"]["message"])
+        return payload
 
     def collect(
         self,
@@ -1242,6 +1258,75 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         resources_before_collect = self.managed_resource_snapshot()
         self.operational_failure(self.collect(), "integration-collect", "lane_not_ready")
         self.assertEqual(self.managed_resource_snapshot(), resources_before_collect)
+
+
+    def freeze_contract(self, lane: Path, path: str, content: str) -> str:
+        return self.commit_file(
+            lane,
+            path,
+            content,
+            "Freeze the Contract",
+            ("Origin: contract", f"Immutable: {path}"),
+        )
+
+    def test_declared_tdd_refuses_a_lane_that_froze_no_contract(self) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        self.commit_file(lane, "feature.txt", "feature\n", "Implement directly")
+
+        # The lane is collectable; only the declared mode contradicts it.
+        self.lane_check_success(self.lane_command("check"))
+        self.mode_mismatch(
+            self.lane_command("check", None, None, "--expect-mode", "tdd")
+        )
+
+    def test_declared_tdd_accepts_a_frozen_contract_and_direct_refuses_it(self) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        self.freeze_contract(lane, "tests/contract.py", "ROUND = 1\n")
+
+        payload = self.lane_check_success(
+            self.lane_command("check", None, None, "--expect-mode", "tdd")
+        )
+        self.assertEqual(len(payload["ticket_contract_commits"]), 1)
+        self.mode_mismatch(
+            self.lane_command("check", None, None, "--expect-mode", "direct")
+        )
+
+    def test_declared_direct_ignores_a_predecessor_ticket_already_collected(
+        self,
+    ) -> None:
+        """A persistent lane keeps its base, so its range outlives one ticket."""
+        self.create_task()
+        lane = self.create_lane()
+        self.freeze_contract(lane, "tests/contract.py", "ROUND = 1\n")
+        self.commit_file(lane, "feature.txt", "feature\n", "Implement the Contract")
+        self.mutation_success(self.collect(), "integration-collect")
+
+        self.commit_file(lane, "second.txt", "second\n", "Serve the next ticket")
+
+        payload = self.lane_check_success(
+            self.lane_command("check", None, None, "--expect-mode", "direct")
+        )
+        # The predecessor's Contract stays in the lane's range and leaves the
+        # ticket's window, which is the whole reason the two keys differ.
+        self.assertEqual(len(payload["contract_commits"]), 1)
+        self.assertEqual(payload["ticket_contract_commits"], [])
+        self.assertEqual(payload["ticket_contract_added_lines"], 0)
+        self.mode_mismatch(
+            self.lane_command("check", None, None, "--expect-mode", "tdd")
+        )
+
+    def test_ticket_contract_depth_counts_added_lines_of_its_own_commits(self) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        self.freeze_contract(lane, "tests/contract.py", "a\nb\nc\nd\ne\n")
+        self.commit_file(lane, "feature.txt", "one\ntwo\n", "Implement the Contract")
+
+        payload = self.lane_check_success(self.lane_command("check"))
+
+        # Five Contract lines; the two implementation lines are not depth.
+        self.assertEqual(payload["ticket_contract_added_lines"], 5)
 
 
 if __name__ == "__main__":

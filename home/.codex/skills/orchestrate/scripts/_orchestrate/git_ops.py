@@ -236,3 +236,25 @@ def changed_paths(root: Path, *args: str) -> list[str]:
 
 def first_parent_changed_paths(root: Path, sha: str) -> list[str]:
     return changed_paths(root, f"{sha}^", sha)
+
+
+def first_parent_added_lines(root: Path, sha: str) -> int:
+    """Return added lines in one commit against its first parent.
+
+    Binary paths report `-` rather than a count and contribute nothing, so the
+    total is the added text S2.8 measures depth in.
+    """
+    raw = run_git(
+        root,
+        "diff",
+        "--numstat",
+        "--no-renames",
+        f"{sha}^",
+        sha,
+    ).stdout
+    total = 0
+    for line in raw.splitlines():
+        added = line.split("\t", 1)[0]
+        if added.isdigit():
+            total += int(added)
+    return total

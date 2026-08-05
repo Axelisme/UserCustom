@@ -33,6 +33,16 @@ carry what size was standing in for.
 
 ## S2 — Invariant admission
 
+Root records the validation mode here and the ticket carries it. `Validation mode: TDD` when a
+reasonable production red oracle exists: the worker commits Contract tests, fixtures, and test
+adapters before implementation, records focused red evidence, and keeps Contract paths protected by
+normalized `Immutable:` trailers. `Validation mode: direct — <specific reason>` when no reasonable
+production red state exists: the delivery is validated against a frozen acceptance surface without
+fabricating Contract tests, fixtures, red evidence, or `Immutable:` trailers. File type never
+selects the mode. Execution that changes the mode judgment stops and returns to Root for
+re-admission; a worker cannot downgrade TDD to direct, and `lane check --expect-mode tdd` refuses
+the lane that tried.
+
 In TDD mode a Contract commit declares `Origin: contract` and the normalized `Immutable:` paths it
 protects; an implementation commit declares neither, and `lane check` reports both projections. That
 pair is what makes S2.5's first stop and S2.8 derivable from the lane's first-parent range rather
@@ -82,8 +92,9 @@ there — S2.5 proves only its lane-ready state and S2.8 never fires.
   an applicable correction, not a complaint. **The threshold is provisional** — it comes from three
   Slices whose frozen depth ordered their rework monotonically (604 lines / 18 min, 1071 / 43,
   1664 / 71) — so report what it cost or saved on this increment and propose a better one. The
-  depth is the added test lines in the `lane check` `contract_commits` that precede the first commit
-  declaring neither trailer; the commit set is reported, the line count is not yet.
+  depth is `lane check`'s `ticket_contract_added_lines`: the added lines across the Contract commits
+  this ticket froze, measured rather than estimated. A Contract commit carries tests, fixtures and
+  test adapters by construction, so its added lines are the test lines this threshold counts.
 
   A correction returns to the same reviewer on the same axis, which reads only the bounded delta
   and retains its prior verdicts — a correction is not self-validating, and one has already
@@ -152,6 +163,9 @@ Steps 1 and 2 are dev-flow's contract and step 4 is the repo's; run them there a
 their policy in the task record.
 
 ## S5 — Landing and close-out
+
+S1–S4 are Root's own authority, so a run with no user present carries a Slice all the way to an
+accepted snapshot without asking. S5 is where that run stops.
 
 - Landing requires current user authority and targets the exact reviewed candidate Git ref. The
   topology, squash and tree predicates are `integration land`'s own and are not restated here.

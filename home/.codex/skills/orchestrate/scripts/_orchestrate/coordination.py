@@ -11,6 +11,7 @@ from .git_ops import (
     changed_paths,
     commit_subject,
     commit_trailer_values,
+    first_parent_added_lines,
     first_parent_changed_paths,
     first_parent_range,
     immutable_declarations,
@@ -370,6 +371,8 @@ class LaneValidation:
     first_parent_valid: bool
     protected_paths: tuple[str, ...]
     contract_commits: tuple[str, ...]
+    ticket_contract_commits: tuple[str, ...]
+    ticket_contract_added_lines: int
     diagnostics: tuple[dict[str, str], ...]
 
     @property
@@ -411,6 +414,8 @@ def _lane_validation(
             False,
             (),
             (),
+            (),
+            0,
             (_diagnostic("lane_not_found", "lane worktree does not exist"),),
         )
 
@@ -434,6 +439,8 @@ def _lane_validation(
 
     protected: set[str] = set()
     contract_commits: list[str] = []
+    ticket_contract: list[str] = []
+    ticket_added_lines = 0
     commits = first_parent_range(repo.worktree_root, base, tip) if base and tip else None
     first_parent_valid = commits is not None
     if base and tip and commits is None:
@@ -463,6 +470,20 @@ def _lane_validation(
                 details.append("protected path changed without redeclaration")
             diagnostics.append(_diagnostic("lane_not_ready", "; ".join(details)))
 
+        # A persistent lane keeps its original base across collect cycles, so its
+        # whole first-parent range accumulates every ticket it ever served. The
+        # Contract this ticket froze is the part integration has not collected.
+        integration = _ref(repo, task.integration_branch)
+        collected = (
+            reachable_commits(repo.worktree_root, integration)
+            if integration is not None
+            else frozenset()
+        )
+        ticket_contract = [sha for sha in contract_commits if sha not in collected]
+        ticket_added_lines = sum(
+            first_parent_added_lines(repo.worktree_root, sha) for sha in ticket_contract
+        )
+
     unique: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for item in diagnostics:
@@ -477,6 +498,8 @@ def _lane_validation(
         first_parent_valid,
         tuple(sorted(protected)),
         tuple(contract_commits),
+        tuple(ticket_contract),
+        ticket_added_lines,
         tuple(unique[:20]),
     )
 
@@ -486,7 +509,12 @@ def _raise_lane_refusal(validation: LaneValidation) -> None:
     _error(first["message"], first["code"])
 
 
-def lane_check(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandResult:
+def lane_check(
+    repo: RepositoryContext,
+    task_id: str,
+    lane_id: str,
+    expect_mode: str | None = None,
+) -> CommandResult:
     task = _task(repo, task_id)
     validation = _lane_validation(repo, task, lane_id)
     if not validation.ready:
@@ -500,6 +528,37 @@ def lane_check(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandRe
             },
             diagnostics=validation.diagnostics,
         )
+    if expect_mode is not None:
+        # Root declares the ticket's admitted mode per call; orchestrate reads
+        # the mode it was handed against Git and still stores no task narrative.
+        frozen = bool(validation.ticket_contract_commits)
+        if expect_mode == "tdd" and not frozen:
+            return CommandResult(
+                False,
+                {
+                    "error": {
+                        "code": "validation_mode_mismatch",
+                        "message": (
+                            "lane was admitted TDD and freezes no Contract commit "
+                            "for this ticket"
+                        ),
+                    }
+                },
+            )
+        if expect_mode == "direct" and frozen:
+            return CommandResult(
+                False,
+                {
+                    "error": {
+                        "code": "validation_mode_mismatch",
+                        "message": (
+                            "lane was admitted direct and freezes "
+                            f"{len(validation.ticket_contract_commits)} Contract "
+                            "commits for this ticket"
+                        ),
+                    }
+                },
+            )
     lane_tip = validation.tip
     lane_base = validation.base
     assert lane_tip is not None and lane_base is not None
@@ -519,6 +578,8 @@ def lane_check(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandRe
             "base": lane_base,
             "protected_paths": list(validation.protected_paths),
             "contract_commits": list(validation.contract_commits),
+            "ticket_contract_commits": list(validation.ticket_contract_commits),
+            "ticket_contract_added_lines": validation.ticket_contract_added_lines,
         },
         tuple(warnings),
     )

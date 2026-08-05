@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Git lanes for dispatched task work. Use when dispatching implementation to worker agents, integrating or landing completed lanes, checking task or lane state, or when a runtime binding needs the lane dispatch contract. Not for work one agent completes in a single context.
-skill_version: 160
+skill_version: 161
 ---
 
 # Orchestrate
@@ -26,15 +26,9 @@ it, and Root reads that S0 before creating the first lane.
    remove it. Root dispatches the exact canonical cwd and Git identity and preserves primary-checkout
    dirt. Done when the lane branch and worktree exist at the recorded base.
 
-3. Execute the admitted Contract in its recorded validation mode. Root records `Validation mode:
-   TDD` when a reasonable production red oracle exists; in TDD mode the worker commits Contract tests,
-   fixtures, and test adapters before implementation, records focused red evidence, and keeps
-   Contract paths protected by normalized `Immutable:` trailers. Root records `Validation mode:
-   direct — <specific reason>` when no reasonable production red state exists; direct mode freezes
-   the acceptance surface and validates the delivery without fabricating Contract tests, fixtures,
-   red evidence, or `Immutable:` trailers. File type never selects the mode, and the worker cannot
-   downgrade TDD to direct; if execution changes the mode judgment, stop and return to Root for
-   re-admission. Done when Root holds the mode-appropriate evidence and exact clean tip SHA.
+3. Execute the admitted Contract in its recorded validation mode — `TDD` or `direct`, chosen and
+   defined by [admission](references/admission.md) S2. Done when Root holds the mode-appropriate
+   evidence and exact clean tip SHA.
 
 4. If another collect advanced the integration tip, `lane sync --task-id <task> --lane-id <lane>`
    performs the writer-owned no-commit merge in that lane; the writer resolves and commits any
@@ -109,9 +103,12 @@ and collected lanes do not count. Agent acceptance records authority first, then
 clean named lanes; anomalies retain the lane and warn Root for explicit correction or drop.
 
 `lane check --task-id <task> --lane-id <lane>` applies the same predicates collection enforces,
-without mutation, and reports the lane `sha`, `base`, `protected_paths`, and the `contract_commits`
-declaring `Origin: contract`. When a per-task gate script exists it adds one factual warning naming
-it. This is how Root reads a lane — most usefully to bind the identity binding a dispatch carries —
+without mutation, and reports the lane `sha`, `base`, `protected_paths`, the `contract_commits`
+declaring `Origin: contract`, and the `ticket_contract_commits` among them integration has not yet
+collected with their `ticket_contract_added_lines`. A persistent lane outlives one ticket, so those
+two Contract projections differ and S2.8 measures depth in the second. `--expect-mode tdd|direct`
+declares the ticket's admitted mode and refuses a lane whose frozen Contract contradicts it. When a
+per-task gate script exists it adds one factual warning naming it. This is how Root reads a lane — most usefully to bind the identity binding a dispatch carries —
 not a gate collection needs run first; a lane that fails it fails collection identically, with the
 same diagnostics.
 

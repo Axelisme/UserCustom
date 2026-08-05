@@ -36,7 +36,7 @@ from .release import (
 from .resources import RepositoryContext, TaskResources
 from .telemetry import auto_resume, record_event, timing_transition, write_report
 
-ORCHESTRATE_VERSION = 160
+ORCHESTRATE_VERSION = 161
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
@@ -69,6 +69,8 @@ def build_parser() -> argparse.ArgumentParser:
         op.add_argument("--lane-id", required=True)
         if name == "create":
             op.add_argument("--comment")
+        if name == "check":
+            op.add_argument("--expect-mode", choices=("tdd", "direct"))
         op.set_defaults(route=f"lane-{name}", mutation=True)
     comment = lane_commands.add_parser("comment")
     comment.add_argument("--task-id", required=True)
@@ -185,7 +187,7 @@ def _run(
     if route == "lane-comment":
         return lane_comment(repo, args.task_id, args.lane_id, args.text, args.clear)
     if route == "lane-check":
-        return lane_check(repo, args.task_id, args.lane_id)
+        return lane_check(repo, args.task_id, args.lane_id, args.expect_mode)
     if route == "lane-sync":
         return lane_sync(repo, args.task_id, args.lane_id)
     if route == "lane-drop":

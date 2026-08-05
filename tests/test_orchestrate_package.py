@@ -1510,38 +1510,21 @@ class SourcePublicationContractTests(unittest.TestCase):
                         "## Recovery", 1
                     )[0]
                     for marker in (
-                        "HANDOFF.md",
                         "task: <task-id>",
                         "run:",
                         "why:",
                         "open:",
                     ):
                         self.assertIn(marker, epoch)
-
-            runtime = (CODEX_SKILL / "runtime-pi.md").read_text(encoding="utf-8")
-            recovery = runtime.split("Use this writer recovery matrix:", 1)[1]
-            recovery = recovery.split("\n\nAcceptance re-review", 1)[0]
-            table_rows = [
-                line for line in recovery.splitlines() if line.startswith("|")
-            ]
-            self.assertEqual(len(table_rows), 5, table_rows)
-            self.assertRegex(
-                table_rows[2], r"(?is)(asset|trusted).*resume.*same session"
-            )
-            self.assertRegex(
-                table_rows[3],
-                r"(?is)(debt|untrusted|not trusted).*fresh.*same lane",
-            )
-            self.assertRegex(
-                table_rows[4],
-                r"(?is)(unnecessary|no longer needed).*lane drop",
-            )
-            for marker in (
-                "newly admitted lane",
-                "rolling handoff",
-                "same `Handoff path`",
-            ):
-                self.assertNotIn(marker, runtime)
+                    # v160 passes the seed inline; no file carries it between
+                    # epochs, so no path may reintroduce one.
+                    self.assertNotIn("HANDOFF.md", epoch)
+                    for marker in (
+                        "newly admitted lane",
+                        "rolling handoff",
+                        "same `Handoff path`",
+                    ):
+                        self.assertNotIn(marker, runtime)
 
             for label, root in (
                 ("repository", ROOT / "home"),

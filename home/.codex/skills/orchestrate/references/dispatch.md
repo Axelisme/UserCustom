@@ -7,7 +7,8 @@ expected base carried in the dispatch, and those `protected_paths` are its immut
 read from the check that just computed them, never rebuilt by hand. The dispatch carries them together with the frozen
 objective, `Validation mode: TDD` or `Validation mode: direct —
 <specific reason>`, canonical lane cwd, expected Git root/common-dir, branch, write scope,
-primary-checkout dirt snapshot, focused commands, evidence, and stop conditions. When the task
+primary-checkout dirt snapshot, focused commands, evidence, stop conditions, and the orchestrate
+script path the worker authors its commits with. When the task
 has a durable record, the dispatch also carries its `Envelope` and any `Standing orders`: the worker
 cannot honour a boundary the user froze, or an instruction the user issued, that never reached it.
 
@@ -17,8 +18,9 @@ it observes, and Root judges whether they match the admitted lane. The worker ru
 self-check and does not block itself. Every later operation is path-bound. Root verifies identity and
 primary dirt, then holds the mode-appropriate pre-collect evidence [admission](admission.md) S2.5
 requires. Root alone invokes `lane sync` or collection.
-The worker resolves and commits a sync conflict in its lane; shared integration is never the conflict
-workspace.
+`lane sync` stages its merge and stops, so the worker resolves whatever it left — a conflict, or a
+clean merge that is wrong for reasons only the writer sees — and signs it with `lane commit
+--amend-frozen` in its lane; shared integration is never the conflict workspace.
 
 Root invokes `acceptance start [--sha <exact>]` to create one detached snapshot from the managed
 integration branch's first-parent history. Canonical tests and ReviewGate run there; Root records an

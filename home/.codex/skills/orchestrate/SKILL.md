@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Git lanes for dispatched task work. Use when dispatching implementation to worker agents, integrating or landing completed lanes, checking task or lane state, or when a runtime binding needs the lane dispatch contract. Not for work one agent completes in a single context.
-skill_version: 162
+skill_version: 163
 ---
 
 # Orchestrate
@@ -27,13 +27,18 @@ it, and Root reads that S0 before creating the first lane.
    dirt. Done when the lane branch and worktree exist at the recorded base.
 
 3. Execute the admitted Contract in its recorded validation mode — `TDD` or `direct`, chosen and
-   defined by [admission](references/admission.md) S2. Done when Root holds the mode-appropriate
+   defined by [admission](references/admission.md) S2. Every commit in the lane is authored by
+   `lane commit --task-id <task> --lane-id <lane> --message-file <file> [--contract |
+   --amend-frozen]`, which computes each `Immutable:` declaration from the staged diff so S2.6's
+   "never rebuilt by hand" holds for protected paths too. Done when Root holds the mode-appropriate
    evidence and exact clean tip SHA.
 
 4. If another collect advanced the integration tip, `lane sync --task-id <task> --lane-id <lane>`
-   performs the writer-owned no-commit merge in that lane; the writer resolves and commits any
-   conflict there. Done when the lane tip carries the merge (or is unchanged, if no sync was
-   needed).
+   stages the writer-owned no-commit merge in that lane and stops. Conflicts are reported as a
+   warning on a successful envelope, because a merge Git resolves cleanly can still be wrong in
+   ways only the writer sees. The writer resolves, verifies, and signs it with `lane commit
+   --amend-frozen`. Done when the writer has committed the staged merge (or the lane is unchanged,
+   if no sync was needed).
 
 5. `integration collect --task-id <task> --lane-id <lane> --ticket <ticket>` applies the shared
    first-parent, cleanliness, topology, and declaration predicates and refuses before any repository

@@ -509,6 +509,90 @@ def _raise_lane_refusal(validation: LaneValidation) -> None:
     _error(first["message"], first["code"])
 
 
+def _staged_declarations(validation: LaneValidation) -> tuple[list[str], list[str]]:
+    """Return what the index adds to the lane tip, and which of it is protected.
+
+    One builder serves every declaration orchestrate emits, so the set a commit
+    declares is the set Git will report changed. S2.6 forbids rebuilding a
+    protected path by hand; this is the script that computes it instead.
+    """
+    assert validation.tip is not None
+    staged = changed_paths(validation.lane.path, "--cached", validation.tip)
+    return staged, sorted(set(staged) & set(validation.protected_paths))
+
+
+def lane_commit(
+    repo: RepositoryContext,
+    task_id: str,
+    lane_id: str,
+    message_file: str,
+    *,
+    contract: bool = False,
+    amend_frozen: bool = False,
+) -> CommandResult:
+    """Author one lane commit whose Immutable set is computed, never typed."""
+    task = _task(repo, task_id)
+    validation = _lane_validation(repo, task, lane_id)
+    # This verb runs on a dirty worktree by definition — staged content is what
+    # it exists to commit — so that one diagnostic is expected rather than
+    # blocking. A merge in progress is dirt of the same supported kind: Git
+    # writes the two-parent commit itself and refuses while conflicts remain.
+    blocking = [
+        item for item in validation.diagnostics if item["code"] != "dirty_worktree"
+    ]
+    if blocking:
+        _error(blocking[0]["message"], blocking[0]["code"])
+    assert validation.tip is not None
+
+    source = Path(message_file)
+    try:
+        body = source.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
+        body = ""
+    if not body:
+        _error(
+            f"message file is missing, unreadable or empty: {message_file}",
+            "message_file_invalid",
+        )
+
+    staged, frozen = _staged_declarations(validation)
+    if not staged and not merge_in_progress(validation.lane.path):
+        _error("no staged content to commit", "nothing_staged")
+    if contract:
+        declared = staged
+    elif amend_frozen:
+        declared = frozen
+    else:
+        if frozen:
+            _error(
+                "staged changes touch frozen paths; commit them with "
+                "--amend-frozen: " + ", ".join(frozen),
+                "frozen_path_undeclared",
+            )
+        declared = []
+
+    lines = [
+        body,
+        "",
+        f"Task: {task.task_id}",
+        f"Lane: {validation.lane.lane_id}",
+    ]
+    if contract:
+        lines.append("Origin: contract")
+    lines.extend(f"Immutable: {path}" for path in declared)
+    run_git(validation.lane.path, "commit", "-m", "\n".join(lines))
+
+    sha = _ref(repo, validation.lane.branch)
+    warnings = record_event(
+        task,
+        "lane-commit",
+        "success",
+        lane_id=validation.lane.lane_id,
+        subject_sha=sha,
+    )
+    return CommandResult(True, {"sha": sha, "immutable": list(declared)}, warnings)
+
+
 def lane_check(
     repo: RepositoryContext,
     task_id: str,
@@ -772,6 +856,10 @@ def lane_sync(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandRes
             ("lane already includes latest integration", *event_warnings),
         )
 
+    # Sync merges and stops. A merge Git resolves cleanly can still be wrong
+    # for reasons only the writer can see, so the lane tip never advances until
+    # the writer signs it with `lane commit --amend-frozen`. Until then the
+    # worktree is dirty and `lane check` refuses, which is the forcing function.
     merge = run_git(
         validation.lane.path,
         "merge",
@@ -781,23 +869,30 @@ def lane_sync(repo: RepositoryContext, task_id: str, lane_id: str) -> CommandRes
         check=False,
     )
     if merge.returncode:
-        _error("integration sync has a merge conflict", "merge_conflict")
+        # A conflict is the handoff working, not the command failing: the merge
+        # ran as asked and the result needs the writer.
+        conflicted = changed_paths(validation.lane.path, "--diff-filter=U")
+        return CommandResult(
+            True,
+            {},
+            (
+                "integration sync left conflicts to resolve before committing: "
+                + ", ".join(conflicted),
+                *record_event(
+                    task, "lane-sync", "conflict", lane_id=validation.lane.lane_id
+                ),
+            ),
+        )
 
-    staged = changed_paths(validation.lane.path, "--cached", lane_tip)
-    redeclared = sorted(set(staged) & set(validation.protected_paths))
-    message_lines = [
-        f"Sync integration into lane {validation.lane.lane_id}",
-        "",
-        f"Task: {task.task_id}",
-        f"Lane: {validation.lane.lane_id}",
-        *(f"Immutable: {path}" for path in redeclared),
-    ]
-    run_git(validation.lane.path, "commit", "-m", "\n".join(message_lines))
     return CommandResult(
         True,
         {},
-        record_event(
-            task, "lane-sync", "success", lane_id=validation.lane.lane_id
+        (
+            "integration sync is staged; commit it with lane commit "
+            "--amend-frozen",
+            *record_event(
+                task, "lane-sync", "success", lane_id=validation.lane.lane_id
+            ),
         ),
     )
 

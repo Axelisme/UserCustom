@@ -13,6 +13,7 @@ from .coordination import (
     integration_remove,
     lane_check,
     lane_comment,
+    lane_commit,
     lane_create,
     lane_drop,
     lane_sync,
@@ -36,7 +37,7 @@ from .release import (
 from .resources import RepositoryContext, TaskResources
 from .telemetry import auto_resume, record_event, timing_transition, write_report
 
-ORCHESTRATE_VERSION = 162
+ORCHESTRATE_VERSION = 163
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
@@ -72,6 +73,14 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "check":
             op.add_argument("--expect-mode", choices=("tdd", "direct"))
         op.set_defaults(route=f"lane-{name}", mutation=True)
+    commit = lane_commands.add_parser("commit")
+    commit.add_argument("--task-id", required=True)
+    commit.add_argument("--lane-id", required=True)
+    commit.add_argument("--message-file", required=True)
+    commit_mode = commit.add_mutually_exclusive_group()
+    commit_mode.add_argument("--contract", action="store_true")
+    commit_mode.add_argument("--amend-frozen", action="store_true")
+    commit.set_defaults(route="lane-commit", mutation=True)
     comment = lane_commands.add_parser("comment")
     comment.add_argument("--task-id", required=True)
     comment.add_argument("--lane-id", required=True)
@@ -188,6 +197,15 @@ def _run(
         return lane_comment(repo, args.task_id, args.lane_id, args.text, args.clear)
     if route == "lane-check":
         return lane_check(repo, args.task_id, args.lane_id, args.expect_mode)
+    if route == "lane-commit":
+        return lane_commit(
+            repo,
+            args.task_id,
+            args.lane_id,
+            args.message_file,
+            contract=args.contract,
+            amend_frozen=args.amend_frozen,
+        )
     if route == "lane-sync":
         return lane_sync(repo, args.task_id, args.lane_id)
     if route == "lane-drop":
@@ -221,6 +239,7 @@ _AUTO_RESUME_OPERATIONS = frozenset(
         "lane-create",
         "lane-comment",
         "lane-check",
+        "lane-commit",
         "lane-sync",
         "lane-drop",
         "integration-collect",

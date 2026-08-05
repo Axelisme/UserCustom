@@ -131,7 +131,8 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
         )
         self.assert_help_surface(("timing",), commands=("pause", "resume"))
         self.assert_help_surface(
-            ("lane",), commands=("create", "check", "sync", "drop", "comment")
+            ("lane",),
+            commands=("create", "check", "sync", "drop", "commit", "comment"),
         )
         self.assert_help_surface(
             ("integration",),
@@ -161,6 +162,16 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
         )
         self.assert_help_surface(
             ("lane", "drop"), long_options=("--task-id", "--lane-id")
+        )
+        self.assert_help_surface(
+            ("lane", "commit"),
+            long_options=(
+                "--task-id",
+                "--lane-id",
+                "--message-file",
+                "--contract",
+                "--amend-frozen",
+            ),
         )
         self.assert_help_surface(
             ("integration", "create"), long_options=("--task-id",)

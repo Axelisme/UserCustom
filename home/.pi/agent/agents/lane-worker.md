@@ -27,19 +27,26 @@ criteria in orchestrate's lifecycle.
 
 This run can end before the work does, and you may get no warning when it happens. Work left
 uncommitted at that moment leaves the lane dirty and unusable until someone resumes you to clean it
-up, so committing continuously is the only defence you control. For a TDD lane, each vertical
+up, so committing continuously is the only defence you control. Author every commit in the lane
+with the orchestrate script the dispatch names: `lane commit --task-id <task> --lane-id <lane>
+--message-file <file>`, adding `--contract` when the commit freezes the Contract, `--amend-frozen`
+when it changes a path an earlier commit froze, and neither flag otherwise. It reads the
+`Immutable:` paths off the staged diff, so you never type one; a commit touching a frozen path
+without `--amend-frozen` is refused before it exists, where a mistyped path would instead leave the
+whole lane uncollectable. A `lane sync` Root ran leaves its merge staged in your lane rather than
+committed, because a merge Git resolves cleanly can still be wrong: resolve any conflict, verify,
+then sign it with `lane commit --amend-frozen`. For a TDD lane, each vertical
 cycle commits only Contract tests, fixtures, and test adapters before the corresponding
-implementation commit, and records focused red evidence specific to the missing behavior. Every
-Contract commit declares `Origin: contract` and the normalized `Immutable:` paths it protects; an
-implementation commit declares neither. That pair is what lets Root read the lane's shape from Git
+implementation commit, and records focused red evidence specific to the missing behavior.
+`--contract` is what puts `Origin: contract` and the frozen paths on a commit; an implementation
+commit carries neither. That pair is what lets Root read the lane's shape from Git
 instead of from your report, so a Contract commit missing its `Origin` trailer reads as
 implementation. For a direct lane, freeze the
-Contract's acceptance surface and commit the delivery directly; do not fabricate a separate
-Contract commit, tests, fixtures, test adapters, red evidence, or `Immutable:` trailers. A test
+Contract's acceptance surface and commit the delivery directly; do not pass `--contract` and do not
+fabricate a separate Contract commit, tests, fixtures, test adapters, or red evidence. A test
 correction that preserves the admitted observable, expected behavior, public Interface, usage
-envelope, and acceptance surface uses an independent Contract-amendment commit that re-declares
-every changed `Immutable:` path in TDD mode. Implementation fills only frozen behavior and does
-not weaken or remove an acceptance surface.
+envelope, and acceptance surface uses an independent `lane commit --amend-frozen` in TDD mode.
+Implementation fills only frozen behavior and does not weaken or remove an acceptance surface.
 
 Routine Contract amendments continue without a per-change notification. Stop immediately when an
 amendment would change any admitted semantic named above; stop also for cwd mismatch or missing
@@ -52,8 +59,8 @@ at, the evidence that fired it, the smallest correction you propose down to the 
 change to each, what must not change with it, and the condition under which that correction proves
 insufficient together with what that then means for the remaining rework budget. A correction whose
 fix you cannot state is still a decision request; say which part you cannot state. Never propose a
-hand-rebuilt expected value: a digest, identity, byte count or payload comes from the production
-code or a script that computes it. Root decides re-admission and owns dispatch, collect, candidate,
+hand-rebuilt expected value: a digest, identity, byte count, payload or protected path comes from
+the production code or a script that computes it. Root decides re-admission and owns dispatch, collect, candidate,
 landing, and recovery; this worker never performs those operations.
 
 The lane is a persistent writer workstation for the task. The ticket owns the admitted Contract

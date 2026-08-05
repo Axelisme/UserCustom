@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,19 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
 
     task_id = "lane-safety"
     lane_id = "writer"
+
+    def setUp(self) -> None:
+        super().setUp()
+        # Commit messages live outside every managed worktree, so authoring one
+        # never shows up as the dirt a cleanliness assertion is measuring.
+        messages = tempfile.TemporaryDirectory(prefix="orchestrate-messages-")
+        self.addCleanup(messages.cleanup)
+        self.messages = Path(messages.name)
+
+    def message_file(self, text: str) -> str:
+        path = self.messages / f"message-{len(os.listdir(self.messages))}.txt"
+        path.write_text(text, encoding="utf-8")
+        return str(path)
 
     def integration_path_for(self, task_id: str | None = None) -> Path:
         return (
@@ -112,6 +126,22 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
             "--lane-id",
             lane,
             *extra,
+        )
+
+    def lane_commit(
+        self,
+        message: str,
+        *flags: str,
+        task_id: str | None = None,
+        lane_id: str | None = None,
+    ):
+        return self.lane_command(
+            "commit",
+            task_id,
+            lane_id,
+            "--message-file",
+            self.message_file(message),
+            *flags,
         )
 
     def mode_mismatch(self, result) -> dict[str, Any]:
@@ -663,7 +693,7 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         self.assertEqual(event["outcome"], "noop")
         self.assertEqual(event["lane_id"], self.lane_id)
 
-    def test_clean_sync_has_fixed_parents_and_only_redeclares_protected_changes(
+    def test_clean_sync_stages_the_merge_and_leaves_the_tip_to_the_writer(
         self,
     ) -> None:
         self.create_task()
@@ -689,9 +719,24 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
             "Change an unprotected path in integration",
         )
 
-        self.mutation_success(self.lane_command("sync"), "lane-sync")
+        self.mutation_success(self.lane_command("sync"), "lane-sync", warnings=True)
+
+        # Git resolved the merge, so it is staged and MERGE_HEAD is pending; the
+        # lane tip stays where the writer left it until the writer signs.
+        self.assertEqual(self.git(lane, "rev-parse", "HEAD"), lane_tip)
+        self.assertEqual(self.merge_head(lane), integration_tip)
+        self.assertNotEqual(self.git(lane, "status", "--porcelain"), "")
+        # A staged merge is dirt, so the lane cannot pass check until it lands.
+        self.predicate_failure(self.lane_command("check"), ["dirty_worktree"])
+
+        payload = self.success(
+            self.lane_commit(
+                f"Sync integration into lane {self.lane_id}\n", "--amend-frozen"
+            )
+        )
         sync_tip = self.git(lane, "rev-parse", "HEAD")
 
+        self.assertEqual(payload["sha"], sync_tip)
         self.assertEqual(
             self.git(lane, "show", "-s", "--format=%P", sync_tip),
             f"{lane_tip} {integration_tip}",
@@ -732,6 +777,7 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
             ),
             "1",
         )
+        self.lane_check_success(self.lane_command("check"))
 
     def test_sync_refuses_each_dirt_class_and_existing_merge_before_mutation(self) -> None:
         for dirt in ("staged", "unstaged", "untracked", "merge-state"):
@@ -799,9 +845,20 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
             self.root, "rev-parse", f"{integration_tip}:base.txt"
         )
 
-        self.operational_failure(
-            self.lane_command("sync"), "lane-sync", "merge_conflict"
+        # A conflict is the handoff working, not the command failing: the merge
+        # ran as asked, so the envelope is ok and the warning names the paths.
+        payload = self.mutation_success(
+            self.lane_command("sync"), "lane-sync", warnings=True
         )
+        self.assertEqual(
+            payload["warnings"],
+            ["integration sync left conflicts to resolve before committing: base.txt"],
+        )
+        event = json.loads(
+            self.telemetry_path_for().read_text(encoding="utf-8").splitlines()[-1]
+        )
+        self.assertEqual(event["operation"], "lane-sync")
+        self.assertEqual(event["outcome"], "conflict")
 
         self.assertEqual(self.git(lane, "rev-parse", "HEAD"), lane_tip)
         self.assertEqual(self.git(self.root, "rev-parse", self.lane_branch()), lane_tip)
@@ -816,6 +873,194 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
             f"<<<<<<< HEAD\nlane\n=======\nintegration\n>>>>>>> {integration_tip}\n"
         ).encode()
         self.assertEqual((lane / "base.txt").read_bytes(), expected)
+
+    def freeze_oracle(self, lane: Path, path: str = "tests/contract.py") -> str:
+        """Freeze one oracle path the way the instrument now does it."""
+        target = lane / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("oracle\n", encoding="utf-8")
+        self.git(lane, "add", path)
+        self.success(self.lane_commit("Freeze the Contract\n", "--contract"))
+        return self.git(lane, "rev-parse", "HEAD")
+
+    def test_contract_declares_every_staged_path_and_marks_its_origin(self) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        oracle = "tests/test_c40_plot_publication_authority.py"
+        (lane / "tests").mkdir()
+        (lane / oracle).write_text("oracle\n", encoding="utf-8")
+        (lane / "docs.md").write_text("doc\n", encoding="utf-8")
+        self.git(lane, "add", oracle, "docs.md")
+
+        payload = self.success(self.lane_commit("Freeze the Contract\n", "--contract"))
+
+        self.assertEqual(payload["immutable"], ["docs.md", oracle])
+        self.assertEqual(payload["sha"], self.git(lane, "rev-parse", "HEAD"))
+        self.assertEqual(self.immutable_trailers(lane), ["docs.md", oracle])
+        self.assertEqual(
+            self.git(lane, "show", "-s", "--format=%(trailers:key=Origin,valueonly)"),
+            "contract",
+        )
+        self.assertEqual(
+            self.git(lane, "show", "-s", "--format=%s"), "Freeze the Contract"
+        )
+        self.assertEqual(self.git(lane, "status", "--porcelain"), "")
+
+    def test_amend_frozen_declares_the_intersection_and_no_contract_origin(self) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        self.freeze_oracle(lane)
+        (lane / "tests/contract.py").write_text("corrected oracle\n", encoding="utf-8")
+        (lane / "src.py").write_text("implementation\n", encoding="utf-8")
+        self.git(lane, "add", "tests/contract.py", "src.py")
+
+        payload = self.success(
+            self.lane_commit("Correct the oracle\n", "--amend-frozen")
+        )
+
+        # Declaring only the intersection keeps src.py free: a path declared once
+        # owes a redeclaration every later time it is touched.
+        self.assertEqual(payload["immutable"], ["tests/contract.py"])
+        self.assertEqual(self.immutable_trailers(lane), ["tests/contract.py"])
+        self.assertEqual(
+            self.git(lane, "show", "-s", "--format=%(trailers:key=Origin,valueonly)"),
+            "",
+        )
+        self.lane_check_success(self.lane_command("check"))
+
+    def test_unflagged_commit_declares_nothing_when_no_frozen_path_is_staged(
+        self,
+    ) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        self.freeze_oracle(lane)
+        (lane / "src.py").write_text("implementation\n", encoding="utf-8")
+        self.git(lane, "add", "src.py")
+
+        payload = self.success(self.lane_commit("Implement the slice\n"))
+
+        self.assertEqual(payload["immutable"], [])
+        self.assertEqual(self.immutable_trailers(lane), [])
+        self.assertEqual(
+            self.git(lane, "show", "-s", "--format=%(trailers:key=Origin,valueonly)"),
+            "",
+        )
+        self.lane_check_success(self.lane_command("check"))
+
+    def test_unflagged_commit_names_the_frozen_paths_and_changes_nothing(self) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        frozen_tip = self.freeze_oracle(lane)
+        (lane / "tests/contract.py").write_text("quietly changed\n", encoding="utf-8")
+        (lane / "src.py").write_text("implementation\n", encoding="utf-8")
+        self.git(lane, "add", "tests/contract.py", "src.py")
+        before = self.managed_resource_snapshot()
+
+        payload = self.operational_failure(
+            self.lane_commit("Implement the slice\n"),
+            "lane-commit",
+            "frozen_path_undeclared",
+        )
+
+        # The refusal is what keeps Immutable: meaningful: an intent this
+        # explicit is never supplied on the author's behalf.
+        self.assertIn("tests/contract.py", payload["error"]["message"])
+        self.assertIn("--amend-frozen", payload["error"]["message"])
+        self.assertNotIn("src.py", payload["error"]["message"])
+        self.assertEqual(self.git(lane, "rev-parse", "HEAD"), frozen_tip)
+        self.assertEqual(self.managed_resource_snapshot(), before)
+
+    def test_the_two_declaration_modes_are_mutually_exclusive(self) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        (lane / "src.py").write_text("implementation\n", encoding="utf-8")
+        self.git(lane, "add", "src.py")
+
+        self.operational_failure(
+            self.lane_commit("Both modes\n", "--contract", "--amend-frozen"),
+            "cli",
+            "cli_usage",
+        )
+        self.assertEqual(self.git(lane, "rev-list", "--count", "HEAD"), "1")
+
+    def test_commit_refuses_an_unusable_message_wrong_identity_and_empty_index(
+        self,
+    ) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        head = self.git(lane, "rev-parse", "HEAD")
+
+        self.operational_failure(
+            self.lane_commit("Nothing staged\n"), "lane-commit", "nothing_staged"
+        )
+        (lane / "src.py").write_text("implementation\n", encoding="utf-8")
+        self.git(lane, "add", "src.py")
+        self.operational_failure(
+            self.lane_commit("   \n\n"), "lane-commit", "message_file_invalid"
+        )
+        self.operational_failure(
+            self.lane_command(
+                "commit",
+                None,
+                None,
+                "--message-file",
+                str(self.messages / "absent.txt"),
+            ),
+            "lane-commit",
+            "message_file_invalid",
+        )
+        self.git(lane, "switch", "-q", "-c", "operator-branch")
+        self.operational_failure(
+            self.lane_commit("Wrong identity\n"),
+            "lane-commit",
+            "worktree_identity_mismatch",
+        )
+        self.assertEqual(self.git(lane, "rev-parse", "HEAD"), head)
+
+    def test_a_declared_path_carrying_whitespace_survives_the_round_trip(self) -> None:
+        self.create_task()
+        lane = self.create_lane()
+        spaced = "tests/contract cases.py"
+        (lane / "tests").mkdir()
+        (lane / spaced).write_text("oracle\n", encoding="utf-8")
+        self.git(lane, "add", spaced)
+        self.success(self.lane_commit("Freeze a spaced path\n", "--contract"))
+
+        (lane / spaced).write_text("corrected oracle\n", encoding="utf-8")
+        self.git(lane, "add", spaced)
+        payload = self.success(
+            self.lane_commit("Correct the spaced path\n", "--amend-frozen")
+        )
+
+        self.assertEqual(payload["immutable"], [spaced])
+        self.assertEqual(self.immutable_trailers(lane), [spaced])
+        self.assertEqual(
+            self.lane_check_success(self.lane_command("check"))["protected_paths"],
+            [spaced],
+        )
+
+    def test_a_computed_amendment_stays_collectable_where_a_typed_one_died(
+        self,
+    ) -> None:
+        # The regression this instrument exists for: the amendment's declaration
+        # is the same string Git reports changed, so the collect predicate can
+        # never see an undeclared protected path.
+        self.create_task()
+        lane = self.create_lane()
+        oracle = "tests/test_c40_plot_publication_authority.py"
+        self.freeze_oracle(lane, oracle)
+        (lane / oracle).write_text("corrected oracle\n", encoding="utf-8")
+        self.git(lane, "add", oracle)
+        self.success(self.lane_commit("Correct the oracle\n", "--amend-frozen"))
+        (lane / "src.py").write_text("implementation\n", encoding="utf-8")
+        self.git(lane, "add", "src.py")
+        self.success(self.lane_commit("Implement against the oracle\n"))
+
+        payload = self.lane_check_success(self.lane_command("check"))
+
+        self.assertEqual(payload["protected_paths"], [oracle])
+        self.assertEqual(len(payload["ticket_contract_commits"]), 1)
+        self.mutation_success(self.collect(), "integration-collect")
 
     def assert_collect_topology(self, *, stale: bool) -> None:
         self.create_task()

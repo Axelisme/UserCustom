@@ -1,161 +1,138 @@
 ---
 name: orchestrate
 description: Git lanes for dispatched task work. Use when dispatching implementation to worker agents, integrating or landing completed lanes, checking task or lane state, or when a runtime binding needs the lane dispatch contract. Not for work one agent completes in a single context.
-skill_version: 165
+skill_version: 166
 ---
 
 # Orchestrate
 
-Orchestrate is the **Git task lane**. It owns managed lane and integration worktrees, exact
-Git-backed task state, acceptance snapshots, local persistence landing, reporting, and runtime
-bindings. Git commits, refs, SHAs, trailers, and worktree state are its durable inputs. It may
-consume dev-flow task IDs but stores no task narrative. [Admission](references/admission.md) is the
-normative S1–S5 authority for dispatched work; dev-flow owns the S0 design admission that precedes
-it, and Root reads that S0 before creating the first lane.
+Orchestrate is the **Git task lane**. It owns managed lane and integration worktrees, Git-backed task
+state, acceptance snapshots, local persistence landing, reports, and runtime bindings. Its durable
+inputs are commits, refs, SHAs, trailers, and worktree state. It may consume dev-flow IDs but stores
+no task narrative. [Admission](references/admission.md) is the normative S1–S5 authority; dev-flow
+owns the preceding S0, which Root reads before creating the first lane.
 
 ## Orienting
 
-`status --task-id <task>` reports the exact integration SHA, the active lanes, and what is
-pending, accepted and landed; `lane check --task-id <task> --lane-id <lane>` reports one lane's
-exact state. Those two place you on exactly one step of the lifecycle below. Open only what that
-step points at.
+Run `status --task-id <task>` for the exact integration SHA and pending, accepted, landed, and lane
+state; run `lane check --task-id <task> --lane-id <lane>` for one lane. Together they locate the
+lifecycle step below; open only that step's pointers.
 
-Every command prints one JSON object with `orchestrate_version`. Success is on stdout with exit 0;
-a completed negative predicate uses stdout and exit 1; an operational or usage error uses stderr
-and exit 2. Mutation commands fail before repository changes when the executing package is
-unhealthy. Read-only diagnosis remains available.
+Every command emits one JSON object with `orchestrate_version`: exit 0 is success, exit 1 is a
+completed negative predicate on stdout, and exit 2 is an operational/usage error on stderr.
+Mutations preflight package health before repository changes; read-only diagnosis remains available.
 
 ## Minimum complete lifecycle
 
-1. `integration create --task-id <task>` creates the append-only task integration branch and
-   worktree at the current repository subject. Done when the integration branch and worktree exist.
+1. `integration create --task-id <task>` creates the append-only integration branch and worktree at
+the current repository subject. Done when both exist.
 
-2. `lane create --task-id <task> --lane-id <lane> [--comment <text>]` creates one managed writer
-   branch and worktree at the recorded task base. A lane is a persistent writer workstation for the
-   task; the ticket owns the admitted Contract and validation mode. The same lane may serve multiple
-   worker calls and collect/rework cycles. The optional comment is a bounded annotation only; use
-   `lane comment --task-id <task> --lane-id <lane> --text <text>` to overwrite it or `--clear` to
-   remove it. Root dispatches the exact canonical cwd and Git identity and preserves primary-checkout
-   dirt. Done when the lane branch and worktree exist at the recorded base. The Slice this lane
-   serves must already hold S1 admission; [admission.md](references/admission.md) S1.1–S1.3 are
-   the checks, read together as one admission decision.
+2. `lane create --task-id <task> --lane-id <lane> [--comment <text>]` creates a persistent writer
+branch/worktree at the recorded base. The ticket owns the admitted Contract and validation mode;
+the lane may span worker calls and collect/rework cycles. `lane comment ... --text <text>` replaces
+the bounded annotation and `--clear` removes it. Root dispatches the exact canonical cwd and Git
+identity while preserving primary-checkout dirt. Done when branch and worktree exist at the base.
+The Slice must satisfy [S1.1–S1.3](references/admission.md) together as one admission decision.
 
-3. Execute the admitted Contract in its recorded validation mode — `TDD` or `direct`, chosen and
-   defined by S2's mode rule in [admission.md](references/admission.md). The Contract itself
-   answers S2.1–S2.3 and S2.6–S2.7; S2.5 is what the [gate script](references/gate.md) proves at
-   each stop; a Contract over roughly 1000 test lines additionally owes S2.8. Every commit in the lane is authored by
-   `lane commit --task-id <task> --lane-id <lane> --message-file <file> [--contract |
-   --amend-frozen]`, which computes each `Immutable:` declaration from the staged diff so S2.6's
-   "never rebuilt by hand" holds for protected paths too. Done when Root holds the mode-appropriate
-   evidence and exact clean tip SHA.
+3. Execute the admitted Contract in S2's recorded `TDD` or `direct` mode. The Contract answers
+S2.1–S2.3 and S2.6–S2.7; the [gate script](references/gate.md) proves S2.5 at each stop, and a
+Contract over roughly 1000 test lines also owes S2.8. Author every lane commit with `lane commit
+--task-id <task> --lane-id <lane> --message-file <file> [--contract | --amend-frozen]`; it computes
+`Immutable:` declarations from the staged diff, including protected paths. Done when Root holds the
+mode-specific evidence and exact clean tip SHA.
 
-4. If another collect advanced the integration tip, `lane sync --task-id <task> --lane-id <lane>`
-   stages the writer-owned no-commit merge in that lane and stops. Conflicts are reported as a
-   warning on a successful envelope, because a merge Git resolves cleanly can still be wrong in
-   ways only the writer sees. The writer resolves, verifies, and signs it with `lane commit
-   --amend-frozen`. Done when the writer has committed the staged merge (or the lane is unchanged,
-   if no sync was needed).
+4. When integration advanced, `lane sync --task-id <task> --lane-id <lane>` stages a writer-owned,
+no-commit merge and stops. A successful envelope may warn about conflicts because even a clean Git
+merge needs writer verification. The writer resolves, verifies, and commits with
+`lane commit --amend-frozen`. Done after that commit, or immediately when no sync was needed.
 
-5. `integration collect --task-id <task> --lane-id <lane> --ticket <ticket>` applies the shared
-   first-parent, cleanliness, topology, and declaration predicates and refuses before any repository
-   change when one fails, then creates one fixed-parent no-ff collect commit with `Task:`, `Lane:`,
-   and bounded `Ticket:` trailers. Collection retains the lane worktree, branch, and original base
-   ref; `lane drop` remains the explicit discard operation. Done when the collect commit exists and
-   the persistent lane remains available. Collect assumes Root already holds S2.5's lane-ready
-   proof and, in a TDD lane, S2.4's exact bound SHA — both in
-   [admission.md](references/admission.md).
+5. `integration collect --task-id <task> --lane-id <lane> --ticket <ticket>` preflights cleanliness,
+first-parent topology, and declarations, refusing before repository changes when any predicate fails.
+It then creates a fixed-parent no-ff commit with `Task:`, `Lane:`, and bounded `Ticket:` trailers and
+retains the lane worktree, branch, and base ref;
+`lane drop` is explicit discard. Done when the collect commit exists and the lane remains available.
+Before collect Root holds S2.5 lane-ready proof and, for TDD, S2.4's exact bound SHA.
 
-6. `acceptance start --task-id <task> [--sha <exact>]` checks out one managed detached acceptance
-   snapshot. Omission selects the managed integration branch tip; an explicit full SHA may select
-   any commit on its first-parent history. Integration worktree state is irrelevant because the
-   subject is a commit. Done when the acceptance worktree holds the selected exact subject.
+6. `acceptance start --task-id <task> [--sha <exact>]` creates a managed detached snapshot. Omission
+selects the integration tip; a full SHA may select any commit on its first-parent history. Done when
+the acceptance worktree holds that exact commit, independent of integration worktree state.
 
-7. Run canonical tests and the read-only Standards/Spec ReviewGate on that managed acceptance
-   checkout. `acceptance result --task-id <task> --verifier agent|user --outcome pass|fail` records
-   the exact result. Agent pass moves `refs/orchestrate/<task>/accepted`; user pass moves
-   `refs/orchestrate/<task>/user-accepted`, and either may move backward explicitly. Failure revokes
-   only the same verifier's equal ref. User evidence does not affect landing or closeability. Done
-   when the result, ref state and telemetry agree. The gate order, snapshot binding, and
-   reviewer rules are S4 in [admission.md](references/admission.md).
+7. On that snapshot, run canonical tests then the read-only Standards/Spec ReviewGate. Record the
+exact result with `acceptance result --task-id <task> --verifier agent|user --outcome pass|fail`.
+Agent pass moves `refs/orchestrate/<task>/accepted`; user pass moves
+`refs/orchestrate/<task>/user-accepted`; either may move backward explicitly, and failure revokes
+only the same verifier's equal ref. User evidence does not
+affect landing or closeability. Done when result, refs, and telemetry agree. S4 defines gate order,
+binding, and reviewer rules.
 
-8. Landing requires an accepted snapshot and exactly one local checkout of the named persistence
-   branch. `integration land --task-id <task> --persist <branch>` creates one canonical squash
-   commit with `Task:` and `Landed:` trailers, then records the accepted subject in
-   `refs/orchestrate/<task>/landed`. Orchestrate never pushes or reads remote refs. Done when the
-   landed ref points at the accepted subject. Landing's user-authority and topology requirements
-   are S5 in [admission.md](references/admission.md).
+8. With an accepted snapshot and exactly one local checkout of the persistence branch,
+`integration land --task-id <task> --persist <branch>` creates the canonical squash commit with
+`Task:` and `Landed:` trailers and records the accepted subject at
+`refs/orchestrate/<task>/landed`. Orchestrate neither pushes nor reads remote refs. Done when that ref
+points to the accepted subject. S5 governs user authority
+and topology.
 
-9. `integration remove --task-id <task> --output-dir <dir>` writes the final report, including
-   agent and user acceptance evidence, and removes only a closeable task's exact managed inventory. `--no-report` explicitly omits report output.
-   Done when the report is written (unless `--no-report`) and the closeable managed inventory is
-   removed. The close-out actions this step owes are S4 in
-   [admission.md](references/admission.md); final landing's additional requirements are S5.
+9. `integration remove --task-id <task> --output-dir <dir>` writes the final report, including agent
+and user evidence, then removes only a closeable task's exact managed inventory; `--no-report`
+explicitly omits output. Done when the report is written unless omitted and the inventory is gone.
+S4 governs close-out; S5 adds final-landing requirements.
 
 ### Exceptions to the main sequence
 
-A clean unwanted lane is removed with `lane drop` instead of being collected.
+Use `lane drop` for a clean unwanted lane.
 
-If persistence moved before landing, create an admitted reconciliation lane and run `integration
-reconcile --task-id <task> --lane-id <lane> --persist <branch>`; the writer owns the resulting
-no-commit merge, resolution, tests, commit, and normal collection (steps 4–5) before acceptance
-(steps 6–7) is repeated.
+If persistence advances before landing, create an admitted reconciliation lane and run `integration
+reconcile --task-id <task> --lane-id <lane> --persist <branch>`. The writer owns the staged merge,
+resolution, tests, and commit; then repeat collection and acceptance.
 
-An acceptance failure grants no repair by itself. Once Root admits its bounded correction, an
-implementation bug, preserving test correction, or additive-only observable correction resumes the
-same worker context when it remains an asset. Context debt or a wrong observable starts a fresh worker
-run in the same lane. An additive-only observable opens a new ticket and repeats S1; a lane no longer
-needed uses `lane drop`. The matching runtime binding defines how writer context and reviewer context
-continue.
+Acceptance failure grants no repair authority. After Root admits a bounded correction, resume the
+same useful worker context for an implementation bug, preserving test correction, or additive-only
+observable correction. Context debt or a wrong observable starts a fresh run in the same lane. An
+additive-only observable opens a ticket and repeats S1; an unnecessary lane is dropped. The runtime
+binding governs writer and reviewer context continuation.
 
-Destructive `--abandon` on `integration remove` is exceptional current-user authority, not an
-automatic recovery path. It reports unlanded and uncollected state while preserving unrelated refs,
-paths, and user dirt.
+Destructive `integration remove --abandon` requires exceptional current-user authority. It reports
+unlanded/uncollected state while preserving unrelated refs, paths, and user dirt.
 
-Which correction path applies is S2.4's preserving/semantic distinction in
-[admission.md](references/admission.md); the monotonic rework count is S3.
+[Admission S2.4](references/admission.md) selects preserving versus semantic correction; S3 owns the
+monotonic rework count.
 
 ## Observation and timing
 
-`orchestrate.py --version` is the top-level version query and returns the normal JSON envelope; there
-is no `version` subcommand. `status` is the only task discovery and state projection. Without a task
-ID it lists known tasks; with `--task-id` it reports the exact integration SHA, active lanes as
-`{sha, comment?, uncollected}` objects, top-level `pending`, accepted, `user_accepted`, landed, and
-real inventory warnings. `uncollected` is the Git-derived first-parent work not reachable from
-integration; `pending` independently counts collected lanes awaiting agent acceptance. The managed
-acceptance worktree and historical lane/comment data are not synthesized into current status.
+`orchestrate.py --version` is the top-level version query; there is no `version` subcommand. `status`
+is the only task discovery/projection: without an ID it lists tasks; with one it reports integration
+SHA, active `{sha, comment?, uncollected}` lanes, top-level `pending`, accepted, `user_accepted`,
+landed, and inventory warnings. `uncollected` is lane first-parent work outside integration;
+`pending` counts collected lanes awaiting agent acceptance. It does not synthesize historical
+lane/comments or the managed acceptance worktree.
 
-Lane comments are append-only annotations and never grant lifecycle, acceptance, landing, or cleanup
-authority. They project only while the lane is active. After a successful create, the current
-ninth-lane warning is factual and creation never blocks. Agent acceptance records authority first, then automatically closes
-clean named lanes; anomalies retain the lane and warn Root for explicit correction or drop.
+Lane comments are mutable bounded annotations with no lifecycle, acceptance, landing, or cleanup
+authority, and project only while active. The ninth and later active-lane creates warn factually
+when projected `uncollected > 0` but never block creation. Agent acceptance records authority before
+automatically
+closing clean named lanes; anomalies retain the lane and warn Root.
 
-`lane check --task-id <task> --lane-id <lane>` applies the same predicates collection enforces,
-without mutation, and reports the lane `sha`, `base`, `protected_paths`, the `contract_commits`
-declaring `Origin: contract`, and the `ticket_contract_commits` among them integration has not yet
-collected with their `ticket_contract_added_lines`. A persistent lane outlives one ticket, so those
-two Contract projections differ and S2.8 measures depth in the second. `--expect-mode tdd|direct`
-declares the ticket's admitted mode and refuses a lane whose frozen Contract contradicts it. When a
-per-task gate script exists it adds one factual warning naming it. Root reads a lane this way most
-usefully before dispatch, to bind the identity binding it carries. It is not a gate collection
-requires running first — a lane that fails it fails collection identically, with the same
-diagnostics.
+`lane check` applies collection predicates without mutation and reports lane `sha`, `base`,
+`protected_paths`, `contract_commits`, and uncollected `ticket_contract_commits` with their
+`ticket_contract_added_lines`. Persistent lanes make the two Contract projections distinct; S2.8
+measures the latter. `--expect-mode tdd|direct` refuses a frozen-Contract mismatch. A per-task gate
+script adds a factual warning naming it. The check is most useful before dispatch, where it binds the
+carried identity, but is optional before collection, which applies identical predicates.
 
-`report --task-id <task> --output-dir <dir>` atomically writes the two fixed report artifacts from
-Git and append-only telemetry. `timing pause --task-id <task>` closes active timing before an
-external wait; `timing resume --task-id <task>` resumes it. Repeated matching transitions are
-idempotent warnings. Reports and status remain read-only.
+`report --task-id <task> --output-dir <dir>` atomically writes two fixed artifacts from Git and
+append-only telemetry. `timing pause` closes active timing before an external wait; `timing resume`
+restarts it. Repeated matching transitions are idempotent warnings. Reports and status are read-only.
 
 ## Package administration
 
-Doctor, doctor diff, pin, and release are covered in [package-admin.md](references/package-admin.md); read it
-before a release or pin change.
+[Package administration](references/package-admin.md) covers doctor, doctor diff, pin, and release;
+read it before a release or pin change.
 
 ## Runtime and authority boundaries
 
-Read the matching [Codex runtime](runtime-codex.md), [Claude runtime](runtime-claude.md), or
-[Pi runtime](runtime-pi.md) before dispatch. Runtime bindings transport the frozen dispatch and
-exact-run evidence; they do not grant admission, collect, acceptance, persistence, setup, pin, or
-cleanup authority. Beyond the shared authority in [dispatch.md](references/dispatch.md), Root owns Contract
-semantics, the S2.5 mechanical guarantee, and primary dirt. A semantic change to the ticket's Contract requires
-fresh admission; persistent-lane rework does not automatically change its lane or session. Provider
-and liveness recovery follows the context asset/debt routing in dispatch.
+Before dispatch, read the matching [Codex](runtime-codex.md), [Claude](runtime-claude.md), or
+[Pi](runtime-pi.md) binding. Bindings transport frozen dispatch and exact-run evidence; they grant
+no admission, collection, acceptance, persistence, setup, pin, or cleanup authority. Beyond shared
+[dispatch](references/dispatch.md) authority, Root owns Contract semantics, S2.5's guarantee, and
+primary dirt. Semantic Contract changes require fresh admission; rework does not automatically
+change lane or session. Dispatch governs provider/liveness recovery through context asset/debt.

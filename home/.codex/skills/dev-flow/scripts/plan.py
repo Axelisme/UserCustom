@@ -24,7 +24,7 @@ REFRESHED_MARKER = re.compile(r"<!-- task-record:refreshed-at:([^>\r\n]*) -->")
 
 # Ticket status is exactly this closed enum. It replaces harness Task-tool vocabulary
 # (`pending`, `in_progress`, `completed`, ...) which is a non-authoritative projection and must
-# never enter a ticket. See dev-flow/SKILL.md "Never create a second ticket store".
+# never enter a ticket. See dev-flow/SKILL.md "One task record".
 AUTHORED_BUDGET = 6000
 SECTION_HEADING = re.compile(r"^## +(.+?)\s*$", re.MULTILINE)
 STANDING_ORDERS_HEADING = "Standing orders"
@@ -378,8 +378,8 @@ def load_for_refresh(root: Path, task_id: str) -> RefreshRecord:
             (relative(root, index),),
             version,
         )
-    # v5 records carry no generated files block; `locate` lists the directory when a reader needs
-    # it. A record that still has one is kept in step rather than rewritten out from under its
+    # Current records carry no generated files block; `locate` lists the directory when a reader
+    # needs it. A record that still has one is kept in step rather than rewritten out from under its
     # reader, so zero markers and one matched pair are both well formed — only a broken pair is not.
     if text.count(START) != text.count(END) or text.count(START) > 1:
         raise Refusal("malformed_index", "missing or repeated files marker", (relative(root, index),), version)
@@ -456,7 +456,7 @@ def command_refresh(root: Path, arguments: argparse.Namespace) -> None:
     updated = record.text
     separator = "\r\n" if "\r\n" in record.text else "\n"
     if START in record.text:
-        # v5 drops the generated block rather than maintaining it. A projection in the file is one
+        # The current format drops the generated block rather than maintaining it. A projection in the file is one
         # more thing that can be read after it stops being true; `locate` derives the same listing
         # on demand. Removal happens here so existing records migrate the first time they refresh.
         start = record.text.index(START)

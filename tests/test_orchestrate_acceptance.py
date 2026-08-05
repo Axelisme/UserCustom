@@ -267,39 +267,26 @@ class AcceptedDeliveryAndReconciliationContractTests(OrchestrateCliRepositoryTes
         self.assertNotIn(f"refs/heads/wave/{task_id}/landed", refs)
 
     def test_01_acceptance_start_is_lazy_detached_and_replaces_prior_dirt(self) -> None:
-        integration_help = self.assert_help_surface(
+        self.assert_help_surface(
             ("integration",),
             commands=("create", "collect", "reconcile", "land", "remove"),
         )
-        acceptance_help = self.assert_help_surface(
-            ("acceptance",), commands=("start", "result")
-        )
-        start_help = self.assert_help_surface(
+        self.assert_help_surface(("acceptance",), commands=("start", "result"))
+        self.assert_help_surface(
             ("acceptance", "start"), long_options=("--task-id", "--sha")
         )
-        result_help = self.assert_help_surface(
+        self.assert_help_surface(
             ("acceptance", "result"),
             long_options=("--task-id", "--outcome", "--verifier"),
         )
-        land_help = self.assert_help_surface(
+        self.assert_help_surface(
             ("integration", "land"),
             long_options=("--task-id", "--persist", "--message"),
         )
-        reconcile_help = self.assert_help_surface(
+        self.assert_help_surface(
             ("integration", "reconcile"),
             long_options=("--task-id", "--lane-id", "--persist"),
         )
-        all_help = "\n".join(
-            (integration_help, acceptance_help, start_help, result_help, land_help, reconcile_help)
-        )
-        for retired in (
-            "candidate",
-            "rejected",
-            "--accepted",
-            "--final",
-            "--squash",
-        ):
-            self.assertNotIn(retired, all_help)
 
         task_id = "lazy-start"
         integration = self.create_task(task_id)

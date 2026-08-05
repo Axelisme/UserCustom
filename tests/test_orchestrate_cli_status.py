@@ -139,10 +139,9 @@ class CliStatusContractTests(OrchestrateCliRepositoryTestCase):
         )
 
     def test_lane_help_and_group_are_removed_but_comment_grammar_is_public(self) -> None:
-        lane_help = self.assert_help_surface(
+        self.assert_help_surface(
             ("lane",), commands=("create", "check", "sync", "drop", "comment")
         )
-        self.assertNotIn("--group", lane_help)
         self.assert_help_surface(
             ("lane", "create"),
             long_options=("--task-id", "--lane-id", "--comment"),

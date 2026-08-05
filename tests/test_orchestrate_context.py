@@ -111,105 +111,97 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
         self.assertNotIn(str(self.lane_path), worktrees)
 
     def test_help_exposes_only_the_exact_grammar(self) -> None:
-        help_texts = [
-            self.assert_help_surface(
-                (),
-                commands=(
-                    "status",
-                    "timing",
-                    "lane",
-                    "integration",
-                    "acceptance",
-                    "report",
-                    "pin",
-                    "doctor",
-                    "release",
-                ),
-                long_options=("--skill-dir", "--version"),
+        # assert_help_surface compares the command tuple and the long-option
+        # set for equality, so a retired option or subcommand cannot survive
+        # anywhere in this list.
+        self.assert_help_surface(
+            (),
+            commands=(
+                "status",
+                "timing",
+                "lane",
+                "integration",
+                "acceptance",
+                "report",
+                "pin",
+                "doctor",
+                "release",
             ),
-            self.assert_help_surface(("timing",), commands=("pause", "resume")),
-            self.assert_help_surface(
-                ("lane",), commands=("create", "check", "sync", "drop", "comment")
+            long_options=("--skill-dir", "--version"),
+        )
+        self.assert_help_surface(("timing",), commands=("pause", "resume"))
+        self.assert_help_surface(
+            ("lane",), commands=("create", "check", "sync", "drop", "comment")
+        )
+        self.assert_help_surface(
+            ("integration",),
+            commands=("create", "collect", "reconcile", "land", "remove"),
+        )
+        self.assert_help_surface(("acceptance",), commands=("start", "result"))
+        self.assert_help_surface(("pin",), commands=("status", "set"))
+        self.assert_help_surface(
+            ("doctor",), commands=("diff",), long_options=("--path",)
+        )
+        self.assert_help_surface(("status",), long_options=("--task-id",))
+        self.assert_help_surface(("timing", "pause"), long_options=("--task-id",))
+        self.assert_help_surface(("timing", "resume"), long_options=("--task-id",))
+        self.assert_help_surface(
+            ("lane", "create"), long_options=("--task-id", "--lane-id", "--comment")
+        )
+        self.assert_help_surface(
+            ("lane", "comment"),
+            long_options=("--task-id", "--lane-id", "--text", "--clear"),
+        )
+        self.assert_help_surface(
+            ("lane", "check"),
+            long_options=("--task-id", "--lane-id", "--expect-mode"),
+        )
+        self.assert_help_surface(
+            ("lane", "sync"), long_options=("--task-id", "--lane-id")
+        )
+        self.assert_help_surface(
+            ("lane", "drop"), long_options=("--task-id", "--lane-id")
+        )
+        self.assert_help_surface(
+            ("integration", "create"), long_options=("--task-id",)
+        )
+        self.assert_help_surface(
+            ("integration", "collect"),
+            long_options=("--task-id", "--lane-id", "--ticket"),
+        )
+        self.assert_help_surface(
+            ("integration", "reconcile"),
+            long_options=("--task-id", "--lane-id", "--persist"),
+        )
+        self.assert_help_surface(
+            ("integration", "land"),
+            long_options=("--task-id", "--persist", "--message"),
+        )
+        self.assert_help_surface(
+            ("integration", "remove"),
+            long_options=(
+                "--task-id",
+                "--output-dir",
+                "--no-report",
+                "--abandon",
             ),
-            self.assert_help_surface(
-                ("integration",),
-                commands=("create", "collect", "reconcile", "land", "remove"),
-            ),
-            self.assert_help_surface(("acceptance",), commands=("start", "result")),
-            self.assert_help_surface(("pin",), commands=("status", "set")),
-            self.assert_help_surface(
-                ("doctor",), commands=("diff",), long_options=("--path",)
-            ),
-            self.assert_help_surface(("status",), long_options=("--task-id",)),
-            self.assert_help_surface(("timing", "pause"), long_options=("--task-id",)),
-            self.assert_help_surface(("timing", "resume"), long_options=("--task-id",)),
-            self.assert_help_surface(
-                ("lane", "create"), long_options=("--task-id", "--lane-id", "--comment")
-            ),
-            self.assert_help_surface(
-                ("lane", "comment"),
-                long_options=("--task-id", "--lane-id", "--text", "--clear"),
-            ),
-            self.assert_help_surface(
-                ("lane", "check"),
-                long_options=("--task-id", "--lane-id", "--expect-mode"),
-            ),
-            self.assert_help_surface(
-                ("lane", "sync"), long_options=("--task-id", "--lane-id")
-            ),
-            self.assert_help_surface(
-                ("lane", "drop"), long_options=("--task-id", "--lane-id")
-            ),
-            self.assert_help_surface(
-                ("integration", "create"), long_options=("--task-id",)
-            ),
-            self.assert_help_surface(
-                ("integration", "collect"),
-                long_options=("--task-id", "--lane-id", "--ticket"),
-            ),
-            self.assert_help_surface(
-                ("integration", "reconcile"),
-                long_options=("--task-id", "--lane-id", "--persist"),
-            ),
-            self.assert_help_surface(
-                ("integration", "land"),
-                long_options=("--task-id", "--persist", "--message"),
-            ),
-            self.assert_help_surface(
-                ("integration", "remove"),
-                long_options=(
-                    "--task-id",
-                    "--output-dir",
-                    "--no-report",
-                    "--abandon",
-                ),
-            ),
-            self.assert_help_surface(
-                ("acceptance", "start"), long_options=("--task-id", "--sha")
-            ),
-            self.assert_help_surface(
-                ("acceptance", "result"),
-                long_options=("--task-id", "--outcome", "--verifier"),
-            ),
-            self.assert_help_surface(
-                ("report",), long_options=("--task-id", "--output-dir")
-            ),
-            self.assert_help_surface(("pin", "status")),
-            self.assert_help_surface(("pin", "set")),
-            self.assert_help_surface(("doctor", "diff"), long_options=("--runtime",)),
-            self.assert_help_surface(
-                ("release",), long_options=("--version", "--drop")
-            ),
-        ]
-        all_help = "\n".join(help_texts)
-        for retired in (
-            "commit-check",
-            "candidate",
-            "--root",
-            "--base",
-            "--final",
-        ):
-            self.assertNotIn(retired, all_help)
+        )
+        self.assert_help_surface(
+            ("acceptance", "start"), long_options=("--task-id", "--sha")
+        )
+        self.assert_help_surface(
+            ("acceptance", "result"),
+            long_options=("--task-id", "--outcome", "--verifier"),
+        )
+        self.assert_help_surface(
+            ("report",), long_options=("--task-id", "--output-dir")
+        )
+        self.assert_help_surface(("pin", "status"))
+        self.assert_help_surface(("pin", "set"))
+        self.assert_help_surface(("doctor", "diff"), long_options=("--runtime",))
+        self.assert_help_surface(
+            ("release",), long_options=("--version", "--drop")
+        )
         acceptance_result_help = self.assert_help_surface(
             ("acceptance", "result"),
             long_options=("--task-id", "--outcome", "--verifier"),

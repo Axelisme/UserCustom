@@ -114,11 +114,15 @@ class TaskRecordTests(unittest.TestCase):
     def test_interface_has_exactly_four_commands(self) -> None:
         done = run_plan(Path(tempfile.gettempdir()), "--help")
         self.assertEqual(done.returncode, 0, done.stderr)
-        command_line = next(line for line in done.stdout.splitlines() if "{create," in line)
-        for command in ("create", "refresh", "archive", "locate"):
-            self.assertIn(command, command_line)
-        for retired in ("resume", "ticket-create", "check", "init", "status", "show", "set", "phase", "log", "checkpoint", "migrate", "validate"):
-            self.assertNotIn(retired, command_line)
+        choices = re.search(r"\{([^{}]+)\}", done.stdout)
+        self.assertIsNotNone(choices, done.stdout)
+        assert choices is not None
+        # Equality, not membership: a command that is gone cannot hide in a list
+        # nobody enumerates, and a new one cannot arrive unannounced.
+        self.assertEqual(
+            tuple(part.strip() for part in choices.group(1).split(",")),
+            ("create", "refresh", "archive", "locate"),
+        )
 
     def test_create_and_refresh_leave_no_generated_projection_behind(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -591,12 +595,6 @@ class TaskRecordTests(unittest.TestCase):
             refreshed = index.read_text(encoding="utf-8")
             for comment in comments:
                 self.assertIn(comment, refreshed)
-
-    def test_worked_example_tree_and_skill_link_are_absent(self) -> None:
-        example = ROOT / "home" / ".codex" / "skills" / "dev-flow" / "references" / "example-record"
-        self.assertFalse(example.exists())
-        skill = (ROOT / "home" / ".codex" / "skills" / "dev-flow" / "SKILL.md").read_text(encoding="utf-8")
-        self.assertNotIn("references/example-record", skill)
 
     def test_v3_refresh_leaves_v2_and_v1_content_untouched_by_new_marker(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

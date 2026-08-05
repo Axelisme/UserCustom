@@ -11,10 +11,9 @@ of each stop belongs to S2.5.
 
 ## The two stops want opposite answers
 
-| stop | expects | proves |
-| --- | --- | --- |
-| Contract frozen | non-zero | the focused command is red, for the named missing behavior, with no collection, import, type or environment failure |
-| lane-ready | zero | the declared selection is green and static checks over changed paths are clean |
+The two stops, the exit code each expects, and the state each proves are the S2.5 table in
+[admission.md](admission.md#s25--roots-mechanical-guarantee). That table is the only definition;
+this file states how to execute it.
 
 A TDD lane has both. A direct lane freezes no Contract commits, so it has only the second. Take the
 stop as an argument rather than writing two scripts that drift:

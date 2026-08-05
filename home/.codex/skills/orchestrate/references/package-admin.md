@@ -3,7 +3,7 @@
 `doctor` verifies the executing package's current manifest, its documents, and its profile
 identity and prompt projections. A profile entry carries only `agent_name` and `prompt_sha256`;
 runtime, model, and configuration metadata are excluded, so changing a profile's model is not a
-package change. `doctor --path <repo>` adds the cwd-derived repository pin projection.
+package change. `doctor --path <repo>` points the repository pin projection at `<repo>` instead of cwd.
 `doctor diff <old> <new>` compares only bundled immutable manifests; `--runtime codex|claude|pi`
 filters runtime-specific documents, profiles, and assets. `pin status` and the atomic idempotent
 `pin set` derive the repository from cwd. A pin records the last manually adopted release; it never

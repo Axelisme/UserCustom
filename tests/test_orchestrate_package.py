@@ -221,6 +221,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                 "operation",
                 "orchestrate_version",
                 "package",
+                "spine",
                 "repository",
                 "warnings",
             },
@@ -243,6 +244,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                     "operation",
                     "orchestrate_version",
                     "package",
+                    "spine",
                     "warnings",
                 },
             )
@@ -261,6 +263,45 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         self.assertNotIn("repository", missing)
         self.assertEqual(missing["package"], expected_package)
         self.assertTrue(missing["warnings"])
+
+    def test_03a_doctor_sizes_the_spine_and_never_refuses_on_it(self) -> None:
+        """The standing read cost is a reported fact, not a prose discipline."""
+        expected = {
+            name: len((self.skill / name).read_bytes())
+            for name in ("SKILL.md", "runtime-codex.md", "runtime-claude.md", "runtime-pi.md")
+        }
+
+        payload = self.success(self.cli(self.nested, "doctor"))
+        self.assertEqual(payload["spine"], expected)
+
+        # References are reached from one position and free at every other, so
+        # they are not the standing cost and are not counted.
+        self.assertNotIn("references/admission.md", payload["spine"])
+
+        # A package with no repository still owes the number: it is a package
+        # fact, not a repository one.
+        with tempfile.TemporaryDirectory(prefix="orchestrate-spine-no-repo-") as outside:
+            no_repository = self.success(self.cli(Path(outside), "doctor"))
+            self.assertEqual(no_repository["spine"], expected)
+
+        # `spine` measures, it does not police. A document that grows while
+        # staying inside the existing 16 KB single-read budget draws only the
+        # checksum complaint that any edit draws, and the new size is still
+        # reported. The budget refusal is a separate, per-document guard that
+        # this projection neither replaces nor duplicates.
+        skill_md = self.skill / "SKILL.md"
+        original = skill_md.read_bytes()
+        try:
+            skill_md.write_bytes(original + b"\npadding\n")
+            grown = json_object(self.cli(self.nested, "doctor").stdout)
+            self.assertEqual(grown["spine"]["SKILL.md"], len(skill_md.read_bytes()))
+            self.assertGreater(grown["spine"]["SKILL.md"], expected["SKILL.md"])
+            self.assertEqual(
+                [item["message"] for item in grown["diagnostics"]],
+                ["hash mismatch: SKILL.md"],
+            )
+        finally:
+            skill_md.write_bytes(original)
 
     def test_04_doctor_predicate_failure_is_structured_and_still_projects_pin(
         self,
@@ -285,6 +326,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
                 "operation",
                 "orchestrate_version",
                 "package",
+                "spine",
                 "repository",
                 "warnings",
                 "diagnostics",

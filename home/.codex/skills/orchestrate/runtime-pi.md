@@ -68,8 +68,12 @@ When Root chooses to transition:
 5. **Transition.** Call `handoff_context` with the complete inline seed as the old epoch's final tool
    action. Its authorization revalidation is authoritative. On `scheduled`, end old-context work.
 
-After transition, run `plan.py locate` and read what it names, then reread the active skill, frozen
-spec and admission before repeating the required Git and runtime checks.
+After transition, run the same three commands the seed named — `plan.py locate`,
+`orchestrate.py status --task-id <task-id>`, `backlog.py list --status inbox` — and let their output
+place you on exactly one line of this skill's lifecycle, one exception, or one S0 stage in dev-flow.
+Open only what that line points at — never the whole skill — then repeat the required Git and runtime
+checks. If they place you between steps, read the lifecycle list alone and pick the next step. Reread
+further only when what you open contradicts what the three commands reported.
 
 ## Recovery
 

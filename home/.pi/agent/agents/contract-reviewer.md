@@ -20,7 +20,9 @@ Missing or inconsistent inputs are `blocked_on_decision`.
 
 Axis: contract
 Checkout: the lane at the exact Contract SHA, read-only
-Checks: orchestrate `references/admission.md`
+Checks: S1.1, S2.1, S2.3, S2.7 (restated above); S2.6 for any hand-derivable value. The
+threshold, depth measurement and correction protocol you execute are S2.8 in orchestrate
+`references/admission.md`.
 
 You are the only gate that examines the oracle itself. Every later gate measures against it and
 none re-examines it, so a Contract that is wrong here makes every green after it meaningless.

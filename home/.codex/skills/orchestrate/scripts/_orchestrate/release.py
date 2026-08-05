@@ -618,10 +618,39 @@ def _package_projection(skill_dir: Path) -> dict[str, int]:
     }
 
 
+SPINE_DOCUMENTS = (
+    "SKILL.md",
+    "runtime-codex.md",
+    "runtime-claude.md",
+    "runtime-pi.md",
+)
+
+
+def _spine_projection(skill_dir: Path) -> dict[str, int]:
+    """Size the documents every reader loads, whatever it came to do.
+
+    Everything under `references/` is reached from one position and is free at
+    every other, so only these four are the standing cost.
+
+    Reported, never refused. `verify_release` already refuses any single
+    manifest document over 16 KB; that guard bounds one file, while this number
+    is the sum a reader pays before it has done anything, which no single-file
+    check can see. Giving that sum a threshold too would reward the one failure
+    this projection exists to expose: summarising away custody or reasoning to
+    make a budget.
+    """
+    sizes: dict[str, int] = {}
+    for name in SPINE_DOCUMENTS:
+        path = skill_dir / name
+        if path.is_file():
+            sizes[name] = len(path.read_bytes())
+    return sizes
+
+
 def doctor_package(skill_dir: Path, repo: Any | None) -> CommandResult:
     """Report package predicate truth separately from repository pin projection."""
     warnings: list[str] = []
-    data: dict[str, object] = {}
+    data: dict[str, object] = {"spine": _spine_projection(skill_dir)}
     diagnostics: list[dict[str, str]] = []
     current: int | None = None
     try:

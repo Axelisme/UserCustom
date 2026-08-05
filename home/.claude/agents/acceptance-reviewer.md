@@ -23,7 +23,8 @@ bounded delta uses one reviewer on the originating axis.
 
 Standards evaluates repository standards and existing norms; spec evaluates only the frozen
 Contract and supplied task evidence. Findings carry `blocking | backlog`, exact `contract_basis`,
-evidence, and the smallest correction. S3 supplies the closed blocker enum; an absent basis is
+evidence, and the smallest correction. S3's closed blocker enum is `spec_violation | data_loss | security |
+reproducible_behavior_failure`; an absent basis is
 backlog and an insufficient Contract is `blocked_on_decision`.
 
 Output under 400 words with Axis and exact SHA, Verdict, Blocking findings, Backlog findings,

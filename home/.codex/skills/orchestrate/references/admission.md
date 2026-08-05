@@ -49,60 +49,82 @@ pair is what makes S2.5's first stop and S2.8 derivable from the lane's first-pa
 than from prose about it. A direct lane freezes no Contract commits, so neither check has a subject
 there — S2.5 proves only its lane-ready state and S2.8 never fires.
 
-- **S2.1 Observability.** Name the difference a user or client outside this Module observes when
-  the invariant is violated. An internal-only difference is hardening and is not Contract work.
-- **S2.2 Red evidence.** A focused test must be red without the device and red for that specific
-  missing behavior. Record the command and observed reason.
-- **S2.3 Envelope.** The violating scenario must be inside the frozen usage envelope. A test that is
-  red against a stand-in rather than against the production path is not S1.1 evidence, whatever it
-  proves about the stand-in.
-- **S2.4 Lane-ready binding.** Before collect, Root binds the exact clean lane-ready SHA. A test
-  correction that preserves observable behavior, public Interface, envelope and acceptance surface
-  uses an independent amendment commit; a semantic change requires lane re-admission. Which of the
-  two a correction is, the originating axis reviewer decides — never the party proposing it. That
-  party is the one the preserving answer releases, and S3 already exempts contract-only correction
-  from its counter, so nothing else prices the choice.
-- **S2.5 Root's mechanical guarantee.** Root proves each stop the lane has by executing it at an
-  exact bound SHA, and holds the result rather than the diff that produced it. What runs is the
-  repository's own [gate script](gate.md) at `.agent_state/orchestrate/<task-id>/gate.sh`, so the
-  check set is written down once rather than reassembled from memory at each stop; only the
-  exit-code direction below is this standard's:
+### S2.1 — Observability
 
-  | stop | mode | proven state |
-  | --- | --- | --- |
-  | Contract frozen | TDD only | the focused command is red, red for the named missing behavior, and free of collection, import, type and environment failure |
-  | lane-ready | both | the declared selection is green and static checks over the changed paths are clean |
+Name the difference a user or client outside this Module observes when
+the invariant is violated. An internal-only difference is hardening and is not Contract work.
 
-  Neither depends on the invariant class. A green focused selection is not the lane-ready state:
-  the broader affected selection and the static checks belong inside the declared one, because a
-  focused green has passed while both were failing.
-- **S2.6 No hand-derived expected value.** A digest, identity, byte count, payload or protected
-  path that a Contract asserts is produced by the production code or by a script that computes it,
-  never rebuilt by hand — Root included. A hand-built expectation is indistinguishable from a
-  correct one until something recomputes it, so it enters the Contract wearing the authority of the
-  check it was supposed to be. `lane check` reports the protected paths it measured for this reason.
-- **S2.7 Satisfiable together.** The frozen assertions must be able to hold at once. An
-  unsatisfiable set is not caught by running it: a focused selection that feeds an assertion its own
-  output passes, and only a broader one exposes the contradiction. This is read, not executed, which
-  is why S2.8 sends it to an axis rather than to a command.
-- **S2.8 Contract review.** In a TDD lane, when more than 1000 test lines freeze before the first
-  production commit, the Contract is read on its own axis before implementation is admitted. The oracle is
-  what every later gate measures against and no later gate re-examines it, so a wrong oracle makes
-  every green after it meaningless. That reviewer is read-only at the exact Contract SHA and owes
-  an applicable correction, not a complaint. **The threshold is provisional** — it comes from three
-  Slices whose frozen depth ordered their rework monotonically (604 lines / 18 min, 1071 / 43,
-  1664 / 71) — so report what it cost or saved on this increment and propose a better one. The
-  depth is `lane check`'s `ticket_contract_added_lines`: the added lines across the Contract commits
-  this ticket froze, measured rather than estimated. A Contract commit carries tests, fixtures and
-  test adapters by construction, so its added lines are the test lines this threshold counts.
+### S2.2 — Red evidence
 
-  A correction returns to the same reviewer on the same axis, which reads only the bounded delta
-  and retains its prior verdicts — a correction is not self-validating, and one has already
-  introduced the defect that superseded it. A Contract that fails this axis a second time is an S1
-  signal, not a third correction: report it, naming whether the observable sentence survives, and
-  keep that report with the Slice. Nothing here opens a new counter or stops the lane; the same
-  first-parent range already carries the pre-production amendments this produces.
+A focused test must be red without the device and red for that specific
+missing behavior. Record the command and observed reason.
 
+### S2.3 — Envelope
+
+The violating scenario must be inside the frozen usage envelope. A test that is
+red against a stand-in rather than against the production path is not S1.1 evidence, whatever it
+proves about the stand-in.
+
+### S2.4 — Lane-ready binding
+
+Before collect, Root binds the exact clean lane-ready SHA. A test
+correction that preserves observable behavior, public Interface, envelope and acceptance surface
+uses an independent amendment commit; a semantic change requires lane re-admission. Which of the
+two a correction is, the originating axis reviewer decides — never the party proposing it. That
+party is the one the preserving answer releases, and S3 already exempts contract-only correction
+from its counter, so nothing else prices the choice.
+
+### S2.5 — Root's mechanical guarantee
+
+Root proves each stop the lane has by executing it at an
+exact bound SHA, and holds the result rather than the diff that produced it. What runs is the
+repository's own [gate script](gate.md) at `.agent_state/orchestrate/<task-id>/gate.sh`, so the
+check set is written down once rather than reassembled from memory at each stop; only the
+exit-code direction below is this standard's:
+
+| stop | mode | expects | proven state |
+| --- | --- | --- | --- |
+| Contract frozen | TDD only | non-zero | the focused command is red, red for the named missing behavior, and free of collection, import, type and environment failure |
+| lane-ready | both | zero | the declared selection is green and static checks over the changed paths are clean |
+
+Neither depends on the invariant class. A green focused selection is not the lane-ready state:
+the broader affected selection and the static checks belong inside the declared one, because a
+focused green has passed while both were failing.
+
+### S2.6 — No hand-derived expected value
+
+A digest, identity, byte count, payload or protected
+path that a Contract asserts is produced by the production code or by a script that computes it,
+never rebuilt by hand — Root included. A hand-built expectation is indistinguishable from a
+correct one until something recomputes it, so it enters the Contract wearing the authority of the
+check it was supposed to be. `lane check` reports the protected paths it measured for this reason.
+
+### S2.7 — Satisfiable together
+
+The frozen assertions must be able to hold at once. An
+unsatisfiable set is not caught by running it: a focused selection that feeds an assertion its own
+output passes, and only a broader one exposes the contradiction. This is read, not executed, which
+is why S2.8 sends it to an axis rather than to a command.
+
+### S2.8 — Contract review
+
+In a TDD lane, when more than 1000 test lines freeze before the first
+production commit, the Contract is read on its own axis before implementation is admitted. The oracle is
+what every later gate measures against and no later gate re-examines it, so a wrong oracle makes
+every green after it meaningless. That reviewer is read-only at the exact Contract SHA and owes
+an applicable correction, not a complaint. **The threshold is provisional** — it comes from three
+Slices whose frozen depth ordered their rework monotonically (604 lines / 18 min, 1071 / 43,
+1664 / 71) — so report what it cost or saved on this increment and propose a better one. The
+depth is `lane check`'s `ticket_contract_added_lines`: the added lines across the Contract commits
+this ticket froze, measured rather than estimated. A Contract commit carries tests, fixtures and
+test adapters by construction, so its added lines are the test lines this threshold counts.
+
+A correction returns to the same reviewer on the same axis, which reads only the bounded delta
+and retains its prior verdicts — a correction is not self-validating, and one has already
+introduced the defect that superseded it. A Contract that fails this axis a second time is an S1
+signal, not a third correction: report it, naming whether the observable sentence survives, and
+keep that report with the Slice. Nothing here opens a new counter or stops the lane; the same
+first-parent range already carries the pre-production amendments this produces.
 ## S3 — Machine rework admission
 
 - Root keeps one monotonic `Machine rework: N` prose line in the active Slice ticket's Current

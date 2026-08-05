@@ -554,14 +554,14 @@ class TaskRecordTests(unittest.TestCase):
                 "Current": ("judgement", "receipts", "sha", "not "),
                 "Next": ("next", "owner", "do not"),
                 "Envelope": ("minimum", "out-of-envelope", "do not"),
+                # The template points at Custody rather than restating it, so the
+                # comment owes the pointer and the shape of an entry, not a second
+                # copy of the rules SKILL.md holds.
                 "Standing orders": (
                     "verbatim",
-                    "issued",
+                    "custody",
                     "do not",
-                    "ratifi",
-                    "decisions.md",
                     "lapse",
-                    "instruction",
                 ),
             }
             comments: list[str] = []

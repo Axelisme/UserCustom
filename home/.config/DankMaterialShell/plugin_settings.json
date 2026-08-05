@@ -19,5 +19,9 @@
   "codexBar": {
     "enabled": true,
     "sourceMode": "cli"
+  },
+  "dankscale": {
+    "enabled": true,
+    "lastAccount": "jary33333@gmail.com"
   }
 }

@@ -44,7 +44,7 @@ instead of from your report, so a Contract commit missing its `Origin` trailer r
 implementation. For a direct lane, freeze the
 Contract's acceptance surface and commit the delivery directly; do not pass `--contract` and do not
 fabricate a separate Contract commit, tests, fixtures, test adapters, or red evidence. A test
-correction that preserves the admitted observable, expected behavior, public Interface, usage
+correction that preserves the admitted observable behavior, public Interface, usage
 envelope, and acceptance surface uses an independent `lane commit --amend-frozen` in TDD mode.
 Implementation fills only frozen behavior and does not weaken or remove an acceptance surface.
 

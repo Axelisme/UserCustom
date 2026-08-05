@@ -17,6 +17,7 @@ _EVENT_OPERATIONS = frozenset(
         "lane-create",
         "lane-comment",
         "lane-check",
+        "lane-commit",
         "lane-sync",
         "lane-drop",
         "integration-collect",

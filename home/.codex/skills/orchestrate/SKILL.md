@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Git lanes for dispatched task work. Use when dispatching implementation to worker agents, integrating or landing completed lanes, checking task or lane state, or when a runtime binding needs the lane dispatch contract. Not for work one agent completes in a single context.
-skill_version: 163
+skill_version: 164
 ---
 
 # Orchestrate
@@ -113,9 +113,10 @@ declaring `Origin: contract`, and the `ticket_contract_commits` among them integ
 collected with their `ticket_contract_added_lines`. A persistent lane outlives one ticket, so those
 two Contract projections differ and S2.8 measures depth in the second. `--expect-mode tdd|direct`
 declares the ticket's admitted mode and refuses a lane whose frozen Contract contradicts it. When a
-per-task gate script exists it adds one factual warning naming it. This is how Root reads a lane — most usefully to bind the identity binding a dispatch carries —
-not a gate collection needs run first; a lane that fails it fails collection identically, with the
-same diagnostics.
+per-task gate script exists it adds one factual warning naming it. Root reads a lane this way most
+usefully before dispatch, to bind the identity binding it carries. It is not a gate collection
+requires running first — a lane that fails it fails collection identically, with the same
+diagnostics.
 
 `report --task-id <task> --output-dir <dir>` atomically writes the two fixed report artifacts from
 Git and append-only telemetry. `timing pause --task-id <task>` closes active timing before an

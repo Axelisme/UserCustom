@@ -1062,6 +1062,39 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         self.assertEqual(len(payload["ticket_contract_commits"]), 1)
         self.mutation_success(self.collect(), "integration-collect")
 
+    def test_every_lane_commit_is_a_readable_ledger_entry(self) -> None:
+        # The instrument v163 made mandatory writes one event per commit, so a
+        # ledger that cannot read them turns adoption into report noise.
+        self.create_task()
+        lane = self.create_lane()
+        self.freeze_oracle(lane)
+        (lane / "src.py").write_text("implementation\n", encoding="utf-8")
+        self.git(lane, "add", "src.py")
+        self.success(self.lane_commit("Implement the slice\n"))
+        output = self.root / "ledger-report"
+        output.mkdir()
+
+        self.success(
+            self.cli(
+                self.nested,
+                "report",
+                "--task-id",
+                self.task_id,
+                "--output-dir",
+                str(output),
+            )
+        )
+
+        report = json.loads(
+            (output / "orchestrate-report.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(report["counts"]["invalid_telemetry_lines"], 0)
+        for warning in report["warnings"]:
+            self.assertNotIn("invalid telemetry", warning)
+        raw = (output / "orchestrate-telemetry.jsonl").read_text(encoding="utf-8")
+        operations = [json.loads(line)["operation"] for line in raw.splitlines()]
+        self.assertEqual(operations.count("lane-commit"), 2)
+
     def assert_collect_topology(self, *, stale: bool) -> None:
         self.create_task()
         lane = self.create_lane()

@@ -97,29 +97,39 @@ a short backward slice:
 On statically-typed code step 1 is usually the whole answer — the type is already
 in the signature.
 
-## Empty output usually means a missing grammar
+## Empty output has three causes that look identical
 
-grove parses only languages whose grammar is in the registry, and a missing
-grammar **fails silently**: `symbols` prints `0 symbols` and exits 0 — identical
-to a symbol that genuinely does not exist. Adding a language to the repo is what
-triggers it.
+`symbols` prints `0 symbols` and exits 0 whether the symbol is genuinely absent,
+the language has no grammar, or the grammar carries no tags query. Nothing in the
+output separates them, so rule the last two out before reporting that a symbol
+does not exist.
 
-When a query returns empty and should not have:
+**Is the language in the registry?**
 
 ```sh
-grove languages       # what the registry actually holds
-grove fetch <lang>    # add the missing one
+grove languages       # what the registry holds, and the extensions each claims
+grove fetch <lang>    # add a missing one
 ```
 
 Grammars land in the OS cache (`~/.cache/grove/grammars`), shared by every repo
-and worktree on the machine, so one fetch serves all of them.
+and worktree on the machine, so one fetch serves all of them. The catalog does
+not cover every language — Lua and TOML have no grammar in it at all.
 
-Other thin results are expected rather than broken:
+**Does that grammar extract symbols?** Eleven of the catalog's twenty-seven
+languages parse but tag nothing, so `check` passes on a file `outline` reports as
+empty, and `fetch` cannot fix it. **`bash` is one of them** — along with css,
+html, json, regex, jsdoc, agda, haskell, julia, verilog, and embedded_template.
+Confirm rather than assume:
 
-- A grammar with no tags query (css, html, json) passes `check` but yields no
-  symbols.
-- Genuinely partial body → read the file with `offset` / `limit` taken from
-  `grove outline --detail 2 --json`.
+```sh
+grep -l "^; no upstream tags query" ~/.cache/grove/grammars/*/tags.scm
+```
+
+A file in one of those languages is shell work. Reach for `rg` on the function
+name; a deeper grove query has nothing to find.
+
+Genuinely partial body → read the file with `offset` / `limit` taken from
+`grove outline --detail 2 --json`.
 
 ## Setup
 

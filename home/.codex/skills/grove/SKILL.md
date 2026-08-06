@@ -35,40 +35,40 @@ a fallback:**
 - **A quick fact** — does a path exist, list a dir, count lines, find files by
   name → shell. A grove round-trip to confirm one line is wasted motion.
 
-**Combine:**
+**Combine:** `rg -n '<text>'` finds the line a call site sits on → `grove
+definition --at <file:line:col>` resolves what it refers to.
 
-- `rg -n '<text>'` to find the line a call site sits on → `grove definition --at
-  <file:line:col>` to resolve what it refers to.
-- `grove outline <file>` for the shape → a **bounded** read to grab a run of
-  small adjacent symbols when that beats N `source` calls.
-- `grove symbols` / `map` to locate the subsystem → `rg` to pin a constant inside.
+## Pick the verb from what you are doing
 
-| ❌ Don't (when the target is a symbol) | ✅ Do |
+Take the first row that matches. Each row is the whole move, and `rg` and the
+shell hold rows of their own — partners here, not fallbacks.
+
+| You are trying to… | Command |
 |---|---|
-| `rg -n 'cmd_struct' git.c`, then read `git.c` | `grove outline git.c` → `grove source <id>` |
-| `rg -n 'refs_be_files' refs/` | `grove symbols refs/ --name refs_be_files` → `grove source <id>` |
-| read a whole 1700-line file for one function | `grove outline <file>` → `grove source <id>` |
-| 7× `source` calls to understand a subsystem | `grove map <dir>` — one call, definitions + references, no bodies |
+| read a symbol whose **name** you already have | `grove symbols <dir> --name <X>` → `grove source <id>` |
+| see what a **file** holds, with no symbol in hand | `grove outline <file>` |
+| find every **call site** of a name | `grove callers <name> -d <dir>` |
+| resolve what a name **refers to** at a position | `grove definition <name> -d <dir>`, or `--at <file:line:col>` — scope-aware, follows imports across files |
+| find **text** — a string, log line, config key, a constant's *value*, a flag | `rg -n '<text>'` |
+| confirm a **quick fact** — path exists, list a dir, count lines | shell |
+| check a file you just **edited** | `grove check <file>` |
 
-Searching for the *text* `refs_be_files` — a log line, a comment, a config value
-— is the opposite case, and that is what `grep` is for.
+A dispatched ticket names the symbols it admits, so row 1 is the usual entry: go
+from the name straight to the body, and read no file whole. `--name` is exact by
+default; `--name-contains` is for deliberate fuzzy exploration.
 
-## Procedure
+`grove source <file> <name>` returns the same body as the id does; the id pins
+the exact match when a name is overloaded. An id reads
+`<lang>:<path>#<name>@<line>`, line 1-based.
 
-1. Identify the named symbol and/or file in the prompt.
-2. File but no symbol → `grove outline <file>`.
-3. Symbol but no file → `grove symbols <dir> --name <symbol>` (exact by default;
-   `--name-contains` only for deliberate fuzzy exploration).
-4. Take the id from that result: `<lang>:<path>#<name>@<line>`, line 1-based.
-5. `grove source <id>` → exactly that symbol's body. `grove source <file> <name>`
-   returns the same body; the id pins the exact match when a name is overloaded.
-6. "Who calls" → `grove callers <name> -d <dir>`. "Where defined" → `grove
-   definition <name> -d <dir>`, or `--at <file:line:col>` when you have a
-   position — that mode is scope-aware and follows imports across files.
-7. After an edit → `grove check <file>`.
-8. Broad or architectural questions → `grove map <dir>`: every definition grouped
-   by file, each with its outgoing references, in one call. Prefer it over
-   fetching many sources in sequence to build the same picture.
+**An outline grows with the file.** A 271-definition file outlines to ~30KB —
+affordable once, ruinous per file. When the outline is the expensive part of the
+answer, you already know enough to take row 1 instead.
+
+**`grove map <dir>` needs a small directory.** It returns every definition with
+its outgoing references, so on a large subsystem it costs more than the reads it
+replaces — one application directory measured 183KB in a single call. Reach for
+it when the directory is small *and* the question is genuinely architectural.
 
 `--json` on any verb gives machine-readable output. `--detail 0|1|2` adjusts
 **JSON verbosity only** — it does not shrink the human table.

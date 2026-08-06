@@ -7,10 +7,33 @@ expected base carried in the dispatch, and those `protected_paths` are its immut
 read from the check that just computed them, never rebuilt by hand. The dispatch carries them together with the frozen
 objective, `Validation mode: TDD` or `Validation mode: direct —
 <specific reason>`, canonical lane cwd, expected Git root/common-dir, branch, write scope,
-primary-checkout dirt snapshot, focused commands, evidence, stop conditions, and the orchestrate
-script path the worker authors its commits with. When the task
+primary-checkout dirt snapshot, focused commands, evidence, stop conditions, and the commit command
+below. When the task
 has a durable record, the dispatch also carries its `Envelope` and any `Standing orders`: the worker
 cannot honour a boundary the user froze, or an instruction the user issued, that never reached it.
+
+## Commit command
+
+Root fills the values in and the dispatch carries the line whole, so the worker never rebuilds it
+from the script or from this package:
+
+    lane commit --task-id <task> --lane-id <lane> --message-file <file>
+
+Add `--contract` when the commit freezes the Contract, `--amend-frozen` when it changes a path an
+earlier commit froze, and neither flag otherwise; a direct lane never passes `--contract`. The
+script reads the `Immutable:` paths off the staged diff, so no path is ever typed — a commit
+touching a frozen path without `--amend-frozen` is refused before it exists, where a mistyped path
+would instead leave the whole lane uncollectable.
+
+`--contract` is what puts `Origin: contract` and the frozen paths on a commit; an implementation
+commit carries neither. That pair is what lets Root read the lane's shape from Git rather than from
+the worker's report, so a Contract commit missing its `Origin` trailer reads as implementation.
+
+A dispatch naming the script path instead of the line costs the worker a read of the script and of
+this package to rebuild it — measured on a lane that spent it *after* its production edits were
+already written.
+
+## Lane identity and mode
 
 Working inside the canonical lane cwd is the only hard contract; the agent, its skills, and its context
 mode are recommendations. The worker reports the cwd, Git root/common-dir, branch, HEAD, and clean state

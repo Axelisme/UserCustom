@@ -37,7 +37,7 @@ from .release import (
 from .resources import RepositoryContext, TaskResources
 from .telemetry import auto_resume, record_event, timing_transition, write_report
 
-ORCHESTRATE_VERSION = 168
+ORCHESTRATE_VERSION = 169
 
 
 class JsonArgumentParser(argparse.ArgumentParser):

@@ -65,7 +65,9 @@ which is what keeps the coupling out of every other file.
    `improve-codebase-architecture`, `ask-matt`.
 2. **Tracker by convention, not by config.** Upstream defers to `/setup-matt-pocock-skills` for
    where issues live. The local copy reads CLAUDE.md / AGENTS.md and falls back to local markdown
-   under `.scratch/`. Affects `to-spec`, `to-tickets`, `wayfinder`, `code-review`, `ask-matt`.
+   under `.scratch/`. Affects `to-spec`, `to-tickets`, `wayfinder`, `code-review`, `prototype`,
+   `ask-matt`. `prototype` carries it in rule 6 — where the pointer to the kept prototype branch
+   goes; the `prototype/<name>` branch-naming convention itself is upstream's and stays.
    `code-review` additionally states what to do when no spec is found: run the Standards axis alone
    and say so.
 3. **Traditional Chinese output** in `improve-codebase-architecture` (HTML report body, card labels,

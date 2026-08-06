@@ -3,12 +3,12 @@
 Skills in this directory that come from [mattpocock/skills](https://github.com/mattpocock/skills),
 plus the local changes deliberately layered on top.
 
-**Synced at upstream commit `2ab9580` (2026-07-28).**
+**Synced at upstream commit `8b36d4f` (2026-08-05).**
 
 To find what changed since:
 
 ```sh
-git -C <path-to-skills-repo> log 2ab9580..HEAD -- skills/
+git -C <path-to-skills-repo> log 8b36d4f..HEAD -- skills/
 ```
 
 Then re-apply the deviations below onto whatever you take. A conflict that lands on a listed
@@ -38,12 +38,15 @@ the thing this file exists to prevent.
 | `teach` | `skills/productivity/teach` |
 | `to-spec` | `skills/engineering/to-spec` |
 | `to-tickets` | `skills/engineering/to-tickets` |
+| `wait-what` | `skills/productivity/wait-what` |
 | `wayfinder` | `skills/engineering/wayfinder` |
-| `writing-great-skills` | `skills/productivity/writing-great-skills` |
+| `writing-for-agents` | `skills/productivity/writing-for-agents` |
 
 Not taken from upstream: `triage` (no external request surface here — `candidate-backlog` covers
-internal discoveries) and `setup-matt-pocock-skills` (its generated config is replaced by the
-"repo's documented conventions win" rule below).
+internal discoveries), `setup-matt-pocock-skills` (its generated config is replaced by the
+"repo's documented conventions win" rule below), and — both graduated out of `in-progress` at the
+`8b36d4f` sync but not adopted here — `to-questionnaire` (sending someone else a questionnaire) and
+`wizard` (generating an interactive bash wizard for human-only setup steps).
 
 ## Local skills — not upstream, never overwrite
 
@@ -82,5 +85,12 @@ which is what keeps the coupling out of every other file.
 8. **Invocation policy** — `to-spec` and `to-tickets` are model-invocable here (upstream makes them
    user-invoked) so `dev-flow` can drive them. `wayfinder` stays user-invoked deliberately: it is the
    heavyweight flow a human should choose to enter.
-9. **`writing-great-skills` adds `PORTING.md`** and a `## Porting` section pointing at it — a
-   checklist for adopting a skill written for another ecosystem. No upstream equivalent.
+9. **`writing-for-agents` adds `PORTING.md`** and a `## Porting` section in `SKILL-MECHANICS.md`
+   pointing at it — a checklist for adopting a skill written for another ecosystem. No upstream
+   equivalent. (Upstream renamed this skill from `writing-great-skills` and dropped its
+   `GLOSSARY.md` at `1fc6573`; the porting checklist moved to the skill-mechanics branch because
+   that is where the skill-specific material now lives.)
+10. **`wait-what` re-pitches in Traditional Chinese.** Upstream asks for ASD-STE100 Simplified
+    Technical English; the local copy applies the same plain-prose discipline to Chinese, and
+    reads the glossary the repo documents (deviation 1) rather than hardcoding `CONTEXT.md`.
+    Identifiers, paths and commands stay in their original form.

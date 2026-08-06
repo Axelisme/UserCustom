@@ -73,6 +73,13 @@ Searching for the *text* `refs_be_files` — a log line, a comment, a config val
 `--json` on any verb gives machine-readable output. `--detail 0|1|2` adjusts
 **JSON verbosity only** — it does not shrink the human table.
 
+**An id is cwd-relative.** Its path is relative to the directory the query ran
+in, and absolute only when the target lies outside that directory. The same id
+therefore names a *different file* when resolved from a different cwd — including
+another worktree of the same repo, where it resolves silently and returns that
+tree's copy. Keep ids inside the session that produced them; hand another agent
+an absolute `grove source <file> <name>` instead.
+
 ## Trace a value's shape (dynamically-typed code)
 
 grove has no type system, so on Python / JS reconstruct a parameter's shape with

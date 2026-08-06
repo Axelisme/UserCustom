@@ -128,8 +128,11 @@ which is what keeps the coupling out of every other file.
     enters any review's scope. The section states the carve-out explicitly — *Refactoring is not
     part of the loop* still governs the code under test — so the two rules do not contradict.
     `simplify`'s whole-tree mode is the tool the section's first rule assumes.
-12. **`code-review` adds the Reinvented Wheel smell** to the Fowler baseline. No upstream
-    equivalent; the baseline covers duplication within a change but not a change that duplicates a
-    declared dependency. Pairs with `dev-flow`'s S0 dependency check (local skill, v7), which is
-    where the reason for rejecting a package is supposed to be recorded — this smell is what
-    notices when nothing was recorded.
+12. **`code-review` adds the Reinvented Wheel smell** to the baseline. No upstream equivalent; the
+    baseline covers duplication within a change but not a change that duplicates a declared
+    dependency. Pairs with `dev-flow`'s S0 dependency check (local skill, v7), which is where the
+    reason for rejecting a package is supposed to be recorded — this smell is what notices when
+    nothing was recorded. Upstream's sentence introducing the baseline calls it "a fixed set of
+    Fowler code smells (_Refactoring_, ch.3)"; since that sentence is pasted verbatim into the
+    Standards sub-agent prompt, it is amended here to say Fowler's plus one local addition, and the
+    entry itself is marked. Take upstream's wording again only if this smell is dropped.

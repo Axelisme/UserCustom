@@ -39,17 +39,17 @@ this same context, in one pass — do not skip an angle for lack of fan-out, and
 say so in the summary. State clearly that this was a single-pass review without
 the 4-agent fan-out, so whoever reads it isn't misled about what actually ran.
 
+**In whole-tree mode, every angle counts instead of listing.** A pattern
+occurring across the tree is reported as "this appears N times, about M
+reclaimable lines" — one number a reader can decide on. Hundreds of file/line
+hits for the same mechanism are not actionable, and bury the number that is.
+
 ### Reuse
 
 Flag new code that re-implements something the codebase already has — Grep
 shared/utility modules and files adjacent to the change, and name the existing
 helper to call instead. Tests count: duplicated assertions, and hand-rolled
 fixtures or helpers that shadow ones the suite already provides.
-
-In whole-tree mode, count instead of listing. A repeated sequence is worth
-reporting as "this prologue appears N times, about M reclaimable lines" — a
-finding a reader can decide on. A list of file/line hits for something occurring
-hundreds of times is not actionable, and buries the one number that is.
 
 ### Simplification
 
@@ -91,3 +91,10 @@ fix would change intended behavior, require changes well outside the reviewed
 diff, or that you judge to be a false positive — note the skip rather than
 arguing with it. Finish with a brief summary of what was fixed and what was
 skipped (or confirm the code was already clean).
+
+**Whole-tree mode does not apply.** A counted finding is reported and handed
+back; it is not fixed here. The scope guard above — reject a fix reaching well
+outside the reviewed diff — is the only thing bounding how much this phase
+rewrites, and in whole-tree mode there is no diff for it to bound against. A
+finding worth acting on becomes its own scoped run or its own ticket, where
+someone chooses the blast radius before the edits start.

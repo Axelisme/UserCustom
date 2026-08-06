@@ -54,6 +54,7 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 - **Message Chains** — long `a.b().c().d()` navigation the caller shouldn't depend on. → hide the walk behind one method on the first object.
 - **Middle Man** — a class or function that mostly just delegates onward. → cut it, call the real target direct.
 - **Refused Bequest** — a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
+- **Reinvented Wheel** — new code hand-builds general-purpose infrastructure (schema derivation, validation, serialization, HTTP/WebSocket transport, path resolution, file locking, retry) that a dependency the project already declares, or one it could readily take on, already provides. → name the package and what it would replace. Raise it only where the change records no reason the package was rejected; a stated reason — security boundary, determinism, licence — settles it.
 
 ### 4. Spawn both sub-agents in parallel
 

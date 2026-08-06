@@ -19,6 +19,13 @@ include the working-tree changes in scope — the review often runs before the
 commit. If a PR number, branch name, or file path was passed as an argument,
 review that target instead. Treat this diff as the review scope.
 
+**Whole-tree mode.** When the argument is a directory, the scope is everything
+under it, not a diff. Use this when the cost accumulated across many changes
+rather than inside one: boilerplate that grew a few lines per commit is
+invisible to every diff review, because no single diff ever contained enough of
+it to notice. Say in the summary that whole-tree mode ran and over what path, so
+nobody reads the findings as being about recent work.
+
 ## Phase 1 — Review (4 cleanup angles in parallel)
 
 Launch **4 independent review agents** through this harness's sub-agent tool,
@@ -38,6 +45,11 @@ Flag new code that re-implements something the codebase already has — Grep
 shared/utility modules and files adjacent to the change, and name the existing
 helper to call instead. Tests count: duplicated assertions, and hand-rolled
 fixtures or helpers that shadow ones the suite already provides.
+
+In whole-tree mode, count instead of listing. A repeated sequence is worth
+reporting as "this prologue appears N times, about M reclaimable lines" — a
+finding a reader can decide on. A list of file/line hits for something occurring
+hundreds of times is not actionable, and buries the one number that is.
 
 ### Simplification
 

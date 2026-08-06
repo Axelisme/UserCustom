@@ -22,3 +22,5 @@ altitude and evidence without duplicating either one's checks.
 11. Production reachability is evidence, not an assumption: a green test suite cannot validate
     code no shipped entrypoint reaches.
 12. Independence beats persuasive dispatch prose; reviewers receive artifacts and a fixed point.
+13. Size a handoff by what the receiver must read before it can start: carry the conclusion, locate
+    the rest exactly, and end every reference with the condition that discharges it.

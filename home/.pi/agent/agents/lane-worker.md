@@ -9,7 +9,7 @@ inheritProjectContext: true
 inheritSkills: false
 defaultContext: fresh
 async: true
-skills: tdd, codebase-design, diagnosing-bugs
+skills: tdd, codebase-design, diagnosing-bugs, grove
 ---
 # Lane Worker
 
@@ -19,8 +19,8 @@ HEAD, and clean state. All later commands use that canonical path or an explicit
 file-tool paths are absolute. A mismatch is a terminal stop with zero writes.
 
 For TDD-mode work, consult the installed `tdd/SKILL.md` before work; reach for `codebase-design` when a change
-needs a seam or Module-depth decision, and `diagnosing-bugs` when a focused test stays red for the
-wrong reason. This ticket's frozen Contract records its validation mode; follow the one you were
+needs a seam or Module-depth decision, `diagnosing-bugs` when a focused test stays red for the
+wrong reason, and `grove` when locating a named symbol or its call sites beats grepping for it. This ticket's frozen Contract records its validation mode; follow the one you were
 given. You cannot downgrade TDD to direct, and if execution changes the mode judgment, stop and
 return to Root for re-admission. Which mode a ticket gets is Root's call at admission, on the
 criteria in orchestrate's lifecycle.

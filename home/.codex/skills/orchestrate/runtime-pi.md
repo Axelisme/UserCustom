@@ -86,10 +86,18 @@ a dispatch.
 Use the worker context routing in [dispatch.md](references/dispatch.md).
 
 For acceptance re-review, after the prior reviewer process is terminal and `acceptance start`
-recreates the checkout, resume each trusted axis reviewer session with the prior subject, new
-subject, and correction range. If its context is untrusted, start a fresh reviewer with the prior
-terminal report supplied explicitly. The shared checkout binding and report rules remain in
-[admission.md](references/admission.md).
+recreates the checkout, one `subagent` fleet query settles each axis. A session the fleet still
+lists resumes with the prior subject, new subject, and correction range. Every other answer —
+an empty fleet included — starts a fresh reviewer carrying the prior axis report from disk,
+supplied explicitly; that report is the durable form of the prior verdict, and the fleet query is
+the whole of the search this rule asks for.
+
+Never reconstruct a reviewer's context from the session store. One measured re-review read
+`No active subagent fleet`, then spent 156KB parsing the previous day's session JSONL to recover
+conclusions that were already on disk in the axis report whose filename it was grepping for. The
+prior reviewer's context is not a thing to recover; its report is, and it is one read away.
+
+The shared checkout binding and report rules remain in [admission.md](references/admission.md).
 
 ## Reading silence
 

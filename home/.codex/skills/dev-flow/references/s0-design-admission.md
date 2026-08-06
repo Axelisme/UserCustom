@@ -28,6 +28,15 @@ Module depth is a deliverable of this stage, produced deliberately, not a side e
 during implementation. For the vocabulary and technique for designing a deep Module, see
 [`codebase-design`](../../codebase-design/SKILL.md); S0 does not restate it.
 
+**An existing mechanism includes third-party packages.** Before designing any Module that provides
+general-purpose infrastructure — schema derivation, validation, serialization, HTTP or WebSocket
+transport, path resolution, file locking, retry, config parsing — check whether a package the
+project already depends on, or one it could reasonably take on, already covers it. Record the check
+and its outcome in the design: the packages considered, and for each rejection the current need it
+cannot satisfy — a security boundary, a determinism requirement, a licence constraint. Already
+being written in this repo is not such a reason, and neither is a preference for owning the code.
+An unrecorded check counts as not performed, because there is nothing later stages can audit.
+
 ## Slicing
 
 Deliver one usable tracer through the whole required path before deepening any one Module, then

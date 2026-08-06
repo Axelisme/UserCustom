@@ -120,3 +120,16 @@ which is what keeps the coupling out of every other file.
     Technical English; the local copy applies the same plain-prose discipline to Chinese, and
     reads the glossary the repo documents (deviation 1) rather than hardcoding `CONTEXT.md`.
     Identifiers, paths and commands stay in their original form.
+11. **`tdd` owns test-suite contraction** — an added `## Test-suite hygiene` section plus two
+    anti-patterns (Setup-heavy, Type-narrowing as assertion) and Python examples in `tests.md`,
+    which upstream writes only in TypeScript. Upstream's loop has no owner for removing a test or
+    for extracting test scaffolding: it routes all reshaping to `/code-review`, whose scope is one
+    diff. Boilerplate that accrues a few lines per ticket across hundreds of files therefore never
+    enters any review's scope. The section states the carve-out explicitly — *Refactoring is not
+    part of the loop* still governs the code under test — so the two rules do not contradict.
+    `simplify`'s whole-tree mode is the tool the section's first rule assumes.
+12. **`code-review` adds the Reinvented Wheel smell** to the Fowler baseline. No upstream
+    equivalent; the baseline covers duplication within a change but not a change that duplicates a
+    declared dependency. Pairs with `dev-flow`'s S0 dependency check (local skill, v7), which is
+    where the reason for rejecting a package is supposed to be recorded — this smell is what
+    notices when nothing was recorded.

@@ -26,6 +26,17 @@ envelope, and the task record those land in. S1 starts once there is something t
 - **S1.3 Independently landable.** The Slice is useful and testable without a later Slice and its
   first accepted checkpoint is days, not weeks, away.
 
+### Citing evidence in the admission
+
+The admission is the worker's brief, and every path it prints is a pointer the worker will follow.
+A list of supporting report paths therefore reads as an instruction to open all of them: one
+measured lane opened four axis reports, the frozen spec, the ticket and the record index — 70KB
+before its first edit — beside an admission that already carried every conclusion it needed.
+
+Carry the conclusion, and print a path only with the condition that reaches it: *if the admission
+and the source disagree, the axis reports are in `<dir>`*. One conditional pointer replaces a list;
+the reports stay available to the reader who needs them and stop recruiting the reader who does not.
+
 There is no production-diff line limit. One existed and thresholded the wrong variable: the Slice
 with the largest rework had the smallest production diff, while frozen Contract depth ordered the
 same Slices monotonically. S2.8 thresholds that variable instead, and S1.3 with S0's Slicing stage

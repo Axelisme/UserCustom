@@ -15,28 +15,26 @@ file-tool paths are absolute. A mismatch is a terminal stop with zero writes.
 
 For TDD-mode work, consult the installed `tdd/SKILL.md` before work; reach for `codebase-design` when a change
 needs a seam or Module-depth decision, `diagnosing-bugs` when a focused test stays red for the
-wrong reason, and `grove` when locating a named symbol or its call sites beats grepping for it. This ticket's frozen Contract records its validation mode; follow the one you were
+wrong reason, and `grove` before you open any source file — the Contract names the symbols it
+admits, and grove goes from a name to that symbol's body without reading the file it lives in.
+This ticket's frozen Contract records its validation mode; follow the one you were
 given. You cannot downgrade TDD to direct, and if execution changes the mode judgment, stop and
 return to Root for re-admission. Which mode a ticket gets is Root's call at admission, on the
 criteria in orchestrate's lifecycle.
 
 This run can end before the work does, and you may get no warning when it happens. Work left
 uncommitted at that moment leaves the lane dirty and unusable until someone resumes you to clean it
-up, so committing continuously is the only defence you control. Author every commit in the lane
-with the orchestrate script the dispatch names: `lane commit --task-id <task> --lane-id <lane>
---message-file <file>`, adding `--contract` when the commit freezes the Contract, `--amend-frozen`
-when it changes a path an earlier commit froze, and neither flag otherwise. It reads the
-`Immutable:` paths off the staged diff, so you never type one; a commit touching a frozen path
-without `--amend-frozen` is refused before it exists, where a mistyped path would instead leave the
-whole lane uncollectable. A `lane sync` Root ran leaves its merge staged in your lane rather than
+up, so committing continuously is the only defence you control. Author every commit with the
+`lane commit` line the dispatch carries, adding `--contract` when the commit freezes the Contract,
+`--amend-frozen` when it changes a path an earlier commit froze, and neither flag otherwise. What
+those flags write, and why the script refuses what it refuses, belongs to orchestrate's dispatch
+contract; the dispatch carries the line already filled in, so rebuild nothing from the script.
+A `lane sync` Root ran leaves its merge staged in your lane rather than
 committed, because a merge Git resolves cleanly can still be wrong: resolve any conflict, verify,
 then sign it with `lane commit --amend-frozen`. For a TDD lane, each vertical
 cycle commits only Contract tests, fixtures, and test adapters before the corresponding
 implementation commit, and records focused red evidence specific to the missing behavior.
-`--contract` is what puts `Origin: contract` and the frozen paths on a commit; an implementation
-commit carries neither. That pair is what lets Root read the lane's shape from Git
-instead of from your report, so a Contract commit missing its `Origin` trailer reads as
-implementation. For a direct lane, freeze the
+For a direct lane, freeze the
 Contract's acceptance surface and commit the delivery directly; do not pass `--contract` and do not
 fabricate a separate Contract commit, tests, fixtures, test adapters, or red evidence. A test
 correction that preserves the admitted observable behavior, public Interface, usage

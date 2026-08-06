@@ -15,7 +15,31 @@ This skill takes the current conversation context and codebase understanding and
 
 Check with the user that these seams match their expectations.
 
-3. Write the spec using the template below, then publish it. If the tracker uses a triage label vocabulary, apply its `ready-for-agent` equivalent — no need for additional triage.
+3. Write the spec using the template below, publish it as an **entry file**, then apply the tracker's `ready-for-agent` label equivalent if it uses a triage vocabulary — no need for additional triage.
+
+## Keep the spec an entry file
+
+A spec outlives the conversation that wrote it, and every later reader opens it looking for one
+clause. Its length is a cost each of them pays in full: one 37KB spec cost a worker ~9k tokens on a
+ticket whose whole delivery was five files and 77 lines, and the clauses it actually needed were two
+sections of thirty lines.
+
+So the published spec is an **entry file** — what every reader needs, plus one pointer per section
+that only some readers reach.
+
+- **Stays in the entry** — Problem Statement, Solution, Out of Scope, and any frozen clause a later
+  gate cites by name (a usage envelope, a hard gate). Frozen clauses are quoted from, so they live
+  where the quote is checked.
+- **Moves behind a pointer** — long interface and contract detail, a per-slice or per-phase map,
+  anything one kind of reader opens and the others never do. One file per section, beside the spec.
+
+**Write each pointer as a condition, not a path.** *When you need the wire format, read
+`spec/protocol.md`* reaches the reader who needs it. A bare list of paths under a heading reads as
+an instruction to open all of them, and gets obeyed — measured on an admission that listed four
+supporting reports and had all four opened by a worker that needed none of them.
+
+Splitting a spec that already exists is a **move**, never a rewrite: every section keeps its bytes,
+so frozen text stays byte-identical to what earlier gates cited.
 
 <spec-template>
 

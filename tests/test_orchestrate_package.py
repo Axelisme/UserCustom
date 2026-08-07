@@ -113,7 +113,6 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             commands=(
                 "show",
                 "status",
-                "timing",
                 "lane",
                 "integration",
                 "acceptance",

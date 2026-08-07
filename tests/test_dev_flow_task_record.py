@@ -689,10 +689,43 @@ class TaskRecordTests(unittest.TestCase):
                 [
                     {
                         "section": "Standing orders",
-                        "rule": "not-verbatim",
+                        "rule": "missing-verbatim-quote",
                         "entry": "- **2026-08-08 — User:** Keep this exact, despite 「incidental punctuation」.",
                         "repair": "Put a 「...」 quote on the standing-order entry's first line.",
                     }
+                ],
+            )
+
+    def test_locate_names_wrapped_and_non_outer_standing_order_quotes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            index = record(root) / "INDEX.md"
+            text = index.read_text(encoding="utf-8").replace(
+                "Not yet recorded.", "Need and boundaries are frozen in spec.md."
+            ).replace(
+                "None.",
+                "- **2026-08-08 — User:** 「Keep this exact\n"
+                "  across lines。」\n"
+                "  Lapses: explicit revocation.\n\n"
+                "- **2026-08-09 — User:** Keep this exact, despite 「incidental punctuation」.\n"
+                "  Lapses: explicit revocation.",
+            )
+            index.write_text(text, encoding="utf-8")
+
+            findings = self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"]
+
+            self.assertEqual(
+                [(finding["rule"], finding["entry"]) for finding in findings],
+                [
+                    (
+                        "quote-not-one-line",
+                        "- **2026-08-08 — User:** 「Keep this exact",
+                    ),
+                    (
+                        "missing-verbatim-quote",
+                        "- **2026-08-09 — User:** Keep this exact, despite 「incidental punctuation」.",
+                    ),
                 ],
             )
 
@@ -740,7 +773,7 @@ class TaskRecordTests(unittest.TestCase):
                     },
                     {
                         "section": "Standing orders",
-                        "rule": "not-verbatim",
+                        "rule": "missing-verbatim-quote",
                         "entry": "- **User:** no quote",
                         "repair": "Put a 「...」 quote on the standing-order entry's first line.",
                     },

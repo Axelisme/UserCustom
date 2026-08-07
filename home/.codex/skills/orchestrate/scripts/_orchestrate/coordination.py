@@ -88,6 +88,7 @@ class _TaskProjection:
     integration: str
     lanes: dict[str, _LaneProjection]
     pending: int
+    collect_rounds: dict[str, int]
     warnings: tuple[str, ...]
 
 
@@ -165,6 +166,117 @@ def collect_lane_id(
     return lane.lane_id
 
 
+def _is_already_reachable_integration_merge(
+    repo: RepositoryContext,
+    sha: str,
+    integration_tip: str | None,
+) -> bool:
+    """Recognize a sync merge whose content is already in integration history."""
+    if integration_tip is None:
+        return False
+    parents = run_git(
+        repo.worktree_root,
+        "show",
+        "-s",
+        "--format=%P",
+        sha,
+    ).stdout.split()
+    if len(parents) < 2:
+        return False
+    second_parent = parents[1]
+    if run_git(
+        repo.worktree_root,
+        "merge-base",
+        "--is-ancestor",
+        second_parent,
+        integration_tip,
+        check=False,
+    ).returncode != 0:
+        return False
+    changed = changed_paths(repo.worktree_root, second_parent, sha)
+    if not changed:
+        return True
+    immutable: set[str] = set()
+    for commit in run_git(
+        repo.worktree_root,
+        "rev-list",
+        "--first-parent",
+        sha,
+    ).stdout.splitlines():
+        immutable.update(immutable_declarations(repo.worktree_root, commit))
+    return bool(immutable) and set(changed).issubset(immutable)
+
+
+def _is_contract_only_commit(
+    repo: RepositoryContext,
+    sha: str,
+    integration_tip: str | None = None,
+) -> bool:
+    """Recognize only Git-proven Contract or no-content carriage commits."""
+    if _is_already_reachable_integration_merge(repo, sha, integration_tip):
+        return True
+    origins = {
+        value.casefold()
+        for value in commit_trailer_values(repo.worktree_root, sha, "Origin")
+    }
+    if "contract" in origins:
+        return True
+    changed = first_parent_changed_paths(repo.worktree_root, sha)
+    if not changed:
+        return True
+    immutable = set(immutable_declarations(repo.worktree_root, sha))
+    return bool(immutable) and set(changed).issubset(immutable)
+
+
+def _collect_rounds(
+    repo: RepositoryContext,
+    task: TaskResources,
+    commits: list[str],
+) -> dict[str, int]:
+    """Count production-bearing collected rounds from the integration history."""
+    rounds: dict[str, int] = {}
+    previous_lane_tips: dict[str, str | None] = {}
+    for sha in commits:
+        lane_id = collect_lane_id(repo, task, sha)
+        if lane_id is None:
+            continue
+        tickets = commit_trailer_values(repo.worktree_root, sha, "Ticket")
+        parents = run_git(
+            repo.worktree_root,
+            "show",
+            "-s",
+            "--format=%P",
+            sha,
+        ).stdout.split()
+        if len(tickets) != 1 or len(parents) < 2:
+            continue
+        lane_tip = parents[1]
+        if lane_id not in previous_lane_tips:
+            merge_base = run_git(
+                repo.worktree_root,
+                "merge-base",
+                parents[0],
+                lane_tip,
+                check=False,
+            )
+            previous_lane_tips[lane_id] = merge_base.stdout.strip() or None
+        lower = previous_lane_tips[lane_id]
+        collected = (
+            first_parent_range(repo.worktree_root, lower, lane_tip)
+            if lower is not None
+            else None
+        )
+        if collected is None:
+            continue
+        previous_lane_tips[lane_id] = lane_tip
+        if any(
+            not _is_contract_only_commit(repo, commit, parents[0])
+            for commit in collected
+        ):
+            rounds[tickets[0]] = rounds.get(tickets[0], 0) + 1
+    return dict(sorted(rounds.items()))
+
+
 def task_projection(repo: RepositoryContext, task: TaskResources) -> _TaskProjection:
     """Derive lane state, pending work, and warning inputs from Git."""
     base = _ref(repo, task.integration_base_ref)
@@ -240,6 +352,7 @@ def task_projection(repo: RepositoryContext, task: TaskResources) -> _TaskProjec
     accepted = _ref(repo, task.accepted_ref)
     lower = accepted if accepted is not None else base
     collect_commits = first_parent_range(repo.worktree_root, lower, integration)
+    history_commits = first_parent_range(repo.worktree_root, base, integration)
     collected_lanes: set[str] = set()
     if collect_commits is not None:
         for sha in collect_commits:
@@ -254,6 +367,7 @@ def task_projection(repo: RepositoryContext, task: TaskResources) -> _TaskProjec
         integration=integration,
         lanes=lanes,
         pending=pending,
+        collect_rounds=_collect_rounds(repo, task, history_commits or []),
         warnings=tuple(warnings),
     )
 
@@ -287,6 +401,7 @@ def status(
         "integration": projection.integration,
         "lanes": lanes,
         "pending": projection.pending,
+        "collect_rounds": projection.collect_rounds,
     }
     refs: dict[str, str | None] = {}
     for key, ref in (

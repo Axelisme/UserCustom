@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Git lanes for dispatched task work. Use when dispatching implementation to worker agents, integrating or landing completed lanes, checking task or lane state, or when a runtime binding needs the lane dispatch contract. Not for work one agent completes in a single context.
-skill_version: 173
+skill_version: 177
 ---
 
 # Orchestrate
@@ -16,8 +16,10 @@ owns the preceding S0, which Root reads before creating the first lane.
 
 Run `status --task-id <task>` for the exact integration SHA and pending, accepted, landed, and lane
 state; when it emits `step`, open only the addresses in `step.open`. A clean response without `step`
-is self-placing; use `status --task-id <task> --step` only when it is not. Run `lane check --task-id
-<task> --lane-id <lane>` for one lane's exact state.
+is self-placing; use `status --task-id <task> --step` only when it is not. With a task id, status also
+projects a lexically sorted `collect_rounds` mapping by `Ticket:` trailer, counting each collected
+round whose new lane range contains a non-Contract commit. Run `lane check --task-id <task> --lane-id <lane>`
+for one lane's exact state.
 
 `show` is the text-stream exception: success writes only the verified section to stdout. Every
 other command emits one JSON object with `orchestrate_version`: exit 0 is success, exit 1 is a
@@ -115,9 +117,9 @@ Destructive `integration remove --abandon` requires exceptional current-user aut
 unlanded/uncollected state while preserving unrelated refs, paths, and user dirt.
 
 [Admission S2.4](references/admission.md) selects preserving versus semantic correction; S3 owns the
-monotonic rework count.
+Git-derived collect-round projection and its diagnosis trigger.
 
-## Observation and timing
+## Observation and wall-clock facts
 
 `orchestrate.py --version` is the top-level version query; there is no `version` subcommand. `status`
 is the only task discovery/projection: without an ID it lists tasks; with one it reports integration
@@ -140,8 +142,9 @@ script adds a factual warning naming it. The check is most useful before dispatc
 carried identity, but is optional before collection, which applies identical predicates.
 
 `report --task-id <task> --output-dir <dir>` atomically writes two fixed artifacts from Git and
-append-only telemetry. `timing pause` closes active timing before an external wait; `timing resume`
-restarts it. Repeated matching transitions are idempotent warnings. Reports and status are read-only.
+append-only telemetry. Reports use version 2: wall-clock `wall_seconds` and span `elapsed_seconds`
+remain, while pause/resume-derived fields and event-gap interpretation do not exist. Reports and
+status are read-only.
 
 ## Package administration
 

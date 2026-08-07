@@ -44,9 +44,10 @@ already written.
 Working inside the canonical lane cwd is the only hard contract; the agent, its skills, and its context
 mode are recommendations. The worker reports the cwd, Git root/common-dir, branch, HEAD, and clean state
 it observes, and Root judges whether they match the admitted lane. The worker runs no mechanical
-self-check and does not block itself. Every later operation is path-bound. Root verifies identity and
-primary dirt, then holds the mode-appropriate pre-collect evidence [admission](admission.md) S2.5
-requires. Root alone invokes `lane sync` or collection.
+self-check and does not block itself. Every later operation is path-bound. Root verifies the worker
+identity and primary dirt, then reads `sha`, `base`, `protected_paths`, and `contract_commits` from
+`lane check` for the mode-appropriate pre-collect evidence [admission](admission.md) S2.5 requires.
+Root alone invokes `lane sync` or collection.
 `lane sync` stages its merge and stops, so the worker resolves whatever it left — a conflict, or a
 clean merge that is wrong for reasons only the writer sees — and signs it with `lane commit
 --amend-frozen` in its lane; shared integration is never the conflict workspace.
@@ -56,8 +57,8 @@ integration branch's first-parent history. Canonical tests and ReviewGate run th
 agent or current-user decision with required `acceptance result --verifier`. Agent pass establishes
 landing authority in `accepted`; user pass records independent evidence in `user-accepted`. A
 persistence advance routes through an admitted writer lane and `integration reconcile`; after collection
-the exact snapshot must receive agent acceptance again before it can become landed. `timing pause` and `timing
-resume` bracket external waits without granting lifecycle authority.
+the exact snapshot must receive agent acceptance again before it can become landed; external waits
+do not grant lifecycle authority.
 
 The current CLI has no lane group or consumption policy: `lane create` accepts an optional bounded
 annotation, `lane comment --text|--clear` overwrites or clears it, and status projects active lanes
@@ -84,14 +85,15 @@ path-bound operation.
 | lane is unnecessary | `lane drop`. |
 
 The worker's terminal reports are normal runtime output. A TDD lane reports twice: first at the
-frozen Contract before any production line, naming every Contract commit SHA with its exact red
-command and observed red reason plus the exact clean SHA and tree it stopped at, and again at
-lane-ready with the green result, changed and protected paths, and final exact clean SHA. Root
-proves the Contract state and admits implementation between them; a worker does not cross that stop
-on its own judgement that the Contract looks complete. A direct lane reports once at lane-ready,
-naming the frozen Contract pointer, changed and protected paths, direct validation
-commands/results, and final exact clean SHA. Root proves the public process-terminal result and Git
-facts at every stop; no external worker artifact is required.
+frozen Contract before any production line, giving its exact red command and observed red reason,
+and again at lane-ready with the green validation commands/results. Root reads the exact `sha`,
+tree, `base`, `protected_paths`, and `contract_commits` from `lane check`; a worker does not
+restate those Git facts. Root proves the Contract state and admits implementation between the two
+stops; a worker
+does not cross that stop on its own judgement that the Contract looks complete. A direct lane reports
+once at lane-ready with the frozen Contract pointer and direct validation commands/results,
+likewise leaving Git facts to `lane check`. Root proves the public
+process-terminal result and Git facts at every stop; no external worker artifact is required.
 
 ## Authority
 

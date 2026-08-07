@@ -41,6 +41,7 @@ STANDING_ORDER_ENTRY = re.compile(r"^- +\*\*", re.MULTILINE)
 STANDING_ORDER_BLOCK = re.compile(r"^- +\*\*.*?(?=^- +\*\*|\Z)", re.MULTILINE | re.DOTALL)
 STANDING_ORDER_DATE = re.compile(r"^- +\*\*\d{4}-\d{2}-\d{2} +—")
 STANDING_ORDER_QUOTE = re.compile(r"^- +\*\*[^*\r\n]+:\*\* +「.+」\s*$", re.MULTILINE)
+STANDING_ORDER_QUOTE_START = re.compile(r"^- +\*\*[^*\r\n]+:\*\* +「")
 STANDING_ORDER_LAPSE = re.compile(r"^ +Lapses: +\S", re.MULTILINE)
 TICKET_STATUSES = frozenset({"open", "active", "closed"})
 # Required exactly when status is `closed`; distinguishes a resolved ticket from one ruled out of
@@ -381,10 +382,15 @@ def lint_frozen_state(text: str) -> list[dict[str, str]]:
                 }
             )
         if not STANDING_ORDER_QUOTE.search(entry):
+            rule = (
+                "quote-not-one-line"
+                if STANDING_ORDER_QUOTE_START.match(entry_heading) and "」" not in entry_heading
+                else "missing-verbatim-quote"
+            )
             findings.append(
                 {
                     "section": STANDING_ORDERS_HEADING,
-                    "rule": "not-verbatim",
+                    "rule": rule,
                     "entry": entry_heading,
                     "repair": "Put a 「...」 quote on the standing-order entry's first line.",
                 }

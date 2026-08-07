@@ -119,7 +119,6 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             commands=(
                 "show",
                 "status",
-                "timing",
                 "lane",
                 "integration",
                 "acceptance",
@@ -131,7 +130,6 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             long_options=("--skill-dir", "--version"),
         )
         self.assert_help_surface(("show",))
-        self.assert_help_surface(("timing",), commands=("pause", "resume"))
         self.assert_help_surface(
             ("lane",),
             commands=("create", "check", "sync", "drop", "commit", "comment"),
@@ -148,8 +146,6 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
         self.assert_help_surface(
             ("status",), long_options=("--task-id", "--step")
         )
-        self.assert_help_surface(("timing", "pause"), long_options=("--task-id",))
-        self.assert_help_surface(("timing", "resume"), long_options=("--task-id",))
         self.assert_help_surface(
             ("lane", "create"), long_options=("--task-id", "--lane-id", "--comment")
         )
@@ -322,6 +318,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                     "docs": {"sha": self.base, "uncollected": 0},
                 },
                 "pending": 0,
+                "collect_rounds": {},
             },
         )
         self.assertEqual(list(payload["lanes"]), ["api", "docs"])
@@ -358,6 +355,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                     "docs": {"sha": self.base, "uncollected": 0},
                 },
                 "pending": 0,
+                "collect_rounds": {},
                 "accepted": self.base,
                 "landed": self.base,
             },
@@ -385,6 +383,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "integration",
                 "lanes",
                 "pending",
+                "collect_rounds",
                 "warnings",
                 "step",
             },
@@ -424,6 +423,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             "integration",
             "lanes",
             "pending",
+            "collect_rounds",
             "warnings",
             "step",
         }
@@ -434,6 +434,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             self.assertEqual(payload.get("integration"), self.base)
             self.assertEqual(payload.get("lanes"), {})
             self.assertEqual(payload.get("pending"), 0)
+            self.assertEqual(payload.get("collect_rounds"), {})
             self.assertEqual(
                 payload.get("step"),
                 {
@@ -554,6 +555,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "integration": self.base,
                 "lanes": {},
                 "pending": 0,
+                "collect_rounds": {},
             },
         )
 
@@ -663,6 +665,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                     self.lane_id: {"sha": lane_tip, "uncollected": 0},
                 },
                 "pending": 1,
+                "collect_rounds": {"context-clean-ticket": 1},
                 "step": {
                     "n": 6,
                     "open": [
@@ -779,6 +782,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "integration": integration_tip,
                 "lanes": {},
                 "pending": 0,
+                "collect_rounds": {"context-clean-ticket": 1},
                 "accepted": integration_tip,
                 "landed": integration_tip,
             },

@@ -36,9 +36,9 @@ from .release import (
     require_verified_release,
 )
 from .resources import RepositoryContext, TaskResources
-from .telemetry import auto_resume, record_event, timing_transition, write_report
+from .telemetry import write_report
 
-ORCHESTRATE_VERSION = 173
+ORCHESTRATE_VERSION = 177
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
@@ -60,13 +60,6 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--task-id")
     status_parser.add_argument("--step", action="store_true")
     status_parser.set_defaults(route="status", mutation=False)
-
-    timing = commands.add_parser("timing")
-    timing_commands = timing.add_subparsers(dest="timing_command", required=True, parser_class=JsonArgumentParser)
-    for name in ("pause", "resume"):
-        op = timing_commands.add_parser(name)
-        op.add_argument("--task-id", required=True)
-        op.set_defaults(route=f"timing-{name}", mutation=True)
 
     lane = commands.add_parser("lane")
     lane_commands = lane.add_subparsers(dest="lane_command", required=True, parser_class=JsonArgumentParser)
@@ -193,10 +186,6 @@ def _run(
         raise OrchestrateError("current directory is not a Git repository", "not_git_repository")
     if route == "status":
         return status(repo, args.task_id, include_step=args.step)
-    if route == "timing-pause":
-        return timing_transition(TaskResources.derive(repo, args.task_id), pause=True)
-    if route == "timing-resume":
-        return timing_transition(TaskResources.derive(repo, args.task_id), pause=False)
     if route == "integration-create":
         return integration_create(repo, args.task_id)
     if route == "lane-create":
@@ -242,38 +231,11 @@ def _run(
     raise OrchestrateError(f"{route} is not implemented in this tracer", "cli_usage")
 
 
-_AUTO_RESUME_OPERATIONS = frozenset(
-    {
-        "lane-create",
-        "lane-comment",
-        "lane-check",
-        "lane-commit",
-        "lane-sync",
-        "lane-drop",
-        "integration-collect",
-        "integration-reconcile",
-        "integration-land",
-        "integration-remove",
-        "acceptance-start",
-        "acceptance-result",
-    }
-)
-
-
-def _event_context(args: argparse.Namespace) -> dict[str, object]:
-    return {
-        key: getattr(args, key)
-        for key in ("lane_id", "persist", "sha", "verifier")
-        if getattr(args, key, None) is not None
-    }
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     skill_dir = Path(__file__).resolve().parents[2]
     operation = "cli"
     args: argparse.Namespace | None = None
     repo: RepositoryContext | None = None
-    auto_resumed = False
     try:
         parser = build_parser()
         args = parser.parse_args(argv)
@@ -312,25 +274,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 repo = None
             else:
                 raise
-        auto_warnings: tuple[str, ...] = ()
-        if operation in _AUTO_RESUME_OPERATIONS:
-            task = TaskResources.derive(repo, args.task_id)
-            auto_warnings, auto_resumed = auto_resume(task)
         result = _run(args, repo, skill_dir)
-        if auto_resumed and not result.ok:
-            record_event(
-                TaskResources.derive(repo, args.task_id),
-                operation,
-                "failure",
-                **_event_context(args),
-            )
-        if auto_warnings:
-            result = CommandResult(
-                result.ok,
-                result.data,
-                (*auto_warnings, *result.warnings),
-                result.diagnostics,
-            )
         if operation == "show":
             sys.stdout.write(str(result.data["text"]))
             return 0
@@ -352,18 +296,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
         return 0 if result.ok else 1
     except (OSError, UnicodeError, OrchestrateError) as exc:
-        if (
-            auto_resumed
-            and args is not None
-            and repo is not None
-            and hasattr(args, "task_id")
-        ):
-            record_event(
-                TaskResources.derive(repo, args.task_id),
-                operation,
-                "failure",
-                **_event_context(args),
-            )
         code = getattr(exc, "code", "git_error")
         error = {"code": code, "message": str(exc)}
         repair = getattr(exc, "repair", None)

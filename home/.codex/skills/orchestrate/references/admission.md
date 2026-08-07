@@ -136,20 +136,23 @@ introduced the defect that superseded it. A Contract that fails this axis a seco
 signal, not a third correction: report it, naming whether the observable sentence survives, and
 keep that report with the Slice. Nothing here opens a new counter or stops the lane; the same
 first-parent range already carries the pre-production amendments this produces.
-## S3 — Machine rework admission
+## S3 — Derived collect-round admission
 
-- Root keeps one monotonic `Machine rework: N` prose line in the active Slice ticket's Current
-  section before a Standards or Spec production correction. It is an instrument, not a gate: no
-  count blocks a dispatch, invalidates a Slice or requires re-admission, and there is never another
-  counter store.
-- Contract-only correction, backlog, decision blocking and rollout correction do not increment it.
-- Two is the advisory point, not a limit. From the third increment on, Root adds one line naming
-  what the preceding corrections' diagnosis missed. The count alone cannot separate four
-  independent defects found by successively deeper gates from one misdiagnosis corrected four
-  times, and those two read identically afterwards while calling for opposite handling. The line is
-  written where it is cheapest to write, which is not at review.
-- The count and diagnosis lines remain in the active Slice ticket's `Current`, which `locate` names
-  to the next reader.
+- Root reads `status --task-id <task>.collect_rounds[<ticket>]` before a Standards or Spec
+  production correction. The projection is Git-derived, counts collected rounds whose newly
+  collected lane range contains a non-Contract commit, and is the only measured collect-round
+  fact; there is no hand-maintained counter store.
+- The projection excludes only Git-provable Contract-only and no-content carriage. Backlog,
+  decision blocking, and rollout correction are human classifications; status does not infer or
+  exclude them.
+- Two is the advisory point, not a limit. Before making another production correction when the
+  current derived value is already at least three, Root writes one line naming what the preceding
+  corrections' diagnosis missed. The count alone cannot separate four independent defects found by
+  successively deeper gates from one misdiagnosis corrected four times, and those two read
+  identically afterwards while calling for opposite handling. The line is written where it is
+  cheapest to write, which is not at review.
+- The diagnosis line remains in the active Slice ticket's `Current`, which `locate` names to the
+  next reader; the measured value remains in `status.collect_rounds`.
 
 Nothing here bounds the loop mechanically. A Slice corrected eight times remains visible in its own
 ticket beside the diagnosis that explains the corrections.

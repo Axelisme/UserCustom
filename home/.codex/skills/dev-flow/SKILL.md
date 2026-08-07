@@ -51,6 +51,8 @@ user's quote and a pointer to that frozen text. Amendments require new ratificat
 editing the assented text. If no antecedent was recorded, preserve it under an explicit
 `reconstructed` label.
 
+**Keep verbatim quotes on one line.** A verbatim `「...」` quote must open and close on one physical line because line wrapping makes exact custody ambiguous.
+
 **Retire by user authority.** An order lapses only when its stated condition fires, a later user
 message revokes or replaces it, or the task is archived. Move it intact to the retired record with
 date and reason. Keep overlapping orders separate: the newest governs addressed points and all

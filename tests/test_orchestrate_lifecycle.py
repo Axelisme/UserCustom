@@ -207,154 +207,7 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
         worktrees = self.git(self.root, "worktree", "list", "--porcelain")
         self.assertNotIn(str(self.task_root(task_id)), worktrees)
 
-    def test_01_task_start_and_duplicate_pause_resume_event_semantics(self) -> None:
-        task_id = "timing-explicit"
-        self.create_task(task_id)
-        initial = self.events(task_id)
-        self.assertEqual(len(initial), 1)
-        self.assertEqual(initial[0]["operation"], "integration-create")
-        self.assertEqual(initial[0]["outcome"], "success")
-
-        self.mutation_success(
-            self.cli(self.nested, "timing", "pause", "--task-id", task_id),
-            "timing-pause",
-        )
-        paused_bytes = self.telemetry_path(task_id).read_bytes()
-        paused_events = self.events(task_id)
-        self.assertEqual(paused_events[-1]["operation"], "timing-pause")
-
-        self.mutation_success(
-            self.cli(self.nested, "timing", "pause", "--task-id", task_id),
-            "timing-pause",
-            warnings=True,
-        )
-        self.assertEqual(self.telemetry_path(task_id).read_bytes(), paused_bytes)
-
-        self.mutation_success(
-            self.cli(self.nested, "timing", "resume", "--task-id", task_id),
-            "timing-resume",
-        )
-        resumed_bytes = self.telemetry_path(task_id).read_bytes()
-        self.assertEqual(self.events(task_id)[-1]["operation"], "timing-resume")
-        self.mutation_success(
-            self.cli(self.nested, "timing", "resume", "--task-id", task_id),
-            "timing-resume",
-            warnings=True,
-        )
-        self.assertEqual(self.telemetry_path(task_id).read_bytes(), resumed_bytes)
-
-    def test_02_closed_auto_resume_set_precedes_success_or_failure_and_queries_are_excluded(
-        self,
-    ) -> None:
-        invocations: tuple[tuple[str, tuple[str, ...], int, str], ...] = (
-            (
-                "lane-create",
-                ("lane", "create", "--lane-id", "writer"),
-                0,
-                "success",
-            ),
-            ("lane-check", ("lane", "check", "--lane-id", "missing"), 1, "failure"),
-            ("lane-sync", ("lane", "sync", "--lane-id", "missing"), 2, "failure"),
-            ("lane-drop", ("lane", "drop", "--lane-id", "missing"), 2, "failure"),
-            (
-                "integration-collect",
-                (
-                    "integration",
-                    "collect",
-                    "--lane-id",
-                    "missing",
-                    "--ticket",
-                    "missing-collect-ticket",
-                ),
-                2,
-                "failure",
-            ),
-            (
-                "integration-reconcile",
-                (
-                    "integration",
-                    "reconcile",
-                    "--lane-id",
-                    "repair",
-                    "--persist",
-                    "missing",
-                ),
-                2,
-                "failure",
-            ),
-            (
-                "integration-land",
-                ("integration", "land", "--persist", "main"),
-                2,
-                "failure",
-            ),
-            ("integration-remove", ("integration", "remove", "--no-report"), 2, "failure"),
-            ("acceptance-start", ("acceptance", "start"), 0, "success"),
-            (
-                "acceptance-result",
-                ("acceptance", "result", "--verifier", "agent", "--outcome", "pass"),
-                2,
-                "failure",
-            ),
-        )
-        for index, (operation, argv, returncode, outcome) in enumerate(invocations):
-            task_id = f"auto-{index}"
-            self.create_task(task_id)
-            if operation == "integration-remove":
-                self.create_lane(task_id, "blocker")
-            self.mutation_success(
-                self.cli(self.nested, "timing", "pause", "--task-id", task_id),
-                "timing-pause",
-            )
-            result = self.cli(
-                self.nested,
-                *argv,
-                "--task-id",
-                task_id,
-            )
-            self.assertEqual(result.returncode, returncode, result.stderr)
-            observed = self.events(task_id)
-            resume_indexes = [
-                position
-                for position, event in enumerate(observed)
-                if event["operation"] == "timing-resume" and event.get("auto") is True
-            ]
-            operation_indexes = [
-                position
-                for position, event in enumerate(observed)
-                if event["operation"] == operation
-            ]
-            with self.subTest(operation=operation, assertion="one-auto-resume"):
-                self.assertEqual(len(resume_indexes), 1)
-            with self.subTest(operation=operation, assertion="before-outcome"):
-                self.assertTrue(operation_indexes)
-                self.assertLess(resume_indexes[0], operation_indexes[-1])
-                self.assertEqual(observed[operation_indexes[-1]]["outcome"], outcome)
-
-        task_id = "excluded-queries"
-        self.create_task(task_id)
-        self.mutation_success(
-            self.cli(self.nested, "timing", "pause", "--task-id", task_id),
-            "timing-pause",
-        )
-        before = self.telemetry_path(task_id).read_bytes()
-        output_dir = self.root / "query-report"
-        excluded = (
-            ("status", "--task-id", task_id),
-            ("report", "--task-id", task_id, "--output-dir", str(output_dir)),
-            ("pin", "status"),
-            ("doctor",),
-            ("doctor", "diff", "136", "136"),
-            ("release", "--version", "136"),
-        )
-        for argv in excluded:
-            self.cli(self.nested, *argv)
-            with self.subTest(argv=argv):
-                self.assertEqual(self.telemetry_path(task_id).read_bytes(), before)
-
-    def test_03_observation_append_failure_warns_but_explicit_timing_failure_is_fatal(
-        self,
-    ) -> None:
+    def test_03_observation_append_failure_warns_for_mutation(self) -> None:
         task_id = "append-warning"
         self.create_task(task_id)
         telemetry = self.telemetry_path(task_id)
@@ -372,15 +225,6 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
         )
         self.mutation_success(lane, "lane-create", warnings=True)
         self.assertTrue(self.lane_path(task_id, "writer").is_dir())
-
-        timing = self.cli(
-            self.nested,
-            "timing",
-            "pause",
-            "--task-id",
-            task_id,
-        )
-        self.operational_failure(timing, "timing-pause", "telemetry_write_failed")
         self.assertTrue(telemetry.is_dir())
 
     def test_04_literal_events_compute_exact_counts_rates_spans_and_markers(self) -> None:
@@ -393,8 +237,6 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
             self.event("2026-07-30T12:06:00+00:00", "lane-sync", "success", lane_id="docs"),
             self.event("2026-07-30T12:07:00+00:00", "integration-collect", "success", lane_id="docs"),
             self.event("2026-07-30T12:08:00+00:00", "lane-drop", "success", lane_id="api"),
-            self.event("2026-07-30T12:10:00+00:00", "timing-pause", "success"),
-            self.event("2026-07-30T12:15:00+00:00", "timing-resume", "success"),
             self.event("2026-07-30T12:16:00+00:00", "acceptance-start", "success", subject_sha="a" * 40),
             self.event("2026-07-30T12:17:00+00:00", "acceptance-result", "fail", subject_sha="a" * 40),
             self.event("2026-07-30T12:18:00+00:00", "acceptance-start", "success", subject_sha="b" * 40),
@@ -418,14 +260,14 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
                 "churn": 15,
             },
         )
-        self.assertEqual(report["report_version"], 1)
+        self.assertEqual(report["report_version"], 2)
         self.assertEqual(report["task_id"], "alpha")
         self.assertEqual(report["generated_at"], "2026-07-30T12:30:00+00:00")
         self.assertEqual(report["warnings"], [])
         self.assertEqual(
             report["counts"],
             {
-                "lifecycle_events": 21,
+                "lifecycle_events": 19,
                 "lanes_created": 2,
                 "lanes_collected": 1,
                 "lanes_dropped": 1,
@@ -455,15 +297,13 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
                 "acceptance_pass_rate": 0.5,
                 "reconciliation_conflict_rate": 1 / 3,
                 "landing_success_rate": 1 / 3,
-                "events_per_wall_hour": 42.0,
-                "events_per_recorded_hour": 50.4,
+                "events_per_wall_hour": 38.0,
                 "churn_per_wall_hour": 30.0,
-                "churn_per_recorded_hour": 36.0,
             },
         )
         self.assertEqual(
             report["timing"],
-            {"wall_seconds": 1800.0, "paused_seconds": 300.0, "recorded_seconds": 1500.0},
+            {"wall_seconds": 1800.0},
         )
         self.assertEqual(
             report["integration_diff"],
@@ -474,24 +314,23 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
         self.assertEqual(
             report["lane_durations"],
             {
-                "collected": {"lanes": 1.0, "elapsed_seconds": 300.0, "recorded_seconds": 300.0},
-                "dropped": {"lanes": 1.0, "elapsed_seconds": 300.0, "recorded_seconds": 300.0},
+                "collected": {"lanes": 1.0, "elapsed_seconds": 300.0},
+                "dropped": {"lanes": 1.0, "elapsed_seconds": 300.0},
             },
         )
         timeline = report["timeline"]
         self.assertEqual(
             timeline,
             [
-                {"type": "span", "kind": "task", "identity": "alpha", "outcome": "success", "started_at": "2026-07-30T12:00:00+00:00", "ended_at": "2026-07-30T12:30:00+00:00", "elapsed_seconds": 1800.0, "recorded_seconds": 1500.0},
-                {"type": "span", "kind": "lane", "identity": "docs", "outcome": "success", "disposition": "collected", "started_at": "2026-07-30T12:02:00+00:00", "ended_at": "2026-07-30T12:07:00+00:00", "elapsed_seconds": 300.0, "recorded_seconds": 300.0},
-                {"type": "span", "kind": "lane", "identity": "api", "outcome": "success", "disposition": "dropped", "started_at": "2026-07-30T12:03:00+00:00", "ended_at": "2026-07-30T12:08:00+00:00", "elapsed_seconds": 300.0, "recorded_seconds": 300.0},
+                {"type": "span", "kind": "task", "identity": "alpha", "outcome": "success", "started_at": "2026-07-30T12:00:00+00:00", "ended_at": "2026-07-30T12:30:00+00:00", "elapsed_seconds": 1800.0},
+                {"type": "span", "kind": "lane", "identity": "docs", "outcome": "success", "disposition": "collected", "started_at": "2026-07-30T12:02:00+00:00", "ended_at": "2026-07-30T12:07:00+00:00", "elapsed_seconds": 300.0},
+                {"type": "span", "kind": "lane", "identity": "api", "outcome": "success", "disposition": "dropped", "started_at": "2026-07-30T12:03:00+00:00", "ended_at": "2026-07-30T12:08:00+00:00", "elapsed_seconds": 300.0},
                 {"type": "marker", "kind": "sync", "identity": "docs", "outcome": "conflict", "at": "2026-07-30T12:04:00+00:00"},
                 {"type": "marker", "kind": "collect", "identity": "docs", "outcome": "conflict", "at": "2026-07-30T12:05:00+00:00"},
                 {"type": "marker", "kind": "sync", "identity": "docs", "outcome": "success", "at": "2026-07-30T12:06:00+00:00"},
                 {"type": "marker", "kind": "collect", "identity": "docs", "outcome": "success", "at": "2026-07-30T12:07:00+00:00"},
-                {"type": "span", "kind": "pause", "identity": "pause", "outcome": "success", "started_at": "2026-07-30T12:10:00+00:00", "ended_at": "2026-07-30T12:15:00+00:00", "elapsed_seconds": 300.0, "recorded_seconds": 0.0},
-                {"type": "span", "kind": "acceptance", "identity": "a" * 40, "outcome": "fail", "started_at": "2026-07-30T12:16:00+00:00", "ended_at": "2026-07-30T12:17:00+00:00", "elapsed_seconds": 60.0, "recorded_seconds": 60.0},
-                {"type": "span", "kind": "acceptance", "identity": "b" * 40, "outcome": "success", "started_at": "2026-07-30T12:18:00+00:00", "ended_at": "2026-07-30T12:19:00+00:00", "elapsed_seconds": 60.0, "recorded_seconds": 60.0},
+                {"type": "span", "kind": "acceptance", "identity": "a" * 40, "outcome": "fail", "started_at": "2026-07-30T12:16:00+00:00", "ended_at": "2026-07-30T12:17:00+00:00", "elapsed_seconds": 60.0},
+                {"type": "span", "kind": "acceptance", "identity": "b" * 40, "outcome": "success", "started_at": "2026-07-30T12:18:00+00:00", "ended_at": "2026-07-30T12:19:00+00:00", "elapsed_seconds": 60.0},
                 {"type": "marker", "kind": "reconcile", "identity": "dev", "outcome": "noop", "at": "2026-07-30T12:20:00+00:00"},
                 {"type": "marker", "kind": "reconcile", "identity": "dev", "outcome": "success", "at": "2026-07-30T12:21:00+00:00"},
                 {"type": "marker", "kind": "reconcile", "identity": "dev", "outcome": "conflict", "at": "2026-07-30T12:22:00+00:00"},
@@ -531,9 +370,7 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
         ):
             self.assertNotIn(absent, rates)
         self.assertEqual(rates["events_per_wall_hour"], 1.0)
-        self.assertEqual(rates["events_per_recorded_hour"], 1.0)
         self.assertEqual(rates["churn_per_wall_hour"], 0.0)
-        self.assertEqual(rates["churn_per_recorded_hour"], 0.0)
 
         domain_rates = {
             "lane_collection_rate": self.event("2026-07-30T12:30:00+00:00", "lane-create", "success", lane_id="docs"),
@@ -569,40 +406,12 @@ class ObservationReportingCleanupContractTests(OrchestrateCliRepositoryTestCase)
         )
         for absent in (
             "events_per_wall_hour",
-            "events_per_recorded_hour",
             "churn_per_wall_hour",
-            "churn_per_recorded_hour",
         ):
             self.assertNotIn(absent, zero_time["rates"])
         encoded = json.dumps(zero_time, allow_nan=False)
         self.assertNotIn("NaN", encoded)
         self.assertNotIn("Infinity", encoded)
-
-    def test_06_open_pause_is_virtually_closed_without_a_resume_event(self) -> None:
-        events = [
-            self.event("2026-07-30T12:00:00+00:00", "integration-create", "success"),
-            self.event("2026-07-30T12:10:00+00:00", "timing-pause", "success"),
-        ]
-        report = self.compute_report(
-            events, datetime(2026, 7, 30, 12, 30, tzinfo=UTC)
-        )
-        self.assertEqual(
-            report["timing"],
-            {"wall_seconds": 1800.0, "paused_seconds": 1200.0, "recorded_seconds": 600.0},
-        )
-        self.assertIn(
-            {
-                "type": "span",
-                "kind": "pause",
-                "identity": "pause",
-                "started_at": "2026-07-30T12:10:00+00:00",
-                "ended_at": "2026-07-30T12:30:00+00:00",
-                "elapsed_seconds": 1200.0,
-                "recorded_seconds": 0.0,
-            },
-            report["timeline"],
-        )
-        self.assertEqual([event["operation"] for event in events], ["integration-create", "timing-pause"])
 
     def test_07_malformed_unknown_and_truncated_events_warn_skip_and_preserve_raw_bytes(self) -> None:
         task_id = "raw-invalid"

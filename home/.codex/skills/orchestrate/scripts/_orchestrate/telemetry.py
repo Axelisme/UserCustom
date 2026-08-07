@@ -26,8 +26,6 @@ _EVENT_OPERATIONS = frozenset(
         "integration-remove",
         "acceptance-start",
         "acceptance-result",
-        "timing-pause",
-        "timing-resume",
     }
 )
 
@@ -109,22 +107,6 @@ def record_event(
     return ()
 
 
-def require_event(
-    task: TaskResources,
-    operation: str,
-    outcome: str,
-    **extra: Any,
-) -> None:
-    """Append an explicitly requested timing transition or fail it."""
-    try:
-        _append(task, _event_bytes(task, operation, outcome, **extra))
-    except OSError as exc:
-        raise OrchestrateError(
-            "telemetry timing transition could not be recorded",
-            "telemetry_write_failed",
-        ) from exc
-
-
 def _decode_events(raw: bytes) -> tuple[list[dict[str, Any]], int]:
     events: list[dict[str, Any]] = []
     invalid = 0
@@ -175,39 +157,6 @@ def _seconds(start: datetime, end: datetime) -> float:
     return max(0.0, (end - start).total_seconds())
 
 
-def _pause_intervals(
-    events: list[dict[str, object]], now: datetime
-) -> list[tuple[datetime, datetime, str, str | None]]:
-    intervals: list[tuple[datetime, datetime, str, str | None]] = []
-    opened: tuple[datetime, str] | None = None
-    for event in events:
-        operation = event["operation"]
-        outcome = event["outcome"]
-        if operation == "timing-pause" and outcome == "success" and opened is None:
-            opened = (_time(event), str(event["at"]))
-        elif operation == "timing-resume" and outcome == "success" and opened is not None:
-            end = _time(event)
-            intervals.append((opened[0], end, opened[1], str(event["at"])))
-            opened = None
-    if opened is not None:
-        intervals.append((opened[0], now, opened[1], None))
-    return intervals
-
-
-def _recorded_seconds(
-    start: datetime,
-    end: datetime,
-    pauses: list[tuple[datetime, datetime, str, str | None]],
-) -> float:
-    paused = 0.0
-    for pause_start, pause_end, _start_text, _end_text in pauses:
-        overlap_start = max(start, pause_start)
-        overlap_end = min(end, pause_end)
-        if overlap_end > overlap_start:
-            paused += (overlap_end - overlap_start).total_seconds()
-    return max(0.0, _seconds(start, end) - paused)
-
-
 def _marker(
     event: Mapping[str, object],
     kind: str,
@@ -235,8 +184,8 @@ def _lane_durations(timeline: list[dict[str, Any]]) -> dict[str, dict[str, float
     figure a reader takes for "how long a lane takes"; kept apart, both numbers stay usable.
     """
     totals: dict[str, dict[str, float]] = {
-        "collected": {"lanes": 0.0, "elapsed_seconds": 0.0, "recorded_seconds": 0.0},
-        "dropped": {"lanes": 0.0, "elapsed_seconds": 0.0, "recorded_seconds": 0.0},
+        "collected": {"lanes": 0.0, "elapsed_seconds": 0.0},
+        "dropped": {"lanes": 0.0, "elapsed_seconds": 0.0},
     }
     for entry in timeline:
         disposition = entry.get("disposition")
@@ -245,7 +194,6 @@ def _lane_durations(timeline: list[dict[str, Any]]) -> dict[str, dict[str, float
         bucket = totals[str(disposition)]
         bucket["lanes"] += 1
         bucket["elapsed_seconds"] += float(entry.get("elapsed_seconds", 0.0))
-        bucket["recorded_seconds"] += float(entry.get("recorded_seconds", 0.0))
     return totals
 
 
@@ -254,7 +202,7 @@ def compute_report(
     events: list[dict[str, object]],
     now: datetime,
 ) -> dict[str, Any]:
-    """Pure finite calculator for the version-one lifecycle report."""
+    """Pure finite calculator for the wall-clock lifecycle report."""
     counts = {
         "lifecycle_events": len(events),
         "lanes_created": 0,
@@ -276,7 +224,6 @@ def compute_report(
         "landing_nothing_to_land": 0,
         "invalid_telemetry_lines": int(snapshot.get("invalid_telemetry_lines", 0)),
     }
-    pauses = _pause_intervals(events, now)
     timeline: list[dict[str, object]] = []
     lane_starts: dict[str, tuple[datetime, str]] = {}
     acceptance_starts: dict[str, tuple[datetime, str]] = {}
@@ -310,7 +257,6 @@ def compute_report(
                     "outcome": "success", "disposition": "dropped",
                     "started_at": start[1], "ended_at": at_text,
                     "elapsed_seconds": elapsed,
-                    "recorded_seconds": _recorded_seconds(start[0], at, pauses),
                 })
         elif operation == "lane-comment" and isinstance(lane_id, str):
             timeline.append(_marker(event, "comment", lane_id, include_comment=True))
@@ -336,7 +282,6 @@ def compute_report(
                             "outcome": "success", "disposition": "collected",
                             "started_at": start[1], "ended_at": at_text,
                             "elapsed_seconds": elapsed,
-                            "recorded_seconds": _recorded_seconds(start[0], at, pauses),
                         })
         elif operation == "acceptance-start" and outcome in {"success", "superseded"} and isinstance(subject, str):
             acceptance_starts[subject] = (at, at_text)
@@ -354,7 +299,6 @@ def compute_report(
                         "outcome": "success" if outcome == "pass" else "fail",
                         "started_at": start[1], "ended_at": at_text,
                         "elapsed_seconds": elapsed,
-                        "recorded_seconds": _recorded_seconds(start[0], at, pauses),
                     }
                     verifier = event.get("verifier")
                     if isinstance(verifier, str):
@@ -381,31 +325,16 @@ def compute_report(
             if isinstance(persist, str):
                 timeline.append(_marker(event, "land", persist))
 
-    for start, end, start_text, end_text in pauses:
-        entry: dict[str, object] = {
-            "type": "span", "kind": "pause", "identity": "pause",
-            "started_at": start_text, "ended_at": end_text or now.isoformat(),
-            "elapsed_seconds": _seconds(start, end), "recorded_seconds": 0.0,
-        }
-        if end_text is not None:
-            entry["outcome"] = "success"
-        timeline.append(entry)
-
     timing: dict[str, float] | None = None
     if task_start is not None:
         end = task_end or (now, now.isoformat())
         wall = _seconds(task_start[0], end[0])
-        recorded = _recorded_seconds(task_start[0], end[0], pauses)
-        timing = {
-            "wall_seconds": wall,
-            "paused_seconds": max(0.0, wall - recorded),
-            "recorded_seconds": recorded,
-        }
+        timing = {"wall_seconds": wall}
         timeline.append({
             "type": "span", "kind": "task", "identity": str(snapshot["task_id"]),
             "outcome": "success" if task_end is not None else "active",
             "started_at": task_start[1], "ended_at": end[1],
-            "elapsed_seconds": wall, "recorded_seconds": recorded,
+            "elapsed_seconds": wall,
         })
 
     timeline.sort(
@@ -429,17 +358,12 @@ def compute_report(
         if denominator:
             rates[name] = numerator / denominator
     diff = dict(snapshot["integration_diff"])  # type: ignore[arg-type]
-    if timing is not None:
-        for suffix, seconds in (
-            ("wall", timing["wall_seconds"]),
-            ("recorded", timing["recorded_seconds"]),
-        ):
-            if seconds > 0:
-                rates[f"events_per_{suffix}_hour"] = len(events) * 3600.0 / seconds
-                rates[f"churn_per_{suffix}_hour"] = int(diff["churn"]) * 3600.0 / seconds
+    if timing is not None and timing["wall_seconds"] > 0:
+        rates["events_per_wall_hour"] = len(events) * 3600.0 / timing["wall_seconds"]
+        rates["churn_per_wall_hour"] = int(diff["churn"]) * 3600.0 / timing["wall_seconds"]
 
     report: dict[str, Any] = {
-        "report_version": 1,
+        "report_version": 2,
         "lane_durations": _lane_durations(timeline),
         "task_id": snapshot["task_id"],
         "generated_at": now.isoformat(),
@@ -484,39 +408,6 @@ def lane_comments(task: TaskResources) -> dict[str, str | None]:
         elif operation in {"lane-drop", "integration-collect"} and outcome == "success":
             comments.pop(lane_id, None)
     return comments
-
-
-def timing_state(task: TaskResources) -> str:
-    try:
-        raw = task.telemetry_path.read_bytes()
-    except OSError:
-        raw = b""
-    events, _invalid = _decode_events(raw)
-    state = "recording"
-    for event in events:
-        if event["operation"] == "timing-pause" and event["outcome"] == "success":
-            state = "paused"
-        elif event["operation"] == "timing-resume" and event["outcome"] == "success":
-            state = "recording"
-    return state
-
-
-def timing_transition(task: TaskResources, *, pause: bool) -> CommandResult:
-    if task.ref(task.integration_base_ref) is None:
-        raise OrchestrateError("task does not exist", "task_not_found")
-    desired = "paused" if pause else "recording"
-    operation = "timing-pause" if pause else "timing-resume"
-    if timing_state(task) == desired:
-        return CommandResult(True, {}, (f"timing is already {desired}",))
-    require_event(task, operation, "success")
-    return CommandResult(True, {})
-
-
-def auto_resume(task: TaskResources) -> tuple[tuple[str, ...], bool]:
-    if timing_state(task) != "paused":
-        return (), False
-    warnings = record_event(task, "timing-resume", "success", auto=True)
-    return warnings, not warnings
 
 
 def _integration_diff(task: TaskResources) -> dict[str, int]:

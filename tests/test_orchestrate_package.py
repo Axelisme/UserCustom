@@ -29,7 +29,7 @@ PI_SKILL = ROOT / "home/.pi/agent/skills/orchestrate"
 CURRENT_VERSION = release.skill_version(CODEX_SKILL)
 
 
-OLDEST_BUNDLED_VERSION = 141
+OLDEST_BUNDLED_VERSION = 155
 
 class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
     """Contract module E through copied packages and the shipped subprocess."""

@@ -582,6 +582,35 @@ class TaskRecordTests(unittest.TestCase):
 
             self.assertNotIn("files", self.assert_ok(run_plan(root, "refresh", "demo"), "refresh"))
 
+    def test_locate_names_the_specific_malformed_standing_order(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            index = record(root) / "INDEX.md"
+            text = index.read_text(encoding="utf-8").replace(
+                "Not yet recorded.", "Need and boundaries are frozen in spec.md."
+            ).replace(
+                "None.",
+                "- **2026-08-08 — User:** 「Keep this exact.」\n"
+                "  Lapses: explicit revocation.\n\n"
+                "- **User:** 「Broken order.」\n"
+                "  Lapses: explicit revocation.",
+            )
+            index.write_text(text, encoding="utf-8")
+
+            findings = self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"]
+
+            self.assertEqual(
+                findings,
+                [
+                    {
+                        "section": "Standing orders",
+                        "rule": "missing-date",
+                        "entry": "- **User:** 「Broken order.」",
+                    }
+                ],
+            )
+
     def test_locate_reports_custody_obligation_lint(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -605,7 +634,11 @@ class TaskRecordTests(unittest.TestCase):
                 findings,
                 [
                     {"section": "Envelope", "rule": "blank"},
-                    {"section": "Standing orders", "rule": "missing-date"},
+                    {
+                        "section": "Standing orders",
+                        "rule": "missing-date",
+                        "entry": "- **User:** 「Keep this exact.」",
+                    },
                 ],
             )
             before = index.read_text(encoding="utf-8")
@@ -616,7 +649,13 @@ class TaskRecordTests(unittest.TestCase):
             index.write_text(missing_lapse, encoding="utf-8")
             self.assertEqual(
                 self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"],
-                [{"section": "Standing orders", "rule": "missing-lapse"}],
+                [
+                    {
+                        "section": "Standing orders",
+                        "rule": "missing-lapse",
+                        "entry": "- **2026-08-08 — User:** 「Keep this exact.」",
+                    }
+                ],
             )
 
             not_verbatim = healthy.replace(
@@ -625,7 +664,13 @@ class TaskRecordTests(unittest.TestCase):
             index.write_text(not_verbatim, encoding="utf-8")
             self.assertEqual(
                 self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"],
-                [{"section": "Standing orders", "rule": "not-verbatim"}],
+                [
+                    {
+                        "section": "Standing orders",
+                        "rule": "not-verbatim",
+                        "entry": "- **2026-08-08 — User:** Keep this exact, despite 「incidental punctuation」.",
+                    }
+                ],
             )
 
     def test_lint_names_frozen_state_in_current_and_next_only(self) -> None:

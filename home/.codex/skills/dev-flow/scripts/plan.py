@@ -318,12 +318,19 @@ def lint_frozen_state(text: str) -> list[dict[str, str]]:
 
     standing_orders = HTML_COMMENT.sub("", body.get(STANDING_ORDERS_HEADING, ""))
     for entry in STANDING_ORDER_BLOCK.findall(standing_orders):
+        entry_heading = entry.splitlines()[0]
         if not STANDING_ORDER_DATE.search(entry):
-            findings.append({"section": STANDING_ORDERS_HEADING, "rule": "missing-date"})
+            findings.append(
+                {"section": STANDING_ORDERS_HEADING, "rule": "missing-date", "entry": entry_heading}
+            )
         if not STANDING_ORDER_LAPSE.search(entry):
-            findings.append({"section": STANDING_ORDERS_HEADING, "rule": "missing-lapse"})
+            findings.append(
+                {"section": STANDING_ORDERS_HEADING, "rule": "missing-lapse", "entry": entry_heading}
+            )
         if not STANDING_ORDER_QUOTE.search(entry):
-            findings.append({"section": STANDING_ORDERS_HEADING, "rule": "not-verbatim"})
+            findings.append(
+                {"section": STANDING_ORDERS_HEADING, "rule": "not-verbatim", "entry": entry_heading}
+            )
     return findings
 
 
@@ -363,8 +370,8 @@ def load_for_refresh(root: Path, task_id: str) -> RefreshRecord:
             (relative(root, index),),
             version,
         )
-    # Current records carry no generated files block, and nothing regenerates one — the record's
-    # inventory is `artifacts/README.md` and the filesystem. A record that still has a block is kept
+    # Current records carry no generated files block, and nothing regenerates one — the filesystem
+    # under `artifacts/` is the record's inventory. A record that still has a block is kept
     # in step rather than rewritten out from under its reader, so zero markers and one matched pair
     # are both well formed — only a broken pair is not.
     if text.count(START) != text.count(END) or text.count(START) > 1:

@@ -17,8 +17,8 @@ Everything else already has a home too, so compaction is a **move**, never a rew
 - Lapsed orders move to `standing-orders-lapsed.md`, whole and verbatim.
 - Evidence that a past gate passed — counts, SHAs, baselines — belongs to that gate's artifact. The
   record keeps the frontier, not the receipts.
-- The artifact inventory is `artifacts/README.md`, and the filesystem underneath it. A second list
-  beside it drifts. `locate` does not enumerate the record: it reports the frontier and what to read
+- The filesystem under `artifacts/` is the artifact inventory. A separate list beside it drifts.
+  `locate` does not enumerate the record: it reports the frontier and what to read
   next, and a finished ticket's path bears on no current decision.
 
 `refresh` measures the authored region against a budget and reports it; it never refuses on size,

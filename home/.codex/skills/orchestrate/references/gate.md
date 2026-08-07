@@ -71,6 +71,11 @@ Static checks answer in seconds and have caught defects that a fully green suite
 error on an optional dereference, an import-order violation inside a frozen Contract. Run them
 first, and let the expensive step run only when they pass.
 
+A command belongs in the gate only after Root has run that exact command on the base tree and
+observed it exit zero. The shape below is a menu to verify against this repository, not a list to
+copy. If the next gate written under this rule is still red before its lane changes anything, record
+that occurrence as evidence that the prose rule needs an instrument.
+
 ```bash
 run() {  # run <label> <command...>
   printf '\n=== %s ===\n' "$1" | tee -a "$log"
@@ -82,11 +87,13 @@ run() {  # run <label> <command...>
 }
 ```
 
-A rough shape for the lane-ready stop:
+A menu for the lane-ready stop:
 
-1. formatter and lint over changed paths
-2. type check over changed paths
+1. a formatter or linter over changed paths
+2. a type check over changed paths
 3. the declared test selection
+
+Choose only the entries whose exact commands passed on the base tree.
 
 The Contract stop runs only the focused command the Contract names, and asserts it failed:
 
@@ -102,17 +109,23 @@ A red result is not automatically the right red. The script cannot judge that â€
 observed reason, and a collection, import, type or environment failure is red for the wrong reason.
 Print enough of the failure for a reader to tell the difference, and leave the judgement to Root.
 
-## Keep the run isolated and disposable
+## Separate durable evidence from disposable runner state
 
-Give the test runner a base temporary directory inside the task's own workspace so a killed run
-leaves nothing behind and parallel lanes never share a path:
+The log and the test runner's temporary files have opposite lifetimes. `LOG_DIR` holds gate evidence
+and resolves outside every lane worktree and managed task path that `integration remove` deletes.
+`RUN_DIR` belongs inside the current lane workspace, where cleanup can remove it:
 
 ```bash
---basetemp="${LOG_DIR}/pytest-tmp"
+: "${LOG_DIR:?set LOG_DIR to a durable path outside lane and managed task worktrees}"
+RUN_DIR="${RUN_DIR:-$PWD/.agent_state/gate-tmp}"
+mkdir -p "$LOG_DIR" "$RUN_DIR"
+# pytest arguments:
+--basetemp="${RUN_DIR}/pytest-tmp"
 ```
 
-Never write into a shared, named `/tmp` path: it is memory on most systems, it survives until
-reboot, and two lanes racing on the same name corrupt each other's evidence.
+This separation leaves the stamped log readable after lane and integration teardown while a killed
+runner leaves no temporary state behind. Give each concurrent lane its own `RUN_DIR`; a shared,
+named `/tmp` path lets parallel lanes corrupt one another's state.
 
 ## What the script does not do
 

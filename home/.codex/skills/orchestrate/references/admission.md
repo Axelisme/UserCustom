@@ -148,11 +148,11 @@ first-parent range already carries the pre-production amendments this produces.
   independent defects found by successively deeper gates from one misdiagnosis corrected four
   times, and those two read identically afterwards while calling for opposite handling. The line is
   written where it is cheapest to write, which is not at review.
-- The count and those lines travel into the Slice's acceptance receipt, where a later reader meets
-  them.
+- The count and diagnosis lines remain in the active Slice ticket's `Current`, which `locate` names
+  to the next reader.
 
-Nothing here bounds the loop mechanically. A Slice corrected eight times is visible only in that
-receipt, and whoever reads it is who notices.
+Nothing here bounds the loop mechanically. A Slice corrected eight times remains visible in its own
+ticket beside the diagnosis that explains the corrections.
 
 Blocking is a closed enum: `spec_violation | data_loss | security |
 reproducible_behavior_failure` within the frozen envelope. Every blocker has `contract_basis`;
@@ -170,8 +170,9 @@ delta is reviewed by one reviewer on its originating axis.
 - Standards and Spec reviewers are read-only, report their axis and exact SHA, and never mutate the
   acceptance checkout. Each writes that same report to one `Report path` Root binds to its axis and
   exact SHA outside that checkout; the file is its only write and becomes evidence when Root accepts
-  it. Root records the verdict, counts and both paths in the receipt it already writes, and does not
-  restate the reviews — an axis is heard in its own words or not at all.
+  it. The reports carry their own counts and findings, while the Slice ticket's `Current` records the
+  verdict and both bound paths. Root does not restate the reviews — an axis is heard in its own words
+  or not at all.
 - A bounded delta uses only its originating axis.
 
 Each accepted increment closes by bringing the task record with it. The record is the only
@@ -180,8 +181,8 @@ reads as correct while being wrong — the failure mode that made this step expl
 actions, in order:
 
 1. Update `INDEX.md`'s `Current` and `Next` to the accepted state, then run dev-flow's `refresh`.
-2. Move the receipts `refresh` names out of `Current` and `Next`, into the artifact of the gate
-   that produced them.
+2. Move every frozen token `refresh` names out of `Current` and `Next`, into the artifact of the
+   gate that produced it.
 3. Verify automatic clean closure for every named lane attempted by agent acceptance. Any retained
    lane and its warning remain an active current-task finding and require explicit correction or
    `lane drop` before closeout; do not unconditionally drop lanes.

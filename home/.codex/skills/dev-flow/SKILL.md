@@ -90,8 +90,8 @@ owner without rewriting it.
 
 - Ticket headers in `tickets/*.md` are the frontier, largest ticket ID, and dependency graph.
 - `Status` cells in `decisions.md` identify superseded decisions.
-- `locate` derives the frontier and what to read next, never the record's contents; the
-  inventory is `artifacts/README.md` and the filesystem under it.
+- `locate` derives the frontier and what to read next, never the record's contents; the filesystem
+  under `artifacts/` is the inventory.
 
 `refresh` validates ticket status and reports staleness and frozen state in `Current` or `Next`. It
 does not validate dependencies or frontier consistency; the reader must reconcile those against the

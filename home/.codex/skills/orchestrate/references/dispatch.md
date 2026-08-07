@@ -1,16 +1,22 @@
 # Orchestrate — runtime-neutral dispatch contract
 
+## Dispatch payload
+
 Before dispatch Root runs `lane check --task-id <task> --lane-id <lane> --expect-mode <mode>` with
-the ticket's admitted mode, which must exit 0 and reports the exact lane `sha`, `base`,
-`protected_paths`, and `contract_commits`. That `sha` is the
-expected base carried in the dispatch, and those `protected_paths` are its immutable paths — both are
-read from the check that just computed them, never rebuilt by hand. The dispatch carries them together with the frozen
-objective, `Validation mode: TDD` or `Validation mode: direct —
-<specific reason>`, canonical lane cwd, expected Git root/common-dir, branch, write scope,
-primary-checkout dirt snapshot, focused commands, evidence, stop conditions, and the commit command
-below. When the task
-has a durable record, the dispatch also carries its `Envelope` and any `Standing orders`: the worker
-cannot honour a boundary the user froze, or an instruction the user issued, that never reached it.
+the ticket's admitted mode. The dispatch carries four things, and no obligation cache:
+
+1. **Binding** — the check's exact `sha`, `base`, `protected_paths` and `contract_commits`, plus the
+   runtime binding's canonical cwd, Git identity, branch, write scope and primary-checkout dirt.
+   Values are copied from their instruments, never rebuilt.
+2. **Read** — exact addresses to the ticket admission's `#Contract obligations` and `#Expected Red`.
+   `#Admission reasoning` remains Root-only. The admission owns the frozen objective, validation
+   mode, applicable Envelope and Standing orders, focused commands, evidence and stop conditions.
+3. **Commit** — the verbatim command line below.
+4. **Delta** — only facts volatile for this call, including authority issued after admission.
+
+A dispatch that restates the addressed obligations violates this contract: the admission is their
+single authority, while Binding, Commit and Delta are the information that cannot be recovered from
+those two sections.
 
 ## Commit command
 

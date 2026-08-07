@@ -111,6 +111,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
         self.assert_help_surface(
             (),
             commands=(
+                "show",
                 "status",
                 "timing",
                 "lane",
@@ -123,6 +124,7 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             ),
             long_options=("--skill-dir", "--version"),
         )
+        self.assert_help_surface(("show",))
         self.assert_help_surface(("pin",), commands=("status", "set"))
         self.assert_help_surface(("pin", "status"))
         self.assert_help_surface(("pin", "set"))
@@ -151,6 +153,85 @@ class PackageCommandContractTests(OrchestrateCliRepositoryTestCase):
             "cli_usage",
         )
         self.assertEqual(self.managed_state_snapshot(), before)
+
+    def test_01a_show_resolves_released_section_addresses(self) -> None:
+        fixture = self.skill / "references" / "show-fixture.md"
+        fixture_text = "# Fixture\nintro\n\n## Same\nfirst\n\n## Same\nsecond\n\n## Tail\nlast\n"
+        fixture.write_text(fixture_text, encoding="utf-8")
+        self.seal_current_package()
+
+        first = self.cli(self.nested, "show", "references/show-fixture.md#Same")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(first.stderr, "")
+        self.assertEqual(first.stdout, "## Same\nfirst")
+
+        duplicate = self.cli(
+            self.nested, "show", "references/show-fixture.md#Same [2]"
+        )
+        self.assertEqual(duplicate.returncode, 0, duplicate.stderr)
+        self.assertEqual(duplicate.stderr, "")
+        self.assertEqual(duplicate.stdout, "## Same\nsecond")
+
+        unknown = self.cli(
+            self.nested, "show", "references/show-fixture.md#Missing"
+        )
+        payload = self.assert_package_failure(unknown, "show", "cli_usage")
+        for address in ("Fixture", "Same", "Same [2]", "Tail"):
+            self.assertIn(address, payload["error"]["message"])
+        self.assertEqual(unknown.stdout, "")
+
+        for address in (
+            "references/missing.md#Missing",
+            "references/show-fixture.md",
+        ):
+            with self.subTest(address=address):
+                refusal = self.cli(self.nested, "show", address)
+                self.assert_package_failure(refusal, "show", "cli_usage")
+                self.assertEqual(refusal.stdout, "")
+
+        fixture.write_text(
+            fixture_text.replace("## Same\nfirst", "## Same\nchanged"),
+            encoding="utf-8",
+        )
+        mismatch = self.cli(
+            self.nested, "show", "references/show-fixture.md#Same"
+        )
+        self.assert_package_failure(
+            mismatch, "show", "section_integrity_mismatch"
+        )
+        self.assertEqual(mismatch.stdout, "")
+        fixture.write_text(fixture_text, encoding="utf-8")
+
+        steps = (
+            "Step 1 — Create integration",
+            "Step 2 — Create lane",
+            "Step 3 — Execute Contract",
+            "Step 4 — Sync lane",
+            "Step 5 — Collect lane",
+            "Step 6 — Start acceptance",
+            "Step 7 — Validate and accept",
+            "Step 8 — Land",
+            "Step 9 — Remove task",
+        )
+        parent = self.cli(
+            self.nested, "show", "SKILL.md#Minimum complete lifecycle"
+        )
+        self.assertEqual(parent.returncode, 0, parent.stderr)
+        for step in steps:
+            self.assertIn(f"### {step}", parent.stdout)
+
+        for index, step in enumerate(steps):
+            with self.subTest(step=step):
+                section = self.cli(self.nested, "show", f"SKILL.md#{step}")
+                self.assertEqual(section.returncode, 0, section.stderr)
+                self.assertTrue(section.stdout.startswith(f"### {step}\n"))
+                if index + 1 < len(steps):
+                    self.assertNotIn(f"### {steps[index + 1]}", section.stdout)
+
+        removed = self.cli(self.nested, "show", "migrations/141.md#From")
+        self.assert_package_failure(removed, "show", "cli_usage")
+        self.assertEqual(removed.stdout, "")
+        self.assertTrue(self.success(self.cli(self.nested, "doctor"))["ok"])
 
     def test_02_pin_set_verifies_current_and_aligned_set_preserves_bytes(self) -> None:
         self.mutation_success(self.cli(self.nested, "pin", "set"), "pin-set")

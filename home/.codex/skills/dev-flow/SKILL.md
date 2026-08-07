@@ -9,10 +9,11 @@ skill_version: 8
 ## Orienting
 
 After compaction, or in a session that did not create the task, run `locate`; it derives record
-health, frontier, and orientation at read time. Read what it names, then apply **Custody** below and
-read the pointed `Envelope` and `Standing orders`; they preserve what the user froze and granted.
-Orientation is complete when you can state the task and its next action from those sources.
-Everything below governs acting on them.
+health, frontier, and orientation at read time. Read what it names; the pointed record preserves the
+`Envelope` and `Standing orders`, while `lint` names any section whose mechanical obligations are
+violated. Open **Custody** below only when changing those sections or deciding how user authority
+applies. Orientation is complete when you can state the task and its next action from the named
+sources. Everything below governs acting on them.
 
 ## Jurisdiction
 
@@ -37,8 +38,8 @@ context may skip the sequence. They still record an `Envelope` value.
 
 The record holds the user's authority in **custody**; it creates none.
 
-**Hold originals.** Quote each standing order verbatim, stamped with when it was issued and when it
-lapses. List new entries in the same reply so the user can disown them immediately.
+**Surface new grants.** List new standing-order entries in the same reply so the user can disown
+them immediately.
 
 **Admit durable grants.** An order is authority that still binds after the requested act completes.
 Test it with: *doing this, does the sentence go away?* The work itself records one-off instructions.
@@ -55,9 +56,7 @@ message revokes or replaces it, or the task is archived. Move it intact to the r
 date and reason. Keep overlapping orders separate: the newest governs addressed points and all
 other in-force clauses remain. Ask whether an ambiguous new order narrows or replaces an old one.
 
-**Fill the Envelope.** Record the frozen minimum need and usage envelope, point to its owning
-artifact, or write `Not applicable — <reason>` for work without implementation output. A blank slot
-means the evidence never arrived; out-of-envelope decisions cite this slot.
+**Apply the Envelope.** Out-of-envelope decisions cite the frozen Envelope slot.
 
 **Mutate from current authority.** Only current user messages authorize custody changes. A standing
 order records a grant; it never extends one. When it activates another skill, point to that skill's
@@ -91,7 +90,8 @@ owner without rewriting it.
 
 - Ticket headers in `tickets/*.md` are the frontier, largest ticket ID, and dependency graph.
 - `Status` cells in `decisions.md` identify superseded decisions.
-- `locate` derives the complete inventory without storing it.
+- `locate` derives the frontier and what to read next, never the record's contents; the
+  inventory is `artifacts/README.md` and the filesystem under it.
 
 `refresh` validates ticket status and reports staleness and frozen state in `Current` or `Next`. It
 does not validate dependencies or frontier consistency; the reader must reconcile those against the

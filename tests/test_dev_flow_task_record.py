@@ -35,18 +35,6 @@ START = "<!-- task-record:files:start -->"
 END = "<!-- task-record:files:end -->"
 
 
-def listed_files(root: Path, task_id: str = "demo") -> str:
-    """The record inventory as `locate` derives it, which is now the only place it exists."""
-    done = subprocess.run(
-        [sys.executable, str(SCRIPT), "locate", task_id],
-        cwd=root,
-        text=True,
-        capture_output=True,
-        check=True,
-    )
-    return "\n".join(json.loads(done.stdout)["files"])
-
-
 def ticket_text(ticket_id: str, status: str, disposition: str | None = None, depends_on: str = "none") -> str:
     rows = [
         f"| id | {ticket_id} |",
@@ -151,104 +139,10 @@ class TaskRecordTests(unittest.TestCase):
             after = index.read_text(encoding="utf-8")
             self.assertEqual(goal_before, after.split("## Goal")[1].split("## Current")[0])
             self.assertNotIn(START, after)
-            self.assertEqual(
-                listed_files(root),
-                "INDEX.md\ndecisions.md\nevidence/\n  raw.bin\ntickets/\n  T001-any-name.md",
-            )
             # Refresh always re-stamps, so a second call still exits clean even though the stamp
             # itself advances (it is not byte-for-byte idempotent, by design: see (b) staleness).
             second = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
             self.assertIsNone(second["stale"])
-
-    def test_locate_bounds_large_file_tree_by_depth_and_direct_file_count(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            task = record(root)
-
-            # Build this in reverse order so the generated projection must impose its own
-            # deterministic lexical order. INDEX.md is itself a direct regular file.
-            for number in reversed(range(11)):
-                (task / f"root-{number:02d}.md").write_text("root\n", encoding="utf-8")
-
-            first = task / "a-dir"
-            first.mkdir()
-            for number in reversed(range(11)):
-                (first / f"first-{number:02d}.md").write_text("first\n", encoding="utf-8")
-
-            nested = first / "nested"
-            nested.mkdir()
-            (nested / "inside.md").write_text("inside\n", encoding="utf-8")
-            deep = nested / "z-deep"
-            deep.mkdir()
-            (deep / "deep-a.md").write_text("deep\n", encoding="utf-8")
-            deeper = deep / "deeper"
-            deeper.mkdir()
-            (deeper / "deep-b.md").write_text("deeper\n", encoding="utf-8")
-
-            self.assertEqual(
-                listed_files(root),
-                "\n".join(
-                    [
-                        "INDEX.md",
-                        "a-dir/",
-                        "  first-00.md",
-                        "  first-01.md",
-                        "  first-02.md",
-                        "  first-03.md",
-                        "  first-04.md",
-                        "  first-05.md",
-                        "  first-06.md",
-                        "  first-07.md",
-                        "  first-08.md",
-                        "  first-09.md",
-                        "  nested/",
-                        "    inside.md",
-                        "    z-deep/",
-                        "      ...2 file",
-                        "  ...1 file",
-                        "root-00.md",
-                        "root-01.md",
-                        "root-02.md",
-                        "root-03.md",
-                        "root-04.md",
-                        "root-05.md",
-                        "root-06.md",
-                        "root-07.md",
-                        "root-08.md",
-                        "tickets/",
-                        "...2 file",
-                    ]
-                ),
-            )
-
-    def test_locate_omits_zero_file_metadata_for_level_three_directories(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            task = record(root)
-
-            empty = task / "empty" / "branch" / "leaf"
-            empty.mkdir(parents=True)
-            empty_subtree = task / "empty-subtree" / "branch" / "leaf"
-            empty_subtree.mkdir(parents=True)
-            (empty_subtree / "child").mkdir()
-
-            self.assertEqual(
-                listed_files(root),
-                "\n".join(
-                    [
-                        "INDEX.md",
-                        "empty/",
-                        "  branch/",
-                        "    leaf/",
-                        "empty-subtree/",
-                        "  branch/",
-                        "    leaf/",
-                        "tickets/",
-                    ]
-                ),
-            )
 
     def test_refresh_is_content_blind_except_version_and_markers(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -460,7 +354,18 @@ class TaskRecordTests(unittest.TestCase):
             refreshed = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
             self.assertNotIn("stale", refreshed)
             self.assertNotIn(START, index.read_text(encoding="utf-8"))
-            self.assertIn("T001-legacy.md", listed_files(root))
+            # A foreign status keeps its own group, so the ticket stays visible instead of being
+            # silently counted as finished.
+            frontier = self.assert_ok(run_plan(root, "locate", "demo"), "locate", version=2)["tickets"]
+            self.assertEqual(
+                frontier,
+                {
+                    "active": [],
+                    "open": [],
+                    "pending": [".agent_state/plans/demo/tickets/T001-legacy.md"],
+                    "closed_count": 0,
+                },
+            )
 
     def test_size_reports_sections_and_ignores_the_generated_block(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -628,7 +533,7 @@ class TaskRecordTests(unittest.TestCase):
                 {
                     "active": [".agent_state/plans/demo/tickets/T001-first.md"],
                     "open": [".agent_state/plans/demo/tickets/T002-next.md"],
-                    "closed": [".agent_state/plans/demo/tickets/T003-done.md"],
+                    "closed_count": 1,
                 },
             )
             # The other two skills answer for themselves; locate points and stops there.
@@ -638,6 +543,90 @@ class TaskRecordTests(unittest.TestCase):
             )
             self.assertIn("size", body)
             self.assertIn("lint", body)
+
+    def test_locate_omits_the_inventory_and_counts_closed_tickets(self) -> None:
+        """An arriving reader pays for what places it, not for what the record contains."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            task = record(root)
+            (task / "artifacts").mkdir()
+            for number in range(12):
+                (task / "artifacts" / f"receipt-{number:02d}.md").write_text("x", encoding="utf-8")
+            (task / "tickets" / "T001-first.md").write_text(ticket_text("T001-first", "active"), encoding="utf-8")
+            (task / "tickets" / "T002-next.md").write_text(ticket_text("T002-next", "open"), encoding="utf-8")
+            for number in range(3):
+                name = f"T1{number:02d}-done"
+                (task / "tickets" / f"{name}.md").write_text(
+                    ticket_text(name, "closed", "resolved"), encoding="utf-8"
+                )
+
+            body = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+
+            self.assertNotIn("files", body)
+            self.assertEqual(
+                body["tickets"],
+                {
+                    "active": [".agent_state/plans/demo/tickets/T001-first.md"],
+                    "open": [".agent_state/plans/demo/tickets/T002-next.md"],
+                    "closed_count": 3,
+                },
+            )
+            self.assertEqual(body["read"], [".agent_state/plans/demo/INDEX.md"])
+            self.assertEqual(
+                body["then_run"],
+                ["orchestrate.py status --task-id demo", "backlog.py list --status inbox"],
+            )
+            for key in ("size", "lint", "stale"):
+                self.assertIn(key, body)
+
+            self.assertNotIn("files", self.assert_ok(run_plan(root, "refresh", "demo"), "refresh"))
+
+    def test_locate_reports_custody_obligation_lint(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            index = record(root) / "INDEX.md"
+            created = index.read_text(encoding="utf-8")
+
+            healthy = created.replace("Not yet recorded.", "Need and boundaries are frozen in spec.md.").replace(
+                "None.",
+                "- **2026-08-08 — User:** 「Keep this exact.」\n  Lapses: explicit revocation.",
+            )
+            index.write_text(healthy, encoding="utf-8")
+            self.assertEqual(self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"], [])
+
+            malformed = created.replace("Not yet recorded.", "").replace(
+                "None.", "- **User:** 「Keep this exact.」\n  Lapses: explicit revocation."
+            )
+            index.write_text(malformed, encoding="utf-8")
+            findings = self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"]
+            self.assertEqual(
+                findings,
+                [
+                    {"section": "Envelope", "rule": "blank"},
+                    {"section": "Standing orders", "rule": "missing-date"},
+                ],
+            )
+            before = index.read_text(encoding="utf-8")
+            self.assertEqual(self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")["lint"], findings)
+            self.assertIn(before, index.read_text(encoding="utf-8"), "refresh may stamp, not repair the record")
+
+            missing_lapse = healthy.replace("\n  Lapses: explicit revocation.", "")
+            index.write_text(missing_lapse, encoding="utf-8")
+            self.assertEqual(
+                self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"],
+                [{"section": "Standing orders", "rule": "missing-lapse"}],
+            )
+
+            not_verbatim = healthy.replace(
+                "「Keep this exact.」", "Keep this exact, despite 「incidental punctuation」."
+            )
+            index.write_text(not_verbatim, encoding="utf-8")
+            self.assertEqual(
+                self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"],
+                [{"section": "Standing orders", "rule": "not-verbatim"}],
+            )
 
     def test_lint_names_frozen_state_in_current_and_next_only(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

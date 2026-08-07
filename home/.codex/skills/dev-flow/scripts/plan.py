@@ -30,13 +30,18 @@ SECTION_HEADING = re.compile(r"^## +(.+?)\s*$", re.MULTILINE)
 STANDING_ORDERS_HEADING = "Standing orders"
 HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 
-# Sections that carry a live judgement and nothing else. `Standing orders` and `Envelope` are
-# deliberately not scanned: a verbatim quote and a frozen date are legitimate content there.
+# Sections scanned for frozen commit-ish tokens carry a live judgement and nothing else.
+# `Standing orders` and `Envelope` are excluded from that scan because verbatim quotes and frozen
+# dates are legitimate there; separate custody rules below validate their structure.
 LINTED_SECTIONS = ("Current", "Next")
 # A commit-ish token. Only this rule is shipped: it measured zero false positives on real records,
 # while counts and ref names did not converge (a bare year and ordinary English words match).
 FROZEN_STATE_RULES = (("hex", re.compile(r"\b[0-9a-f]{7,40}\b")),)
 STANDING_ORDER_ENTRY = re.compile(r"^- +\*\*", re.MULTILINE)
+STANDING_ORDER_BLOCK = re.compile(r"^- +\*\*.*?(?=^- +\*\*|\Z)", re.MULTILINE | re.DOTALL)
+STANDING_ORDER_DATE = re.compile(r"^- +\*\*\d{4}-\d{2}-\d{2} +—")
+STANDING_ORDER_QUOTE = re.compile(r"^- +\*\*[^*\r\n]+:\*\* +「.+」\s*$", re.MULTILINE)
+STANDING_ORDER_LAPSE = re.compile(r"^ +Lapses: +\S", re.MULTILINE)
 TICKET_STATUSES = frozenset({"open", "active", "closed"})
 # Required exactly when status is `closed`; distinguishes a resolved ticket from one ruled out of
 # scope, superseded, or hard-stopped after its rework budget was exhausted.
@@ -306,6 +311,19 @@ def lint_frozen_state(text: str) -> list[dict[str, str]]:
         for rule, pattern in FROZEN_STATE_RULES:
             for match in dict.fromkeys(pattern.findall(content)):
                 findings.append({"section": name, "rule": rule, "match": match})
+
+    envelope = HTML_COMMENT.sub("", body.get("Envelope", "")).strip()
+    if not envelope:
+        findings.append({"section": "Envelope", "rule": "blank"})
+
+    standing_orders = HTML_COMMENT.sub("", body.get(STANDING_ORDERS_HEADING, ""))
+    for entry in STANDING_ORDER_BLOCK.findall(standing_orders):
+        if not STANDING_ORDER_DATE.search(entry):
+            findings.append({"section": STANDING_ORDERS_HEADING, "rule": "missing-date"})
+        if not STANDING_ORDER_LAPSE.search(entry):
+            findings.append({"section": STANDING_ORDERS_HEADING, "rule": "missing-lapse"})
+        if not STANDING_ORDER_QUOTE.search(entry):
+            findings.append({"section": STANDING_ORDERS_HEADING, "rule": "not-verbatim"})
     return findings
 
 
@@ -320,39 +338,6 @@ def set_refreshed_marker(text: str, value: str, separator: str) -> str:
     # against it and a record that never stamps can never report itself stale.
     tail = "" if text.endswith(separator) else separator
     return text + tail + marker + separator
-
-
-def files_projection(directory: Path) -> str:
-    lines: list[str] = []
-
-    def regular_file_count(path: Path) -> int:
-        return sum(descendant.is_file() for descendant in path.rglob("*"))
-
-    def render(current: Path, depth: int) -> None:
-        entries = sorted(current.iterdir(), key=lambda path: path.name)
-        direct_files = [entry for entry in entries if entry.is_file()]
-        displayed_files = set(direct_files[:10])
-        omitted_files = len(direct_files) - len(displayed_files)
-
-        for entry in entries:
-            indent = "  " * (depth + 1)
-            if entry.is_dir():
-                lines.append(f"{indent}{entry.name}/")
-                entry_depth = depth + 1
-                if entry_depth >= 2:
-                    hidden_files = regular_file_count(entry)
-                    if hidden_files:
-                        lines.append(f"{'  ' * (entry_depth + 1)}...{hidden_files} file")
-                else:
-                    render(entry, entry_depth)
-            elif entry in displayed_files:
-                lines.append(f"{indent}{entry.name}")
-
-        if omitted_files:
-            lines.append(f"{'  ' * (depth + 1)}...{omitted_files} file")
-
-    render(directory, -1)
-    return "\n".join(lines)
 
 
 def load_for_refresh(root: Path, task_id: str) -> RefreshRecord:
@@ -378,9 +363,10 @@ def load_for_refresh(root: Path, task_id: str) -> RefreshRecord:
             (relative(root, index),),
             version,
         )
-    # Current records carry no generated files block; `locate` lists the directory when a reader
-    # needs it. A record that still has one is kept in step rather than rewritten out from under its
-    # reader, so zero markers and one matched pair are both well formed — only a broken pair is not.
+    # Current records carry no generated files block, and nothing regenerates one — the record's
+    # inventory is `artifacts/README.md` and the filesystem. A record that still has a block is kept
+    # in step rather than rewritten out from under its reader, so zero markers and one matched pair
+    # are both well formed — only a broken pair is not.
     if text.count(START) != text.count(END) or text.count(START) > 1:
         raise Refusal("malformed_index", "missing or repeated files marker", (relative(root, index),), version)
     if text.count(START) == 1 and text.index(START) > text.index(END):
@@ -456,9 +442,10 @@ def command_refresh(root: Path, arguments: argparse.Namespace) -> None:
     updated = record.text
     separator = "\r\n" if "\r\n" in record.text else "\n"
     if START in record.text:
-        # The current format drops the generated block rather than maintaining it. A projection in the file is one
-        # more thing that can be read after it stops being true; `locate` derives the same listing
-        # on demand. Removal happens here so existing records migrate the first time they refresh.
+        # The current format drops the generated block rather than maintaining it. A projection in
+        # the file is one more thing that can be read after it stops being true, and nothing takes
+        # its place: `locate` reports the frontier, not the contents. Removal happens here so
+        # existing records migrate the first time they refresh.
         start = record.text.index(START)
         end = record.text.index(END, start) + len(END)
         head = record.text[:start].rstrip("\r\n")
@@ -487,15 +474,24 @@ def command_refresh(root: Path, arguments: argparse.Namespace) -> None:
     )
 
 
-def ticket_frontier(root: Path, directory: Path) -> dict[str, list[str]]:
-    """Read ticket state straight from the headers, which are the only authority for it."""
+def ticket_frontier(root: Path, directory: Path) -> dict[str, object]:
+    """Read ticket state straight from the headers, which are the only authority for it.
+
+    Closed tickets are counted, not listed. The frontier is what the reader acts on next; a
+    finished ticket's path bears on no current decision, and on a long-lived record the closed
+    list was most of what this command printed.
+    """
     tickets_directory = directory / "tickets"
-    grouped: dict[str, list[str]] = {"active": [], "open": [], "closed": []}
+    grouped: dict[str, list[str]] = {"active": [], "open": []}
+    closed = 0
     if tickets_directory.is_dir():
         for path in sorted(tickets_directory.glob("*.md")):
             status = single_row_value(path.read_text(encoding="utf-8"), TICKET_STATUS_ROW)
-            grouped.setdefault(status or "unreadable", []).append(relative(root, path))
-    return grouped
+            if status == "closed":
+                closed += 1
+            else:
+                grouped.setdefault(status or "unreadable", []).append(relative(root, path))
+    return {**grouped, "closed_count": closed}
 
 
 def command_locate(root: Path, arguments: argparse.Namespace) -> None:
@@ -511,7 +507,6 @@ def command_locate(root: Path, arguments: argparse.Namespace) -> None:
     body: dict[str, object] = {
         "task_id": arguments.task_id,
         "read": [relative(root, record.index)],
-        "files": files_projection(record.directory).splitlines(),
         "tickets": ticket_frontier(root, record.directory),
     }
     if record.version == VALIDATED_VERSION:

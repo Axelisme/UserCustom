@@ -352,6 +352,122 @@ class CliStatusContractTests(OrchestrateCliRepositoryTestCase):
         self.assertEqual(payload["landed"], accepted)
         self.assertEqual(self.git(lane, "rev-parse", "HEAD"), accepted)
 
+    def test_status_step_names_resolvable_addresses_only_when_triggered(self) -> None:
+        self.create_task()
+        clean = self.status()
+        self.assertNotIn("step", clean)
+
+        lane = self.create_lane()
+        self.commit_file(lane, "work.txt", "work\n", "Uncollected work")
+        uncollected = self.status()
+        self.assertEqual(
+            uncollected["step"],
+            {
+                "n": 5,
+                "open": [
+                    "SKILL.md#Step 5 — Collect lane",
+                    "references/admission.md#S2.5 — Root's mechanical guarantee",
+                ],
+            },
+        )
+
+        self.mutation_success(
+            self.collect(ticket="status-step-ticket"), "integration-collect"
+        )
+        pending = self.status()
+        self.assertEqual(
+            pending["step"],
+            {
+                "n": 6,
+                "open": [
+                    "SKILL.md#Step 6 — Start acceptance",
+                    "references/admission.md#S4 — Review and validation",
+                ],
+            },
+        )
+
+        warning_task = "status-step-warning"
+        self.create_task(warning_task)
+        self.git(
+            self.root,
+            "update-ref",
+            f"refs/orchestrate/{warning_task}/orphan/base",
+            self.base,
+        )
+        warning = self.status(warning_task)
+        self.assertTrue(warning["warnings"])
+        self.assertEqual(
+            warning["step"],
+            {
+                "n": 2,
+                "open": [
+                    "SKILL.md#Step 2 — Create lane",
+                    "references/admission.md#S1 — Slice admission",
+                    "SKILL.md#Exceptions to the main sequence",
+                ],
+            },
+        )
+
+        authority_task = "status-step-authority"
+        self.create_task(authority_task)
+        self.git(
+            self.root,
+            "update-ref",
+            f"refs/orchestrate/{authority_task}/accepted",
+            self.base,
+        )
+        accepted = self.status(authority_task)
+        self.assertEqual(
+            accepted["step"],
+            {
+                "n": 8,
+                "open": [
+                    "SKILL.md#Step 8 — Land",
+                    "references/admission.md#S5 — Landing and close-out",
+                ],
+            },
+        )
+
+        self.git(
+            self.root,
+            "update-ref",
+            f"refs/orchestrate/{authority_task}/landed",
+            self.base,
+        )
+        self.assertNotIn("step", self.status(authority_task))
+        explicit = self.success(
+            self.cli(
+                self.nested,
+                "status",
+                "--task-id",
+                authority_task,
+                "--step",
+            )
+        )
+        self.assertEqual(
+            explicit["step"],
+            {
+                "n": 9,
+                "open": [
+                    "SKILL.md#Step 9 — Remove task",
+                    "references/admission.md#S5 — Landing and close-out",
+                ],
+            },
+        )
+        self.operational_failure(
+            self.cli(self.nested, "status", "--step"),
+            "status",
+            "cli_usage",
+        )
+
+        for payload in (uncollected, pending, warning, accepted, explicit):
+            self.assertEqual(set(payload["step"]), {"n", "open"})
+            for address in payload["step"]["open"]:
+                shown = self.cli(self.nested, "show", address)
+                self.assertEqual(shown.returncode, 0, shown.stderr)
+                self.assertEqual(shown.stderr, "")
+                self.assertTrue(shown.stdout.startswith("#"))
+
     def test_status_derives_uncollected_and_pending_from_real_collect_history(self) -> None:
         self.create_task()
         lane = self.create_lane()

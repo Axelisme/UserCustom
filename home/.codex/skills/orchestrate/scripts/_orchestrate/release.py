@@ -5,6 +5,7 @@ import os
 import re
 import stat
 import tempfile
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -39,7 +40,15 @@ def source_home(skill_dir: Path) -> Path:
     raise OrchestrateError(f"cannot locate home root from {skill_dir}")
 
 
-def markdown_sections(text: str) -> dict[str, str]:
+@dataclass(frozen=True)
+class MarkdownSection:
+    start: int
+    end: int
+    text: str
+    sha256: str
+
+
+def markdown_sections(text: str) -> dict[str, MarkdownSection]:
     lines = text.splitlines()
     start = 0
     if lines and lines[0].strip() == "---":
@@ -49,26 +58,92 @@ def markdown_sections(text: str) -> dict[str, str]:
             end = -1
         if end >= 0:
             start = end + 1
-    headings: list[tuple[int, str]] = []
+    headings: list[tuple[int, int, str]] = []
     in_fence = False
     for index, line in enumerate(lines[start:], start=start):
         if re.match(r"^\s*(```|~~~)", line):
             in_fence = not in_fence
             continue
-        if not in_fence and re.match(r"^#{1,6}\s+\S", line):
-            headings.append((index, line.lstrip("#").strip()))
+        match = None if in_fence else re.match(r"^(#{1,6})\s+(\S.*)$", line)
+        if match is not None:
+            headings.append((index, len(match.group(1)), match.group(2).strip()))
     if not headings:
-        return {"__file__": normalized_sha256("\n".join(lines[start:]))}
-    sections: dict[str, str] = {}
-    for position, (index, heading) in enumerate(headings):
-        end = headings[position + 1][0] if position + 1 < len(headings) else len(lines)
+        section_text = "\n".join(lines[start:]).rstrip("\n")
+        return {
+            "__file__": MarkdownSection(
+                start, len(lines), section_text, normalized_sha256(section_text)
+            )
+        }
+    sections: dict[str, MarkdownSection] = {}
+    for position, (index, level, heading) in enumerate(headings):
+        end = next(
+            (
+                later_index
+                for later_index, later_level, _ in headings[position + 1 :]
+                if later_level <= level
+            ),
+            len(lines),
+        )
         key = heading
         suffix = 2
         while key in sections:
             key = f"{heading} [{suffix}]"
             suffix += 1
-        sections[key] = normalized_sha256("\n".join(lines[index:end]))
+        section_text = "\n".join(lines[index:end]).rstrip("\n")
+        sections[key] = MarkdownSection(
+            index, end, section_text, normalized_sha256(section_text)
+        )
     return sections
+
+
+def show_section(skill_dir: Path, address: str) -> CommandResult:
+    relative, separator, section_name = address.partition("#")
+    if not separator or not relative or not section_name:
+        raise OrchestrateError(
+            "show address must be <file>#<section>", "cli_usage"
+        )
+    manifest = load_manifest(skill_dir, skill_version(skill_dir))
+    document = manifest["documents"].get(relative)
+    if document is None:
+        raise OrchestrateError(
+            f"unknown released document: {relative}", "cli_usage"
+        )
+    released_sections = document["sections"]
+    expected = released_sections.get(section_name)
+    if expected is None:
+        available = ", ".join(
+            f"{relative}#{name}" for name in sorted(released_sections)
+        )
+        raise OrchestrateError(
+            f"unknown section address: {address}; available: {available}",
+            "cli_usage",
+        )
+
+    path = skill_dir / relative
+    try:
+        data = path.read_bytes()
+        text = data.decode("utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise OrchestrateError(
+            f"cannot read released document: {relative}",
+            "section_integrity_mismatch",
+        ) from exc
+
+    if path.suffix == ".md":
+        observed = markdown_sections(text).get(section_name)
+        if observed is None or observed.sha256 != expected:
+            raise OrchestrateError(
+                f"released section integrity mismatch: {address}",
+                "section_integrity_mismatch",
+            )
+        return CommandResult(True, {"text": observed.text})
+
+    if section_name != "__file__" or sha256_bytes(data) != expected:
+        raise OrchestrateError(
+            f"released section integrity mismatch: {address}",
+            "section_integrity_mismatch",
+        )
+    return CommandResult(True, {"text": text})
 
 
 def _profile_text(value: object, field: str, path: Path) -> str:
@@ -183,7 +258,10 @@ def build_manifest(skill_dir: Path, version: int) -> dict[str, Any]:
         entry: dict[str, Any] = {
             "bytes": len(data),
             "sha256": sha256_bytes(data),
-            "sections": markdown_sections(data.decode("utf-8"))
+            "sections": {
+                name: section.sha256
+                for name, section in markdown_sections(data.decode("utf-8")).items()
+            }
             if path.suffix == ".md"
             else {"__file__": sha256_bytes(data)},
         }

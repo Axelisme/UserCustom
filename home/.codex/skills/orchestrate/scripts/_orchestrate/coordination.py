@@ -68,6 +68,57 @@ class _TaskProjection:
     warnings: tuple[str, ...]
 
 
+_STEP_ADDRESSES: dict[int, tuple[str, ...]] = {
+    2: (
+        "SKILL.md#Step 2 — Create lane",
+        "references/admission.md#S1 — Slice admission",
+    ),
+    3: (
+        "SKILL.md#Step 3 — Execute Contract",
+        "references/admission.md#S2 — Invariant admission",
+    ),
+    5: (
+        "SKILL.md#Step 5 — Collect lane",
+        "references/admission.md#S2.5 — Root's mechanical guarantee",
+    ),
+    6: (
+        "SKILL.md#Step 6 — Start acceptance",
+        "references/admission.md#S4 — Review and validation",
+    ),
+    8: (
+        "SKILL.md#Step 8 — Land",
+        "references/admission.md#S5 — Landing and close-out",
+    ),
+    9: (
+        "SKILL.md#Step 9 — Remove task",
+        "references/admission.md#S5 — Landing and close-out",
+    ),
+}
+
+
+def _status_step(
+    projection: _TaskProjection,
+    accepted: str | None,
+    landed: str | None,
+) -> dict[str, object]:
+    if projection.pending > 0:
+        number = 6
+    elif any(lane.uncollected > 0 for lane in projection.lanes.values()):
+        number = 5
+    elif accepted is not None and accepted != landed:
+        number = 8
+    elif accepted is not None and accepted == landed:
+        number = 9
+    elif projection.lanes:
+        number = 3
+    else:
+        number = 2
+    addresses = list(_STEP_ADDRESSES[number])
+    if projection.warnings:
+        addresses.append("SKILL.md#Exceptions to the main sequence")
+    return {"n": number, "open": addresses}
+
+
 def collect_lane_id(
     repo: RepositoryContext,
     task: TaskResources,
@@ -184,8 +235,15 @@ def task_projection(repo: RepositoryContext, task: TaskResources) -> _TaskProjec
     )
 
 
-def status(repo: RepositoryContext, task_id: str | None = None) -> CommandResult:
+def status(
+    repo: RepositoryContext,
+    task_id: str | None = None,
+    *,
+    include_step: bool = False,
+) -> CommandResult:
     if task_id is None:
+        if include_step:
+            _error("status --step requires --task-id", "cli_usage")
         return CommandResult(True, {"tasks": active_task_ids(repo)})
     task = _task(repo, task_id)
     projection = task_projection(repo, task)
@@ -207,16 +265,30 @@ def status(repo: RepositoryContext, task_id: str | None = None) -> CommandResult
         "lanes": lanes,
         "pending": projection.pending,
     }
+    refs: dict[str, str | None] = {}
     for key, ref in (
         ("accepted", task.accepted_ref),
         ("user_accepted", task.user_accepted_ref),
         ("landed", task.landed_ref),
     ):
         value = _ref(repo, ref)
+        refs[key] = value
         if value is not None:
             data[key] = value
     if projection.warnings:
         data["warnings"] = list(projection.warnings[:20])
+    if (
+        include_step
+        or projection.pending > 0
+        or any(lane.uncollected > 0 for lane in projection.lanes.values())
+        or bool(projection.warnings)
+        or (refs["accepted"] is not None and refs["accepted"] != refs["landed"])
+    ):
+        data["step"] = _status_step(
+            projection,
+            refs["accepted"],
+            refs["landed"],
+        )
     return CommandResult(True, data)
 
 

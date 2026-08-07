@@ -32,12 +32,13 @@ from .release import (
     pin_status,
     release_package,
     require_intact_package,
+    show_section,
     require_verified_release,
 )
 from .resources import RepositoryContext, TaskResources
 from .telemetry import auto_resume, record_event, timing_transition, write_report
 
-ORCHESTRATE_VERSION = 169
+ORCHESTRATE_VERSION = 171
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
@@ -51,8 +52,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", dest="version_query", action="store_true")
     commands = parser.add_subparsers(dest="command", required=False, parser_class=JsonArgumentParser)
 
+    show = commands.add_parser("show")
+    show.add_argument("address", metavar="FILE#SECTION")
+    show.set_defaults(route="show", mutation=False)
+
     status_parser = commands.add_parser("status")
     status_parser.add_argument("--task-id")
+    status_parser.add_argument("--step", action="store_true")
     status_parser.set_defaults(route="status", mutation=False)
 
     timing = commands.add_parser("timing")
@@ -169,6 +175,8 @@ def _run(
     route = args.route
     if route == "version":
         return CommandResult(True, {})
+    if route == "show":
+        return show_section(skill_dir, args.address)
     if route == "pin-status":
         assert repo is not None
         return pin_status(repo.worktree_root, skill_dir)
@@ -184,7 +192,7 @@ def _run(
     if repo is None:
         raise OrchestrateError("current directory is not a Git repository", "not_git_repository")
     if route == "status":
-        return status(repo, args.task_id)
+        return status(repo, args.task_id, include_step=args.step)
     if route == "timing-pause":
         return timing_transition(TaskResources.derive(repo, args.task_id), pause=True)
     if route == "timing-resume":
@@ -300,7 +308,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             repo = RepositoryContext.discover(discovery_path)
         except OrchestrateError:
-            if operation in {"version", "doctor", "doctor-diff", "release"}:
+            if operation in {"version", "show", "doctor", "doctor-diff", "release"}:
                 repo = None
             else:
                 raise
@@ -323,6 +331,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 (*auto_warnings, *result.warnings),
                 result.diagnostics,
             )
+        if operation == "show":
+            sys.stdout.write(str(result.data["text"]))
+            return 0
         response_version = (
             args.version
             if operation == "release" and result.ok

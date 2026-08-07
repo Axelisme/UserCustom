@@ -117,6 +117,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
         self.assert_help_surface(
             (),
             commands=(
+                "show",
                 "status",
                 "timing",
                 "lane",
@@ -129,6 +130,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             ),
             long_options=("--skill-dir", "--version"),
         )
+        self.assert_help_surface(("show",))
         self.assert_help_surface(("timing",), commands=("pause", "resume"))
         self.assert_help_surface(
             ("lane",),
@@ -143,7 +145,9 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
         self.assert_help_surface(
             ("doctor",), commands=("diff",), long_options=("--path",)
         )
-        self.assert_help_surface(("status",), long_options=("--task-id",))
+        self.assert_help_surface(
+            ("status",), long_options=("--task-id", "--step")
+        )
         self.assert_help_surface(("timing", "pause"), long_options=("--task-id",))
         self.assert_help_surface(("timing", "resume"), long_options=("--task-id",))
         self.assert_help_surface(
@@ -382,10 +386,22 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                 "lanes",
                 "pending",
                 "warnings",
+                "step",
             },
         )
         self.assertEqual(payload["lanes"], {})
         self.assertEqual(payload["pending"], 0)
+        self.assertEqual(
+            payload["step"],
+            {
+                "n": 2,
+                "open": [
+                    "SKILL.md#Step 2 — Create lane",
+                    "references/admission.md#S1 — Slice admission",
+                    "SKILL.md#Exceptions to the main sequence",
+                ],
+            },
+        )
         self.assertIsInstance(payload["warnings"], list)
         self.assertGreater(len(payload["warnings"]), 0)
         self.assertLessEqual(len(payload["warnings"]), 20)
@@ -409,6 +425,7 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             "lanes",
             "pending",
             "warnings",
+            "step",
         }
         with self.subTest(assertion="exact-schema"):
             self.assertEqual(set(payload), expected_keys)
@@ -417,6 +434,17 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
             self.assertEqual(payload.get("integration"), self.base)
             self.assertEqual(payload.get("lanes"), {})
             self.assertEqual(payload.get("pending"), 0)
+            self.assertEqual(
+                payload.get("step"),
+                {
+                    "n": 2,
+                    "open": [
+                        "SKILL.md#Step 2 — Create lane",
+                        "references/admission.md#S1 — Slice admission",
+                        "SKILL.md#Exceptions to the main sequence",
+                    ],
+                },
+            )
         for optional in ("acceptance", "accepted", "landed", "lane_consumption"):
             with self.subTest(assertion="optional-slot-omitted", slot=optional):
                 self.assertNotIn(optional, payload)
@@ -635,6 +663,13 @@ class CloseableTracerContractTests(OrchestrateCliRepositoryTestCase):
                     self.lane_id: {"sha": lane_tip, "uncollected": 0},
                 },
                 "pending": 1,
+                "step": {
+                    "n": 6,
+                    "open": [
+                        "SKILL.md#Step 6 — Start acceptance",
+                        "references/admission.md#S4 — Review and validation",
+                    ],
+                },
             },
         )
 

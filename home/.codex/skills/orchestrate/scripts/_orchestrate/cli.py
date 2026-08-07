@@ -38,7 +38,7 @@ from .release import (
 from .resources import RepositoryContext, TaskResources
 from .telemetry import auto_resume, record_event, timing_transition, write_report
 
-ORCHESTRATE_VERSION = 172
+ORCHESTRATE_VERSION = 173
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
@@ -365,11 +365,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 **_event_context(args),
             )
         code = getattr(exc, "code", "git_error")
+        error = {"code": code, "message": str(exc)}
+        repair = getattr(exc, "repair", None)
+        if repair is not None:
+            error["repair"] = repair
         payload = {
             "ok": False,
             "operation": operation,
             "orchestrate_version": ORCHESTRATE_VERSION,
-            "error": {"code": code, "message": str(exc)},
+            "error": error,
         }
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True), file=sys.stderr)
         return 2

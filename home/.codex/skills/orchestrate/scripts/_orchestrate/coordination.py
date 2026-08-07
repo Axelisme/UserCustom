@@ -49,8 +49,31 @@ def _ref(repo: RepositoryContext, ref: str) -> str | None:
     return probe.stdout.strip() if probe.returncode == 0 else None
 
 
-def _error(message: str, code: str) -> None:
-    raise OrchestrateError(message, code)
+_ERROR_REPAIRS = {
+    "cli_usage": "Change the supplied arguments to satisfy the reported command constraint.",
+    "dirty_worktree": "Make the named worktree clean, including any merge state.",
+    "frozen_path_undeclared": "Redeclare every staged protected path in the commit message.",
+    "lane_not_found": "Use a lane id from the task's active lane projection.",
+    "lane_not_ready": "Correct the reported lane-readiness predicate.",
+    "lane_resource_collision": "Choose a lane id with no managed resource collision.",
+    "merge_conflict": "Remove the reported merge conflict before retrying.",
+    "message_file_invalid": "Provide a readable non-empty UTF-8 message file.",
+    "nothing_staged": "Stage lane content before committing it.",
+    "report_write_failed": "Choose an output directory that accepts both report files atomically.",
+    "task_incomplete": "Correct the reported task-closeability predicate.",
+    "task_not_found": "Use a task id with an existing integration base.",
+    "task_resource_collision": "Choose a task id with no managed resource collision.",
+    "task_state_invalid": "Restore the reported managed task resource.",
+    "validation_mode_mismatch": "Make the expected mode agree with the lane's frozen Contract shape.",
+    "worktree_identity_mismatch": "Attach the named worktree to its managed branch and path.",
+}
+
+
+def _error(message: str, code: str, repair: str | None = None) -> None:
+    bound_repair = repair if repair is not None else _ERROR_REPAIRS.get(code)
+    if not bound_repair:
+        raise AssertionError(f"missing repair for coordination error code: {code}")
+    raise OrchestrateError(message, code, bound_repair)
 
 
 @dataclass(frozen=True)
@@ -452,8 +475,8 @@ class LaneValidation:
         return not self.diagnostics
 
 
-def _diagnostic(code: str, message: str) -> dict[str, str]:
-    return {"code": code, "message": message}
+def _diagnostic(code: str, message: str, repair: str) -> dict[str, str]:
+    return {"code": code, "message": message, "repair": repair}
 
 
 def _normalized_immutable_path(value: str) -> bool:
@@ -479,6 +502,12 @@ def _lane_validation(
     lane = task.lane(lane_id)
     state = worktree_state(repo, lane.path)
     if not state["exists"]:
+        active_lane_ids = tuple(task_projection(repo, task).lanes)
+        repair = (
+            f"Use one of the active lane ids: {', '.join(active_lane_ids)}."
+            if active_lane_ids
+            else "Create a managed lane before checking it."
+        )
         return LaneValidation(
             lane,
             None,
@@ -488,7 +517,13 @@ def _lane_validation(
             (),
             (),
             0,
-            (_diagnostic("lane_not_found", "lane worktree does not exist"),),
+            (
+                _diagnostic(
+                    "lane_not_found",
+                    "lane worktree does not exist",
+                    repair,
+                ),
+            ),
         )
 
     diagnostics: list[dict[str, str]] = []
@@ -497,16 +532,27 @@ def _lane_validation(
             _diagnostic(
                 "worktree_identity_mismatch",
                 "lane worktree is not attached to its managed branch",
+                "Attach the lane worktree to its managed branch.",
             )
         )
     if not state["clean"] or merge_in_progress(lane.path):
-        diagnostics.append(_diagnostic("dirty_worktree", "lane worktree is dirty"))
+        diagnostics.append(
+            _diagnostic(
+                "dirty_worktree",
+                "lane worktree is dirty",
+                "Commit or remove all staged, unstaged, untracked, and merge-state changes in the lane worktree.",
+            )
+        )
 
     tip = _ref(repo, lane.branch)
     base = _ref(repo, lane.base_ref)
     if tip is None or base is None:
         diagnostics.append(
-            _diagnostic("lane_not_ready", "lane branch or base ref is missing")
+            _diagnostic(
+                "lane_not_ready",
+                "lane branch or base ref is missing",
+                "Restore both the lane branch and lane base ref.",
+            )
         )
 
     protected: set[str] = set()
@@ -517,7 +563,11 @@ def _lane_validation(
     first_parent_valid = commits is not None
     if base and tip and commits is None:
         diagnostics.append(
-            _diagnostic("lane_not_ready", "lane tip is not on the lane base first-parent range")
+            _diagnostic(
+                "lane_not_ready",
+                "lane tip is not on the lane base first-parent range",
+                "Move the lane tip onto the lane base first-parent range.",
+            )
         )
     elif commits is not None:
         immutable_invalid = False
@@ -540,7 +590,13 @@ def _lane_validation(
                 details.append("malformed Immutable declaration")
             if immutable_violation:
                 details.append("protected path changed without redeclaration")
-            diagnostics.append(_diagnostic("lane_not_ready", "; ".join(details)))
+            diagnostics.append(
+                _diagnostic(
+                    "lane_not_ready",
+                    "; ".join(details),
+                    "Correct every malformed declaration and redeclare every protected path changed later.",
+                )
+            )
 
         # A persistent lane keeps its original base across collect cycles, so its
         # whole first-parent range accumulates every ticket it ever served. The
@@ -680,6 +736,7 @@ def lane_check(
                 "error": {
                     "code": "lane_not_ready",
                     "message": "lane is not ready for collection",
+                    "repair": "Apply every diagnostic repair, then rerun lane check.",
                 }
             },
             diagnostics=validation.diagnostics,
@@ -698,6 +755,7 @@ def lane_check(
                             "lane was admitted TDD and freezes no Contract commit "
                             "for this ticket"
                         ),
+                        "repair": "This check counts only uncollected Contract commits; add one before using --expect-mode tdd.",
                     }
                 },
             )
@@ -712,6 +770,7 @@ def lane_check(
                             f"{len(validation.ticket_contract_commits)} Contract "
                             "commits for this ticket"
                         ),
+                        "repair": "Make --expect-mode agree with the lane's uncollected Contract-commit shape.",
                     }
                 },
             )
@@ -1162,7 +1221,12 @@ def integration_remove(
     ).stdout.strip()
     no_change = integration_tree == base_tree
     if lanes and not abandon:
-        _error("task has active lanes", "task_incomplete")
+        lane_ids = ", ".join(lane.lane_id for lane in lanes)
+        _error(
+            "task has active lanes",
+            "task_incomplete",
+            f"Remove these active lanes before removing the task: {lane_ids}.",
+        )
     complete = accepted == integration and landed == integration
     if not abandon and not no_change and not complete:
         _error("task is not accepted and landed", "task_incomplete")

@@ -9,10 +9,16 @@ ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
 class OrchestrateError(RuntimeError):
-    def __init__(self, message: str, code: str = "git_error") -> None:
+    def __init__(
+        self,
+        message: str,
+        code: str = "git_error",
+        repair: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
+        self.repair = repair
 
 
 @dataclass(frozen=True)
@@ -33,9 +39,16 @@ def normalized_sha256(text: str) -> str:
 
 def require_identifier(value: str, *, label: str) -> str:
     if not ID_PATTERN.fullmatch(value):
+        lowered = value.casefold()
+        repair = (
+            f"Use {lowered!r}."
+            if ID_PATTERN.fullmatch(lowered)
+            else f"Use a {label} matching {ID_PATTERN.pattern}."
+        )
         raise OrchestrateError(
             f"{label} must match {ID_PATTERN.pattern}: {value!r}",
             "invalid_identifier",
+            repair,
         )
     return value
 

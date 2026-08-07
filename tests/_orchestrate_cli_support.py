@@ -285,6 +285,8 @@ class OrchestrateCliRepositoryTestCase(unittest.TestCase):
         result: subprocess.CompletedProcess[str],
         operation: str,
         code: str,
+        *,
+        repair: bool | None = None,
     ) -> dict[str, Any]:
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
@@ -295,10 +297,20 @@ class OrchestrateCliRepositoryTestCase(unittest.TestCase):
         self.assertEqual(payload["ok"], False)
         self.assertEqual(payload["operation"], operation)
         self.assertEqual(payload["orchestrate_version"], self.orchestrate_version)
-        self.assertEqual(set(payload["error"]), {"code", "message"})
+        expected_error_fields = {"code", "message"}
+        if repair is True:
+            expected_error_fields.add("repair")
+        elif repair is None and "repair" in payload["error"]:
+            expected_error_fields.add("repair")
+        self.assertEqual(set(payload["error"]), expected_error_fields)
         self.assertEqual(payload["error"]["code"], code)
         self.assertIsInstance(payload["error"]["message"], str)
         self.assertTrue(payload["error"]["message"])
+        if "repair" in payload["error"]:
+            self.assertIsInstance(payload["error"]["repair"], str)
+            self.assertTrue(payload["error"]["repair"])
+            self.assertNotIn("#", payload["error"]["repair"])
+            self.assertNotRegex(payload["error"]["repair"], r"\b[^ ]+\.md\b")
         return payload
 
     def commit_file(

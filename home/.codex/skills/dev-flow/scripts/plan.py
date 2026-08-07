@@ -55,12 +55,14 @@ class Refusal(RuntimeError):
         self,
         code: str,
         message: str,
+        repair: str,
         paths: tuple[str, ...] = (),
         version: int | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
+        self.repair = repair
         self.paths = tuple(sorted(paths))
         self.version = version
 
@@ -84,7 +86,12 @@ def fail(operation: str, refusal: Refusal) -> NoReturn:
         operation,
         ok=False,
         version=refusal.version,
-        error={"code": refusal.code, "message": refusal.message, "paths": list(refusal.paths)},
+        error={
+            "code": refusal.code,
+            "message": refusal.message,
+            "paths": list(refusal.paths),
+            "repair": refusal.repair,
+        },
     )
     raise SystemExit(1)
 
@@ -95,7 +102,11 @@ def relative(root: Path, path: Path) -> str:
 
 def validate_task_id(value: str) -> None:
     if not SAFE_ID.fullmatch(value) or not value.isascii():
-        raise Refusal("invalid_argument", f"invalid task id: {value!r}")
+        raise Refusal(
+            "invalid_argument",
+            f"invalid task id: {value!r}",
+            f"Use an ASCII task id matching {SAFE_ID.pattern}.",
+        )
 
 
 def state_dir(root: Path, location: str, task_id: str) -> Path:
@@ -126,7 +137,11 @@ def reject_symlink_components(root: Path, path: Path) -> None:
     try:
         parts = absolute.relative_to(root).parts
     except ValueError as exc:
-        raise Refusal("unsafe_path", f"path escapes repository: {path}") from exc
+        raise Refusal(
+            "unsafe_path",
+            f"path escapes repository: {path}",
+            "Use a path contained by the repository root.",
+        ) from exc
     current = root
     for part in parts:
         current /= part
@@ -134,6 +149,7 @@ def reject_symlink_components(root: Path, path: Path) -> None:
             raise Refusal(
                 "unsafe_path",
                 f"symlink is not allowed: {relative(root, current)}",
+                "Replace the named symlink with a real path component.",
                 (relative(root, current),),
             )
 
@@ -147,6 +163,7 @@ def require_directory_components(root: Path, path: Path) -> None:
             raise Refusal(
                 "unsafe_path",
                 f"path component is not a directory: {relative(root, current)}",
+                "Make the named path component a directory.",
                 (relative(root, current),),
             )
 
@@ -155,12 +172,18 @@ def reject_symlink_tree(root: Path, directory: Path) -> None:
     require_directory_components(root, directory)
     if directory.is_symlink() or not directory.is_dir():
         path = relative(root, directory) if directory.exists() or directory.is_symlink() else str(directory)
-        raise Refusal("unsafe_path", f"record is not a real directory: {path}", (path,))
+        raise Refusal(
+            "unsafe_path",
+            f"record is not a real directory: {path}",
+            "Make the named record path a real directory.",
+            (path,),
+        )
     for path in sorted(directory.rglob("*")):
         if path.is_symlink():
             raise Refusal(
                 "unsafe_path",
                 f"symlink is not allowed: {relative(root, path)}",
+                "Remove the named symlink from the record tree.",
                 (relative(root, path),),
             )
 
@@ -198,6 +221,7 @@ def validate_ticket_records(root: Path, directory: Path) -> None:
             raise Refusal(
                 "invalid_ticket_status",
                 f"ticket status must be one of open, active, closed: {rel} has status {status!r}",
+                "Set the named ticket status to open, active, or closed.",
                 (rel,),
                 VALIDATED_VERSION,
             )
@@ -208,6 +232,7 @@ def validate_ticket_records(root: Path, directory: Path) -> None:
                     "invalid_ticket_disposition",
                     "closed ticket requires a disposition of resolved, superseded, out-of-scope, "
                     f"or hard-stop: {rel} has disposition {disposition!r}",
+                    "Set the named closed ticket disposition to resolved, superseded, out-of-scope, or hard-stop.",
                     (rel,),
                     VALIDATED_VERSION,
                 )
@@ -216,6 +241,7 @@ def validate_ticket_records(root: Path, directory: Path) -> None:
                 "invalid_ticket_disposition",
                 f"disposition is only allowed when status is closed: {rel} has status {status!r} "
                 f"and disposition {disposition!r}",
+                "Remove disposition from the named ticket, or set its status to closed.",
                 (rel,),
                 VALIDATED_VERSION,
             )
@@ -278,13 +304,17 @@ def record_size(text: str) -> dict[str, object]:
         sections[name] = len(body)
         if name == STANDING_ORDERS_HEADING:
             standing_orders = len(STANDING_ORDER_ENTRY.findall(body))
-    return {
+    result: dict[str, object] = {
         "authored_chars": len(authored),
         "budget": AUTHORED_BUDGET,
         "over_budget": len(authored) > AUTHORED_BUDGET,
         "sections": sections,
         "standing_orders": standing_orders,
     }
+    if len(authored) > AUTHORED_BUDGET:
+        overage = len(authored) - AUTHORED_BUDGET
+        result["repair"] = f"Remove at least {overage} authored characters from the index."
+    return result
 
 
 def sections(text: str) -> dict[str, str]:
@@ -310,26 +340,54 @@ def lint_frozen_state(text: str) -> list[dict[str, str]]:
         content = HTML_COMMENT.sub("", body.get(name, ""))
         for rule, pattern in FROZEN_STATE_RULES:
             for match in dict.fromkeys(pattern.findall(content)):
-                findings.append({"section": name, "rule": rule, "match": match})
+                findings.append(
+                    {
+                        "section": name,
+                        "rule": rule,
+                        "match": match,
+                        "repair": f"Remove {match} from {name}.",
+                    }
+                )
 
     envelope = HTML_COMMENT.sub("", body.get("Envelope", "")).strip()
     if not envelope:
-        findings.append({"section": "Envelope", "rule": "blank"})
+        findings.append(
+            {
+                "section": "Envelope",
+                "rule": "blank",
+                "repair": "Add non-comment text to Envelope.",
+            }
+        )
 
     standing_orders = HTML_COMMENT.sub("", body.get(STANDING_ORDERS_HEADING, ""))
     for entry in STANDING_ORDER_BLOCK.findall(standing_orders):
         entry_heading = entry.splitlines()[0]
         if not STANDING_ORDER_DATE.search(entry):
             findings.append(
-                {"section": STANDING_ORDERS_HEADING, "rule": "missing-date", "entry": entry_heading}
+                {
+                    "section": STANDING_ORDERS_HEADING,
+                    "rule": "missing-date",
+                    "entry": entry_heading,
+                    "repair": "Add a YYYY-MM-DD date to the named standing-order entry.",
+                }
             )
         if not STANDING_ORDER_LAPSE.search(entry):
             findings.append(
-                {"section": STANDING_ORDERS_HEADING, "rule": "missing-lapse", "entry": entry_heading}
+                {
+                    "section": STANDING_ORDERS_HEADING,
+                    "rule": "missing-lapse",
+                    "entry": entry_heading,
+                    "repair": "Add an indented non-empty Lapses: line to the named standing-order entry.",
+                }
             )
         if not STANDING_ORDER_QUOTE.search(entry):
             findings.append(
-                {"section": STANDING_ORDERS_HEADING, "rule": "not-verbatim", "entry": entry_heading}
+                {
+                    "section": STANDING_ORDERS_HEADING,
+                    "rule": "not-verbatim",
+                    "entry": entry_heading,
+                    "repair": "Put a 「...」 quote on the standing-order entry's first line.",
+                }
             )
     return findings
 
@@ -350,15 +408,29 @@ def set_refreshed_marker(text: str, value: str, separator: str) -> str:
 def load_for_refresh(root: Path, task_id: str) -> RefreshRecord:
     directory = state_dir(root, "plans", task_id)
     if not directory.exists():
-        raise Refusal("record_missing", f"record not found: {task_id}")
+        raise Refusal(
+            "record_missing",
+            f"record not found: {task_id}",
+            "Provide the requested record under active plans.",
+        )
     reject_symlink_tree(root, directory)
     index = directory / "INDEX.md"
     if not index.is_file() or index.is_symlink():
-        raise Refusal("malformed_index", "INDEX.md is missing", (relative(root, index),))
+        raise Refusal(
+            "malformed_index",
+            "INDEX.md is missing",
+            "Provide a regular index file at the named path.",
+            (relative(root, index),),
+        )
     try:
         text = index.read_bytes().decode("utf-8")
     except (OSError, UnicodeError) as exc:
-        raise Refusal("malformed_index", "INDEX.md is not readable UTF-8", (relative(root, index),)) from exc
+        raise Refusal(
+            "malformed_index",
+            "INDEX.md is not readable UTF-8",
+            "Encode the named index file as readable UTF-8.",
+            (relative(root, index),),
+        ) from exc
 
     # The version boundary is deliberately checked before the generated-block markers.
     version = version_from_text(text)
@@ -367,6 +439,7 @@ def load_for_refresh(root: Path, task_id: str) -> RefreshRecord:
         raise Refusal(
             "unsupported_record_version",
             f"unsupported record_version: {detail}",
+            f"Set record_version to {' or '.join(str(item) for item in SUPPORTED_VERSIONS)}.",
             (relative(root, index),),
             version,
         )
@@ -375,9 +448,21 @@ def load_for_refresh(root: Path, task_id: str) -> RefreshRecord:
     # in step rather than rewritten out from under its reader, so zero markers and one matched pair
     # are both well formed — only a broken pair is not.
     if text.count(START) != text.count(END) or text.count(START) > 1:
-        raise Refusal("malformed_index", "missing or repeated files marker", (relative(root, index),), version)
+        raise Refusal(
+            "malformed_index",
+            "missing or repeated files marker",
+            "Leave either no files markers or one matched start/end pair.",
+            (relative(root, index),),
+            version,
+        )
     if text.count(START) == 1 and text.index(START) > text.index(END):
-        raise Refusal("malformed_index", "files markers are out of order", (relative(root, index),), version)
+        raise Refusal(
+            "malformed_index",
+            "files markers are out of order",
+            "Place the files start marker before the files end marker.",
+            (relative(root, index),),
+            version,
+        )
     return RefreshRecord(directory, index, text, version)
 
 
@@ -392,7 +477,11 @@ def collision_paths(root: Path, location: str, task_id: str) -> tuple[Path, ...]
 def command_create(root: Path, arguments: argparse.Namespace) -> None:
     validate_task_id(arguments.task_id)
     if not arguments.goal.strip() or "\x00" in arguments.goal:
-        raise Refusal("invalid_argument", "goal must be non-empty text")
+        raise Refusal(
+            "invalid_argument",
+            "goal must be non-empty text",
+            "Pass non-empty --goal text without NUL characters.",
+        )
     collisions = tuple(
         path
         for location in ("plans", "archives")
@@ -402,6 +491,7 @@ def command_create(root: Path, arguments: argparse.Namespace) -> None:
         raise Refusal(
             "record_exists",
             f"active or archived record already exists: {arguments.task_id}",
+            "Choose a task id with no case-insensitive active or archived collision.",
             tuple(relative(root, path) for path in collisions),
         )
 
@@ -541,24 +631,37 @@ def command_move(root: Path, arguments: argparse.Namespace, operation: str) -> N
     reject_symlink_components(root, source)
     reject_symlink_components(root, destination)
     if not source.exists():
-        raise Refusal("record_missing", f"source record not found: {arguments.task_id}")
+        raise Refusal(
+            "record_missing",
+            f"source record not found: {arguments.task_id}",
+            f"Provide the requested source record under {source_location}.",
+        )
     reject_symlink_tree(root, source)
     collisions = collision_paths(root, destination_location, arguments.task_id)
     if collisions:
         raise Refusal(
             "record_exists",
             f"destination record already exists: {arguments.task_id}",
+            "Use a task id with no case-insensitive destination collision.",
             tuple(relative(root, path) for path in collisions),
         )
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     require_directory_components(root, destination.parent)
     if source.parent.stat().st_dev != destination.parent.stat().st_dev:
-        raise Refusal("cross_device", "source and destination are on different filesystems")
+        raise Refusal(
+            "cross_device",
+            "source and destination are on different filesystems",
+            "Keep source and destination record directories on the same filesystem.",
+        )
     try:
         os.rename(source, destination)
     except OSError as exc:
-        raise Refusal("cross_device", f"atomic directory rename refused: {exc}") from exc
+        raise Refusal(
+            "cross_device",
+            f"atomic directory rename refused: {exc}",
+            "Make the source-to-destination directory rename atomic on one filesystem.",
+        ) from exc
     emit(
         operation,
         ok=True,

@@ -156,6 +156,7 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         self.assertEqual(payload["operation"], "lane-check")
         self.assertEqual(payload["error"]["code"], "validation_mode_mismatch")
         self.assertTrue(payload["error"]["message"])
+        self.assertTrue(payload["error"]["repair"])
         return payload
 
     def collect(
@@ -212,10 +213,12 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         self.assertIs(payload["ok"], False)
         self.assertEqual(payload["operation"], "lane-check")
         self.assertEqual(payload["orchestrate_version"], self.orchestrate_version)
-        self.assertEqual(set(payload["error"]), {"code", "message"})
+        self.assertEqual(set(payload["error"]), {"code", "message", "repair"})
         self.assertEqual(payload["error"]["code"], "lane_not_ready")
         self.assertIsInstance(payload["error"]["message"], str)
         self.assertTrue(payload["error"]["message"])
+        self.assertIsInstance(payload["error"]["repair"], str)
+        self.assertTrue(payload["error"]["repair"])
         diagnostics = payload["diagnostics"]
         self.assertIsInstance(diagnostics, list)
         self.assertGreater(len(diagnostics), 0)
@@ -225,12 +228,16 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
             len({(item["code"], item["message"]) for item in diagnostics}),
         )
         for diagnostic in diagnostics:
-            self.assertEqual(set(diagnostic), {"code", "message"})
+            self.assertEqual(set(diagnostic), {"code", "message", "repair"})
             self.assertIsInstance(diagnostic["code"], str)
             self.assertTrue(diagnostic["code"])
             self.assertIsInstance(diagnostic["message"], str)
             self.assertTrue(diagnostic["message"])
+            self.assertIsInstance(diagnostic["repair"], str)
+            self.assertTrue(diagnostic["repair"])
             self.assertNotIn(str(self.root), diagnostic["message"])
+            self.assertNotIn("#", diagnostic["repair"])
+            self.assertNotRegex(diagnostic["repair"], r"\b[^ ]+\.md\b")
         if expected_diagnostic_codes is not None:
             self.assertEqual(
                 [item["code"] for item in diagnostics], expected_diagnostic_codes
@@ -461,8 +468,28 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         self.predicate_failure(self.lane_command("check"), ["lane_not_ready"])
         self.assertEqual(self.managed_state_snapshot(), before_check)
         before_collect = self.managed_resource_snapshot()
-        self.operational_failure(self.collect(), "integration-collect", "lane_not_ready")
+        self.operational_failure(
+            self.collect(),
+            "integration-collect",
+            "lane_not_ready",
+            repair=True,
+        )
         self.assertEqual(self.managed_resource_snapshot(), before_collect)
+
+    def test_missing_lane_repair_lists_live_lane_ids(self) -> None:
+        self.create_task()
+        self.create_lane()
+        self.create_lane(lane_id="reviewer")
+
+        payload = self.predicate_failure(
+            self.lane_command("check", lane_id="missing"),
+            ["lane_not_found"],
+        )
+
+        self.assertEqual(
+            payload["diagnostics"][0]["repair"],
+            "Use one of the active lane ids: reviewer, writer.",
+        )
 
     def test_immutable_declarations_preserve_paragraph_tolerance_and_unfolding(
         self,
@@ -1227,11 +1254,13 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         self.commit_file(lane, "lane.txt", "lane\n", "Lane-owned change")
         before = self.managed_resource_snapshot()
 
-        self.operational_failure(
-            self.collect(ticket="Ticket/with/slash"),
+        refused = self.operational_failure(
+            self.collect(ticket="T1"),
             "integration-collect",
             "invalid_identifier",
+            repair=True,
         )
+        self.assertEqual(refused["error"]["repair"], "Use 't1'.")
 
         self.assertEqual(self.managed_resource_snapshot(), before)
 
@@ -1591,8 +1620,12 @@ class LaneSafetyAndTopologyContractTests(OrchestrateCliRepositoryTestCase):
         self.assertEqual(len(payload["contract_commits"]), 1)
         self.assertEqual(payload["ticket_contract_commits"], [])
         self.assertEqual(payload["ticket_contract_added_lines"], 0)
-        self.mode_mismatch(
+        mismatch = self.mode_mismatch(
             self.lane_command("check", None, None, "--expect-mode", "tdd")
+        )
+        self.assertEqual(
+            mismatch["error"]["repair"],
+            "This check counts only uncollected Contract commits; add one before using --expect-mode tdd.",
         )
 
     def test_ticket_contract_depth_counts_added_lines_of_its_own_commits(self) -> None:

@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Git lanes for dispatched task work. Use when dispatching implementation to worker agents, integrating or landing completed lanes, checking task or lane state, or when a runtime binding needs the lane dispatch contract. Not for work one agent completes in a single context.
-skill_version: 172
+skill_version: 173
 ---
 
 # Orchestrate
@@ -23,6 +23,8 @@ is self-placing; use `status --task-id <task> --step` only when it is not. Run `
 other command emits one JSON object with `orchestrate_version`: exit 0 is success, exit 1 is a
 completed negative predicate on stdout, and exit 2 is an operational/usage error on stderr.
 Mutations preflight package health before repository changes; read-only diagnosis remains available.
+A command-bound refusal carries non-empty `repair` beside `code` and `message`; diagnostics use the
+same shape, and each repair states only corrective action the command's own behavior binds.
 
 ## Minimum complete lifecycle
 

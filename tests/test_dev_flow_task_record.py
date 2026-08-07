@@ -94,9 +94,15 @@ class TaskRecordTests(unittest.TestCase):
         error = body["error"]
         self.assertIsInstance(error, dict)
         assert isinstance(error, dict)
-        self.assertEqual(set(error), {"code", "message", "paths"})
+        self.assertEqual(set(error), {"code", "message", "paths", "repair"})
         self.assertEqual(error["code"], code)
         self.assertEqual(error["paths"], sorted(error["paths"]))
+        repair = error["repair"]
+        self.assertIsInstance(repair, str)
+        assert isinstance(repair, str)
+        self.assertTrue(repair)
+        self.assertNotIn("#", repair)
+        self.assertNotRegex(repair, r"\b[^ ]+\.md\b")
         return body
 
     def test_interface_has_exactly_four_commands(self) -> None:
@@ -316,6 +322,10 @@ class TaskRecordTests(unittest.TestCase):
                 run_plan(root, "refresh", "demo"), "refresh", "invalid_ticket_disposition", version=3
             )
             self.assertIn(".agent_state/plans/demo/tickets/T001-closed.md", refused["error"]["message"])
+            self.assertEqual(
+                refused["error"]["repair"],
+                "Set the named closed ticket disposition to resolved, superseded, out-of-scope, or hard-stop.",
+            )
             self.assertEqual(refused["error"]["paths"], [".agent_state/plans/demo/tickets/T001-closed.md"])
 
     def test_v3_disposition_present_when_not_closed_fails(self) -> None:
@@ -388,6 +398,7 @@ class TaskRecordTests(unittest.TestCase):
             assert isinstance(size, dict)
             self.assertEqual(size["standing_orders"], 2)
             self.assertEqual(size["over_budget"], False)
+            self.assertNotIn("repair", size)
             sections = size["sections"]
             assert isinstance(sections, dict)
             self.assertEqual(
@@ -410,6 +421,10 @@ class TaskRecordTests(unittest.TestCase):
             size = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")["size"]
             assert isinstance(size, dict)
             self.assertEqual(size["over_budget"], True)
+            self.assertEqual(
+                size["repair"],
+                f"Remove at least {size['authored_chars'] - size['budget']} authored characters from the index.",
+            )
             sections = size["sections"]
             assert isinstance(sections, dict)
             self.assertGreater(sections["Current"], 7000)
@@ -607,6 +622,7 @@ class TaskRecordTests(unittest.TestCase):
                         "section": "Standing orders",
                         "rule": "missing-date",
                         "entry": "- **User:** 「Broken order.」",
+                        "repair": "Add a YYYY-MM-DD date to the named standing-order entry.",
                     }
                 ],
             )
@@ -633,11 +649,16 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(
                 findings,
                 [
-                    {"section": "Envelope", "rule": "blank"},
+                    {
+                        "section": "Envelope",
+                        "rule": "blank",
+                        "repair": "Add non-comment text to Envelope.",
+                    },
                     {
                         "section": "Standing orders",
                         "rule": "missing-date",
                         "entry": "- **User:** 「Keep this exact.」",
+                        "repair": "Add a YYYY-MM-DD date to the named standing-order entry.",
                     },
                 ],
             )
@@ -654,6 +675,7 @@ class TaskRecordTests(unittest.TestCase):
                         "section": "Standing orders",
                         "rule": "missing-lapse",
                         "entry": "- **2026-08-08 — User:** 「Keep this exact.」",
+                        "repair": "Add an indented non-empty Lapses: line to the named standing-order entry.",
                     }
                 ],
             )
@@ -669,9 +691,68 @@ class TaskRecordTests(unittest.TestCase):
                         "section": "Standing orders",
                         "rule": "not-verbatim",
                         "entry": "- **2026-08-08 — User:** Keep this exact, despite 「incidental punctuation」.",
+                        "repair": "Put a 「...」 quote on the standing-order entry's first line.",
                     }
                 ],
             )
+
+    def test_every_lint_rule_carries_a_script_bound_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            index = record(root) / "INDEX.md"
+            malformed = index.read_text(encoding="utf-8").replace(
+                "Task created.", "Landed ea508fc."
+            ).replace(
+                "Not yet recorded.", ""
+            ).replace(
+                "None.", "- **User:** no quote"
+            )
+            index.write_text(malformed, encoding="utf-8")
+
+            findings = self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"]
+
+            self.assertEqual(
+                findings,
+                [
+                    {
+                        "section": "Current",
+                        "rule": "hex",
+                        "match": "ea508fc",
+                        "repair": "Remove ea508fc from Current.",
+                    },
+                    {
+                        "section": "Envelope",
+                        "rule": "blank",
+                        "repair": "Add non-comment text to Envelope.",
+                    },
+                    {
+                        "section": "Standing orders",
+                        "rule": "missing-date",
+                        "entry": "- **User:** no quote",
+                        "repair": "Add a YYYY-MM-DD date to the named standing-order entry.",
+                    },
+                    {
+                        "section": "Standing orders",
+                        "rule": "missing-lapse",
+                        "entry": "- **User:** no quote",
+                        "repair": "Add an indented non-empty Lapses: line to the named standing-order entry.",
+                    },
+                    {
+                        "section": "Standing orders",
+                        "rule": "not-verbatim",
+                        "entry": "- **User:** no quote",
+                        "repair": "Put a 「...」 quote on the standing-order entry's first line.",
+                    },
+                ],
+            )
+            for finding in findings:
+                repair = finding["repair"]
+                self.assertIsInstance(repair, str)
+                assert isinstance(repair, str)
+                self.assertTrue(repair)
+                self.assertNotIn("#", repair)
+                self.assertNotRegex(repair, r"\b[^ ]+\.md\b")
 
     def test_lint_names_frozen_state_in_current_and_next_only(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -696,7 +777,17 @@ class TaskRecordTests(unittest.TestCase):
             )
             findings = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")["lint"]
             # `Next` is scanned; `Envelope` is not — a frozen pointer is legitimate content there.
-            self.assertEqual(findings, [{"section": "Next", "rule": "hex", "match": "9db09f9"}])
+            self.assertEqual(
+                findings,
+                [
+                    {
+                        "section": "Next",
+                        "rule": "hex",
+                        "match": "9db09f9",
+                        "repair": "Remove 9db09f9 from Next.",
+                    }
+                ],
+            )
 
             index.write_text(
                 narrative.replace(
@@ -708,8 +799,18 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(
                 findings,
                 [
-                    {"section": "Current", "rule": "hex", "match": "ea508fc"},
-                    {"section": "Current", "rule": "hex", "match": "5a83f10"},
+                    {
+                        "section": "Current",
+                        "rule": "hex",
+                        "match": "ea508fc",
+                        "repair": "Remove ea508fc from Current.",
+                    },
+                    {
+                        "section": "Current",
+                        "rule": "hex",
+                        "match": "5a83f10",
+                        "repair": "Remove 5a83f10 from Current.",
+                    },
                 ],
                 "the count is a known miss: only the hex rule shipped",
             )
@@ -723,7 +824,18 @@ class TaskRecordTests(unittest.TestCase):
                 index.read_text(encoding="utf-8").replace("Task created.", "Landed ea508fc."),
                 encoding="utf-8",
             )
-            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
+            refreshed = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
+            self.assertEqual(
+                refreshed["lint"],
+                [
+                    {
+                        "section": "Current",
+                        "rule": "hex",
+                        "match": "ea508fc",
+                        "repair": "Remove ea508fc from Current.",
+                    }
+                ],
+            )
             self.assertIn("Landed ea508fc.", index.read_text(encoding="utf-8"))
 
 

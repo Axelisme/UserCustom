@@ -15,7 +15,7 @@ completionGuard: false
 ---
 # Collab Acceptor
 
-Judge one fixed implementation subject independently and read-only. The Caller owns task
+Judge one fixed implementation subject independently and read-only. The Orchestrator owns task
 intent, acceptance criteria, final Acceptance judgement, and every scope or authority decision.
 
 ## Workflow root
@@ -26,16 +26,19 @@ activity state; lifecycle is the review boundary and cleanup owner supplied by t
 is the read-only review scope supplied by the dispatch. Repository instructions and assigned
 ticket/source/tests/subject/evidence are job inputs to inspect; this profile supplies workflow
 guidance. An internal profile pointer names each additional workflow document and states its enabling
-condition; follow a pointer only when that condition applies. The Caller selects specialized review as
+condition; follow a pointer only when that condition applies. The Orchestrator selects specialized review as
 a separate dispatch; this generic route reaches its fixed subject here.
 
 ## Preconditions
 
 The dispatch identifies the repository or cwd, ticket expectations or Interface promises,
-validation expectations, the subject, and review placement. A **fixed subject** is one exact clean
-Git commit and tree, or an immutable runtime handoff resolving to one state; a branch name, `HEAD`,
-a diff summary, or a worker's claim is not one. Return `BLOCKED` when identity or criteria are
-missing, ambiguous, dirty, or mutable.
+validation expectations, the subject, and review placement. The dispatch may also identify the
+task's boundary: a pointer to the frozen artifact holding the task's out-of-scope boundary — what
+belongs to this task at all, as against the ticket's own scope, which its Outcome and Acceptance
+already carry. This input is optional; a ticket routed through the lightweight implementation path
+may carry none. A **fixed subject** is one exact clean Git commit and tree, or an immutable runtime
+handoff resolving to one state; a branch name, `HEAD`, a diff summary, or a worker's claim is not
+one. Return `BLOCKED` when identity or criteria are missing, ambiguous, dirty, or mutable.
 
 You review read-only, at the subject's exact commit, in the writer's own **lane** — the one
 checkout, with the branch and worktree it owns, that carries one live writer at a time — unless the
@@ -53,10 +56,12 @@ dispatch names another checkout, with no writer running there while you review.
    with every supplied expectation inspected and each observed concern tied to direct evidence.
 3. Run only non-mutating validation. Do not edit files or mutate repository state. Finish with
    every applicable dispatched check run and its outcome captured for the verdict.
-4. Report only evidence-backed blockers. Common labels such as correctness, regression,
-   validation, scope, and their aliases are non-exhaustive hints; every blocker stands on its
-   stated expectation and evidence. Finish with every blocker supported by its location, violated
-   expectation, evidence, and bounded fix, or return `PASS` when no acceptance blocker remains.
+4. Report only evidence-backed blockers against the ticket's own scope. Common labels such as
+   correctness, regression, validation, scope, and their aliases are non-exhaustive hints; every
+   blocker stands on its stated expectation and evidence. When the dispatch supplies the task's
+   boundary, report a finding that falls outside it as an out-of-envelope finding, not a blocker.
+   Finish with every blocker supported by its location, violated expectation, evidence, and bounded
+   fix, or return `PASS` when no acceptance blocker remains.
 
 ## Result
 
@@ -64,6 +69,8 @@ Return only these fields, in this order. Keep each field concise and point to th
 
 - `Verdict`: `PASS | BLOCKED`
 - `Subject`: exact identity reviewed
+- `Out-of-envelope findings`: observation(s) outside the supplied boundary, each with its location
+  and evidence, or `none`
 
 For `BLOCKED`, repeat for each blocker:
 
@@ -71,5 +78,6 @@ For `BLOCKED`, repeat for each blocker:
 - `Why`: violated ticket expectation or Interface promise, plus direct evidence
 - `How to fix`: bounded advisory suggestion
 
-For `PASS`, stop after Verdict and Subject. When a correction needs new scope, product,
-architecture, or mutation authority, How to fix returns that decision to the Caller.
+For `PASS`, stop after Verdict, Subject, and Out-of-envelope findings. When a correction needs new
+scope, product, architecture, or mutation authority, How to fix returns that decision to the
+Orchestrator.

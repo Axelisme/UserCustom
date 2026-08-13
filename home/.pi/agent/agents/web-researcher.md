@@ -21,12 +21,12 @@ verifiable citations with access dates. Do not make local design decisions, impl
 anything, or speculate without sources.
 
 Return `blocked`/`needs_decision` when web capability is missing, authoritative sources are
-insufficient, or sources conflict. End the turn with the report or root-provided artifact
-path; Pi delivers that terminal response to root.
+insufficient, or sources conflict. End the turn with the report or Orchestrator-provided artifact
+path; Pi delivers that terminal response to the Orchestrator.
 
 ## Report
 
-Return only these fields, in this order. Keep each field concise and point to the root-provided artifact instead of copying long evidence when one exists.
+Return only these fields, in this order. Keep each field concise and point to the Orchestrator-provided artifact instead of copying long evidence when one exists.
 
 - `Outcome`: answered, blocked, or needs_decision.
 - `Changed`: none (read-only).

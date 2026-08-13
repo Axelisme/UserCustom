@@ -2008,7 +2008,7 @@ async function laneCollect(
     throw new CollabOpError(
       "lane_sha_mismatch",
       "supplied sha is not the exact current lane tip",
-      "Collect the exact lane subject on which the Caller judgement relies.",
+      "Collect the exact lane subject on which the Orchestrator judgement relies.",
       { lane_sha: laneSha, supplied_sha: requestedSha },
     );
   }
@@ -2036,11 +2036,11 @@ async function laneCollect(
     );
   }
 
-  // The judged comparison point must be the exact integration head the Caller
+  // The judged comparison point must be the exact integration head the Orchestrator
   // judged against, and that head must be contained in the judged lane subject.
   // Any mismatch stops before collection mutation: a stale subject is
   // synchronized with current integration, and an unchanged subject whose
-  // comparison point moved is returned for new review and Caller judgement.
+  // comparison point moved is returned for new review and Orchestrator judgement.
   const subjectContainsIntegration = await isAncestor(
     controlRepository(repo),
     integration.tip,
@@ -2121,7 +2121,7 @@ async function laneCollect(
       };
     }
     const warnings = [
-      "lane was stale; it was reconciled to a new exact subject that needs review and Caller judgement before collection",
+      "lane was stale; it was reconciled to a new exact subject that needs review and Orchestrator judgement before collection",
     ];
     const telemetryWarning = await recordEvent(task, "lane-collect", "success", {
       lane_id: laneId,
@@ -4737,7 +4737,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_op",
     label: "Collab operation",
-    description: "Operate Caller-gated lanes and the task-local integration, or inspect its status.",
+    description: "Operate Orchestrator-gated lanes and the task-local integration, or inspect its status.",
     parameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const method = String(request.method ?? "");

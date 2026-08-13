@@ -22,7 +22,8 @@ message revokes or replaces it, or the task is archived. Move it intact to the r
 date and reason. Keep overlapping orders separate: the newest governs addressed points and all
 other in-force clauses remain. Ask whether an ambiguous new order narrows or replaces an old one.
 
-**Apply the Envelope.** Out-of-envelope decisions cite the frozen Envelope slot.
+**Apply the Envelope.** Out-of-envelope decisions follow the task record's `Envelope` pointer to its
+frozen artifact and cite that artifact, not the pointer slot itself.
 
 **Mutate from user authority.** A custody change requires either a current user message or an
 in-force task-scoped user grant that names that mutation and whose conditions hold. The record

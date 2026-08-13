@@ -22,7 +22,7 @@ A durable behavior test protects a complete promise at a deep Module Interface. 
 
 A **probe** asks a question. Every test outside `probe/` keeps a promise, and a reviewer judges it as one.
 
-A probe covers exploration, diagnosis, instrumentation, provisional fixtures, adapters, or an uncertain red, and may inspect internals while answering its question. Probes live under `probe/<ticket-id>/` at the root of the repository under work — not in the task record — and the writer creates the directory the first time it writes one. Scaffolding stands outside the building and comes down before handover, so location carries the identity and it survives rework rounds and a change of writer.
+A probe covers exploration, diagnosis, instrumentation, provisional fixtures, adapters, or an uncertain red, and may inspect internals while answering its question. Probes live under `probe/<ticket-id>/` at the root of the repository under work — not in the task record — and the writer creates the directory the first time it writes one. Scaffolding stands outside the building and comes down before the ticket closes — not at each handover — so location carries the identity and it survives rework rounds and a change of writer.
 
 Promotion is a rewrite. A test leaving `probe/` asserts through the Interface and meets the durable standard above.
 

@@ -1,7 +1,6 @@
 ---
 name: candidate-backlog
 description: Capture evidence-backed discoveries that are valuable but outside the current task into a repo-local candidate backlog, without expanding scope or avoiding current-task obligations. Also use when planning work in an area (check its inbox first) or when the user asks what is worth doing next.
-skill_version: 6
 ---
 
 # Candidate Backlog

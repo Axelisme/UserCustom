@@ -3,7 +3,7 @@
 S0 runs as a four-stage sequence — Need, Design, Slicing, Triage — in that order; each stage's
 output is what the next stage designs, slices or triages. Read this before wayfinding, spec, or
 ticket admission. Whether a task may skip the sequence is decided in
-[SKILL.md](../SKILL.md#s0--design-admission), not here.
+[SKILL.md](../SKILL.md#s0--design-admission-need--design--slicing--triage), not here.
 
 ## Need
 
@@ -17,9 +17,12 @@ through the production path. Evidence may be an automated test, instrument, manu
 captured artifact; it exercises the shipped entrypoint rather than a stand-in that can pass while the
 production path stays broken. Purely editorial or organizational work may have no production path.
 
-Record the agreed envelope in the task record's `Envelope` section, or point that section at the
-artifact that carries it (for example a frozen `spec.md`). This exact boundary lets downstream
-Implement and Acceptance distinguish current work from out-of-envelope findings.
+Record the agreed envelope — the task's out-of-scope boundary: what belongs to this task at all, as
+against a ticket's own scope, which its Outcome and Acceptance already carry — into one frozen
+artifact (for example a frozen `spec.md`). Point the task record's `Envelope` section and every
+ticket's envelope field at that artifact; neither record holds the boundary text itself. This exact
+boundary lets downstream Implement and Acceptance distinguish current work from out-of-envelope
+findings.
 
 Need is complete when the smallest need, expected result, agreed envelope, and applicable
 production-path validation have one exact landing point.

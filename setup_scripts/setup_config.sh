@@ -82,7 +82,6 @@ done
 
 for relative in \
   .pi/agent/settings.json \
-  .pi/agent/subagents.json \
   .pi/acp.json \
   .codex/AGENTS.md \
   .pi/agent/APPEND_SYSTEM.md; do

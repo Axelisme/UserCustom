@@ -11,12 +11,12 @@ meaningful seam; otherwise use focused direct checks.
 
 Run typechecking and focused tests regularly, then the applicable full suite at the end.
 
-When independent review is requested, the Caller selects generic /collab Acceptance or specialized
-/code-review as alternatives. Bind either review to the fixed candidate required by that procedure.
+When independent review is requested, use /code-review, binding it to the fixed subject that
+procedure requires.
 
 Commit, land, or otherwise mutate repository history only with applicable user authority; otherwise
-return the validated candidate without forcing persistence.
+return the validated subject without forcing persistence.
 
 Implementation is complete when every supplied spec or ticket criterion is accounted for, every
 changed path is characterized, every applicable check and outcome is recorded, and unresolved
-blockers or residual risks are reported with the fixed candidate.
+blockers or residual risks are reported with the fixed subject.

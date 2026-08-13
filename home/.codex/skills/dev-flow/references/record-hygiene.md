@@ -11,7 +11,7 @@ Everything else already has a home, so compaction is a **move**, never a rewrite
   the order. Its INDEX entry keeps the verbatim quote, exact pointer, and lapse condition.
 - Lapsed orders move to `artifacts/standing-orders-lapsed.md`, whole and verbatim.
 - Evidence that must outlive a past gate belongs to one gate-owned artifact.
-- Durable validation commands, results, and candidate identities belong to one general task artifact;
+- Durable validation commands, results, and subject identities belong to one general task artifact;
   a later judgement points to it only when needed. Cheap reproducible observations may remain in the
   terminal handoff instead.
 - The filesystem under `artifacts/` is the artifact inventory; a second inventory drifts.

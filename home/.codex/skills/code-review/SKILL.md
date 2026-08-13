@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: "Caller-selected specialized review of one fixed Git candidate on separate Standards and Spec axes, or advisory review of dirty work in progress. Use when the Caller explicitly chooses this procedure."
+description: "Specialized review of one fixed Git candidate on separate Standards and Spec axes, or advisory review of dirty work in progress. Use when a specialized Standards + Spec report on a fixed point in history is needed."
 ---
 
 Two-axis report over one pinned subject and one pinned comparison base:

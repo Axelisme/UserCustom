@@ -25,7 +25,6 @@ INSTALL_DIRECTORIES = (
 )
 INSTALL_FILES = (
     Path(".pi/agent/settings.json"),
-    Path(".pi/agent/subagents.json"),
     Path(".pi/acp.json"),
     Path(".codex/AGENTS.md"),
     Path(".pi/agent/APPEND_SYSTEM.md"),

@@ -99,7 +99,7 @@ class TaskRecordTests(unittest.TestCase):
                 listed = self.assert_ok(run_plan(root, "list"), "list")
 
                 self.assertEqual(snapshot(root), before, "list must not write")
-                self.assertEqual(listed["record_version"], None)
+                self.assertNotIn("record_version", listed)
                 self.assertEqual(listed["location"], "active")
                 self.assertEqual(listed["records"], [])
 

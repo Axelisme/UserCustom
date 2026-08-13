@@ -21,7 +21,11 @@ Task created.
 Write or select the first ticket.
 
 ## Envelope
-<!-- Record the frozen minimum need, usage boundaries, and out-of-envelope cases, or point to the owning artifact. Keep inferred constraints, policy, and acceptance claims out. -->
+<!-- The task's out-of-scope boundary: what belongs to this task at all, distinct from a ticket's own
+     scope, which its Outcome and Acceptance already carry. The authoritative text lives in one frozen
+     artifact (for example a frozen `spec.md`); this section holds only a pointer to it, never the
+     text itself. Every ticket carries the same pointer. Keep inferred constraints, policy, and
+     acceptance claims out. -->
 Not yet recorded.
 
 ## Standing orders

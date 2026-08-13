@@ -16,7 +16,7 @@ Durable task state and agent collaboration are separate choices.
 
 - **No durable record needed** — one session, or a handful you're happy to re-orient by hand. Take the **main flow** below. Its artifacts are a spec and some tickets wherever this repo tracks work; nothing else persists.
 - **Durable record needed** — the work must survive compaction and handoff. Start at **`/dev-flow`**, which owns the sole task record under `.agent_state/plans/<task-id>/` and transcribes producer artifacts into it.
-- **Delegated implementation needed** — use **`/collab`** with either branch above. It owns writer-placement and generic-Acceptance guidance without creating another lifecycle store; specialized code-review remains an alternative procedure.
+- **Delegated implementation needed** — use **`/collab`** with either branch above, when the work should run with a placed writer and an independent acceptance step outside your own context; reach for **`/code-review`** directly instead when only a specialized Standards + Spec report is needed, not full delegation.
 
 Everything below describes the main flow. `/dev-flow` documents durable state; `/collab` documents lightweight agent collaboration.
 
@@ -33,7 +33,9 @@ The route most work travels. You have an idea and want it built.
    - **Yes** → **`/to-spec`** (turn the thread into a spec), then **`/to-tickets`** to split it into tracer-bullet tickets, each declaring its **blocking edges**. Where those land is repo-specific: if CLAUDE.md / AGENTS.md documents an issue tracker, the edges become native blocking links and any ticket whose blockers are done can be grabbed; otherwise they're one file per ticket under `.scratch/<feature>/issues/`, worked blockers-first by hand. Either way, kick off **`/implement`** per ticket, **`/clear`ing context between each one**. Each ticket is self-contained, so the last one's context is disposable.
    - **No** → **`/implement`** right here, in the same context window.
 
-   Either way, **`/implement`** builds each ticket with validation suited to its intent. Select **`/tdd`** when a behavior warrants a red-first loop at a meaningful seam. For independent review, the Caller chooses either generic **`/collab`** Acceptance or specialized **`/code-review`** (Standards + Spec) against a fixed candidate. Commit or landing remains subject to applicable user authority. Reach for `/tdd` or `/code-review` directly when only that procedure is needed.
+   Either way, **`/implement`** builds each ticket with validation suited to its intent. Select **`/tdd`** when a behavior warrants a red-first loop at a meaningful seam. For independent review, reach for **`/code-review`** when you need a specialized Standards + Spec report on a fixed point in history, or run the work through **`/collab`** when you want delegated implementation with review built into its flow. Commit or landing remains subject to applicable user authority. Reach for `/tdd` or `/code-review` directly when only that procedure is needed.
+
+   **Which of `/implement` or `/collab` fits a given ticket?** A dispatched ticket takes one of the two peer paths; the full criterion for which one lives in [`/dev-flow`](../dev-flow/SKILL.md#routing-to-implement-or-collab), which owns the dispatch decision. The agent recommends; the user decides. If the two ever disagree, dev-flow wins.
 
 ### Context hygiene
 

@@ -50,7 +50,6 @@ def seed_source(base: Path) -> tuple[Path, Path]:
         "home/.codex/AGENTS.md",
         "home/.pi/agent/APPEND_SYSTEM.md",
         "home/.pi/agent/settings.json",
-        "home/.pi/agent/subagents.json",
         "home/.pi/acp.json",
     ):
         target = source / relative

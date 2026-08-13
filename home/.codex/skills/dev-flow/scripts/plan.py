@@ -38,9 +38,6 @@ def emit(operation: str, *, ok: bool, **values: object) -> None:
     body: dict[str, object] = {
         "ok": ok,
         "operation": operation,
-        # Retained for compatibility with callers of the previous envelope. The current
-        # frontmatter deliberately has no record-version field.
-        "record_version": None,
     }
     body.update(values)
     print(json.dumps(body, ensure_ascii=True, separators=(",", ":")))

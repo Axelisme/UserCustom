@@ -1,151 +1,63 @@
 ---
 name: grove
 description: >
-  Structural code navigation via the grove CLI — outline a file, find a symbol,
-  read one symbol's body, find callers, map a directory's dependency graph,
-  go-to-def, and syntax-check after an edit. The first move for a where-is /
-  what's-in / who-calls question about a named symbol, in any language grove has
-  a grammar for.
+  Structural navigation for named code symbols and relationships. Use first to
+  locate or read definitions, outline a code file, trace callers, resolve a
+  usage, map a small dependency surface, or syntax-check an edited file.
 ---
 
-# grove
+# Grove
 
-grove is the canonical procedure for **structural** code navigation: it parses
-with tree-sitter, so it answers about definitions and their relationships rather
-than about text. `grep`/`rg`/`read` remain the tools for text.
+Use **Grove for structure** and `rg` / `read` / the shell for **text**. Grove
+parses definitions and relationships; text tools find literals, data, paths, and
+non-code.
 
-## grove for structure, shell for text
+## Navigate
 
-They are **partners**. Combining them is often the shortest path to a grounded
-answer — both use 1-based lines over the same bytes.
+1. **Classify the target.** A symbol, definition, caller, usage, or code-file
+   structure is Grove work. A string, log message, config value, flag, path, or
+   prose is text work. Classification is complete when the target is either a
+   named code relationship or a literal/file fact.
 
-**Reach for grove when the target is a named symbol or a structural relationship.**
-If the prompt names a file, a function / class / type, or asks "where is", "who
-calls", "what's in", "how does this connect" — grove answers precisely and
-token-cheap, and returns a stable id to pass forward.
+2. **Start narrow.** Take the first matching row:
 
-**Reach for the shell when grove can't see the target — it is the right tool, not
-a fallback:**
+   | Goal | First move | Complete when |
+   |---|---|---|
+   | Read a named symbol | `grove symbols <root> --name <name>` → `grove source <id>` | The exact match's body is read |
+   | Inspect an unfamiliar code file | `grove outline <file>` → `grove source <id>` for relevant entries | The relevant definitions, not the whole file, are read |
+   | Find call sites | `grove callers <name> -d <root>` | Every returned site relevant to the question is accounted for |
+   | Resolve an identifier at a usage | `grove definition --at <file:line:col>` | The scope-aware target is identified |
+   | Find definitions by exact name | `grove definition <name> -d <root>` | Candidate definitions are identified and ambiguity is resolved |
+   | Map relationships in a small area | `grove map <small-dir>`; add `--kind` or `--name` when known | The requested dependency surface is covered |
+   | Syntax-check an edited file | `grove check <file>` | Grove reports no `ERROR` or `MISSING` nodes |
 
-- **Text, not a symbol** — a string literal, a log or error message, a config
-  key, a constant's *value*, a flag, a `TODO` → `grep -rn` / `rg`. grove finds
-  named definitions; it has no text search.
-- **Non-code or unparsed files** — Makefiles, `*.conf`, YAML / JSON data, docs →
-  `grep` / read.
-- **A quick fact** — does a path exist, list a dir, count lines, find files by
-  name → shell. A grove round-trip to confirm one line is wasted motion.
+3. **Follow evidence.** Pass IDs from `symbols` or `outline` into `source`. If
+   `rg -n` found a usage, pass its 1-based position to `definition --at`.
+   Continue only through symbols or relationships needed by the question. Stop
+   when every structural claim is grounded by a symbol body or file-and-line
+   location.
 
-**Combine:** `rg -n '<text>'` finds the line a call site sits on → `grove
-definition --at <file:line:col>` resolves what it refers to.
+`grove source <file> <name>` is convenient when the file and unique name are
+known. Prefer `source <id>` for overloads. `--name` is exact and
+case-insensitive; add `--name-contains` only for deliberate fuzzy exploration.
 
-## Pick the verb from what you are doing
+## Keep the query tight
 
-Take the first row that matches. Each row is the whole move, and `rg` and the
-shell hold rows of their own — partners here, not fallbacks.
+- `outline` grows with the file. When a name is known, query `symbols` directly.
+- `map` emits every definition and outgoing reference in its scope. Keep the
+  directory small and filter known names or kinds.
+- `--json` provides machine-readable output. `outline --detail 0|1|2` changes
+  JSON detail only.
+- A symbol ID contains a cwd-relative path. Resolve it only from the cwd that
+  produced it. Across agents or worktrees, pass an absolute file path and symbol
+  name instead.
+- `grove check` is a parser check, not a substitute for the repository's tests.
 
-| You are trying to… | Command |
-|---|---|
-| read a symbol whose **name** you already have | `grove symbols <dir> --name <X>` → `grove source <id>` |
-| see what a **file** holds, with no symbol in hand | `grove outline <file>` |
-| find every **call site** of a name | `grove callers <name> -d <dir>` |
-| resolve what a name **refers to** at a position | `grove definition <name> -d <dir>`, or `--at <file:line:col>` — scope-aware, follows imports across files |
-| find **text** — a string, log line, config key, a constant's *value*, a flag | `rg -n '<text>'` |
-| confirm a **quick fact** — path exists, list a dir, count lines | shell |
-| check a file you just **edited** | `grove check <file>` |
+## Branches
 
-A dispatched ticket names the symbols it admits, so row 1 is the usual entry: go
-from the name straight to the body, and read no file whole. `--name` is exact by
-default; `--name-contains` is for deliberate fuzzy exploration.
-
-`grove source <file> <name>` returns the same body as the id does; the id pins
-the exact match when a name is overloaded. An id reads
-`<lang>:<path>#<name>@<line>`, line 1-based.
-
-**An outline grows with the file.** A 271-definition file outlines to ~30KB —
-affordable once, ruinous per file. When the outline is the expensive part of the
-answer, you already know enough to take row 1 instead.
-
-**`grove map <dir>` needs a small directory.** It returns every definition with
-its outgoing references, so on a large subsystem it costs more than the reads it
-replaces — one application directory measured 183KB in a single call. Reach for
-it when the directory is small *and* the question is genuinely architectural.
-
-`--json` on any verb gives machine-readable output. `--detail 0|1|2` adjusts
-**JSON verbosity only** — it does not shrink the human table.
-
-**An id is cwd-relative.** Its path is relative to the directory the query ran
-in, and absolute only when the target lies outside that directory. The same id
-therefore names a *different file* when resolved from a different cwd — including
-another worktree of the same repo, where it resolves silently and returns that
-tree's copy. Keep ids inside the session that produced them; hand another agent
-an absolute `grove source <file> <name>` instead.
-
-## Trace a value's shape (dynamically-typed code)
-
-grove has no type system, so on Python / JS reconstruct a parameter's shape with
-a short backward slice:
-
-1. `grove symbols <dir> --name <fn>` → `grove source <id>` — read the signature
-   and name the parameter of interest.
-2. `grove callers <fn> -d <root>` — every call site, each with its enclosing
-   function, so you don't grep for it.
-3. `grove source <enclosing-id>` — read **how the argument is constructed**. When
-   it comes from a constructor, factory, or import binding, resolve that name too
-   (`grove symbols --name <Ctor>` → `source`) and merge its field assignments
-   with any caller-side mutations.
-
-On statically-typed code step 1 is usually the whole answer — the type is already
-in the signature.
-
-## Empty output has three causes that look identical
-
-`symbols` prints `0 symbols` and exits 0 whether the symbol is genuinely absent,
-the language has no grammar, or the grammar carries no tags query. Nothing in the
-output separates them, so rule the last two out before reporting that a symbol
-does not exist.
-
-**Is the language in the registry?**
-
-```sh
-grove languages       # what the registry holds, and the extensions each claims
-grove fetch <lang>    # add a missing one
-```
-
-Grammars land in the OS cache (`~/.cache/grove/grammars`), shared by every repo
-and worktree on the machine, so one fetch serves all of them. The catalog does
-not cover every language — Lua and TOML have no grammar in it at all.
-
-**Does that grammar extract symbols?** Eleven of the catalog's twenty-seven
-languages parse but tag nothing, so `check` passes on a file `outline` reports as
-empty, and `fetch` cannot fix it. **`bash` is one of them** — along with css,
-html, json, regex, jsdoc, agda, haskell, julia, verilog, and embedded_template.
-Confirm rather than assume:
-
-```sh
-grep -l "^; no upstream tags query" ~/.cache/grove/grammars/*/tags.scm
-```
-
-A file in one of those languages is shell work. Reach for `rg` on the function
-name; a deeper grove query has nothing to find.
-
-Genuinely partial body → read the file with `offset` / `limit` taken from
-`grove outline --detail 2 --json`.
-
-## Setup
-
-Two things must exist: the `grove` binary and its grammars. `grove init` wires up
-an MCP server and is **not** needed for CLI use — the CLI resolves grammars from
-the OS cache with no per-project file at all.
-
-If `grove --version` fails, hand the user these to run; a global install and a
-network download are their call, not the agent's:
-
-1. `curl -fsSL https://raw.githubusercontent.com/Entelligentsia/grove/main/install.sh | sh`
-   (or `npm i -g @entelligentsia/grove`)
-2. `grove fetch` — every grammar in the catalog, once per machine.
-
-In Claude Code they can run either inline by typing `! <command>`.
-
-`grove doctor` defaults to MCP mode and reports missing `.mcp.json` / `CLAUDE.md`
-/ `grove.lock` as failures. For CLI use only `registry_root` and `grammar_cache`
-matter; the rest is noise.
+- **Dynamic shape:** When a Python or JavaScript value's fields must be inferred
+  from construction and mutation, read [VALUE-SHAPES.md](VALUE-SHAPES.md).
+- **Empty or partial result:** Before reporting a missing symbol or trusting an
+  incomplete body, read [RESULT-LIMITS.md](RESULT-LIMITS.md).
+- **Unavailable:** When the binary or target grammar is unavailable, read
+  [SETUP.md](SETUP.md).

@@ -1,0 +1,22 @@
+{
+  "lockfileVersion": 1,
+  "plugins": {
+    "calculator": {
+      "repo": "https://github.com/rochacbruno/DankCalculator",
+      "commit": "1db5865419a40a33171a475855a59e0b8bf7187f"
+    },
+    "codexBar": {
+      "repo": "https://github.com/zakstam/dms-codexbar",
+      "commit": "e6bde0e4ebfa38fedf26038314353e666eb286af"
+    },
+    "dankKDEConnect": {
+      "repo": "https://github.com/AvengeMedia/dms-plugins",
+      "path": "DankKDEConnect",
+      "commit": "e8c36175a1a8ee4718df5d8ef60d105add94f33e"
+    },
+    "dankscale": {
+      "repo": "https://github.com/dwright134/dms-dankscale",
+      "commit": "bddebf0e2935ba23b0614ff9af5bf8f4ed6d3d9f"
+    }
+  }
+}

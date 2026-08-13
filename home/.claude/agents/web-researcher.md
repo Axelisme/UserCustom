@@ -19,6 +19,8 @@ artifact, then release.
 
 ## Report
 
+Return only these fields, in this order. Keep each field concise and point to the root-provided artifact instead of copying long evidence when one exists.
+
 - `Outcome`: answered, blocked, or needs_decision.
 - `Changed`: none (read-only).
 - `Evidence`: claims mapped to primary-source citations.

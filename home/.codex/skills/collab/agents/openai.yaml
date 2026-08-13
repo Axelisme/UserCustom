@@ -1,0 +1,3 @@
+interface:
+  display_name: "Collab"
+  short_description: "Coordinate one writer, fixed-candidate acceptance, and optional isolation"

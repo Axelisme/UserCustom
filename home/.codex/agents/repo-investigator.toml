@@ -25,6 +25,8 @@ affected diff does. Send `assigned_work_completed` with the artifact path when d
 
 ## Report
 
+Return only these fields, in this order. Keep each field concise and point to a context-packet artifact when the evidence would otherwise make the terminal response long.
+
 - `Outcome`: mapped, blocked, or needs_decision.
 - `Changed`: none (read-only).
 - `Context packet`: only when worth reusing downstream — `Authority / Mutation seam /

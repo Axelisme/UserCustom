@@ -1,55 +1,18 @@
-"""Isolated-HOME fixtures shared by setup_config.sh Contract tests."""
+"""Isolated-HOME fixtures for setup_config.sh tests."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
-import re
-import shlex
 import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 SETUP_SCRIPT = ROOT / "setup_scripts/setup_config.sh"
-PROFILE_LAYOUTS = {
-    "codex": Path(".codex/agents"),
-    "claude": Path(".claude/agents"),
-    "pi": Path(".pi/agent/agents"),
-}
 ORDINARY_FILES = {
     "home/.config/shipped.conf": "shipped config\n",
     "home/.local/include/shipped.h": "/* shipped */\n",
 }
-
-
-def _script_array(name: str) -> tuple[str, ...]:
-    match = re.search(
-        rf"(?m)^{re.escape(name)}=\(([^)]*)\)", SETUP_SCRIPT.read_text(encoding="utf-8")
-    )
-    if match is None:
-        raise AssertionError(f"setup_config.sh no longer declares {name}")
-    return tuple(shlex.split(match.group(1)))
-
-
-def managed_skill_layouts() -> tuple[Path, ...]:
-    return tuple(Path(entry) for entry in _script_array("CURRENT_SKILL_LAYOUTS"))
-
-
-def active_skill_names() -> tuple[str, ...]:
-    return _script_array("ACTIVE_LIFECYCLE_SKILLS")
-
-
-def retired_skill_names() -> tuple[str, ...]:
-    return _script_array("RETIRED_LIFECYCLE_SKILLS")
-
-
-def shipped_profile_relatives() -> tuple[Path, ...]:
-    relatives: list[Path] = []
-    for layout in PROFILE_LAYOUTS.values():
-        for path in sorted((ROOT / "home" / layout).iterdir()):
-            if path.is_file():
-                relatives.append(layout / path.name)
-    return tuple(relatives)
 
 
 def run_setup(
@@ -75,6 +38,7 @@ def seed_source(base: Path) -> tuple[Path, Path]:
     for relative in (
         "home/.codex/skills",
         "home/.pi/agent/skills",
+        "home/.pi/agent/extensions",
         "home/.claude/skills",
         "home/.codex/agents",
         "home/.pi/agent/agents",
@@ -86,6 +50,8 @@ def seed_source(base: Path) -> tuple[Path, Path]:
         "home/.codex/AGENTS.md",
         "home/.pi/agent/APPEND_SYSTEM.md",
         "home/.pi/agent/settings.json",
+        "home/.pi/agent/subagents.json",
+        "home/.pi/acp.json",
     ):
         target = source / relative
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -96,20 +62,6 @@ def seed_source(base: Path) -> tuple[Path, Path]:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
     return source, home
-
-
-def seed_managed_retired_links(source: Path, home: Path) -> tuple[Path, ...]:
-    destinations: list[Path] = []
-    for layout in (*managed_skill_layouts(), Path(".claude/skills")):
-        for skill in retired_skill_names():
-            shipped = source / "home" / layout / skill
-            if not shipped.exists():
-                continue
-            destination = home / layout / skill
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.symlink_to(shipped)
-            destinations.append(destination)
-    return tuple(destinations)
 
 
 def snapshot_home(home: Path) -> dict[str, tuple[str, bytes | str | None]]:

@@ -1,26 +1,35 @@
 # Dev-flow — conditional route
 
-Which producer applies, and when `archive` is appropriate. That dev-flow transcribes producer output
-and the producers never write into the record is in [SKILL.md](../SKILL.md#one-task-record); this
-file states only the routing decisions.
+Which planning owner applies, and when `archive` is appropriate.
 
 **Wayfinder is user-invoked** — while the route to a durable destination is not yet clear, say so and
 ask the user to run `/wayfinder`; do not attempt to start it on their behalf.
 
-Use to-spec before a landed change, unless it inherits a frozen contract (mark it inherited, refined,
-or contradicted) or the delivery itself is text.
+Use to-spec when the task or Caller needs a frozen implementation contract; landing alone does not
+create that need, and `spec: none` remains valid. When selected inside a dev-flow task, publish the
+producer-format spec under that task's `artifacts/` directory and set its INDEX spec pointer; to-spec
+still owns the spec format. If an external repository tracker is explicitly in use, link its spec
+from the record instead.
 
-Use to-tickets when work will be dispatched through an admission gate; Root completing work in one
-context still records a generic ticket but does not need to-tickets.
+Use to-tickets when multiple dispatched slices need explicit dependency edges; Root completing work
+in one context still records a generic ticket but does not need to-tickets. Inside a dev-flow task,
+keep the to-tickets producer artifact under `artifacts/`, then transcribe approved work into separate
+conforming dev-flow lifecycle tickets under `tickets/`, each producer ticket's `Blocked by:` edges
+landing in the lifecycle ticket's `depends_on` field. Each lifecycle ticket points to the producer
+artifact when one exists; producer-format tickets never occupy the lifecycle-ticket path parsed by
+`locate`. If an external repository tracker is explicitly in use, link those issues from the record
+instead.
 
-A handoff is a decision-authority transfer event, not a route stage, and the record continues to own
-implementation work after it.
+A handoff routes and guides rather than transferring factual authority or forming a route stage. The
+record continues to own implementation work after it. For a handed-off Dev-flow task, start from the
+active guidance, `INDEX.md`, and handed-off ticket, then follow only current-work pointers. If those
+sources cannot name the next action, maintain them rather than inferring focus from a broad scan.
 
-**Orchestrate derives no task narrative.** It consumes task and ticket IDs and owns Git and runtime
-coordination; it never infers what a task is about, what stage it reached, or why. An orchestrate
-command that appears to know the plan is reporting something a human wrote down — treat narrative
-read out of Git state as absent, not as a second opinion.
+**Collab derives no task narrative.** It consumes bounded intent and Acceptance criteria, then
+coordinates Implement and Acceptance; follow its guidance when writer placement is in question.
+Review evidence identifies its fixed subject separately. Handoffs and collaboration evidence never
+say what the task means, what durable stage it reached, or why; point back to this record instead of
+creating a second status store.
 
-`archive` is a neutral directory move and never implies completion, but use it only after
-implementation completes or the task is explicitly abandoned; a handoff alone does not qualify.
-Final close-out follows orchestrate's S5.
+`archive` is a neutral directory move and never implies completion. Root reconciles the evidence and
+close-out in the task record before moving it, whether work completed or was abandoned.

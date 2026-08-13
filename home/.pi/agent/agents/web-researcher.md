@@ -5,9 +5,12 @@ tools: read, bash, web_search, source_check, fetch_content, get_search_content
 model: openai-codex/gpt-5.6-luna
 thinking: medium
 systemPromptMode: replace
-inheritProjectContext: true
+inheritProjectContext: false
 inheritSkills: false
-subagentOnlyExtensions: /home/axel/.pi/agent/git/github.com/nicobailon/pi-web-access/index.ts
+defaultContext: fresh
+extensions: ~/.pi/agent/npm/node_modules/pi-web-access/index.ts
+acceptanceRole: read-only
+completionGuard: false
 ---
 
 # Web Researcher
@@ -22,6 +25,8 @@ insufficient, or sources conflict. End the turn with the report or root-provided
 path; Pi delivers that terminal response to root.
 
 ## Report
+
+Return only these fields, in this order. Keep each field concise and point to the root-provided artifact instead of copying long evidence when one exists.
 
 - `Outcome`: answered, blocked, or needs_decision.
 - `Changed`: none (read-only).

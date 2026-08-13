@@ -1,0 +1,607 @@
+{
+  "documents": {
+    "SKILL.md": {
+      "bytes": 10907,
+      "sections": {
+        "Exceptions to the main sequence": "c0cf5576eac5f3afed6085797bb90be76b5d303fc8453e4a78440ac614cd9b36",
+        "Minimum complete lifecycle": "8c9f678f52886a20b8b4a968f88e654e31a80136650aaa748f3ac5592b1529ef",
+        "Observation and wall-clock facts": "d58e81e467720b64ca20eec200f40ce37bb631cc71d6bc8e3639c237d999f63c",
+        "Orchestrate": "4af77a3eca34085f022bc45eeeed70ffc09e3fe8267896e7916e9828aaa71b82",
+        "Orienting": "5cc687222537cf97672f78fe017d3f59d898aabe6a4d2600e8a9fcd6a5931253",
+        "Package administration": "0fde1eb2b0ccf0bf61bc1bd27b53e2c8a8480e64679339454986eec2004ae69f",
+        "Runtime and authority boundaries": "788606e3f281485743e0bdb282dbc0f47f248ed80a8fe49a893854c7151f5dac",
+        "Step 1 \u2014 Create integration": "1223934ff2f484669db88af21b7479d16a743588266a0f106c0271b609723500",
+        "Step 2 \u2014 Create lane": "1cef15aa5bfb8f08d6f29334341b100e024bec2622ea4c84197e30ed096ab699",
+        "Step 3 \u2014 Execute Contract": "c5dfdcd41ed10a4135a34a361ee6506dfe610fe74446fc15eaa00b75d5c9bfc4",
+        "Step 4 \u2014 Sync lane": "8fccb68e62bab760fe2c0d03b70b16324441f7a83565932483975c5f42e75f10",
+        "Step 5 \u2014 Collect lane": "a278cb6c0d6a0c62ac8c77ce263f05fef0a770656577e1a30b472eda702867aa",
+        "Step 6 \u2014 Start acceptance": "896716c5c63f01d5bdeb1ed451d44ed620bdc8014eb8dc68c6f6b9835e127c69",
+        "Step 7 \u2014 Validate and accept": "cd49391afa03686f33e88e01082bfab73c7490ccced38d8e177c044b0eeff95b",
+        "Step 8 \u2014 Land": "363a5472588c3ec4cec9715a794007568602822ed2081d29500010525fe7b61e",
+        "Step 9 \u2014 Remove task": "83a2e62bc1b2ed6304ad758b1192357956d1bfd482f932d4227d5b826f36e48d"
+      },
+      "sha256": "35b6e0e08bb165e0334c10a63e85a0212aa6acca9c950516bbebeabc3ee23f88"
+    },
+    "migrations/155.md": {
+      "bytes": 3235,
+      "sections": {
+        "Migrate to Orchestrate v155": "8c706a8f9561cc7c839687db5f2aa2ef1adbc0a2b0895ec60eb7c4e51b5cce08",
+        "Preserved mechanisms": "d03e58b738e36808e9baad809e9afa363465acfe28b0e0a10b80bb3b7fea4b9c",
+        "Restatements collapse": "caaf0c8f60cdc19700d68954cd2da222627c4af02332598ed783fb085d615d20",
+        "S1\u2013S5 move here from the shared admission standard": "ab70fc2f7a75afbb79b3e9a47746ec8073606311f0cd2b8a8e0b0b63e47833fe",
+        "The production-diff line limit is removed": "5dc0aa8bddcea4b19594a831c7a2bb15517a2c1c86f4badc588aec0b2fc92707",
+        "`contract-reviewer` is now bound": "5295b684fc733dafd1cda753dc841571b7170da012a58ee41f2367771d5db6e7"
+      },
+      "sha256": "ac48f531e202a76fe74c3132294b95f6b522d0fc7b12358ca1d828a7f82e81b2"
+    },
+    "migrations/156.md": {
+      "bytes": 4457,
+      "sections": {
+        "Bundled history starts at v141": "18d5e6d068b483dac8cb9d49094a9c8af5068df762bd3b747493666b830c6457",
+        "Direct lanes were being asked for Contract evidence": "e7cdd31d2384fadb13dece20e218e3e98e81d47c845e08ec8eee858d855dd205",
+        "Migrate to Orchestrate v156": "ddd51cdae339e7e1ac9fbe510efd37a4ec49918cc5fd4a1a6e4bea84259c0d84",
+        "Preserved mechanisms": "b44553e4ad602d34ad92443d93625bdffcb6fd7c27a021a8d95d0890d20225a8",
+        "Removing a document is now possible, and must be declared": "e4b02917cc68aee6c6df8b26df1f461fbc5fbdf402076d234325b537b721da0d",
+        "Restatements and leftovers": "6fe47311b9e30dd71ed445c85eb940f50c02f001db564667ea3bad932d9d774a",
+        "S2 gains a check and renumbers": "0fba8644039faaf6f9b57d8b05d7e650643dbd3891781c1dd8cabff421beba58",
+        "`lane check` reports the Contract commits it walked": "5521d828f6380960baf8b8566bbd58366d9d85c224c062cf26ab66ae2b197ba7"
+      },
+      "sha256": "4e01604e6101a344c5264ab0f36d5023869a0c62b25def155a012cec04abe551"
+    },
+    "migrations/157.md": {
+      "bytes": 2697,
+      "sections": {
+        "Migrate to Orchestrate v157": "82f6cb38c8b0bafcff395ec0c8088b9563139f3052e75bb43a8badacf4637d34",
+        "Preserved mechanisms": "534434e6b314c155428ef5f959675db3e2f741e69d4e8343d41d4b094f0b960c",
+        "The gate script has a home and a guide": "7737d4bd834fa6a5d00edb2e59ef213f9bdb58f0963ba9d3d74e2de87ede118e",
+        "What the guide settles": "875f84259674a648629df5d70ba23f45b10eae3b7adc18bd9c6393e70fcbf6c7",
+        "`lane check` reminds, and only reminds": "ff68274993ac52f0829e6675ae8f1d9ba4d1ad4237b714842bca94a808319d52"
+      },
+      "sha256": "216537b7844e50a38d8e24a3eb0a0c261a1fcb4acda72034b82ca1e2d6e0b03b"
+    },
+    "migrations/158.md": {
+      "bytes": 1577,
+      "sections": {
+        "Migrate to Orchestrate v158": "dba5c8e1baea9d4a150cf0303482cfc98c52f48dd8dd9fb36f2f5c0204c6a24a",
+        "Preserved mechanisms": "b4fea4a3f48f2de8717b15b51760fc49e6e2d6d468809d743abf5247fe053155",
+        "The `lane check` payload is described where it is read": "a74797aaab8e674cefd5538f0568cb5d8d5ce17919511e7e8da4022b4ce11964",
+        "Three restatements collapse": "fc914563d82d2da0730e14ed44ea084ff71a30fc66eb274e29d63cdef04e960e"
+      },
+      "sha256": "33a5ea688ee102a33ca942898f3f4dffc2cbe5295cfb2e306b56ebadb0cddc62"
+    },
+    "migrations/159.md": {
+      "bytes": 3055,
+      "sections": {
+        "Migrate to Orchestrate v159": "f79d33f42f0a1fa665d208ac36b43adb5ee4e4e5b93709359a5383d995686591",
+        "Preserved mechanisms": "4b08b3fb9c391ef9179d48d0eb77f8e929b5ad9d77967b4e399d941b3b4e943e",
+        "Recut is removed": "a78f457e139c79f04c3e6dcd3c7c4050f72aab63d4b71c0ee6e18d8c7cf304fd",
+        "S3's counter becomes an instrument": "511e4a8bb631f5a52476969f5c0552a58d65d6e4f69f6bb5ec1dd6573b4163f1",
+        "What this costs": "2496acc30af91a960fe90f32471849a3817ca1de1d0dced4953abee58092aeef"
+      },
+      "sha256": "b54dced485d864072f7582d8f8e53150bda7fb17d12c19aedb753f9839617ba5"
+    },
+    "migrations/160.md": {
+      "bytes": 3550,
+      "sections": {
+        "A Context Epoch changes a projection, not a context": "2bda61d3834531829154b4ee8be15a35c0a65e033d9f79b6d2f15e207db4a357",
+        "Migrate to Orchestrate v160": "93a530721e432e8240db43423e95ba2a1f8491fa2c1c1da06e434620e3d99cab",
+        "Preserved mechanisms": "ffa4282ae8fd87b40756b8409c1974f4be160a1cb9545fb00ab3956269adb401",
+        "The Pi handoff seed is inline": "90e47fe1090e1ccde30eb8a347f1cc95efd91831e06e478706a53708b287cdb6",
+        "The verified-version sentence is removed": "d120add1df74e1babe2a518f320d741e9f02254af86da823e0e1bf501c016b18",
+        "What this costs": "603cecbff0d7a942d7cfb832873b394e16271260f01889d62337fcf88a7af8bb",
+        "runtime-pi.md stops restating the neutral contract": "bb5fd2e8274571b1969a42c376633a7370082597950ab95081999efa8b415e21"
+      },
+      "sha256": "1badd7f7f60c7311ae9573a4e832f427ea4218f9fc2aed0b24b160890466c957"
+    },
+    "migrations/161.md": {
+      "bytes": 4704,
+      "sections": {
+        "Migrate to Orchestrate v161": "1e129fa9c42000e3eb1247f179b20b1d7bd8ce25418dde88a6dbd71c5ed5b725",
+        "Preserved mechanisms": "1f2a2b6184fecc1d63a2b8b595278e87d9c625acbfbcb44b8b492f0261faa567",
+        "S2.8's depth is measured": "c82589d81cfe758868b3c32ab51896ab38c72f034e638725dab23528ed1f0b15",
+        "S5 says what an unattended run may do": "b16355b5892eeda3ec026b39a427d817535f2f7fc9511fe9e975b05bf27adb3b",
+        "The ticket's Contract is not the lane's Contract": "376930c9c89e20e7f6cc793c9a4abf5b287921275a0bedf438657fe88f62bd55",
+        "Validation mode has one authority": "a608fe6f4f8daa2f65d4f6e8e8eee3b3c68e2a7367ec3188700fbd557c5aea56",
+        "What this costs": "27486cf711d57ba2bc19edceb4e962b4e4d808a7ae08efd12f8c494c75d7defe",
+        "`lane check` is told the mode and can refuse it": "2776038e911996c66d9e548e0ca15a9b85998325b03c4555cab8e09933743dea",
+        "dispatch.md stops restating S2.5": "df048bbeb7f113c3ea909120eed260d5f915ed8426952dd41e3e3097508c584c"
+      },
+      "sha256": "886e099f59612ce8e5cb2a40f6202a3486d3c232d05ad696041cb36999b2711e"
+    },
+    "migrations/162.md": {
+      "bytes": 5707,
+      "sections": {
+        "Correcting v160's migration guide": "5e2fae4dc75ae573aee5ddc36164dc67ea2b10469e1c7f0a1888d5fbd7652135",
+        "Migrate to Orchestrate v162": "4ed4049a070e40ced10b8bfe4635bc96d81204a72fd4ef6ca57f62ae241d5dd0",
+        "One restatement v160 missed": "5bd16f3b7e66c9d57bc79b93098ce6b698e103cd03d9b99e38be4afd97b6235f",
+        "Preserved mechanisms": "010a416d07c16a12b127bca553b9843396440fba73662094f055badaaf0ba9e4",
+        "Silence has its own section, and its own reasoning": "b273e55ac0f0d698755d0f036caa12c8e6feeb94f7f00a924c98654af31b9ad6",
+        "The binding stops restating what the profile enforces": "0b7c8fb56658ded394a6f5e48b887c9cf82c1dfc9f7f77841780d93d6f0651be",
+        "The epoch seed says why it is hand-kept": "ee73f5950082e498f38bd8a02f59d6348fe104b564a4395113ada212ee2d68ea",
+        "What this costs": "cc0b361a958b1819cde1283d598d283ff9793d106af2744d987c5ce8369544a7"
+      },
+      "sha256": "61d8a6f265e5cbb3ec0496647e3324b89eeb8a515f7d3b36334d28bf409e9ae0"
+    },
+    "migrations/163.md": {
+      "bytes": 5849,
+      "sections": {
+        "Migrate to Orchestrate v163": "c14e44840c363682b98759c5271cf9cc82aa517abbea7c164a043697d9d547ee",
+        "Preserved mechanisms": "0ee4efbe8169208a683234e30c1e2a0379e3165b8917fc4ead394dfa0ff0bfae",
+        "The lane's declarations are computed, never typed": "72fa1c5d133478df83803955795a7cab4a5e665f3b3b22cdeac8e260ac734df1",
+        "The worker profile gets the item it was missing": "16c6dbe6c53afff47d7396f7b894a4713caf6c77ab3a739622d7c2c21c20fcc3",
+        "What this costs": "062df6faea0cdfa44522b7d5ab414c209eeece55d14d7bc59c217765e6f87a8f",
+        "Why the unflagged mode refuses instead of declaring for you": "8f95103c74eeeb74597c527c2b60ed85032ca5e99f37887f4c1f0a2cc937002c",
+        "`lane sync` stages the merge and stops": "6159fb39ea3d7ee5d0679b745e80fae2ed562801993e3d9133cc4da10c95e1bf"
+      },
+      "sha256": "9e01714208c92e6990b3411278bfa08d4671bc1a627b008a51768e5b8054afba"
+    },
+    "migrations/164.md": {
+      "bytes": 3605,
+      "sections": {
+        "Migrate to Orchestrate v164": "5d7bac892023a089f1a53bc649fa36ebed54a9cd91f3e7b1666730c7b29aea74",
+        "One sentence that did not parse": "7abb4e645a88e5b58612b41ebb34e922ea241869d461735ed45a1ae2b1492fce",
+        "Preserved mechanisms": "2aa0040a976fa258ccb6199e30477e2bd84b9605e3cd55d96bc0ee45163c4000",
+        "S2.4's list had five items in the profile and four in the standard": "2790035818ab4aa829ebf01df5f32023ee7be511163b67e3ee48a9e56720d6aa",
+        "The ledger can read the events the new verb writes": "9ffb94270239791304562a853f45cd3d2937521a5539954a4f6fc156165aa785",
+        "What this costs": "67805f1fc284fc822f37f0663addc0264b145fdac23a71d93dc892e8345508a8"
+      },
+      "sha256": "fe73aa4cd553850e984bea8a2b632a48edf9ab859c72195566013c1613da46b3"
+    },
+    "migrations/165.md": {
+      "bytes": 5773,
+      "sections": {
+        "Migrate to Orchestrate v165": "ffd8661101c31e54d1d5a60c8e1323f8938754620b145756cb4f723ca6ea9ed5",
+        "Preserved mechanisms": "05c41f349cd22d6f552fbb43f76af3475f0dfbcbdbc6bcfaa17a9ad20023860f",
+        "Two corrections carried in from the v164 audit": "b4939612ce5b5b78f243218be1cfdb17b24b8f95ff596e490ab9e9db9f264539",
+        "Two readers, not three situations": "34ec0316ed9c594bab6ea37095dfa97c9aa38e7390bcb4d47bdb081a067b0672",
+        "What changed": "f7af4dc86f9c59aafa5000557572b9d94e0f292c7232b89bfdb56bb871f55231",
+        "What this costs": "e90fe6ae83f24b777631c45d4a13245bb05bcc9ac0f0f2d25b75fb948d9c1811",
+        "`doctor` now sizes the spine": "b6349ef5d9d90147646af0b6c8900ad3c1a59778c62ea2208f977a7592671534"
+      },
+      "sha256": "18ea2f6eec92dc5684d2d0d15cd4f377456ae47abff58bddaf178da23c67d5cc"
+    },
+    "migrations/166.md": {
+      "bytes": 1189,
+      "sections": {
+        "Active-task impact": "cef5d4c47381471371c667eb632d48a87501366fabcd848cbf471b0f645ec5e1",
+        "Manual steps": "d90e7a455b5791f8080593732a38062daeff3c3aabc354ede0302302926d757d",
+        "Migrate to Orchestrate v166": "abdfa255c17c8fee05b5bcba61c412d35f38dc82b63731de7aea3d0c1e8e2844",
+        "Observable changes": "726ff8da7a690b0519e1bacc176d4df35d0a8a7eeaa3e65b62d4181b0d3ba118",
+        "Purpose": "10452ae21e43e02e476363734fd0998d5115fb385fdf784a5292f8566db48cdb",
+        "Rollback": "8c69ecbf10d6d807b50214df602a29a365ca02f04b80b46191bb0abe5f182375",
+        "Verification": "9a4b8057f6c02a048a51a1c6fe18609627474c1ae3b7fed3d4174b9aa6fb6cb2"
+      },
+      "sha256": "9b5c7161a1f332975ef5690aa64192d80ddd1ad2fc5eb122a90e25f7d2e90e09"
+    },
+    "migrations/167.md": {
+      "bytes": 1577,
+      "sections": {
+        "Active-task impact": "cef5d4c47381471371c667eb632d48a87501366fabcd848cbf471b0f645ec5e1",
+        "Manual steps": "b20612f62a2afdb9ea8736cac47410fc5a68ca7baf9fd18b10cd27d8f7ca93b1",
+        "Migrate to Orchestrate v167": "c5959e17a175835504c46eb9b1e69adf15bc1c0a324e8762a6a111c5668700e4",
+        "Observable changes": "4c8f4109577ee9b4d5fcc50af2d424c01b21c0ae316e512b09184619b6a389be",
+        "Purpose": "11333c93f31d2c6a1cd3aedabafe2d6c0c81e9af161c5137983c20dcfe702328",
+        "Rollback": "620dd5ead61e1771eaec95a91b83302a25e78b1ee14ef6996d916677bc6dd581",
+        "Verification": "07c94bd4bc06ec3324d464d697755b36a9967f1088108bfea0ef5a4865ca4eeb"
+      },
+      "sha256": "f90e6e03dae6445f19d6b5557f17e2562ac4eca308a63dcb0c9e3c8f00d98085"
+    },
+    "migrations/168.md": {
+      "bytes": 2696,
+      "sections": {
+        "Active-task impact": "f47df56bfe669c9d5bd9cd0a7a8da2828d0c8d0bc749684f152ffab369b35389",
+        "Manual steps": "3a5576d421aaca970966eb451cb394602ff1bb03026b69132681cc21bf21d75b",
+        "Migrate to Orchestrate v168": "cee85200ef6dc6220b6a05ffcf46edb0165f5ebda83d306c5c35f9002524781d",
+        "Observable changes": "8a65d538190637d3cc3eed460269eb10f72d48fa77e1f5d8996b7a0045e79cff",
+        "Purpose": "0c0bd81d009e86e5fe666f8094ec9d751eccc4d9e68b498c17b9bf4c6230aa7b",
+        "Rollback": "72b34e808f0e6ea13cf92c7217d1a61b2f46fda9912427624062e61ac98635b0",
+        "Verification": "809ab86a331ddcf9483fbec0a8a0b9994bf6cb94e4ad7ffdbec122c23846ada3"
+      },
+      "sha256": "88bfdc700ec8a1f7825d602353a93a35c0059393a24dd6f657070688e2e26d94"
+    },
+    "migrations/169.md": {
+      "bytes": 2273,
+      "sections": {
+        "Active-task impact": "9083d2f6dcfee68216a1dc628dd840234d75c2500e4480c994af45190b490017",
+        "Manual steps": "28c808ed2a5fa40df02f391faa288242fd4d3857931921378b97eb35e8304341",
+        "Migrate to Orchestrate v169": "4aa05d12596a05d026d7828b01ec73d41ef5fb29e6b340fc020ccd6a196ac459",
+        "Observable changes": "7fffd01e931972ec4a28ac81a7d13198f17e99707ab8e5a1dcc28066ed2a7ffb",
+        "Purpose": "16d6782f99d90fe020eafa50bf10766c74f2084cba89738565b4a41f6d432110",
+        "Rollback": "abb9d4cc30ab64141375d5fb45f0aa42c040720a15c1ca893ec278cd70e484cf",
+        "Verification": "ab5f395309c2c7df63d263dd479801186d2877e8c3c977c5295d619ab66d1d05"
+      },
+      "sha256": "d9844af51969266ec67573555072e48af4d9711409829cd2e74186e0b215204a"
+    },
+    "migrations/170.md": {
+      "bytes": 1886,
+      "sections": {
+        "Active-task impact": "1ddeaff5e68e7a9acf9e9a140160f4215a01d201506e75aca693986bb47bf95e",
+        "Manual steps": "36f25de60ba9604e398f5ed4a864ae25e638d8b86c88e0a9c878bf78904cdb2e",
+        "Migrate to Orchestrate v170": "878f996eeb985c5d6c0a7f5dd2b5e8c24d0d59d617fa89be1bb6a3da6ba4de6a",
+        "Observable changes": "a0244fb66a218a0e913443a25fdf628b55dc0220c09a724d50ddefb54d526c93",
+        "Purpose": "bd2a95a735d5a71ec8deb9c8fbd4009d23637b7092d37b12cc3fc536aa087ae5",
+        "Rollback": "eaccc90058e2ba62d075ae975dd9e4fdbe8164d7450e2b42d23dce516c0b37e1",
+        "Verification": "6ea206f6deaa4713a2dd3bca7f5627f264898de162aea14fd65029c2bb634762"
+      },
+      "sha256": "150970b4e21302cb2e459156216647b5fc1d4b26c5956c8f704f13cb796b1aa3"
+    },
+    "migrations/171.md": {
+      "bytes": 1833,
+      "sections": {
+        "Active-task impact": "6f5ff2fd41c66f36bb99395fabd44118e9db038d56a74d53a9a1a5c51449b680",
+        "Manual steps": "e7f60eb6a6ee3bfd859d6ee36758a7ab6f525e61e83559c8ec8c2c813e35fde8",
+        "Migrate to Orchestrate v171": "5d85be16c04b17ec847a440387f76e72ca29ae4e397b1d01bf69399ec66518c6",
+        "Observable changes": "9aeea32d42cfb4af542b24454d57647fa3a65ed46abb4d82388347faa1fca697",
+        "Purpose": "427e6d4002b28955c49aad7c194ec74985894fbfbdc08e2003cff8cfaf56c0db",
+        "Rollback": "582d5dc3727f45e94806f356923b2d15dcaa27aefccec45698f5792eb8ae0f3a",
+        "Verification": "f50687f1636c9a7da4d7d385fcec52c65a1949f06b587505bf47e19839206f92"
+      },
+      "sha256": "5a1f6d36a0a89c4ae5dab82624bbcf574b5ab5a76fae16f8c0bf0666734495fb"
+    },
+    "migrations/172.md": {
+      "bytes": 1910,
+      "sections": {
+        "Active-task impact": "ad5af6dd3f45ceb18a3d73f243b4945a75cd5915a415da3418560d9acb2e954d",
+        "Manual steps": "94b4c6b6955ace762353edef5b795d0bb5d21dac74da07fd716ccd268cd84939",
+        "Migrate to Orchestrate v172": "0d079e18ee4eea49e8bce1edb9d815fac68b2cb76c4229c72a7800ae42296067",
+        "Observable changes": "d55cf13b305fed28eb998067a407798a402f792861dccee395cb74116f65c6a4",
+        "Purpose": "7a5626e8e67a9f63d42670dad061d5fd6daa5881f0eca8b29f1134ae88a7236e",
+        "Rollback": "4ec0afaf38733a67093d6b2e6817469f3a153a5470c5598f53a29cce6fd693b7",
+        "Verification": "c85a36fe2143e4509ec3de19e10c21c2bcba7acacd279fc10f1dbee208a3bc96"
+      },
+      "sha256": "533c428213afae30f28a581fb41f802393a566052a016d46c8b9f7b67594dd75"
+    },
+    "migrations/173.md": {
+      "bytes": 1415,
+      "sections": {
+        "Active-task impact": "ca1a38c85c22a726c529a488372ed18fc34ddeb654c4933c4887e44576dab047",
+        "Manual steps": "d90e7a455b5791f8080593732a38062daeff3c3aabc354ede0302302926d757d",
+        "Migrate to Orchestrate v173": "67087601bb6837e9c4433486f5855e5c9bae09faf340dd7e81871d0fde650295",
+        "Observable changes": "c8c41421e0d1e39b3f1d94808e579078a90cfc800a09c1bde5a24bea9360cdbd",
+        "Purpose": "62a4e716ad2559843ece1f73b8f91abde7a17b217a13639ae9de12377296a1ac",
+        "Rollback": "cff00733b35d9f1e7e3a88081349bc7c4fea3ea1c21b6b51c5640b63cb0b4155",
+        "Verification": "089ef5ffc4a4cfc92f3a841b31b3e383682619f512e7c1aa421c4bba16bf63fc"
+      },
+      "sha256": "f8008cc67df079358e7abe1ed972672329234241de83596e59ad0b7442bdd598"
+    },
+    "migrations/174.md": {
+      "bytes": 2779,
+      "sections": {
+        "Active-task impact": "f85022c24e7428dcf074cafb475eed2a8954d357e1e5555f1e2d758f8119d6df",
+        "Manual steps": "cc8079a9649973b2421be6bc6d20faeff7445c3043ac97e59be43d0729ccc2e1",
+        "Migrate to Orchestrate v174": "56cd7bf882bfee4c899b7246896818fcbd954d3acaf92ff5318076f4acc7f3fe",
+        "Observable changes": "1a3b678eb59946b5aae3100af64a24976dac4b2356bdde07ee87b986ae215813",
+        "Purpose": "85d7be362a4c3bf9e9191a77136dd2cd71b446f98cf4109b4bbb0cdfacb53648",
+        "Rollback": "ffa5565f0e74cf32d62d132647e25e80c3a85414e0b91b3d0c08795e5f20d391",
+        "Verification": "b46d1ab0f9d3e091f5442270dfd9f35a4619d7d99b16a10902c98761c7edff46"
+      },
+      "sha256": "57129fd479268ce76db7f24dccb74e2e84474bc7f4fafe48bd4cdd7b56261e8d"
+    },
+    "migrations/175.md": {
+      "bytes": 2509,
+      "sections": {
+        "Active-task impact": "e377a5c7ec73c9c8f1bc49fc8f430c80c2d6718268b7fe93b233abc6a56214a6",
+        "Manual steps": "18213c85018fa067188b4f667f143147d11613078e6c71a5f847fcfef8424cac",
+        "Migrate to Orchestrate v175": "2cd680fabcf1d9915d0dd400c590b9cc2700354ce9d536d3c74f522edf01ec84",
+        "Observable changes": "a211e1d66bf223063a908e3e874065eb6a027cb663bae95200bfedaa5b7cc5a4",
+        "Purpose": "10a270f0955236f5297a817f964057e6e66de8bdc228cc791ae75c9d6fc1c13c",
+        "Report-version decision": "c58c8ccd2c8b5932124be526c34596f5f5a57d3471fcc4726b340355dff0653d",
+        "Rollback": "16f32be3be091cbf492259562f9d1a89e1e315875de963549e86d1aef5eca314",
+        "Verification": "5510d8a5f28c8c1b1f33970be0d1eb702e8a78b492554fd27035757e2adfbfff"
+      },
+      "sha256": "6a080eb051a6d153d1e0b21ebba43d0ee446664efce7db13d517e374d9ac1c8d"
+    },
+    "migrations/176.md": {
+      "bytes": 2013,
+      "sections": {
+        "Active-task impact": "3e556db2fd99527fa1e6e2da619a845ee356cf4acb78b65be216d4fc8672b95d",
+        "Manual steps": "d90e7a455b5791f8080593732a38062daeff3c3aabc354ede0302302926d757d",
+        "Migrate to Orchestrate v176": "681dd68c27dedb3dbfec6873f6597b7341529b7f03cdd0a8ff1e57238df070cd",
+        "Observable changes": "25a9d29483d7ce0cd789f461076ebd2c0e3130e9377671f5754108bfc74073f4",
+        "Purpose": "1a06852c773a926131a56d8a4b4b5a088db8a2147cfc1c9474142f371d5059c3",
+        "Report-version decision": "920793019579ffc3ccb5bca13bf29de457ec129bc7684a65fdbe63b2554b3c82",
+        "Rollback": "91449f90d8aaa57909ed2d0297e913dac124363d803e748cca304506c7a74a35",
+        "Verification": "7bdd7ed9f41cb184588956c7deb5a62d0674c4ffeecec4ffdb7a7a74395fe7d0"
+      },
+      "sha256": "7b389ed0e12218d7c9f217fb64e4ad1ec786f107cdfad3ffeb430f09bfd24473"
+    },
+    "migrations/177.md": {
+      "bytes": 1557,
+      "sections": {
+        "Active-task impact": "79c64548c99d964dc75293d9b0b1d0231cda5950c855d82b420c23bfa98f6827",
+        "Manual steps": "d90e7a455b5791f8080593732a38062daeff3c3aabc354ede0302302926d757d",
+        "Migrate to Orchestrate v177": "afb64687117434dfaca9553a6d74ea748e00ac24f3e55fc6fa127e212b952ee5",
+        "Observable changes": "4e4d15f3d9ada13538b0f856a80dfba2ca47eccd7009ae616fb289e116aa6c68",
+        "Purpose": "7966f36b497c178f541f7705479d5b58d5f2b7030680cfc8fc2ae21eb32c8239",
+        "Report-version decision": "d04da6070d38a3b6783dec0c1a59a05cd7d8ba931da6d900c3a34f498922ece1",
+        "Rollback": "12190dc2b66e91697d0d195106ed4bf9206eff40fedbec00dd1d992691a950f5",
+        "Verification": "bb58003465c9ed5bc6f05621b529d2b90e3d1fc5806186ee90101034af913900"
+      },
+      "sha256": "735c282b03a2f705ec9a14c9613efcdef6a3f51e2f7ef293dcc00b8e2968f260"
+    },
+    "migrations/178.md": {
+      "bytes": 1987,
+      "sections": {
+        "Active-task impact": "499472b65584e465f4203d5062854343543287080a94a569b9650f43ffb74bc6",
+        "Manual steps": "8878f8ca440a69388f7838e9254b9751fb871aff128dd1bfc77b6408dde72ce2",
+        "Migrate to Orchestrate v178": "02d74b6c5d4d9afe3f4e5040373b5dca0f1537aa724f4f5c67a318fa6513e412",
+        "Observable changes": "531ae36229564b622c890052f1fc506c8eaed4abd463018270f0c81145e54ce5",
+        "Purpose": "dc4d9a4b8f9133076536e8bdc64207818239894566ec0fe5d0685e089c4fb9d3",
+        "Report-version decision": "cc0a12bac6ac1134e36c755bab613a4ef08f7e91a83d73cffc869c29aef82839",
+        "Rollback": "e2a130f60013f96ec4180c1cca642ba361356a795f9edac3ccf5767b18f30b6e",
+        "Verification": "56e4f30d5c3d4191ab9429b9c69995c56d8b5c4a2de8f15658c70ef97eb8a14a"
+      },
+      "sha256": "5cc93fc8430b8e5f560a24dfa1c1f97f40d79e61d5a7306bb72fc8def56d3478"
+    },
+    "migrations/179.md": {
+      "bytes": 2225,
+      "sections": {
+        "Active-task impact": "f96ed88af60c8e12389e82bc0e9a2794220e07998fe3dd9aabf7fbc617a2591b",
+        "Manual steps": "8878f8ca440a69388f7838e9254b9751fb871aff128dd1bfc77b6408dde72ce2",
+        "Migrate to Orchestrate v179": "98f540d4872b02d8f722b912a23d829285fe96130e9b8608ea4de34a49c77d41",
+        "Observable changes": "c7392495e5d6caf66ce27752fff9890b2f0eb15d8bd2d17810d0fbd2febbb2b1",
+        "Purpose": "13f0f5d27d61b6bdd3999dc51c1ac40551e6911e119142435d3316d1c610a51d",
+        "Report-version decision": "424df3708f7e2aa3736be5a26b5a45d4b0c142fb520a240ac6090270240d1ffd",
+        "Rollback": "59e31759f183027b5cac3667a28821592b1a18ca20cdf4c445573ad131add567",
+        "Verification": "813c619ca40b77aa396a26663b60bd8075c9efcf908ce3bf0c8a5860498c981e"
+      },
+      "sha256": "76f2c1f1d7ea9ff4542bed0e08594807b7a903bf4b560ff52f1a6c1a54ab98bf"
+    },
+    "migrations/180.md": {
+      "bytes": 1616,
+      "sections": {
+        "Active-task impact": "6fd0826356c956b72204fa6919c1be9785b1e9b3cbc4d5ca8dba17a691c864d5",
+        "Documentation compatibility correction": "a6cac477481dbf59df74a16b42b57f38651618d77dc0af8ae78f0d5598cc7a66",
+        "Manual steps": "8878f8ca440a69388f7838e9254b9751fb871aff128dd1bfc77b6408dde72ce2",
+        "Migrate to Orchestrate v180": "8247a732617bc2a664c8ba4f5341f9b907ecf9b6dc9375fa951c4500872eb5f4",
+        "Preserved behavior and report contract": "0447a8421a6ba1fec490fcc2f9e9f836fd377f88f9a8797f2a35ea2c1011f0ac",
+        "Purpose": "c6fc416d11588a14a516cc2f28be51cb50dfb14a9ae485a14d8cbb98cb8bb11b",
+        "Rollback": "516114526079d4e7b440cd4b2ce7e75432f940d04ecc4207906158f4827bd5e1",
+        "Verification": "5f0eb573b09637b6e1bc1e3efd6c2c3172148a7c4fcf519493c4a648a55014b9"
+      },
+      "sha256": "a7dc6e94a7335313778cb50858245103f8ebdaee884730df826d39973a7f2b88"
+    },
+    "migrations/181.md": {
+      "bytes": 1496,
+      "sections": {
+        "Orchestrate v181 migration": "54020c654878f3d5daa9c54ffbe2d7cc71952872d65bc29507fa3896d252be0a"
+      },
+      "sha256": "222c0d8b90a14d7f8c9d0569f7181ab1c9e394dfafa79dd063643a0f222bea09"
+    },
+    "migrations/182.md": {
+      "bytes": 1163,
+      "sections": {
+        "Orchestrate v182 migration": "7562a8cebd3b3d0b426afac0cb068adf5a1bf275e8a4fa3b021ac49a4b84aa50"
+      },
+      "sha256": "63f29cbfb1acbebdc210fdaf23744cf47ddc8ba01e1a507f032d52c245168b14"
+    },
+    "migrations/183.md": {
+      "bytes": 772,
+      "sections": {
+        "Orchestrate v183 migration": "660950b593988655d68aa411990077766c61ceb298b48d9be8d336cc4f943639"
+      },
+      "sha256": "db9a297ca44a119f92b397db44e325b6b474b2edcacc4cc879fd69aef355861c"
+    },
+    "references/admission.md": {
+      "bytes": 14842,
+      "sections": {
+        "Citing evidence in the admission": "0ef6c353d31396ba2cb370f97100dea0bc43615bad0f489e027d5f24687eb373",
+        "Orchestrate \u2014 admission": "b3768f291e31ef20ecfe383fe9130b41e484be70a7b45a788922b3e9b49ca151",
+        "S1 \u2014 Slice admission": "0bb2a7d37eaaed9b10da2b52ceaea909c304125cbcdc27f10e2c87bf20a9f8ac",
+        "S2 \u2014 Invariant admission": "63539a6595839c7adc00654d40753a4e736674c635fcbcafcb98bcd3ec8ae103",
+        "S2.0 \u2014 Uncertain-test lifecycle": "191eb83dbda7e8a4a02b0a583360dc606e87f2e82c514dba934acb1dfea2a2c5",
+        "S2.1 \u2014 Observability": "a4017dd162487cccbee3ebcd794fff271fa78ebf797b1d33219248a2ed45f38f",
+        "S2.2 \u2014 Red evidence": "3ca4492bfe04455c924678b08b5752359e67e508367925d7f409913245ff6c00",
+        "S2.3 \u2014 Envelope": "d2940f6b81626df54669f64c582f456963283284b56e970e70074b1ce94baa1b",
+        "S2.4 \u2014 Lane-ready binding": "a58d6d3f1ca90eb4278a04ef6dc7dbf92bffed494b827b36831a506785814018",
+        "S2.5 \u2014 Root's mechanical guarantee": "e6af13291d38ec70f7869259c484257951c42482deb2061ca6f4be943c12dca9",
+        "S2.6 \u2014 No hand-derived expected value": "91839e60b74bb094158c7d59e85b9c093aa5ba61d843523866bfaea0fabb22dd",
+        "S2.7 \u2014 Satisfiable together": "a09ccea1870819dd89e626dc5bd595aee52edb78b6e53d19ddcaaf1634a04853",
+        "S2.8 \u2014 Contract review": "c9bc70a09209e289b74e220d5f3eb6760ffac97e91e1987e9d6faa31d28f664c",
+        "S3 \u2014 Derived collect-round admission": "c54159f376cc5f8aef1b3bde8d9f5ea8d1ca8c504bc76b01f0d8f4a74f53fd22",
+        "S4 \u2014 Review and validation": "a9de25b0654c87c70c57afc2d4127e5e27c9dd7e7160e5d3d9a2a32836b25434",
+        "S5 \u2014 Landing and close-out": "6adbe0eeea66a6cdac5d7c65c526c35e7a2c53e5f4737c03479bea15dabbf313"
+      },
+      "sha256": "379e69ebb54e5dc9f048138c1ea22006aae4bc536ad4e20173c61220d6e3997b"
+    },
+    "references/dispatch.md": {
+      "bytes": 6863,
+      "sections": {
+        "Authority": "eb8eddc2a5250ded2941790a5a17f903304de7c4a56e8363adc8c6ce3ad2a12d",
+        "Commit command": "3163ede6969a6347afdaf8d68a5015abb033e2a337568b37e9889bc20c2b13f4",
+        "Dispatch payload": "d8eed013e2891b820fb9bfab402832da30ea60e69ecd7160188c05817aeb1c79",
+        "Lane identity and mode": "80ebbb4313c0da9fe4f781a17fdd478dee68f12d1e3c1d1fd5e99df60b04af22",
+        "Orchestrate \u2014 runtime-neutral dispatch contract": "3de5c8de8c7d548aabb6a2b1f699ceb9f1ebf8a6249e2fa62d8aab27ced49966"
+      },
+      "sha256": "0f80018d6167bd2da0a8494dd742b351365a02f4831bb0b2e9b83d1e72352db9"
+    },
+    "references/gate.md": {
+      "bytes": 6007,
+      "sections": {
+        "Orchestrate \u2014 writing a gate script": "aca41631486b6ef50a67676b97527e2aec4520cfa993cad44dafc4a88915f44e",
+        "Order by cost, stop at the first failure": "374e9207f79755b8248eb6e2a1c9146150dba64200e6897be673ac45fb83675c",
+        "Separate durable evidence from disposable runner state": "2d85fd514318329236d2b9742a55a09bcb37ecd646a9aa3cc8f28f8a6e8ea5d0",
+        "Stamp the subject before anything else": "d19054b8ef75a9debfd5d692d52ae64592302bedf5807167cda543028f9ea79f",
+        "The selection may be computed, never chosen": "d9aa58030be33340696025fffa5f8e92be52cc2f072788e9eadc9fccbf5ae21e",
+        "The two stops want opposite answers": "eec31fa13f691647058e558cd3bd7d1d23af89951211c398a7086d2662afa65c",
+        "What the script does not do": "f2f3c0087bad5ca6790a8e290e9ef16d9bb5f6d805ad9e806462ecd2a6a57b52"
+      },
+      "sha256": "1d239bc8db56f5d3d672467d32a602aa7875b2e8c547dde04cdacdef52f1d687"
+    },
+    "references/package-admin.md": {
+      "bytes": 1721,
+      "sections": {
+        "Orchestrate \u2014 Package administration": "038fa53bdb2f393f712618464f6b0de3264390cdb28935032b8be2d793ea03e8"
+      },
+      "sha256": "42bf8d52ad371c436ba018debd7d842e10d35c62eb866f94ab6ab47fe3afd9c1"
+    },
+    "runtime-claude.md": {
+      "bytes": 435,
+      "sections": {
+        "Orchestrate \u2014 Claude runtime binding": "d2e1debf4787a095ee79f5aa509f088ef7a9fa2a3fcfb505440fe6eb0aed98ba"
+      },
+      "sha256": "191b30d98fae2823c1e69e279088b3742b1aa728a0671a989ca6a4f8f88d9f26"
+    },
+    "runtime-codex.md": {
+      "bytes": 432,
+      "sections": {
+        "Orchestrate \u2014 Codex runtime binding": "ae39a3024770b5d1dec042bd47b9e7431eb12663f46b2d05e1e4ecb462b36181"
+      },
+      "sha256": "31d55df8c8d149393c6a3026b398c518bd2ae61bd6ec4387b9237b5a2da5e871"
+    },
+    "runtime-pi.md": {
+      "bytes": 6790,
+      "sections": {
+        "Authority": "94471b45860ff8a62b9e17483f0fae582bd495cc47859e8b27e15854de27aae2",
+        "Context management": "2cbddc0328422aabde7701772182d1141ad72237236733033a1c332d43476ba2",
+        "Dispatch": "f11a111a1d19015d7f19ea75416ad9d742750b438b005abfdf1a7cc60036757f",
+        "Evidence": "54c4acdc35019bb5ce580ade5769acdfec1367b20896ac1da5d0e7d3e8667b42",
+        "Orchestrate \u2014 Pi runtime binding": "2333ca28e5ae43f8a7540dd2a381a7b8c33599a67730500cd768d0872277c1d3",
+        "Reading silence": "e1a4fd9a5f975ca1f80eeb141e5e323ee7255f7eac07d47c44181d71e034da93",
+        "Recovery": "d238681277ce3d664907b04e1c23904c30eb3dd4e0a184066ededd46474a30a9",
+        "Runtime dependency": "48ec76e8deaeb10611dbe2200b287b5c7880e2cd2143b8e133b5c3d6d1144fb7",
+        "Writer execution": "cc452bd5310f348daf01c6dca22f6b502f226b01a192ce47364ec6495495dda3"
+      },
+      "sha256": "dc48b9cd247b03bafc060961a3e3e0949155c0db5f9b48ad6374d1a7a20a4b4a"
+    },
+    "scripts/_orchestrate/__init__.py": {
+      "bytes": 55,
+      "sections": {
+        "__file__": "a5fddb2f6b6e3eddc1307c9af0770a246c594b21ef3f45c513bba3ca535ac2c2"
+      },
+      "sha256": "a5fddb2f6b6e3eddc1307c9af0770a246c594b21ef3f45c513bba3ca535ac2c2"
+    },
+    "scripts/_orchestrate/cli.py": {
+      "bytes": 13096,
+      "sections": {
+        "__file__": "aa642f727e4d82963c0358b66e26662041e8fb0390fefc385779275eda4ea197"
+      },
+      "sha256": "aa642f727e4d82963c0358b66e26662041e8fb0390fefc385779275eda4ea197"
+    },
+    "scripts/_orchestrate/coordination.py": {
+      "bytes": 50531,
+      "sections": {
+        "__file__": "b9631bae4846b9e24868572fd179b0ceaded55b5fe9973946183b385b139fd72"
+      },
+      "sha256": "b9631bae4846b9e24868572fd179b0ceaded55b5fe9973946183b385b139fd72"
+    },
+    "scripts/_orchestrate/delivery.py": {
+      "bytes": 36401,
+      "sections": {
+        "__file__": "36808be2ab56f7daeaf2f945ae027752f69dcee00ce58a1f307db86ea7a6c66c"
+      },
+      "sha256": "36808be2ab56f7daeaf2f945ae027752f69dcee00ce58a1f307db86ea7a6c66c"
+    },
+    "scripts/_orchestrate/git_ops.py": {
+      "bytes": 9322,
+      "sections": {
+        "__file__": "3699848e897a2379528f76f0846b675280db3876940b8df6b46429ff0af17f54"
+      },
+      "sha256": "3699848e897a2379528f76f0846b675280db3876940b8df6b46429ff0af17f54"
+    },
+    "scripts/_orchestrate/primitives.py": {
+      "bytes": 2366,
+      "sections": {
+        "__file__": "10004c5f1f89c7b22be38b5ef9ffadcc9bbda5e4406e55193f1ca640d3d206ee"
+      },
+      "sha256": "10004c5f1f89c7b22be38b5ef9ffadcc9bbda5e4406e55193f1ca640d3d206ee"
+    },
+    "scripts/_orchestrate/release.py": {
+      "bytes": 33363,
+      "sections": {
+        "__file__": "2aa1d8864a1e250643b6c6b5f7dd5522e72c25b448ccfb3ec3ed983232e75b04"
+      },
+      "sha256": "2aa1d8864a1e250643b6c6b5f7dd5522e72c25b448ccfb3ec3ed983232e75b04"
+    },
+    "scripts/_orchestrate/resources.py": {
+      "bytes": 6317,
+      "sections": {
+        "__file__": "b3f4649106bf02cf1bca1f1904f1622a7481294bd4cf1e82c97c5ba58b2767b1"
+      },
+      "sha256": "b3f4649106bf02cf1bca1f1904f1622a7481294bd4cf1e82c97c5ba58b2767b1"
+    },
+    "scripts/_orchestrate/telemetry.py": {
+      "bytes": 25746,
+      "sections": {
+        "__file__": "6a5e3b57a85442c38d61b3167d4da7bda0a6ca3d353aa5a1b4233d5b0865ab86"
+      },
+      "sha256": "6a5e3b57a85442c38d61b3167d4da7bda0a6ca3d353aa5a1b4233d5b0865ab86"
+    },
+    "scripts/orchestrate.py": {
+      "bytes": 227,
+      "sections": {
+        "__file__": "ed42e8798b1cd3078cb3bd7716c5ebc483709d9f793a554e3424f9b9ceee3c07"
+      },
+      "sha256": "ed42e8798b1cd3078cb3bd7716c5ebc483709d9f793a554e3424f9b9ceee3c07"
+    }
+  },
+  "orchestrate_compat": 183,
+  "profiles": {
+    ".claude/agents/acceptance-reviewer.md": {
+      "agent_name": "acceptance-reviewer",
+      "prompt_sha256": "92dae4ae8ff52387cda3b4e6da998b902a5765de9b6e964dc5a7451fabe6c733"
+    },
+    ".claude/agents/contract-reviewer.md": {
+      "agent_name": "contract-reviewer",
+      "prompt_sha256": "c9e92c926f892e5ebb09cbe4c4febd1a0e79a3b06d370cfb2002bd991b4b47d8"
+    },
+    ".claude/agents/lane-worker.md": {
+      "agent_name": "lane-worker",
+      "prompt_sha256": "cadb5650454d18209c5fc89407914f9695ec8a4e272fd5355b8f528527995e3e"
+    },
+    ".codex/agents/acceptance-reviewer.toml": {
+      "agent_name": "acceptance-reviewer",
+      "prompt_sha256": "92dae4ae8ff52387cda3b4e6da998b902a5765de9b6e964dc5a7451fabe6c733"
+    },
+    ".codex/agents/contract-reviewer.toml": {
+      "agent_name": "contract-reviewer",
+      "prompt_sha256": "c9e92c926f892e5ebb09cbe4c4febd1a0e79a3b06d370cfb2002bd991b4b47d8"
+    },
+    ".codex/agents/lane-worker.toml": {
+      "agent_name": "lane-worker",
+      "prompt_sha256": "cadb5650454d18209c5fc89407914f9695ec8a4e272fd5355b8f528527995e3e"
+    },
+    ".pi/agent/APPEND_SYSTEM.md": {
+      "agent_name": "APPEND_SYSTEM",
+      "prompt_sha256": "a45199cfd04152ac9380d0a42f1887ba51fc16566eec9a636c2bb9b30fad744b"
+    },
+    ".pi/agent/agents/acceptance-reviewer.md": {
+      "agent_name": "acceptance-reviewer",
+      "prompt_sha256": "92dae4ae8ff52387cda3b4e6da998b902a5765de9b6e964dc5a7451fabe6c733"
+    },
+    ".pi/agent/agents/contract-reviewer.md": {
+      "agent_name": "contract-reviewer",
+      "prompt_sha256": "c9e92c926f892e5ebb09cbe4c4febd1a0e79a3b06d370cfb2002bd991b4b47d8"
+    },
+    ".pi/agent/agents/lane-worker.md": {
+      "agent_name": "lane-worker",
+      "prompt_sha256": "cadb5650454d18209c5fc89407914f9695ec8a4e272fd5355b8f528527995e3e"
+    }
+  },
+  "release_delta": {
+    "acknowledge_removed": [],
+    "changed_profiles": [],
+    "changed_runtime_assets": [],
+    "changed_sections": {
+      "SKILL.md": [],
+      "migrations/183.md": [
+        "Orchestrate v183 migration"
+      ],
+      "scripts/_orchestrate/cli.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/delivery.py": [
+        "__file__"
+      ],
+      "scripts/_orchestrate/telemetry.py": [
+        "__file__"
+      ]
+    },
+    "from_version": 182,
+    "must_reread": [
+      "migrations/183.md"
+    ]
+  },
+  "schema_version": 1,
+  "skill_version": 183
+}

@@ -34,9 +34,7 @@ the thing this file exists to prevent.
 | `improve-codebase-architecture` | `skills/engineering/improve-codebase-architecture` |
 | `prototype` | `skills/engineering/prototype` |
 | `research` | `skills/engineering/research` |
-| `resolving-merge-conflicts` | `skills/engineering/resolving-merge-conflicts` |
 | `tdd` | `skills/engineering/tdd` |
-| `teach` | `skills/productivity/teach` |
 | `to-spec` | `skills/engineering/to-spec` |
 | `to-tickets` | `skills/engineering/to-tickets` |
 | `wait-what` | `skills/productivity/wait-what` |
@@ -74,7 +72,7 @@ internal discoveries), `setup-matt-pocock-skills` (its generated config is repla
 
 ## Local skills — not upstream, never overwrite
 
-`dev-flow`, `orchestrate`, `candidate-backlog`, `simplify`, `dictator`, `planning-with-files`.
+`dev-flow`, `collab`, `candidate-backlog`, `simplify`, `dictator`.
 
 They may reference upstream skills as producers, but the reference runs **one way**: no upstream
 skill mentions them. `ask-matt` is the single exception — as the router it names both workflows,
@@ -95,9 +93,8 @@ which is what keeps the coupling out of every other file.
    `code-review` additionally states what to do when no spec is found: run the Standards axis alone
    and say so.
 3. **Traditional Chinese output** in `improve-codebase-architecture` (HTML report body, card labels,
-   badges, legends — identifiers, paths, ADR ids and `/codebase-design` vocabulary stay original) and
-   `teach` (lessons, references, `MISSION.md`, learning records — code, commands, notation and
-   citation titles stay original). Everything else stays English.
+   badges, legends — identifiers, paths, ADR ids and `/codebase-design` vocabulary stay original).
+   Everything else stays English.
 4. **`domain-modeling` checkpoint mode** — a calling skill may batch glossary writes to natural
    checkpoints instead of writing inline. `grill-with-docs` uses it so the interview keeps its
    rhythm.
@@ -107,7 +104,7 @@ which is what keeps the coupling out of every other file.
 6. **`tdd` scope note** — test-first is declared not to apply at GUI/hardware edges, where the repo's
    documented test conventions are followed and named instead.
 7. **`tdd` renames upstream's "One slice at a time" to "One cycle at a time"** — `slice` collides
-   with `to-tickets`' tracer-bullet slices and with `orchestrate`'s Slice. Content unchanged.
+   with `to-tickets`' tracer-bullet slices. Content unchanged.
 8. **Invocation policy** — `to-spec` and `to-tickets` are model-invocable here (upstream makes them
    user-invoked) so `dev-flow` can drive them. `wayfinder` stays user-invoked deliberately: it is the
    heavyweight flow a human should choose to enter.
@@ -133,6 +130,6 @@ which is what keeps the coupling out of every other file.
     dependency. Pairs with `dev-flow`'s S0 dependency check (local skill, v7), which is where the
     reason for rejecting a package is supposed to be recorded — this smell is what notices when
     nothing was recorded. Upstream's sentence introducing the baseline calls it "a fixed set of
-    Fowler code smells (_Refactoring_, ch.3)"; since that sentence is pasted verbatim into the
+    Fowler code smells (*Refactoring*, ch.3)"; since that sentence is pasted verbatim into the
     Standards sub-agent prompt, it is amended here to say Fowler's plus one local addition, and the
     entry itself is marked. Take upstream's wording again only if this smell is dropped.

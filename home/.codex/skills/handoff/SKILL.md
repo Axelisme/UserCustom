@@ -1,16 +1,24 @@
 ---
 name: handoff
-description: Compact the current conversation into a handoff document for another agent to pick up.
+description: Write a portable routing handoff for another agent or session.
 argument-hint: "What will the next session be used for?"
 disable-model-invocation: true
 ---
 
-Write a handoff document summarising the current conversation so a fresh agent can continue the work. Save to the temporary directory of the user's OS - not the current workspace.
+Write a routing and guidance document for a fresh agent. The handoff is not factual authority:
+point to each owning spec, ticket, task record, ADR, issue, commit, diff, or evidence artifact instead
+of copying or summarizing its contents. Carry inline only receiver guidance and operational facts that
+have no owning document.
 
-Include a "suggested skills" section in the document, which suggests skills that the agent should invoke.
+For Dev-flow work, route the receiver first to the active Dev-flow guidance, task `INDEX.md`, and the
+handed-off ticket. Add only the current-work pointers those sources require. When they cannot identify
+the next action, stop and repair the owning record rather than scanning the ticket DAG or task history
+to infer one.
 
-Do not duplicate content already captured in other artifacts (specs, plans, ADRs, issues, commits, diffs). Reference them by path or URL instead.
+Save a user-requested file handoff in the operating system's temporary directory, outside the current
+workspace. Use the same content contract when preparing an authorized Pi `handoff_context`
+transition; this skill does not itself authorize or schedule that transition.
 
-Redact any sensitive information, such as API keys, passwords, or personally identifiable information.
-
-If the user passed arguments, treat them as a description of what the next session will focus on and tailor the doc accordingly.
+Include a `Suggested skills` section naming skills the receiver should invoke. Redact secrets and
+personally identifiable information. If the user passed arguments, use them only to focus the route
+and guidance for the next session.

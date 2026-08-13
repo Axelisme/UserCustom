@@ -1,8 +1,7 @@
 # Always-resident authority index
 
-1. Root contacts a role only for a cost-growing Contract correction, user stop, or liveness failure.
-2. Handoffs bind to an exact clean commit SHA inspected from Git.
-3. Persistence mutation requires current user authority.
-4. After compaction, reread the active skill, frozen spec, task plan, and the shared admission standard.
-5. The admission standard is the sole normative S1–S5 authority; this index is not a policy copy.
-6. Protect pre-existing user dirt and non-task evidence; never stash, reset, overwrite, or delete it.
+1. Bind every review to one immutable fixed subject; a Git-backed subject is one exact clean commit and tree.
+2. Persistence mutation requires current user authority or an in-force task-scoped user grant naming that mutation and its conditions.
+3. A file-based or authorized context handoff routes and guides; factual claims remain owned by the documents it identifies. Point to owning specs, tickets, records, decisions, commits, diffs, and evidence rather than copying them.
+4. After compaction or handoff, reread the active skill. For Dev-flow, begin with its guidance, the task `INDEX.md`, and handed-off ticket, then follow only their pointers needed for current work. Maintain an insufficient record instead of scanning all tickets, artifacts, or the task DAG to infer focus.
+5. Protect pre-existing user dirt and non-task evidence; never stash, reset, overwrite, or delete it.

@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Run every test module in parallel, one subprocess per module.
+"""Run every test case in parallel, one isolated subprocess per case.
 
 `python3 -m unittest discover -s tests` still works and remains the reference
 behavior; this runner exists only because that discovery is serial. Almost all
-of the suite's wall time is spent launching the shipped scripts as real
-subprocesses, so the work parallelizes across modules with no shared state:
-each module already builds its own temporary repositories and homes.
+of the suite's wall time is spent launching shipped scripts against temporary
+repositories and homes, so independent cases are scheduled across CPU cores.
 
 Usage: python3 tests/run.py [module ...]
 """
@@ -13,35 +12,51 @@ Usage: python3 tests/run.py [module ...]
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import sys
 import time
+import unittest
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 TESTS = Path(__file__).resolve().parent
 ROOT = TESTS.parent
-RAN = re.compile(r"^Ran (\d+) tests? in ", re.MULTILINE)
 
 
 def discovered_modules() -> list[str]:
     return sorted(f"tests.{path.stem}" for path in TESTS.glob("test_*.py"))
 
 
-def run_module(module: str) -> tuple[str, int, float, int, str]:
+def flatten(suite: unittest.TestSuite) -> list[unittest.TestCase]:
+    tests: list[unittest.TestCase] = []
+    for test in suite:
+        if isinstance(test, unittest.TestSuite):
+            tests.extend(flatten(test))
+        else:
+            tests.append(test)
+    return tests
+
+
+def module_for(test_id: str, modules: list[str]) -> str:
+    return next(
+        (module for module in modules if test_id == module or test_id.startswith(f"{module}.")),
+        test_id.rsplit(".", 2)[0],
+    )
+
+
+def run_case(job: tuple[str, str]) -> tuple[str, str, int, float, str]:
+    module, test_id = job
     started = time.monotonic()
     result = subprocess.run(
-        [sys.executable, "-m", "unittest", module],
+        [sys.executable, "-m", "unittest", test_id],
         cwd=ROOT,
         text=True,
         capture_output=True,
         check=False,
     )
-    match = RAN.search(result.stderr)
-    count = int(match.group(1)) if match else 0
     output = "".join((result.stdout, result.stderr))
-    return module, result.returncode, time.monotonic() - started, count, output
+    return module, test_id, result.returncode, time.monotonic() - started, output
 
 
 def main(argv: list[str]) -> int:
@@ -51,26 +66,41 @@ def main(argv: list[str]) -> int:
         return 2
 
     started = time.monotonic()
-    with ThreadPoolExecutor(max_workers=min(len(modules), os.cpu_count() or 4)) as pool:
-        results = list(pool.map(run_module, modules))
+    sys.path.insert(0, str(ROOT))
+    tests = flatten(unittest.defaultTestLoader.loadTestsFromNames(modules))
+    jobs = [(module_for(test.id(), modules), test.id()) for test in tests]
+    if not jobs:
+        print("no test cases found", file=sys.stderr)
+        return 2
 
-    total = 0
+    with ThreadPoolExecutor(max_workers=min(len(jobs), os.cpu_count() or 4)) as pool:
+        results = list(pool.map(run_case, jobs))
+
+    summaries: dict[str, list[tuple[str, str, int, float, str]]] = defaultdict(list)
     failures = []
-    for module, returncode, duration, count, output in sorted(
-        results, key=lambda item: -item[2]
-    ):
-        total += count
-        status = "ok" if returncode == 0 else "FAILED"
-        print(f"{duration:6.1f}s  {count:4d} tests  {status:6s}  {module}")
+    for result in results:
+        module, test_id, returncode, _duration, output = result
+        summaries[module].append(result)
         if returncode != 0:
-            failures.append((module, output))
+            failures.append((test_id, output))
 
-    for module, output in failures:
-        print(f"\n{'=' * 70}\n{module}\n{'=' * 70}\n{output.rstrip()}", file=sys.stderr)
+    for module, module_results in sorted(
+        summaries.items(), key=lambda item: -sum(result[3] for result in item[1])
+    ):
+        worker_time = sum(result[3] for result in module_results)
+        failed = sum(result[2] != 0 for result in module_results)
+        status = "ok" if not failed else "FAILED"
+        print(
+            f"{worker_time:6.1f} worker-s  {len(module_results):4d} tests  "
+            f"{status:6s}  {module}"
+        )
+
+    for test_id, output in failures:
+        print(f"\n{'=' * 70}\n{test_id}\n{'=' * 70}\n{output.rstrip()}", file=sys.stderr)
 
     elapsed = time.monotonic() - started
-    print(f"\nRan {total} tests in {elapsed:.1f}s across {len(modules)} modules")
-    print("OK" if not failures else f"FAILED ({len(failures)} modules)")
+    print(f"\nRan {len(jobs)} tests in {elapsed:.1f}s across {len(summaries)} modules")
+    print("OK" if not failures else f"FAILED ({len(failures)} tests)")
     return 1 if failures else 0
 
 

@@ -12,12 +12,13 @@ A **flow** is a path through the skills. Most paths run along one **main flow**,
 
 ## First fork: does this work need a durable record?
 
-Two workflows live here side by side, and picking the wrong one is the most expensive mistake this router can prevent.
+Durable task state and agent collaboration are separate choices.
 
 - **No durable record needed** — one session, or a handful you're happy to re-orient by hand. Take the **main flow** below. Its artifacts are a spec and some tickets wherever this repo tracks work; nothing else persists.
-- **Durable record needed** — the work must survive compaction and handoff, or it will be dispatched to worker agents in parallel. Start at **`/dev-flow`**, which owns the task record under `.agent_state/plans/<task-id>/`, and **`/orchestrate`**, which owns the Git lanes that dispatch and land it. They consume the main flow's skills as producers — `/dev-flow` transcribes a spec or a set of tickets into its record — so the two workflows compose; they don't compete.
+- **Durable record needed** — the work must survive compaction and handoff. Start at **`/dev-flow`**, which owns the sole task record under `.agent_state/plans/<task-id>/` and transcribes producer artifacts into it.
+- **Delegated implementation needed** — use **`/collab`** with either branch above. It owns writer-placement and generic-Acceptance guidance without creating another lifecycle store; specialized code-review remains an alternative procedure.
 
-Everything below describes the main flow. `/dev-flow` and `/orchestrate` document their own stages.
+Everything below describes the main flow. `/dev-flow` documents durable state; `/collab` documents lightweight agent collaboration.
 
 ## The main flow: idea → ship
 
@@ -32,7 +33,7 @@ The route most work travels. You have an idea and want it built.
    - **Yes** → **`/to-spec`** (turn the thread into a spec), then **`/to-tickets`** to split it into tracer-bullet tickets, each declaring its **blocking edges**. Where those land is repo-specific: if CLAUDE.md / AGENTS.md documents an issue tracker, the edges become native blocking links and any ticket whose blockers are done can be grabbed; otherwise they're one file per ticket under `.scratch/<feature>/issues/`, worked blockers-first by hand. Either way, kick off **`/implement`** per ticket, **`/clear`ing context between each one**. Each ticket is self-contained, so the last one's context is disposable.
    - **No** → **`/implement`** right here, in the same context window.
 
-   Either way, **`/implement`** builds each ticket by driving **`/tdd`** internally — one red-green cycle at a time — then closes out by running **`/code-review`**, a two-axis review (Standards + Spec) of the diff, before committing. Reach for **`/tdd`** on its own when you just want to build a concrete behaviour test-first without a full spec, and **`/code-review`** on its own whenever you want to review a branch or PR against a fixed point.
+   Either way, **`/implement`** builds each ticket with validation suited to its intent. Select **`/tdd`** when a behavior warrants a red-first loop at a meaningful seam. For independent review, the Caller chooses either generic **`/collab`** Acceptance or specialized **`/code-review`** (Standards + Spec) against a fixed candidate. Commit or landing remains subject to applicable user authority. Reach for `/tdd` or `/code-review` directly when only that procedure is needed.
 
 ### Context hygiene
 
@@ -62,7 +63,6 @@ Not feature work — upkeep.
 
 - **`/improve-codebase-architecture`** — run whenever you have a spare moment to keep the codebase good for agents to operate in. It surfaces **deepening opportunities**; picking one _generates an idea_ you can take into the main flow at `/grill-with-docs`. It's the survey that finds the candidates; **`/codebase-design`** (below) is the bench you design the chosen one on. Its report is written in Traditional Chinese.
 - **`/simplify`** — quality pass over code you just changed: reuse, simplification, efficiency, altitude. It does not hunt for bugs; `/code-review` does that.
-- **`/resolving-merge-conflicts`** — for an in-progress merge or rebase that has stopped on conflicts. Resolves from the primary sources behind each side rather than from the diff alone.
 
 ## Vocabulary underneath
 
@@ -94,7 +94,6 @@ Off the main flow entirely.
 - **`/prototype`** — a small, throwaway program that answers one design question: does this state model feel right, or what should this UI look like. Throwaway is a constraint on how the code is written, not a promise to destroy it: the answer folds into the real code, and the prototype itself is kept as a **primary source** on a `prototype/<name>` branch out of main, pointed at from wherever the work is tracked. It's the detour in step 2 of the main flow, but reach for it any time a design question is hard to settle on paper.
 - **`/research`** — delegate reading legwork to a **background agent**: it investigates a question against **primary sources**, then leaves a cited Markdown file in the repo. Keep working while it reads. The file it produces is something to take *into* the main flow at `/grill-with-docs` — research feeds the thinking, it doesn't replace it.
 - **`/wait-what`** — the corrective for a message that didn't land. Use it mid-conversation, inside any other skill, and the agent re-pitches what it just said in plain Traditional Chinese, with the context you were missing and the project's own glossary vocabulary. It works after the fact; `/grill-with-docs` is the upfront cure, because a shared language agreed early is what stops the jargon arriving at all.
-- **`/teach`** — learn a concept over multiple sessions, using the current directory as a stateful workspace. Its lessons and reference documents are written in Traditional Chinese.
 - **`/writing-for-agents`** — reference for writing documents agents consume: skills, CLAUDE.md / AGENTS.md, pointed-at docs. Its `SKILL-MECHANICS.md` covers the skill-specific mechanics, including a `PORTING.md` checklist for adopting a skill written for another ecosystem.
 
 ## Not a flow — a mode

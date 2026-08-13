@@ -31,20 +31,8 @@ def record(root: Path, task_id: str = "demo") -> Path:
     return root / ".agent_state" / "plans" / task_id
 
 
-START = "<!-- task-record:files:start -->"
-END = "<!-- task-record:files:end -->"
-
-
-def ticket_text(ticket_id: str, status: str, disposition: str | None = None, depends_on: str = "none") -> str:
-    rows = [
-        f"| id | {ticket_id} |",
-        f"| status | {status} |",
-    ]
-    if disposition is not None:
-        rows.append(f"| disposition | {disposition} |")
-    rows.append(f"| depends_on | {depends_on} |")
-    header = "\n".join(rows)
-    return f"# {ticket_id} — test ticket\n\n| Ticket field | Value |\n|---|---|\n{header}\n\n## Current\n"
+def ticket(ticket_id: str, state: str, body: str = "") -> str:
+    return f"---\nid: {ticket_id}\nstate: {state}\n---\n# arbitrary narrative\n{body}"
 
 
 def snapshot(directory: Path) -> dict[str, tuple[str, bytes | str | None]]:
@@ -61,815 +49,600 @@ def snapshot(directory: Path) -> dict[str, tuple[str, bytes | str | None]]:
 
 
 class TaskRecordTests(unittest.TestCase):
-    def assert_ok(
-        self,
-        done: subprocess.CompletedProcess[str],
-        operation: str,
-        *,
-        version: int | None = 3,
-    ) -> dict[str, object]:
+    def assert_ok(self, done: subprocess.CompletedProcess[str], operation: str) -> dict[str, object]:
         self.assertEqual(done.returncode, 0, done.stderr or done.stdout)
         body = payload(done)
-        self.assertEqual(body["ok"], True)
+        self.assertIs(body["ok"], True)
         self.assertEqual(body["operation"], operation)
-        self.assertEqual(body["record_version"], version)
         self.assertNotIn("error", body)
         return body
 
     def assert_refusal(
-        self,
-        done: subprocess.CompletedProcess[str],
-        operation: str,
-        code: str,
-        *,
-        version: int | None = None,
+        self, done: subprocess.CompletedProcess[str], operation: str, code: str
     ) -> dict[str, object]:
         self.assertEqual(done.returncode, 1, done.stderr or done.stdout)
         self.assertEqual(done.stderr, "")
         body = payload(done)
-        self.assertEqual(set(body), {"ok", "operation", "record_version", "error"})
-        self.assertEqual(body["ok"], False)
+        self.assertIs(body["ok"], False)
         self.assertEqual(body["operation"], operation)
-        self.assertEqual(body["record_version"], version)
         error = body["error"]
         self.assertIsInstance(error, dict)
         assert isinstance(error, dict)
-        self.assertEqual(set(error), {"code", "message", "paths", "repair"})
         self.assertEqual(error["code"], code)
         self.assertEqual(error["paths"], sorted(error["paths"]))
-        repair = error["repair"]
-        self.assertIsInstance(repair, str)
-        assert isinstance(repair, str)
-        self.assertTrue(repair)
-        self.assertNotIn("#", repair)
-        self.assertNotRegex(repair, r"\b[^ ]+\.md\b")
+        self.assertTrue(error["repair"])
         return body
 
-    def test_interface_has_exactly_four_commands(self) -> None:
+    def test_interface_has_only_create_archive_list_and_locate(self) -> None:
         done = run_plan(Path(tempfile.gettempdir()), "--help")
         self.assertEqual(done.returncode, 0, done.stderr)
         choices = re.search(r"\{([^{}]+)\}", done.stdout)
         self.assertIsNotNone(choices, done.stdout)
         assert choices is not None
-        # Equality, not membership: a command that is gone cannot hide in a list
-        # nobody enumerates, and a new one cannot arrive unannounced.
         self.assertEqual(
             tuple(part.strip() for part in choices.group(1).split(",")),
-            ("create", "refresh", "archive", "locate"),
+            ("create", "archive", "list", "locate"),
         )
 
-    def test_create_and_refresh_leave_no_generated_projection_behind(self) -> None:
+        list_help = run_plan(Path(tempfile.gettempdir()), "list", "--help")
+        self.assertEqual(list_help.returncode, 0, list_help.stderr)
+        self.assertNotIn("task_id", list_help.stdout)
+
+    def test_list_missing_and_empty_plans_succeed_without_writes(self) -> None:
+        for plans_exist in (False, True):
+            with self.subTest(plans_exist=plans_exist), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                if plans_exist:
+                    (root / ".agent_state" / "plans").mkdir(parents=True)
+                before = snapshot(root)
+
+                listed = self.assert_ok(run_plan(root, "list"), "list")
+
+                self.assertEqual(snapshot(root), before, "list must not write")
+                self.assertEqual(listed["record_version"], None)
+                self.assertEqual(listed["location"], "active")
+                self.assertEqual(listed["records"], [])
+
+    def test_list_is_deterministic_active_only_and_exposes_narrow_references(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            created = self.assert_ok(run_plan(root, "create", "demo", "--goal", "Ship one durable record."), "create")
+            plans = root / ".agent_state" / "plans"
+            archives = root / ".agent_state" / "archives"
+            for name in ("beta", "Alpha", "alpha", "Zulu"):
+                (plans / name).mkdir(parents=True)
+            (archives / "archived-only").mkdir(parents=True)
+            before = snapshot(root)
+
+            listed = self.assert_ok(run_plan(root, "list"), "list")
+
+            self.assertEqual(snapshot(root), before, "list must not write")
             self.assertEqual(
-                created["paths"],
-                [".agent_state/plans/demo/INDEX.md", ".agent_state/plans/demo/tickets"],
+                listed["records"],
+                [
+                    {
+                        "lookup_id": "Alpha",
+                        "container": ".agent_state/plans/Alpha",
+                        "index": ".agent_state/plans/Alpha/INDEX.md",
+                    },
+                    {
+                        "lookup_id": "alpha",
+                        "container": ".agent_state/plans/alpha",
+                        "index": ".agent_state/plans/alpha/INDEX.md",
+                    },
+                    {
+                        "lookup_id": "beta",
+                        "container": ".agent_state/plans/beta",
+                        "index": ".agent_state/plans/beta/INDEX.md",
+                    },
+                    {
+                        "lookup_id": "Zulu",
+                        "container": ".agent_state/plans/Zulu",
+                        "index": ".agent_state/plans/Zulu/INDEX.md",
+                    },
+                ],
             )
+            rendered = json.dumps(listed)
+            self.assertNotIn("archived-only", rendered)
+            for entry in listed["records"]:
+                self.assertEqual(set(entry), {"lookup_id", "container", "index"})
+            for forbidden in (
+                "task_id",
+                "spec",
+                "tickets",
+                "orientation",
+                "parse_errors",
+                "current",
+                "next",
+                "health",
+            ):
+                self.assertNotIn(forbidden, rendered.casefold())
+
+    def test_list_does_not_read_malformed_legacy_or_binary_record_contents(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            contents = {
+                "binary": b"\x00\xff narrative SECRET-BINARY",
+                "legacy": b"# old INDEX\n## Current\nSECRET-LEGACY\n",
+                "malformed": b"---\ntask_id: nope\nSECRET-MALFORMED",
+            }
+            for name, index_bytes in contents.items():
+                task = record(root, name)
+                (task / "tickets").mkdir(parents=True)
+                (task / "INDEX.md").write_bytes(index_bytes)
+                (task / "tickets" / "T001.md").write_bytes(b"\x00\xff SECRET-TICKET")
+            before = snapshot(root)
+
+            listed = self.assert_ok(run_plan(root, "list"), "list")
+
+            self.assertEqual(snapshot(root), before, "list must not write")
+            self.assertEqual(
+                [entry["lookup_id"] for entry in listed["records"]],
+                ["binary", "legacy", "malformed"],
+            )
+            rendered = json.dumps(listed)
+            self.assertNotIn("SECRET", rendered)
+            self.assertNotIn("ticket", rendered.casefold())
+            self.assertNotIn("current", rendered.casefold())
+
+    def test_list_fails_closed_for_unsafe_parent_children_and_names(self) -> None:
+        parent_setups = (
+            ("state-file", lambda root: (root / ".agent_state").write_text("unsafe")),
+            (
+                "plans-file",
+                lambda root: (
+                    (root / ".agent_state").mkdir(),
+                    (root / ".agent_state" / "plans").write_text("unsafe"),
+                ),
+            ),
+            (
+                "plans-symlink",
+                lambda root: (
+                    (root / ".agent_state").mkdir(),
+                    (root / ".agent_state" / "plans").symlink_to(root, target_is_directory=True),
+                ),
+            ),
+        )
+        for label, setup in parent_setups:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                setup(root)
+                before = snapshot(root)
+
+                refused = self.assert_refusal(run_plan(root, "list"), "list", "unsafe_path")
+
+                self.assertEqual(snapshot(root), before, "list refusal must not write")
+                self.assertTrue(refused["error"]["paths"])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plans = root / ".agent_state" / "plans"
+            plans.mkdir(parents=True)
+            (plans / "valid").mkdir()
+            (plans / "regular-file").write_text("unsafe")
+            (plans / "linked").symlink_to(plans / "valid", target_is_directory=True)
+            (plans / "bad name").mkdir()
+            (plans / "é").mkdir()
+            before = snapshot(root)
+
+            refused = self.assert_refusal(run_plan(root, "list"), "list", "unsafe_path")
+
+            self.assertEqual(snapshot(root), before, "list refusal must not write")
+            self.assertEqual(
+                refused["error"]["paths"],
+                [
+                    ".agent_state/plans/bad name",
+                    ".agent_state/plans/linked",
+                    ".agent_state/plans/regular-file",
+                    ".agent_state/plans/é",
+                ],
+            )
+            self.assertNotIn("records", refused)
+
+    def test_list_refuses_inaccessible_state_ancestors_without_writes(self) -> None:
+        for inaccessible_name in (".agent_state", "plans"):
+            with (
+                self.subTest(inaccessible_name=inaccessible_name),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                plans = root / ".agent_state" / "plans"
+                plans.mkdir(parents=True)
+                before = snapshot(root)
+                inaccessible = (
+                    root / ".agent_state"
+                    if inaccessible_name == ".agent_state"
+                    else plans
+                )
+                inaccessible.chmod(0)
+                try:
+                    try:
+                        with os.scandir(inaccessible) as entries:
+                            list(entries)
+                    except PermissionError:
+                        pass
+                    else:
+                        self.skipTest("executing account can enumerate a mode-000 directory")
+
+                    done = run_plan(root, "list")
+                    refused = self.assert_refusal(done, "list", "unsafe_path")
+                    self.assertEqual(len(done.stdout.splitlines()), 1)
+                    self.assertEqual(refused["error"]["paths"], [".agent_state/plans"])
+                finally:
+                    inaccessible.chmod(0o700)
+
+                self.assertEqual(snapshot(root), before, "list refusal must not write")
+
+    def test_list_refusal_serializes_undecodable_entry_name_as_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plans = root / ".agent_state" / "plans"
+            plans.mkdir(parents=True)
+            undecodable_name = os.fsdecode(b"\xff")
+            os.mkdir(os.path.join(os.fsencode(plans), b"\xff"))
+            before = snapshot(root)
+
+            done = run_plan(root, "list")
+            refused = self.assert_refusal(done, "list", "unsafe_path")
+
+            self.assertEqual(len(done.stdout.splitlines()), 1)
+            self.assertEqual(refused["error"]["paths"], [f".agent_state/plans/{undecodable_name}"])
+            self.assertEqual(snapshot(root), before, "list refusal must not write")
+
+    def test_create_emits_required_task_scaffold_without_validation_store(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            body = self.assert_ok(
+                run_plan(root, "create", "demo", "--goal", "Ship one durable record."), "create"
+            )
+            self.assertEqual(
+                body["paths"],
+                [
+                    ".agent_state/plans/demo/INDEX.md",
+                    ".agent_state/plans/demo/tickets",
+                    ".agent_state/plans/demo/artifacts",
+                ],
+            )
+            for scaffolded in ("tickets", "artifacts"):
+                self.assertTrue((record(root) / scaffolded).is_dir(), scaffolded)
+            self.assertFalse((record(root) / "validation").exists())
+            created = (record(root) / "INDEX.md").read_text(encoding="utf-8")
+            frontmatter = created.split("---", 2)[1].strip().splitlines()
+            self.assertEqual(frontmatter, ["task_id: demo", "spec: none"])
+            self.assertIn("Ship one durable record.", created)
+
+            create_help = run_plan(root, "create", "--help")
+            self.assertEqual(create_help.returncode, 0, create_help.stderr)
+            self.assertNotIn("--spec", create_help.stdout)
+
+    def test_locate_counts_new_and_legacy_ticket_bodies_from_frontmatter_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
             task = record(root)
-            index = task / "INDEX.md"
-            self.assertIn("| record_version | 3 |", index.read_text(encoding="utf-8"))
-            self.assertNotIn(START, index.read_text(encoding="utf-8"))
-            (task / "decisions.md").write_text("arbitrary decision content\n", encoding="utf-8")
-            (task / "tickets" / "T001-any-name.md").write_text(
-                ticket_text("T001-any-name", "open") + "unparsed prose after the header\n",
+            (task / "INDEX.md").write_text(
+                "---\ntask_id: demo\nspec: none\n---\nNo conventional narrative sections.\n",
                 encoding="utf-8",
             )
-            (task / "evidence").mkdir()
-            (task / "evidence" / "raw.bin").write_bytes(b"\x00\xff")
-            goal_before = index.read_text(encoding="utf-8").split("## Goal")[1].split("## Current")[0]
-            refreshed = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
-            self.assertEqual(refreshed["paths"], [".agent_state/plans/demo/INDEX.md"])
-            # A record with no prior stamp has nothing to compare against yet.
-            self.assertIsNone(refreshed["stale"])
-            after = index.read_text(encoding="utf-8")
-            self.assertEqual(goal_before, after.split("## Goal")[1].split("## Current")[0])
-            self.assertNotIn(START, after)
-            # Refresh always re-stamps, so a second call still exits clean even though the stamp
-            # itself advances (it is not byte-for-byte idempotent, by design: see (b) staleness).
-            second = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
-            self.assertIsNone(second["stale"])
+            legacy_body = (
+                "**Resolve by:** someone else\n"
+                "## Validation\n../validation/T001-first.md\n"
+                "## Current\nMisleading lifecycle claim: closed.\n"
+            )
+            new_body = (
+                "## Acceptance\n- [ ] **A1** — deliberately unchecked\n"
+                "## Resolution\nPending. Misleading lifecycle claim: pending.\n"
+            )
+            (task / "tickets" / "T001-first.md").write_text(
+                ticket("T001-first", "pending", legacy_body), encoding="utf-8"
+            )
+            (task / "tickets" / "T002-done.md").write_text(
+                ticket("T002-done", "closed", new_body), encoding="utf-8"
+            )
+            before = snapshot(task)
 
-    def test_refresh_is_content_blind_except_version_and_markers(self) -> None:
+            located = self.assert_ok(run_plan(root, "locate", "DEMO"), "locate")
+
+            self.assertEqual(snapshot(task), before, "locate must not write")
+            self.assertEqual(located["location"], "active")
+            self.assertEqual(located["container"], ".agent_state/plans/demo")
+            self.assertEqual(located["index"], ".agent_state/plans/demo/INDEX.md")
+            self.assertEqual(located["task_id"], "demo")
+            self.assertEqual(located["spec"], "none")
+            self.assertEqual(
+                located["tickets"],
+                {"pending": 1, "closed": 1, "total": 2, "unreadable": 0},
+            )
+            self.assertEqual(located["orientation"], "available")
+            self.assertEqual(located["parse_errors"], [])
+            rendered = json.dumps(located)
+            self.assertNotIn("T001-first.md", rendered)
+            self.assertNotIn("depends_on", rendered)
+            for forbidden in ("health", "current", "artifacts", "then_run", "lint", "stale"):
+                self.assertNotIn(forbidden, located)
+
+    def test_locate_reads_comments_and_hashes_in_flat_scalar_frontmatter(self) -> None:
+        cases = (
+            ("artifacts/spec.md # frozen pointer", "artifacts/spec.md"),
+            ('"artifacts/spec#v1.md" # frozen pointer', "artifacts/spec#v1.md"),
+            ("'artifacts/spec#v2.md' # frozen pointer", "artifacts/spec#v2.md"),
+        )
+        for source, expected in cases:
+            with self.subTest(source=source), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+                index = record(root) / "INDEX.md"
+                index.write_text(
+                    index.read_text(encoding="utf-8").replace("spec: none", f"spec: {source}"),
+                    encoding="utf-8",
+                )
+
+                located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+
+                self.assertEqual(located["spec"], expected)
+                self.assertEqual(located["orientation"], "available")
+
+    def test_unsupported_yaml_degrades_orientation_instead_of_guessing(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
             index = record(root) / "INDEX.md"
             index.write_text(
-                "arbitrary prose\n| record_version | 2 |\nnot a record schema\n"
-                "<!-- task-record:files:start -->\nstale\n<!-- task-record:files:end -->\n",
+                index.read_text(encoding="utf-8").replace("spec: none", "spec: [artifacts/spec.md]"),
                 encoding="utf-8",
             )
-            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
-            after = index.read_text(encoding="utf-8")
-            self.assertNotIn(START, after)
-            self.assertNotIn("stale", after)
-            self.assertIn("arbitrary prose", after)
-            self.assertIn("not a record schema", after)
 
-    def test_refresh_removes_the_generated_block_preserving_crlf_around_it(self) -> None:
+            located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+
+            self.assertIsNone(located["task_id"])
+            self.assertIsNone(located["spec"])
+            self.assertEqual(located["orientation"], "unavailable")
+            self.assertEqual(
+                located["parse_errors"][0]["code"], "index_frontmatter_unavailable"
+            )
+
+    def test_invalid_index_task_id_keeps_location_but_degrades_orientation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
             index = record(root) / "INDEX.md"
-            original = (
-                b"outside before\r\n| record_version | 2 |\r\n"
-                b"<!-- task-record:files:start -->\r\nstale\r\n"
-                b"<!-- task-record:files:end -->\r\noutside after\r\n"
-            )
-            index.write_bytes(original)
-            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
-            updated = index.read_bytes()
-            self.assertEqual(
-                updated,
-                b"outside before\r\n| record_version | 2 |\r\noutside after\r\n",
+            index.write_text(
+                index.read_text(encoding="utf-8").replace("task_id: demo", "task_id: ../escape"),
+                encoding="utf-8",
             )
 
-    def test_refresh_checks_version_before_markers_and_never_migrates(self) -> None:
+            located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+
+            self.assertEqual(located["location"], "active")
+            self.assertEqual(located["container"], ".agent_state/plans/demo")
+            self.assertEqual(located["index"], ".agent_state/plans/demo/INDEX.md")
+            self.assertIsNone(located["task_id"])
+            self.assertIsNone(located["spec"])
+            self.assertEqual(located["orientation"], "unavailable")
+            self.assertEqual(
+                located["parse_errors"][0]["code"], "index_frontmatter_unavailable"
+            )
+
+    def test_locate_reads_only_frontmatter_and_leaves_binary_bodies_opaque(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            task = record(root)
+            (task / "INDEX.md").write_bytes(
+                b"---\ntask_id: demo\nspec: artifacts/spec.md\n---\nopaque:\xff\x00body"
+            )
+            (task / "tickets" / "T001.md").write_bytes(
+                b"---\nid: T001\nstate: pending\n---\nopaque:\xff\x00body"
+            )
+
+            located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+
+            self.assertEqual(located["orientation"], "available")
+            self.assertEqual(located["spec"], "artifacts/spec.md")
+            self.assertEqual(
+                located["tickets"],
+                {"pending": 1, "closed": 0, "total": 1, "unreadable": 0},
+            )
+            self.assertEqual(located["parse_errors"], [])
+
+    def test_malformed_and_legacy_indexes_still_locate_without_rewrite(self) -> None:
+        for label, index_text in (
+            ("malformed", "---\ntask_id: malformed\nno closing marker\n"),
+            ("legacy", "# legacy\n| task_id | legacy |\n## Current\nDo not parse me.\n"),
+            ("mismatched", "---\ntask_id: other\nspec: none\n---\n"),
+        ):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                task = record(root, label)
+                (task / "tickets").mkdir(parents=True)
+                (task / "tickets" / "T001.md").write_text(
+                    ticket("T001", "pending"), encoding="utf-8"
+                )
+                index = task / "INDEX.md"
+                index.write_text(index_text, encoding="utf-8")
+                before = snapshot(task)
+
+                located = self.assert_ok(run_plan(root, "locate", label), "locate")
+
+                self.assertEqual(snapshot(task), before)
+                self.assertEqual(located["location"], "active")
+                self.assertEqual(located["orientation"], "unavailable")
+                self.assertIsNone(located["task_id"])
+                self.assertIsNone(located["spec"])
+                self.assertEqual(
+                    located["tickets"],
+                    {"pending": 1, "closed": 0, "total": 1, "unreadable": 0},
+                )
+                self.assertEqual(len(located["parse_errors"]), 1)
+                self.assertEqual(
+                    located["parse_errors"][0]["code"], "index_frontmatter_unavailable"
+                )
+
+    def test_one_unreadable_ticket_makes_all_counts_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            tickets = record(root) / "tickets"
+            (tickets / "T001.md").write_text(ticket("T001", "pending"), encoding="utf-8")
+            (tickets / "T002.md").write_text("state: closed in prose only\n", encoding="utf-8")
+
+            located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+
+            self.assertEqual(located["orientation"], "partial")
+            self.assertEqual(
+                located["tickets"],
+                {"pending": None, "closed": None, "total": None, "unreadable": 1},
+            )
+            self.assertEqual(
+                located["parse_errors"], [{"code": "ticket_headers_unreadable", "count": 1}]
+            )
+            self.assertNotIn("T002.md", json.dumps(located))
+
+    def test_permission_denied_ticket_directory_never_fabricates_zero_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            tickets = record(root) / "tickets"
+            (tickets / "T001.md").write_text(ticket("T001", "pending"), encoding="utf-8")
+            tickets.chmod(0)
+            try:
+                try:
+                    with os.scandir(tickets) as entries:
+                        list(entries)
+                except PermissionError:
+                    pass
+                else:
+                    self.skipTest("executing account can enumerate a mode-000 directory")
+
+                located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+
+                self.assertEqual(located["orientation"], "partial")
+                self.assertEqual(
+                    located["tickets"],
+                    {"pending": None, "closed": None, "total": None, "unreadable": None},
+                )
+                self.assertEqual(
+                    located["parse_errors"], [{"code": "ticket_directory_unreadable"}]
+                )
+            finally:
+                tickets.chmod(0o700)
+
+    def test_locate_reports_archived_missing_and_ambiguous_locations(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            self.assert_ok(run_plan(root, "archive", "demo"), "archive")
+            archived = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+            self.assertEqual(archived["location"], "archived")
+            self.assertEqual(archived["container"], ".agent_state/archives/demo")
+            self.assertEqual(archived["index"], ".agent_state/archives/demo/INDEX.md")
+
+            missing = self.assert_ok(run_plan(root, "locate", "absent"), "locate")
+            self.assertEqual(missing["location"], "missing")
+            self.assertEqual(missing["container"], ".agent_state/plans/absent")
+            self.assertEqual(missing["index"], ".agent_state/plans/absent/INDEX.md")
+            self.assertEqual(missing["orientation"], "unavailable")
+
+            active_collision = root / ".agent_state" / "plans" / "DEMO"
+            active_collision.mkdir(parents=True)
+            ambiguous = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+            self.assertEqual(ambiguous["location"], "ambiguous")
+            self.assertIsNone(ambiguous["container"])
+            self.assertEqual(
+                ambiguous["candidates"],
+                [
+                    {
+                        "location": "active",
+                        "container": ".agent_state/plans/DEMO",
+                        "index": ".agent_state/plans/DEMO/INDEX.md",
+                    },
+                    {
+                        "location": "archived",
+                        "container": ".agent_state/archives/demo",
+                        "index": ".agent_state/archives/demo/INDEX.md",
+                    },
+                ],
+            )
+
+    def test_archive_and_undo_are_opaque_atomic_moves(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             task = record(root)
             (task / "tickets").mkdir(parents=True)
-            index = task / "INDEX.md"
-            index.write_text("| record_version | 1 |\n", encoding="utf-8")
-            before = index.read_bytes()
-            refused = self.assert_refusal(
-                run_plan(root, "refresh", "demo"),
-                "refresh",
-                "unsupported_record_version",
-                version=1,
-            )
-            self.assertEqual(refused["error"].get("paths"), [".agent_state/plans/demo/INDEX.md"])
-            self.assertEqual(index.read_bytes(), before)
-            index.write_text("| record_version | future |\n", encoding="utf-8")
-            self.assert_refusal(run_plan(root, "refresh", "demo"), "refresh", "unsupported_record_version")
-            index.write_text("no version\n<!-- task-record:files:start --><!-- task-record:files:end -->", encoding="utf-8")
-            self.assert_refusal(run_plan(root, "refresh", "demo"), "refresh", "unsupported_record_version")
+            (task / "INDEX.md").write_bytes(b"\x00legacy malformed bytes\xff")
+            (task / "tickets" / "anything.bin").write_bytes(b"\x00\xff")
+            before = snapshot(task)
 
-    def test_refresh_refuses_only_malformed_index_for_index_access_errors(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            index = record(root) / "INDEX.md"
-            index.write_text("| record_version | 2 |\n", encoding="utf-8")
-            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
-            for text in (
-                "| record_version | 2 |\n<!-- task-record:files:end --><!-- task-record:files:start -->",
-                "| record_version | 2 |\n<!-- task-record:files:start --><!-- task-record:files:start --><!-- task-record:files:end -->",
-            ):
-                with self.subTest(text=text):
-                    index.write_text(text, encoding="utf-8")
-                    self.assert_refusal(run_plan(root, "refresh", "demo"), "refresh", "malformed_index", version=2)
+            archived = self.assert_ok(run_plan(root, "archive", "demo"), "archive")
+            destination = root / ".agent_state" / "archives" / "demo"
+            self.assertEqual(archived["paths"], [".agent_state/archives/demo"])
+            self.assertFalse(task.exists())
+            self.assertEqual(snapshot(destination), before)
 
-    def test_invalid_arguments_and_collisions_have_stable_codes(self) -> None:
+            restored = self.assert_ok(run_plan(root, "archive", "demo", "--undo"), "archive")
+            self.assertEqual(restored["paths"], [".agent_state/plans/demo"])
+            self.assertEqual(snapshot(task), before)
+            self.assertFalse(destination.exists())
+
+    def test_invalid_arguments_collisions_and_symlinks_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             for task_id in ("", "../escape", "a/b", "a" * 65, "é"):
                 with self.subTest(task_id=task_id):
-                    self.assert_refusal(run_plan(root, "create", task_id, "--goal", "g"), "create", "invalid_argument")
-            self.assert_refusal(run_plan(root, "create", "demo", "--goal", "  "), "create", "invalid_argument")
-            self.assert_ok(run_plan(root, "create", "Demo", "--goal", "g"), "create")
-            collision = self.assert_refusal(run_plan(root, "create", "demo", "--goal", "g"), "create", "record_exists")
-            self.assertEqual(collision["error"].get("paths"), [".agent_state/plans/Demo"])
-            self.assert_ok(run_plan(root, "archive", "Demo"), "archive", version=None)
-            collision = self.assert_refusal(run_plan(root, "create", "Demo", "--goal", "g"), "create", "record_exists")
-            self.assertEqual(collision["error"].get("paths"), [".agent_state/archives/Demo"])
-            self.assert_refusal(run_plan(root, "locate", "missing"), "locate", "record_missing")
-            self.assert_ok(run_plan(root, "create", "carriage", "--goal", "first\rsecond"), "create")
-            self.assertIn(b"first\rsecond", (record(root, "carriage") / "INDEX.md").read_bytes())
-
-    def test_archive_and_undo_preserve_legacy_and_v1_records_without_version_checks(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            for task_id, index_text, expected_version in (
-                ("legacy", "legacy bytes\n", None),
-                ("v1", "| record_version | 1 |\nold ticket table\n", None),
-            ):
-                with self.subTest(task_id=task_id):
-                    task = record(root, task_id)
-                    (task / "tickets").mkdir(parents=True)
-                    (task / "INDEX.md").write_text(index_text, encoding="utf-8")
-                    before = snapshot(task)
-                    self.assert_ok(run_plan(root, "archive", task_id), "archive", version=expected_version)
-                    archived = root / ".agent_state" / "archives" / task_id
-                    self.assertEqual(snapshot(archived), before)
-                    self.assert_ok(
-                        run_plan(root, "archive", task_id, "--undo"), "archive", version=None
+                    self.assert_refusal(
+                        run_plan(root, "create", task_id, "--goal", "g"),
+                        "create",
+                        "invalid_argument",
                     )
-                    self.assertEqual(snapshot(task), before)
-
-    def test_move_collisions_report_the_existing_destination(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "archive-source", "--goal", "g"), "create")
-            destination = root / ".agent_state" / "archives" / "ARCHIVE-source"
-            destination.mkdir(parents=True)
-            refused = self.assert_refusal(run_plan(root, "archive", "archive-source"), "archive", "record_exists")
-            self.assertEqual(refused["error"].get("paths"), [".agent_state/archives/ARCHIVE-source"])
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "undo-source", "--goal", "g"), "create")
-            self.assert_ok(run_plan(root, "archive", "undo-source"), "archive", version=None)
-            destination = root / ".agent_state" / "plans" / "UNDO-source"
-            destination.mkdir(parents=True)
-            refused = self.assert_refusal(
-                run_plan(root, "archive", "undo-source", "--undo"), "archive", "record_exists"
+                    self.assert_refusal(
+                        run_plan(root, "locate", task_id), "locate", "invalid_argument"
+                    )
+            self.assert_refusal(
+                run_plan(root, "create", "demo", "--goal", "  "),
+                "create",
+                "invalid_argument",
             )
-            self.assertEqual(refused["error"].get("paths"), [".agent_state/plans/UNDO-source"])
+            self.assert_ok(run_plan(root, "create", "Demo", "--goal", "g"), "create")
+            self.assert_refusal(
+                run_plan(root, "create", "demo", "--goal", "g"), "create", "record_exists"
+            )
 
-    def test_unsafe_record_trees_fail_closed_without_mutation(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+            unsafe = record(root, "Demo")
+            (unsafe / "link").symlink_to(root / "missing")
+            before = snapshot(unsafe)
+            self.assert_refusal(run_plan(root, "archive", "Demo"), "archive", "unsafe_path")
+            self.assertEqual(snapshot(unsafe), before)
+
+    def test_locate_rejects_symlinked_container_and_parent_without_following(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, tempfile.TemporaryDirectory() as external:
             root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            task = record(root)
-            (task / "unsafe").symlink_to(root / "missing")
-            before = snapshot(task)
-            refusal = self.assert_refusal(run_plan(root, "archive", "demo"), "archive", "unsafe_path", version=None)
-            self.assertTrue(refusal["error"].get("paths"))
-            self.assertEqual(snapshot(task), before)
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            outside = Path(external)
             plans = root / ".agent_state" / "plans"
-            plans.parent.mkdir(parents=True)
-            plans.write_text("not a directory", encoding="utf-8")
-            self.assert_refusal(run_plan(root, "create", "demo", "--goal", "g"), "create", "unsafe_path")
+            plans.mkdir(parents=True)
 
-    def test_v3_ticket_with_foreign_status_fails_naming_file_and_value(self) -> None:
+            container = plans / "demo"
+            container.symlink_to(outside, target_is_directory=True)
+            self.assert_refusal(run_plan(root, "locate", "demo"), "locate", "unsafe_path")
+            self.assertTrue(container.is_symlink())
+
+            container.unlink()
+            plans.rmdir()
+            plans.symlink_to(outside, target_is_directory=True)
+            self.assert_refusal(run_plan(root, "locate", "demo"), "locate", "unsafe_path")
+            self.assertTrue(plans.is_symlink())
+
+    def test_move_collision_preserves_both_records(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            task = record(root)
-            ticket = task / "tickets" / "T001-foreign-status.md"
-            # `in_progress` is the harness Task-tool vocabulary, not dev-flow's — the exact
-            # substitution D-012 documents.
-            ticket.write_text(ticket_text("T001-foreign-status", "in_progress"), encoding="utf-8")
-            refused = self.assert_refusal(
-                run_plan(root, "refresh", "demo"), "refresh", "invalid_ticket_status", version=3
+            self.assert_ok(run_plan(root, "create", "source", "--goal", "g"), "create")
+            destination = root / ".agent_state" / "archives" / "SOURCE"
+            destination.mkdir(parents=True)
+            source_before = snapshot(record(root, "source"))
+            refusal = self.assert_refusal(
+                run_plan(root, "archive", "source"), "archive", "record_exists"
             )
-            message = refused["error"]["message"]
-            self.assertIn(".agent_state/plans/demo/tickets/T001-foreign-status.md", message)
-            self.assertIn("in_progress", message)
-            self.assertEqual(refused["error"]["paths"], [".agent_state/plans/demo/tickets/T001-foreign-status.md"])
-
-    def test_v3_closed_ticket_without_disposition_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            task = record(root)
-            ticket = task / "tickets" / "T001-closed.md"
-            ticket.write_text(ticket_text("T001-closed", "closed"), encoding="utf-8")
-            refused = self.assert_refusal(
-                run_plan(root, "refresh", "demo"), "refresh", "invalid_ticket_disposition", version=3
-            )
-            self.assertIn(".agent_state/plans/demo/tickets/T001-closed.md", refused["error"]["message"])
-            self.assertEqual(
-                refused["error"]["repair"],
-                "Set the named closed ticket disposition to resolved, superseded, out-of-scope, or hard-stop.",
-            )
-            self.assertEqual(refused["error"]["paths"], [".agent_state/plans/demo/tickets/T001-closed.md"])
-
-    def test_v3_disposition_present_when_not_closed_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            task = record(root)
-            ticket = task / "tickets" / "T001-open-with-disposition.md"
-            ticket.write_text(ticket_text("T001-open-with-disposition", "open", disposition="resolved"), encoding="utf-8")
-            self.assert_refusal(run_plan(root, "refresh", "demo"), "refresh", "invalid_ticket_disposition", version=3)
-
-    def test_v3_valid_status_and_disposition_combinations_refresh_cleanly(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            task = record(root)
-            (task / "tickets" / "T001-open.md").write_text(ticket_text("T001-open", "open"), encoding="utf-8")
-            (task / "tickets" / "T002-active.md").write_text(ticket_text("T002-active", "active"), encoding="utf-8")
-            (task / "tickets" / "T003-closed.md").write_text(
-                ticket_text("T003-closed", "closed", disposition="hard-stop"), encoding="utf-8"
-            )
-            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
-
-    def test_v2_record_with_foreign_status_still_refreshes(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            task = record(root)
-            (task / "tickets").mkdir(parents=True)
-            (task / "tickets" / "T001-legacy.md").write_text(ticket_text("T001-legacy", "pending"), encoding="utf-8")
-            index = task / "INDEX.md"
-            index.write_text(
-                "| record_version | 2 |\n"
-                "<!-- task-record:files:start -->\nstale\n<!-- task-record:files:end -->\n",
-                encoding="utf-8",
-            )
-            refreshed = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
-            self.assertNotIn("stale", refreshed)
-            self.assertNotIn(START, index.read_text(encoding="utf-8"))
-            # A foreign status keeps its own group, so the ticket stays visible instead of being
-            # silently counted as finished.
-            frontier = self.assert_ok(run_plan(root, "locate", "demo"), "locate", version=2)["tickets"]
-            self.assertEqual(
-                frontier,
-                {
-                    "active": [],
-                    "open": [],
-                    "pending": [".agent_state/plans/demo/tickets/T001-legacy.md"],
-                    "closed_count": 0,
-                },
-            )
-
-    def test_size_reports_sections_and_ignores_the_generated_block(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            task = record(root)
-            index = task / "INDEX.md"
-            index.write_text(
-                index.read_text(encoding="utf-8").replace(
-                    "None.\n", "- **2026-01-01 — User:** 「a」\n- **2026-01-02 — User:** 「b」\n"
-                ),
-                encoding="utf-8",
-            )
-            for name in range(40):
-                (task / "tickets" / f"T{name:03d}-filler.md").write_text(
-                    ticket_text(f"T{name:03d}-filler", "open"), encoding="utf-8"
-                )
-            size = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")["size"]
-            self.assertIsInstance(size, dict)
-            assert isinstance(size, dict)
-            self.assertEqual(size["standing_orders"], 2)
-            self.assertEqual(size["over_budget"], False)
-            self.assertNotIn("repair", size)
-            sections = size["sections"]
-            assert isinstance(sections, dict)
-            self.assertEqual(
-                list(sections), ["Goal", "Current", "Next", "Envelope", "Standing orders"]
-            )
-            # The projected tree is machine-owned, so growing it must not consume the budget.
-            authored = size["authored_chars"]
-            assert isinstance(authored, int)
-            self.assertLess(authored, len(index.read_text(encoding="utf-8")))
-
-    def test_size_reports_over_budget_without_refusing(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            index = record(root) / "INDEX.md"
-            index.write_text(
-                index.read_text(encoding="utf-8").replace("Task created.", "x" * 7000),
-                encoding="utf-8",
-            )
-            size = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")["size"]
-            assert isinstance(size, dict)
-            self.assertEqual(size["over_budget"], True)
-            self.assertEqual(
-                size["repair"],
-                f"Remove at least {size['authored_chars'] - size['budget']} authored characters from the index.",
-            )
-            sections = size["sections"]
-            assert isinstance(sections, dict)
-            self.assertGreater(sections["Current"], 7000)
-
-    def test_staleness_is_reported_after_hand_edit(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            task = record(root)
-            ticket = task / "tickets" / "T001-open.md"
-            ticket.write_text(ticket_text("T001-open", "open"), encoding="utf-8")
-
-            first = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
-            self.assertIsNone(first["stale"])
-            index = task / "INDEX.md"
-            self.assertRegex(index.read_text(encoding="utf-8"), r"<!-- task-record:refreshed-at:[^>]+ -->")
-
-            # Hand-edit the ticket after the stamp `refresh` just left, without running `refresh`
-            # again in between — the scenario this instrument exists to catch. The rewrite alone
-            # bumps the file's mtime past the stamp already on disk.
-            ticket.write_text(ticket_text("T001-open", "active"), encoding="utf-8")
-
-            second = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
-            self.assertIsNotNone(second["stale"])
-            self.assertIn(".agent_state/plans/demo/tickets/T001-open.md", second["stale"]["newer_ticket_files"])
-
-            # Once refreshed again, the stamp catches up and staleness clears.
-            third = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
-            self.assertIsNone(third["stale"])
-
-    def test_create_generates_persistent_guidance_without_fabricating_initial_facts(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            goal = "Ship one durable record."
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", goal), "create")
-            index = record(root) / "INDEX.md"
-            created = index.read_text(encoding="utf-8")
-            sections = {
-                "Goal": ("Current", goal),
-                "Current": ("Next", "Task created."),
-                "Next": ("Envelope", "Write or select the first ticket."),
-                "Envelope": ("Standing orders", "Not yet recorded."),
-                "Standing orders": (None, "None."),
-            }
-            guidance = {
-                "Goal": ("user", "goal", "do not"),
-                "Current": ("judgement", "receipts", "sha", "not "),
-                "Next": ("next", "owner", "do not"),
-                "Envelope": ("minimum", "out-of-envelope", "do not"),
-                # The template points at Custody rather than restating it, so the
-                # comment owes the pointer and the shape of an entry, not a second
-                # copy of the rules SKILL.md holds.
-                "Standing orders": (
-                    "verbatim",
-                    "custody",
-                    "do not",
-                    "lapse",
-                ),
-            }
-            comments: list[str] = []
-            for heading, (following, initial_fact) in sections.items():
-                start = created.index(f"## {heading}\n") + len(f"## {heading}\n")
-                end = created.index(f"\n## {following}", start) if following else len(created)
-                body = created[start:end]
-                matches = re.findall(r"<!--.*?-->", body, flags=re.DOTALL)
-                self.assertEqual(len(matches), 1, heading)
-                comment = matches[0].casefold()
-                comments.append(matches[0])
-                self.assertTrue(body.lstrip().startswith("<!--"), heading)
-                for phrase in guidance[heading]:
-                    self.assertIn(phrase, comment, heading)
-                self.assertNotIn(goal.casefold(), comment)
-                self.assertNotIn("config-single-source", comment)
-                visible = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL).strip()
-                self.assertEqual(visible, initial_fact, heading)
-
-            self.assertEqual(len(comments), 5)
-            filled = created
-            for old, new in {
-                "Task created.": "Verified: no tickets yet.",
-                "Write or select the first ticket.": "Select the first bounded ticket.",
-                "Not yet recorded.": "spec.md",
-                "None.": "No active orders.",
-            }.items():
-                filled = filled.replace(old, new)
-            index.write_text(filled, encoding="utf-8")
-            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
-            refreshed = index.read_text(encoding="utf-8")
-            for comment in comments:
-                self.assertIn(comment, refreshed)
-
-    def test_v3_refresh_leaves_v2_and_v1_content_untouched_by_new_marker(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            task = record(root)
-            (task / "tickets").mkdir(parents=True)
-            index = task / "INDEX.md"
-            index.write_text(
-                "| record_version | 2 |\n<!-- task-record:files:start --><!-- task-record:files:end -->",
-                encoding="utf-8",
-            )
-            self.assert_ok(run_plan(root, "refresh", "demo"), "refresh", version=2)
-            self.assertNotIn("task-record:refreshed-at", index.read_text(encoding="utf-8"))
-
-    def test_locate_orients_without_mutating_and_names_the_other_two_commands(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            task = record(root)
-            (task / "tickets" / "T001-first.md").write_text(ticket_text("T001-first", "active"), encoding="utf-8")
-            (task / "tickets" / "T002-next.md").write_text(ticket_text("T002-next", "open", depends_on="T001-first"), encoding="utf-8")
-            (task / "tickets" / "T003-done.md").write_text(ticket_text("T003-done", "closed", "resolved"), encoding="utf-8")
-            before = snapshot(task)
-
-            body = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
-
-            self.assertEqual(snapshot(task), before, "locate must not write")
-            self.assertEqual(body["read"], [".agent_state/plans/demo/INDEX.md"])
-            self.assertEqual(
-                body["tickets"],
-                {
-                    "active": [".agent_state/plans/demo/tickets/T001-first.md"],
-                    "open": [".agent_state/plans/demo/tickets/T002-next.md"],
-                    "closed_count": 1,
-                },
-            )
-            # The other two skills answer for themselves; locate points and stops there.
-            self.assertEqual(
-                body["then_run"],
-                ["orchestrate.py status --task-id demo", "backlog.py list --status inbox"],
-            )
-            self.assertIn("size", body)
-            self.assertIn("lint", body)
-
-    def test_locate_omits_the_inventory_and_counts_closed_tickets(self) -> None:
-        """An arriving reader pays for what places it, not for what the record contains."""
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            task = record(root)
-            (task / "artifacts").mkdir()
-            for number in range(12):
-                (task / "artifacts" / f"receipt-{number:02d}.md").write_text("x", encoding="utf-8")
-            (task / "tickets" / "T001-first.md").write_text(ticket_text("T001-first", "active"), encoding="utf-8")
-            (task / "tickets" / "T002-next.md").write_text(ticket_text("T002-next", "open"), encoding="utf-8")
-            for number in range(3):
-                name = f"T1{number:02d}-done"
-                (task / "tickets" / f"{name}.md").write_text(
-                    ticket_text(name, "closed", "resolved"), encoding="utf-8"
-                )
-
-            body = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
-
-            self.assertNotIn("files", body)
-            self.assertEqual(
-                body["tickets"],
-                {
-                    "active": [".agent_state/plans/demo/tickets/T001-first.md"],
-                    "open": [".agent_state/plans/demo/tickets/T002-next.md"],
-                    "closed_count": 3,
-                },
-            )
-            self.assertEqual(body["read"], [".agent_state/plans/demo/INDEX.md"])
-            self.assertEqual(
-                body["then_run"],
-                ["orchestrate.py status --task-id demo", "backlog.py list --status inbox"],
-            )
-            for key in ("size", "lint", "stale"):
-                self.assertIn(key, body)
-
-            self.assertNotIn("files", self.assert_ok(run_plan(root, "refresh", "demo"), "refresh"))
-
-    def test_locate_names_the_specific_malformed_standing_order(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            index = record(root) / "INDEX.md"
-            text = index.read_text(encoding="utf-8").replace(
-                "Not yet recorded.", "Need and boundaries are frozen in spec.md."
-            ).replace(
-                "None.",
-                "- **2026-08-08 — User:** 「Keep this exact.」\n"
-                "  Lapses: explicit revocation.\n\n"
-                "- **User:** 「Broken order.」\n"
-                "  Lapses: explicit revocation.",
-            )
-            index.write_text(text, encoding="utf-8")
-
-            findings = self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"]
-
-            self.assertEqual(
-                findings,
-                [
-                    {
-                        "section": "Standing orders",
-                        "rule": "missing-date",
-                        "entry": "- **User:** 「Broken order.」",
-                        "repair": "Add a YYYY-MM-DD date to the named standing-order entry.",
-                    }
-                ],
-            )
-
-    def test_locate_reports_custody_obligation_lint(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            index = record(root) / "INDEX.md"
-            created = index.read_text(encoding="utf-8")
-
-            healthy = created.replace("Not yet recorded.", "Need and boundaries are frozen in spec.md.").replace(
-                "None.",
-                "- **2026-08-08 — User:** 「Keep this exact.」\n  Lapses: explicit revocation.",
-            )
-            index.write_text(healthy, encoding="utf-8")
-            self.assertEqual(self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"], [])
-
-            malformed = created.replace("Not yet recorded.", "").replace(
-                "None.", "- **User:** 「Keep this exact.」\n  Lapses: explicit revocation."
-            )
-            index.write_text(malformed, encoding="utf-8")
-            findings = self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"]
-            self.assertEqual(
-                findings,
-                [
-                    {
-                        "section": "Envelope",
-                        "rule": "blank",
-                        "repair": "Add non-comment text to Envelope.",
-                    },
-                    {
-                        "section": "Standing orders",
-                        "rule": "missing-date",
-                        "entry": "- **User:** 「Keep this exact.」",
-                        "repair": "Add a YYYY-MM-DD date to the named standing-order entry.",
-                    },
-                ],
-            )
-            before = index.read_text(encoding="utf-8")
-            self.assertEqual(self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")["lint"], findings)
-            self.assertIn(before, index.read_text(encoding="utf-8"), "refresh may stamp, not repair the record")
-
-            missing_lapse = healthy.replace("\n  Lapses: explicit revocation.", "")
-            index.write_text(missing_lapse, encoding="utf-8")
-            self.assertEqual(
-                self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"],
-                [
-                    {
-                        "section": "Standing orders",
-                        "rule": "missing-lapse",
-                        "entry": "- **2026-08-08 — User:** 「Keep this exact.」",
-                        "repair": "Add an indented non-empty Lapses: line to the named standing-order entry.",
-                    }
-                ],
-            )
-
-            not_verbatim = healthy.replace(
-                "「Keep this exact.」", "Keep this exact, despite 「incidental punctuation」."
-            )
-            index.write_text(not_verbatim, encoding="utf-8")
-            self.assertEqual(
-                self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"],
-                [
-                    {
-                        "section": "Standing orders",
-                        "rule": "missing-verbatim-quote",
-                        "entry": "- **2026-08-08 — User:** Keep this exact, despite 「incidental punctuation」.",
-                        "repair": "Put a 「...」 quote on the standing-order entry's first line.",
-                    }
-                ],
-            )
-
-    def test_locate_names_wrapped_and_non_outer_standing_order_quotes(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            index = record(root) / "INDEX.md"
-            text = index.read_text(encoding="utf-8").replace(
-                "Not yet recorded.", "Need and boundaries are frozen in spec.md."
-            ).replace(
-                "None.",
-                "- **2026-08-08 — User:** 「Keep this exact\n"
-                "  across lines。」\n"
-                "  Lapses: explicit revocation.\n\n"
-                "- **2026-08-09 — User:** Keep this exact, despite 「incidental punctuation」.\n"
-                "  Lapses: explicit revocation.",
-            )
-            index.write_text(text, encoding="utf-8")
-
-            findings = self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"]
-
-            self.assertEqual(
-                [(finding["rule"], finding["entry"]) for finding in findings],
-                [
-                    (
-                        "quote-not-one-line",
-                        "- **2026-08-08 — User:** 「Keep this exact",
-                    ),
-                    (
-                        "missing-verbatim-quote",
-                        "- **2026-08-09 — User:** Keep this exact, despite 「incidental punctuation」.",
-                    ),
-                ],
-            )
-
-    def test_every_lint_rule_carries_a_script_bound_repair(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            index = record(root) / "INDEX.md"
-            malformed = index.read_text(encoding="utf-8").replace(
-                "Task created.", "Landed ea508fc."
-            ).replace(
-                "Not yet recorded.", ""
-            ).replace(
-                "None.", "- **User:** no quote"
-            )
-            index.write_text(malformed, encoding="utf-8")
-
-            findings = self.assert_ok(run_plan(root, "locate", "demo"), "locate")["lint"]
-
-            self.assertEqual(
-                findings,
-                [
-                    {
-                        "section": "Current",
-                        "rule": "hex",
-                        "match": "ea508fc",
-                        "repair": "Remove ea508fc from Current.",
-                    },
-                    {
-                        "section": "Envelope",
-                        "rule": "blank",
-                        "repair": "Add non-comment text to Envelope.",
-                    },
-                    {
-                        "section": "Standing orders",
-                        "rule": "missing-date",
-                        "entry": "- **User:** no quote",
-                        "repair": "Add a YYYY-MM-DD date to the named standing-order entry.",
-                    },
-                    {
-                        "section": "Standing orders",
-                        "rule": "missing-lapse",
-                        "entry": "- **User:** no quote",
-                        "repair": "Add an indented non-empty Lapses: line to the named standing-order entry.",
-                    },
-                    {
-                        "section": "Standing orders",
-                        "rule": "missing-verbatim-quote",
-                        "entry": "- **User:** no quote",
-                        "repair": "Put a 「...」 quote on the standing-order entry's first line.",
-                    },
-                ],
-            )
-            for finding in findings:
-                repair = finding["repair"]
-                self.assertIsInstance(repair, str)
-                assert isinstance(repair, str)
-                self.assertTrue(repair)
-                self.assertNotIn("#", repair)
-                self.assertNotRegex(repair, r"\b[^ ]+\.md\b")
-
-    def test_lint_names_frozen_state_in_current_and_next_only(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            index = record(root) / "INDEX.md"
-
-            narrative = index.read_text(encoding="utf-8").replace(
-                "Task created.",
-                "Took the adapter route because the direct one needs a decision we have not made; "
-                "skipped the rollout checklist, it belongs to the next slice. Accepted 2026-08-03.",
-            )
-            index.write_text(narrative, encoding="utf-8")
-            clean = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
-            self.assertEqual(clean["lint"], [], "prose, a year and ordinary English must not match")
-
-            index.write_text(
-                narrative.replace("Not yet recorded.", "Frozen at ea508fc by the user.").replace(
-                    "Write or select the first ticket.", "Review 9db09f9 then land it."
-                ),
-                encoding="utf-8",
-            )
-            findings = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")["lint"]
-            # `Next` is scanned; `Envelope` is not — a frozen pointer is legitimate content there.
-            self.assertEqual(
-                findings,
-                [
-                    {
-                        "section": "Next",
-                        "rule": "hex",
-                        "match": "9db09f9",
-                        "repair": "Remove 9db09f9 from Next.",
-                    }
-                ],
-            )
-
-            index.write_text(
-                narrative.replace(
-                    "Accepted 2026-08-03.", "Accepted at ea508fc, tree 5a83f10, 402 nodes."
-                ),
-                encoding="utf-8",
-            )
-            findings = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")["lint"]
-            self.assertEqual(
-                findings,
-                [
-                    {
-                        "section": "Current",
-                        "rule": "hex",
-                        "match": "ea508fc",
-                        "repair": "Remove ea508fc from Current.",
-                    },
-                    {
-                        "section": "Current",
-                        "rule": "hex",
-                        "match": "5a83f10",
-                        "repair": "Remove 5a83f10 from Current.",
-                    },
-                ],
-                "the count is a known miss: only the hex rule shipped",
-            )
-
-    def test_refresh_reports_lint_without_refusing_or_editing(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
-            index = record(root) / "INDEX.md"
-            index.write_text(
-                index.read_text(encoding="utf-8").replace("Task created.", "Landed ea508fc."),
-                encoding="utf-8",
-            )
-            refreshed = self.assert_ok(run_plan(root, "refresh", "demo"), "refresh")
-            self.assertEqual(
-                refreshed["lint"],
-                [
-                    {
-                        "section": "Current",
-                        "rule": "hex",
-                        "match": "ea508fc",
-                        "repair": "Remove ea508fc from Current.",
-                    }
-                ],
-            )
-            self.assertIn("Landed ea508fc.", index.read_text(encoding="utf-8"))
+            self.assertEqual(refusal["error"]["paths"], [".agent_state/archives/SOURCE"])
+            self.assertEqual(snapshot(record(root, "source")), source_before)
+            self.assertTrue(destination.is_dir())
 
 
 if __name__ == "__main__":

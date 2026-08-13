@@ -2,5 +2,6 @@
 .agent_state
 .codegraph
 .pi-subagents
+.scratch/
 .mcp.json
 /.pi

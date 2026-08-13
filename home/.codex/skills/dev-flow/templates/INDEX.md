@@ -1,34 +1,38 @@
+---
+task_id: {{TASK_ID}}
+spec: none
+---
 # {{TASK_ID}}
 
-| Record field | Value |
-|---|---|
-| record_version | 3 |
-| task_id | {{TASK_ID}} |
-
 ## Goal
-<!-- Fill with the user's smallest current goal and observable outcome. Do not add inferred requirements, success claims, or quotes. -->
+<!-- State the user's smallest current goal and expected result. Keep inferred requirements, success claims, and quotes out of this section. -->
 {{GOAL}}
 
 ## Current
-<!-- Write only the judgement: why this route was taken, what was skipped and why. Not the receipts — a SHA, tree, ReviewGate id or count belongs to the artifact of the gate that produced it, and `refresh` reports one written here. Not guesses, plans, or unissued decisions. -->
+<!-- This section exists so a session that knows nothing can understand where the task stands.
+     Write only what serves that: present focus and current judgement. Anything that does not
+     change a new reader's understanding stays out — which writer or agent is working, commands
+     already run, intermediate attempts, and progress that leaves the next action unchanged.
+     Keep long review history, command logs, SHAs, trees, and receipts in their owning artifacts. -->
 Task created.
 
 ## Next
-<!-- Set the next bounded action and its owner after the current stop. Do not turn suggestions or unapproved work into instructions. -->
+<!-- Name the next bounded action and its owner. Keep suggestions and unapproved work distinct from instructions. -->
 Write or select the first ticket.
 
 ## Envelope
-<!-- Record the frozen minimum need, usage boundaries, and out-of-envelope cases, or point to the owning artifact. Do not invent constraints, policy, or acceptance facts. -->
+<!-- Record the frozen minimum need, usage boundaries, and out-of-envelope cases, or point to the owning artifact. Keep inferred constraints, policy, and acceptance claims out. -->
 Not yet recorded.
 
 ## Standing orders
-<!-- In-force orders only. Follow dev-flow/SKILL.md's Custody rules exactly when adding, retiring, or
-     reading an entry here — do not paraphrase, do not merge overlapping orders, do not grant
-     authority the user did not give.
+<!-- In-force orders only. Follow the active dev-flow skill's references/custody.md when adding,
+     retiring, or reading an entry here: preserve each verbatim grant, its source, and lapse.
 
      - **YYYY-MM-DD — User:** 「<verbatim>」
+       Source: `artifacts/standing-orders/<YYYY-MM-DD>-<slug>.md#grant`
        Lapses: <the user's own condition, or explicit revocation / task archive>
      - **YYYY-MM-DD — User:** 「<verbatim ratification>」
+       Source: `artifacts/standing-orders/<YYYY-MM-DD>-<slug>.md#ratification`
        Ratifies: <path#anchor of the approved text>
        Lapses: <condition> -->
 None.

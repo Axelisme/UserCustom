@@ -58,9 +58,6 @@ disable_legacy_entry() {
   mv -T -- "$active" "$disabled"
 }
 
-disable_legacy_entry "$HOME/.codex/skills/orchestrate" "$HOME/.codex/disabled-skills/orchestrate.bak"
-disable_legacy_entry "$HOME/.pi/agent/skills/orchestrate" "$HOME/.pi/agent/disabled-skills/orchestrate.bak"
-disable_legacy_entry "$HOME/.claude/skills/orchestrate" "$HOME/.claude/disabled-skills/orchestrate.bak"
 for profile in acceptance-reviewer lane-worker; do
   disable_legacy_entry "$HOME/.codex/agents/$profile.toml" "$HOME/.codex/disabled-agents/$profile.toml.bak"
   disable_legacy_entry "$HOME/.pi/agent/agents/$profile.md" "$HOME/.pi/agent/disabled-agents/$profile.md.bak"

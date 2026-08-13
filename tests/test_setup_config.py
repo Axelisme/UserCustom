@@ -174,26 +174,10 @@ class SetupConfigTests(unittest.TestCase):
                 )
             )
 
-    def test_setup_disables_destination_only_legacy_collaboration_entries(self) -> None:
+    def test_setup_disables_destination_only_legacy_agent_entries(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             source, home = support.seed_source(Path(temporary))
-            entries = [
-                (
-                    Path(".codex/skills/orchestrate"),
-                    Path(".codex/disabled-skills/orchestrate.bak"),
-                    True,
-                ),
-                (
-                    Path(".pi/agent/skills/orchestrate"),
-                    Path(".pi/agent/disabled-skills/orchestrate.bak"),
-                    True,
-                ),
-                (
-                    Path(".claude/skills/orchestrate"),
-                    Path(".claude/disabled-skills/orchestrate.bak"),
-                    True,
-                ),
-            ]
+            entries = []
             for runtime, extension in (
                 (Path(".codex"), ".toml"),
                 (Path(".pi/agent"), ".md"),
@@ -263,7 +247,7 @@ class SetupConfigTests(unittest.TestCase):
                         "legacy profile\n",
                     )
 
-    def test_setup_ships_collab_without_active_orchestrate(self) -> None:
+    def test_setup_ships_collab(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             source, home = support.seed_source(Path(temporary))
 
@@ -273,12 +257,6 @@ class SetupConfigTests(unittest.TestCase):
             collab = home / ".codex/skills/collab"
             self.assertTrue(collab.is_symlink())
             self.assertTrue(os.path.samefile(collab, source / "home/.codex/skills/collab"))
-            for relative in (
-                ".codex/skills/orchestrate",
-                ".pi/agent/skills/orchestrate",
-                ".claude/skills/orchestrate",
-            ):
-                self.assertFalse(os.path.lexists(home / relative))
 
 
 if __name__ == "__main__":

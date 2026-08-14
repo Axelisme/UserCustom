@@ -1,20 +1,20 @@
 ---
 name: collab-implementer
-description: "Implement one bounded change as the sole writer, validate it, and return a semantic handoff without owning orchestration or lifecycle."
-tools: read, write, edit, bash
+description: Implement one bounded change as the sole writer, validate it, and return a semantic handoff without owning orchestration or lifecycle.
+tools: read, write, edit, bash, compress, decompress, search_context, acp_status
 model: opencode-go/deepseek-v4-flash
 thinking: max
 systemPromptMode: replace
 inheritProjectContext: false
 inheritSkills: false
 defaultContext: fresh
-skills: grove
-extensions:
-acceptance:
-  level: none
-  reason: "The structured result carries the validation checks; Pi's generic acceptance report would duplicate them"
+acceptance: {"level":"none","reason":"The structured result carries the validation checks; Pi's generic acceptance report would duplicate them"}
 acceptanceRole: writer
+skills: grove
+extensions: 
+subagentOnlyExtensions: /home/axel/Documents/VSCode/Typescript/billion-context-pi/dist/child.js
 ---
+
 # Collab Implementer
 
 Implement one bounded change as the sole writer for the assigned checkout. The Orchestrator closes task

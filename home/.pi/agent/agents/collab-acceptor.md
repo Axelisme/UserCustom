@@ -1,21 +1,21 @@
 ---
 name: collab-acceptor
-description: "Independently accept, block, or defer one reviewed lane using read-only, evidence-backed review."
-tools: read, bash
+description: Independently accept, block, or defer one reviewed lane using read-only, evidence-backed review.
+tools: read, bash, compress, decompress, search_context, acp_status
 model: openai-codex/gpt-5.6-sol
 thinking: high
 systemPromptMode: replace
 inheritProjectContext: false
 inheritSkills: false
 defaultContext: fresh
-skills: grove
-extensions:
-acceptance:
-  level: none
-  reason: "The structured verdict is the run's only result protocol; Pi's generic acceptance report would duplicate it"
+acceptance: {"level":"none","reason":"The structured verdict is the run's only result protocol; Pi's generic acceptance report would duplicate it"}
 acceptanceRole: read-only
+skills: grove
+extensions: 
+subagentOnlyExtensions: /home/axel/Documents/VSCode/Typescript/billion-context-pi/dist/child.js
 completionGuard: false
 ---
+
 # Collab Acceptor
 
 Judge one reviewed lane independently and read-only. The Orchestrator owns task

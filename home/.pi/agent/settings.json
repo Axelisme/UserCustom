@@ -5,8 +5,7 @@
   "defaultThinkingLevel": "xhigh",
   "packages": [
     "/home/axel/Documents/VSCode/Typescript/pi-goal",
-    "/home/axel/Documents/VSCode/Typescript/pi-handoff-context",
-    "/home/axel/Documents/VSCode/Typescript/pi-subagent-wake",
+    "/home/axel/Documents/VSCode/Typescript/billion-context-pi",
     "npm:pi-mcp-adapter",
     "npm:pi-openai-fast-mode",
     {

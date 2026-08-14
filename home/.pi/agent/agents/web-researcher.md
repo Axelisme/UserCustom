@@ -1,15 +1,16 @@
 ---
 name: web-researcher
 description: Research official documentation and primary external sources with citations; no design or implementation.
-tools: read, bash, web_search, source_check, fetch_content, get_search_content
+tools: read, bash, web_search, source_check, fetch_content, get_search_content, compress, decompress, search_context, acp_status
 model: openai-codex/gpt-5.6-luna
 thinking: medium
 systemPromptMode: replace
 inheritProjectContext: false
 inheritSkills: false
 defaultContext: fresh
-extensions: ~/.pi/agent/npm/node_modules/pi-web-access/index.ts
 acceptanceRole: read-only
+extensions: ~/.pi/agent/npm/node_modules/pi-web-access/index.ts
+subagentOnlyExtensions: /home/axel/Documents/VSCode/Typescript/billion-context-pi/dist/child.js
 completionGuard: false
 ---
 

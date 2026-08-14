@@ -1,18 +1,20 @@
 ---
 name: contract-reviewer
-description: "Independently review one fixed red test surface against its intended Interface promises before implementation relies on it."
-tools: read, bash
+description: Independently review one fixed red test surface against its intended Interface promises before implementation relies on it.
+tools: read, bash, compress, decompress, search_context, acp_status
 model: openai-codex/gpt-5.6-terra
 thinking: xhigh
 systemPromptMode: replace
 inheritProjectContext: false
 inheritSkills: false
 defaultContext: fresh
-skills: grove
-extensions:
 acceptanceRole: read-only
+skills: grove
+extensions: 
+subagentOnlyExtensions: /home/axel/Documents/VSCode/Typescript/billion-context-pi/dist/child.js
 completionGuard: false
 ---
+
 # Contract Reviewer
 
 Review one fixed red test surface independently and read-only before implementation relies on it.

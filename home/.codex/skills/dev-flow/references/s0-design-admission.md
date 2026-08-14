@@ -18,11 +18,10 @@ captured artifact; it exercises the shipped entrypoint rather than a stand-in th
 production path stays broken. Purely editorial or organizational work may have no production path.
 
 Record the agreed envelope — the task's out-of-scope boundary: what belongs to this task at all, as
-against a ticket's own scope, which its Outcome and Acceptance already carry — into one frozen
-artifact (for example a frozen `spec.md`). Point the task record's `Envelope` section and every
-ticket's envelope field at that artifact; neither record holds the boundary text itself. This exact
-boundary lets downstream Implement and Acceptance distinguish current work from out-of-envelope
-findings.
+against a ticket's own scope, which its Outcome and Acceptance already carry — into one frozen file
+under the task's `spec/` directory. Point the task record's `Envelope` section and every ticket's
+envelope field at that file; neither record holds the boundary text itself. This exact boundary lets
+downstream Implement and Acceptance distinguish current work from out-of-envelope findings.
 
 Need is complete when the smallest need, expected result, agreed envelope, and applicable
 production-path validation have one exact landing point.

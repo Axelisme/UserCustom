@@ -83,9 +83,9 @@ User 主動觸發,表示把「當前交付的這份任務/專案」的實作裁�
 落點取決於當前任務有沒有 durable task record:
 
 - **有**(例如 dev-flow 的 `.agent_state/plans/<task-id>/`):寫到該 record 的
-  `artifacts/dictator-log.md`。實際建立檔案時,在 INDEX 的 in-force dictator standing-order
-  entry 加上明確的 `Decision log: artifacts/dictator-log.md` pointer;沒有日誌就不加。
-  這是獨立產物,**不要**併進 producer-owned 的 `decisions.md`。
+  `decisions/dictator-log.md`。實際建立檔案時,在 INDEX 的 in-force dictator standing-order
+  entry 加上明確的 `Decision log: decisions/dictator-log.md` pointer;沒有日誌就不加。
+  這是獨立產物,**不要**併進同目錄下 producer-owned 的其他 decision 檔案。
 - **沒有**:寫 `/tmp/dictator-<task>.md`(沙盒內、不會誤入 commit),或該 repo 既有的
   gitignored 工作目錄。
 

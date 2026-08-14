@@ -28,3 +28,6 @@ without duplicating either skill's checks.
 12. Independence beats persuasive dispatch prose; reviewers receive artifacts and a fixed point.
 13. Size a handoff by what the receiver must read before it can start: carry the conclusion, locate
     the rest exactly, and end every reference with the condition that discharges it.
+14. Scaffolding may ship empty structure into a record, never content: content copied into N
+    containers becomes N versions with no update path, and a shipped placeholder is indistinguishable
+    from real content to whatever parses the record.

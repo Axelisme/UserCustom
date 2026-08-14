@@ -30,7 +30,7 @@ Before starting any stage, read
 [references/s0-design-admission.md](references/s0-design-admission.md). `S0` names the full sequence.
 
 Decision-only tasks without implementation output and small corrections completed in Orchestrator's
-single context may skip the sequence. They still record the `Envelope` pointer to the frozen artifact
+single context may skip the sequence. They still record the `Envelope` pointer to the frozen file
 holding the task's out-of-scope boundary.
 
 ## Routing to implement or collab
@@ -59,9 +59,10 @@ command Interface and `templates/` for the current scaffold and frontmatter shap
 
 The script owns container lifecycle, not narrative truth: archive restoration reverses the opaque
 container move, locate is read-only, and narrative sections remain human-authored rather than
-script-validated schema. INDEX owns task identity and the optional spec pointer. Ticket frontmatter
-owns ticket identity and lifecycle state; Outcome and Acceptance own the bounded contract; state and
-Resolution own closure. Artifacts own durable evidence only when that evidence must persist.
+script-validated schema. INDEX owns task identity and the optional spec pointer. A ticket is a
+directory whose `ticket.md` frontmatter owns ticket identity and lifecycle state; Outcome and
+Acceptance own the bounded contract; state and Resolution own closure. Files beside `ticket.md` own
+that ticket's durable evidence, and only when the evidence must persist.
 
 The Orchestrator owns all ticket content and exclusively changes lifecycle state and Resolution. A
 delegated writer may only toggle the Acceptance claims explicitly assigned to it; a reviewer reads
@@ -72,9 +73,9 @@ temporary projections and never overwrite durable state merely because their UI 
 competing phase, progress, or acceptance store leaves the next reader choosing authority by accident.
 
 Read [references/record-hygiene.md](references/record-hygiene.md) when you are the one writing
-`INDEX.md`: it holds what stays there and where every other content kind already lives, so
-compaction is a **move** to that owner rather than a rewrite. A dispatched writer or reviewer never
-writes `INDEX.md`.
+`INDEX.md`, and again before writing durable evidence anywhere: it holds what stays in INDEX, the
+container shape every task already has, and where each content kind lives. Compaction is a **move**
+to that owner rather than a rewrite. A dispatched writer or reviewer never writes `INDEX.md`.
 
 ## Closing a ticket
 

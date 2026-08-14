@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import contextlib
+import dataclasses
+import importlib.util
+import io
 import json
 import os
 import re
-import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,17 +15,45 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "home" / ".codex" / "skills" / "dev-flow" / "scripts" / "plan.py"
 
 
-def run_plan(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(SCRIPT), *arguments],
-        cwd=root,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+def load_plan():
+    """Import the script as a module so its commands run in-process."""
+    specification = importlib.util.spec_from_file_location("dev_flow_plan", SCRIPT)
+    assert specification is not None and specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    return module
 
 
-def payload(done: subprocess.CompletedProcess[str]) -> dict[str, object]:
+plan = load_plan()
+
+
+@dataclasses.dataclass(frozen=True)
+class Outcome:
+    """What one command reported: its exit status and the streams it wrote."""
+
+    returncode: int
+    stdout: str
+    stderr: str
+
+
+def run_plan(root: Path, *arguments: str) -> Outcome:
+    """Call the real entry point in-process, from `root`, exactly as the shell would.
+
+    Running inside `root` rather than passing it keeps `main`'s own working-directory
+    resolution under test; only the process boundary is dropped.
+    """
+    out = io.StringIO()
+    err = io.StringIO()
+    status = 0
+    with contextlib.chdir(root), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        try:
+            plan.main(list(arguments))
+        except SystemExit as exit_status:  # a refusal, or argparse rejecting the arguments
+            status = int(exit_status.code or 0)
+    return Outcome(status, out.getvalue(), err.getvalue())
+
+
+def payload(done: Outcome) -> dict[str, object]:
     return json.loads(done.stdout)
 
 
@@ -33,6 +63,15 @@ def record(root: Path, task_id: str = "demo") -> Path:
 
 def ticket(ticket_id: str, state: str, body: str = "") -> str:
     return f"---\nid: {ticket_id}\nstate: {state}\n---\n# arbitrary narrative\n{body}"
+
+
+def write_ticket(tickets: Path, ticket_id: str, state: str, body: str = "") -> Path:
+    """Place one lifecycle ticket in its own directory, as the record shape requires."""
+    owner = tickets / ticket_id
+    owner.mkdir(parents=True, exist_ok=True)
+    path = owner / "ticket.md"
+    path.write_text(ticket(ticket_id, state, body), encoding="utf-8")
+    return path
 
 
 def snapshot(directory: Path) -> dict[str, tuple[str, bytes | str | None]]:
@@ -49,7 +88,7 @@ def snapshot(directory: Path) -> dict[str, tuple[str, bytes | str | None]]:
 
 
 class TaskRecordTests(unittest.TestCase):
-    def assert_ok(self, done: subprocess.CompletedProcess[str], operation: str) -> dict[str, object]:
+    def assert_ok(self, done: Outcome, operation: str) -> dict[str, object]:
         self.assertEqual(done.returncode, 0, done.stderr or done.stdout)
         body = payload(done)
         self.assertIs(body["ok"], True)
@@ -58,7 +97,7 @@ class TaskRecordTests(unittest.TestCase):
         return body
 
     def assert_refusal(
-        self, done: subprocess.CompletedProcess[str], operation: str, code: str
+        self, done: Outcome, operation: str, code: str
     ) -> dict[str, object]:
         self.assertEqual(done.returncode, 1, done.stderr or done.stdout)
         self.assertEqual(done.stderr, "")
@@ -73,20 +112,25 @@ class TaskRecordTests(unittest.TestCase):
         self.assertTrue(error["repair"])
         return body
 
-    def test_interface_has_only_create_archive_list_and_locate(self) -> None:
-        done = run_plan(Path(tempfile.gettempdir()), "--help")
-        self.assertEqual(done.returncode, 0, done.stderr)
-        choices = re.search(r"\{([^{}]+)\}", done.stdout)
-        self.assertIsNotNone(choices, done.stdout)
-        assert choices is not None
-        self.assertEqual(
-            tuple(part.strip() for part in choices.group(1).split(",")),
-            ("create", "archive", "list", "locate"),
-        )
+    def test_interface_has_only_the_owned_container_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            overall = run_plan(root, "--help")
+            self.assertEqual(overall.returncode, 0, overall.stderr)
 
-        list_help = run_plan(Path(tempfile.gettempdir()), "list", "--help")
-        self.assertEqual(list_help.returncode, 0, list_help.stderr)
-        self.assertNotIn("task_id", list_help.stdout)
+            choices = re.search(r"\{([^{}]+)\}", overall.stdout)
+            self.assertIsNotNone(choices, overall.stdout)
+            assert choices is not None
+            self.assertEqual(
+                tuple(part.strip() for part in choices.group(1).split(",")),
+                ("create", "archive", "list", "locate"),
+            )
+
+            listing = run_plan(root, "list", "--help")
+            self.assertEqual(listing.returncode, 0, listing.stderr)
+            self.assertNotIn("task_id", listing.stdout)
+
+            self.assertEqual(snapshot(root), {}, "reading the interface must not write")
 
     def test_list_missing_and_empty_plans_succeed_without_writes(self) -> None:
         for plans_exist in (False, True):
@@ -169,7 +213,8 @@ class TaskRecordTests(unittest.TestCase):
                 task = record(root, name)
                 (task / "tickets").mkdir(parents=True)
                 (task / "INDEX.md").write_bytes(index_bytes)
-                (task / "tickets" / "T001.md").write_bytes(b"\x00\xff SECRET-TICKET")
+                (task / "tickets" / "T001").mkdir(parents=True)
+                (task / "tickets" / "T001" / "ticket.md").write_bytes(b"\x00\xff SECRET-TICKET")
             before = snapshot(root)
 
             listed = self.assert_ok(run_plan(root, "list"), "list")
@@ -288,36 +333,139 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(refused["error"]["paths"], [f".agent_state/plans/{undecodable_name}"])
             self.assertEqual(snapshot(root), before, "list refusal must not write")
 
-    def test_create_emits_required_task_scaffold_without_validation_store(self) -> None:
+    def test_create_materializes_the_task_template_and_nothing_else(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            body = self.assert_ok(
-                run_plan(root, "create", "demo", "--goal", "Ship one durable record."), "create"
-            )
+            body = self.assert_ok(run_plan(root, "create", "demo"), "create")
             self.assertEqual(
                 body["paths"],
                 [
                     ".agent_state/plans/demo/INDEX.md",
+                    ".agent_state/plans/demo/decisions",
+                    ".agent_state/plans/demo/research",
+                    ".agent_state/plans/demo/spec",
+                    ".agent_state/plans/demo/standing-orders",
                     ".agent_state/plans/demo/tickets",
-                    ".agent_state/plans/demo/artifacts",
                 ],
             )
-            for scaffolded in ("tickets", "artifacts"):
+            for scaffolded in ("tickets", "spec", "research", "decisions", "standing-orders"):
                 self.assertTrue((record(root) / scaffolded).is_dir(), scaffolded)
-            self.assertFalse((record(root) / "validation").exists())
+                self.assertEqual(list((record(root) / scaffolded).iterdir()), [], scaffolded)
+            self.assertFalse((record(root) / "artifacts").exists())
+            self.assertEqual(
+                sorted(path.name for path in record(root).iterdir()),
+                ["INDEX.md", "decisions", "research", "spec", "standing-orders", "tickets"],
+            )
             created = (record(root) / "INDEX.md").read_text(encoding="utf-8")
             frontmatter = created.split("---", 2)[1].strip().splitlines()
             self.assertEqual(frontmatter, ["task_id: demo", "spec: none"])
-            self.assertIn("Ship one durable record.", created)
+            self.assertNotIn("{{", created, "every placeholder the script owns must be substituted")
 
             create_help = run_plan(root, "create", "--help")
             self.assertEqual(create_help.returncode, 0, create_help.stderr)
-            self.assertNotIn("--spec", create_help.stdout)
+            for narrative_argument in ("--spec", "--goal"):
+                self.assertNotIn(
+                    narrative_argument,
+                    create_help.stdout,
+                    "the script owns container lifecycle, not narrative content",
+                )
+
+    def test_main_resolves_its_root_from_the_working_directory_and_reports_exit_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            nested = root / "nested"
+            nested.mkdir()
+
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
+            self.assertTrue(record(root).is_dir())
+
+            # Run from a sibling directory: the record must follow the working directory, not the
+            # previous call's root, and must not reach back up into it.
+            created = self.assert_ok(run_plan(nested, "create", "demo"), "create")
+            self.assertEqual(created["paths"][0], ".agent_state/plans/demo/INDEX.md")
+            self.assertTrue((nested / ".agent_state" / "plans" / "demo").is_dir())
+
+            refused = run_plan(root, "create", "demo")
+            self.assert_refusal(refused, "create", "record_exists")
+            self.assertEqual(refused.returncode, 1, "a refusal must exit non-zero")
+            self.assertEqual(run_plan(root, "list").returncode, 0, "success must exit zero")
+
+    def test_created_container_mirrors_the_task_template_exactly(self) -> None:
+        source = SCRIPT.parent.parent / "templates" / "task"
+        expected = {
+            path.relative_to(source).as_posix()
+            for path in source.rglob("*")
+            if path.name != ".gitkeep"
+        }
+        self.assertTrue(expected, "the task template must not be empty")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
+            produced = {
+                path.relative_to(record(root)).as_posix() for path in record(root).rglob("*")
+            }
+
+            self.assertEqual(
+                produced,
+                expected,
+                "templates/task/ and the container create produces must stay identical",
+            )
+            self.assertFalse(
+                any(path.name == ".gitkeep" for path in record(root).rglob("*")),
+                "the git placeholder must not reach a task record",
+            )
+
+    def test_per_ticket_templates_are_not_shipped_inside_the_task_template(self) -> None:
+        templates = SCRIPT.parent.parent / "templates"
+        for name in ("ticket.md", "evidence.md"):
+            self.assertTrue((templates / "ticket" / name).is_file(), name)
+        # A shipped ticket.md would be parsed by locate, and its placeholder id fails validation:
+        # one unreadable ticket makes every count null, degrading orientation from birth.
+        self.assertEqual(list((templates / "task" / "tickets").glob("*.md")), [])
+        self.assertEqual(list((templates / "task").rglob("ticket.md")), [])
+
+    def test_a_ticket_is_its_directory_and_evidence_beside_it_is_not_counted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
+            tickets = record(root) / "tickets"
+            write_ticket(tickets, "q13-feed", "pending")
+            for kind in ("admission", "validation", "acceptance"):
+                (tickets / "q13-feed" / f"{kind}.md").write_text("evidence", encoding="utf-8")
+            (tickets / "q13-feed" / "gate-20260814T120000Z.log").write_text("log", encoding="utf-8")
+
+            located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+            self.assertEqual(
+                located["tickets"],
+                {"pending": 1, "closed": 0, "total": 1, "unreadable": 0},
+                "evidence sharing the ticket directory is not itself a ticket",
+            )
+
+    def test_a_ticket_directory_without_a_matching_ticket_file_is_unreadable(self) -> None:
+        cases = {
+            "missing ticket.md": lambda owner: owner.mkdir(parents=True),
+            "id disagreeing with the directory": lambda owner: write_ticket(
+                owner.parent, owner.name, "pending"
+            ).write_text(ticket("other-id", "pending"), encoding="utf-8"),
+        }
+        for label, prepare in cases.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                self.assert_ok(run_plan(root, "create", "demo"), "create")
+                prepare(record(root) / "tickets" / "q13-feed")
+
+                located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+                self.assertEqual(
+                    located["tickets"],
+                    {"pending": None, "closed": None, "total": None, "unreadable": 1},
+                )
+                self.assertEqual(located["orientation"], "partial")
 
     def test_locate_counts_new_and_legacy_ticket_bodies_from_frontmatter_only(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
             task = record(root)
             (task / "INDEX.md").write_text(
                 "---\ntask_id: demo\nspec: none\n---\nNo conventional narrative sections.\n",
@@ -332,12 +480,8 @@ class TaskRecordTests(unittest.TestCase):
                 "## Acceptance\n- [ ] **A1** — deliberately unchecked\n"
                 "## Resolution\nPending. Misleading lifecycle claim: pending.\n"
             )
-            (task / "tickets" / "T001-first.md").write_text(
-                ticket("T001-first", "pending", legacy_body), encoding="utf-8"
-            )
-            (task / "tickets" / "T002-done.md").write_text(
-                ticket("T002-done", "closed", new_body), encoding="utf-8"
-            )
+            write_ticket(task / "tickets", "T001-first", "pending", legacy_body)
+            write_ticket(task / "tickets", "T002-done", "closed", new_body)
             before = snapshot(task)
 
             located = self.assert_ok(run_plan(root, "locate", "DEMO"), "locate")
@@ -369,7 +513,7 @@ class TaskRecordTests(unittest.TestCase):
         for source, expected in cases:
             with self.subTest(source=source), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
-                self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+                self.assert_ok(run_plan(root, "create", "demo"), "create")
                 index = record(root) / "INDEX.md"
                 index.write_text(
                     index.read_text(encoding="utf-8").replace("spec: none", f"spec: {source}"),
@@ -384,7 +528,7 @@ class TaskRecordTests(unittest.TestCase):
     def test_unsupported_yaml_degrades_orientation_instead_of_guessing(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
             index = record(root) / "INDEX.md"
             index.write_text(
                 index.read_text(encoding="utf-8").replace("spec: none", "spec: [artifacts/spec.md]"),
@@ -403,7 +547,7 @@ class TaskRecordTests(unittest.TestCase):
     def test_invalid_index_task_id_keeps_location_but_degrades_orientation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
             index = record(root) / "INDEX.md"
             index.write_text(
                 index.read_text(encoding="utf-8").replace("task_id: demo", "task_id: ../escape"),
@@ -425,12 +569,13 @@ class TaskRecordTests(unittest.TestCase):
     def test_locate_reads_only_frontmatter_and_leaves_binary_bodies_opaque(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
             task = record(root)
             (task / "INDEX.md").write_bytes(
                 b"---\ntask_id: demo\nspec: artifacts/spec.md\n---\nopaque:\xff\x00body"
             )
-            (task / "tickets" / "T001.md").write_bytes(
+            (task / "tickets" / "T001").mkdir(parents=True)
+            (task / "tickets" / "T001" / "ticket.md").write_bytes(
                 b"---\nid: T001\nstate: pending\n---\nopaque:\xff\x00body"
             )
 
@@ -453,10 +598,7 @@ class TaskRecordTests(unittest.TestCase):
             with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 task = record(root, label)
-                (task / "tickets").mkdir(parents=True)
-                (task / "tickets" / "T001.md").write_text(
-                    ticket("T001", "pending"), encoding="utf-8"
-                )
+                write_ticket(task / "tickets", "T001", "pending")
                 index = task / "INDEX.md"
                 index.write_text(index_text, encoding="utf-8")
                 before = snapshot(task)
@@ -480,10 +622,13 @@ class TaskRecordTests(unittest.TestCase):
     def test_one_unreadable_ticket_makes_all_counts_unavailable(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
             tickets = record(root) / "tickets"
-            (tickets / "T001.md").write_text(ticket("T001", "pending"), encoding="utf-8")
-            (tickets / "T002.md").write_text("state: closed in prose only\n", encoding="utf-8")
+            write_ticket(tickets, "T001", "pending")
+            (tickets / "T002").mkdir(parents=True)
+            (tickets / "T002" / "ticket.md").write_text(
+                "state: closed in prose only\n", encoding="utf-8"
+            )
 
             located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
 
@@ -500,9 +645,9 @@ class TaskRecordTests(unittest.TestCase):
     def test_permission_denied_ticket_directory_never_fabricates_zero_counts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
             tickets = record(root) / "tickets"
-            (tickets / "T001.md").write_text(ticket("T001", "pending"), encoding="utf-8")
+            write_ticket(tickets, "T001", "pending")
             tickets.chmod(0)
             try:
                 try:
@@ -529,7 +674,7 @@ class TaskRecordTests(unittest.TestCase):
     def test_locate_reports_archived_missing_and_ambiguous_locations(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo", "--goal", "g"), "create")
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
             self.assert_ok(run_plan(root, "archive", "demo"), "archive")
             archived = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
             self.assertEqual(archived["location"], "archived")
@@ -589,21 +734,16 @@ class TaskRecordTests(unittest.TestCase):
             for task_id in ("", "../escape", "a/b", "a" * 65, "é"):
                 with self.subTest(task_id=task_id):
                     self.assert_refusal(
-                        run_plan(root, "create", task_id, "--goal", "g"),
+                        run_plan(root, "create", task_id),
                         "create",
                         "invalid_argument",
                     )
                     self.assert_refusal(
                         run_plan(root, "locate", task_id), "locate", "invalid_argument"
                     )
+            self.assert_ok(run_plan(root, "create", "Demo"), "create")
             self.assert_refusal(
-                run_plan(root, "create", "demo", "--goal", "  "),
-                "create",
-                "invalid_argument",
-            )
-            self.assert_ok(run_plan(root, "create", "Demo", "--goal", "g"), "create")
-            self.assert_refusal(
-                run_plan(root, "create", "demo", "--goal", "g"), "create", "record_exists"
+                run_plan(root, "create", "demo"), "create", "record_exists"
             )
 
             unsafe = record(root, "Demo")
@@ -633,7 +773,7 @@ class TaskRecordTests(unittest.TestCase):
     def test_move_collision_preserves_both_records(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "source", "--goal", "g"), "create")
+            self.assert_ok(run_plan(root, "create", "source"), "create")
             destination = root / ".agent_state" / "archives" / "SOURCE"
             destination.mkdir(parents=True)
             source_before = snapshot(record(root, "source"))

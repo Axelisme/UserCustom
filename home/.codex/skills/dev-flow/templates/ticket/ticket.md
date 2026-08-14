@@ -4,13 +4,18 @@ state: pending
 ---
 # {{TICKET_ID}} — {{TITLE}}
 
-<!-- The Orchestrator owns this ticket. Keep state pending until the Orchestrator resolves the ticket;
+<!-- Copy this to tickets/<ticket-id>/ticket.md. The frontmatter `id` must equal that directory name.
+     This ticket's durable evidence lives beside this file in the same directory — copy
+     the evidence.md beside this template for each piece — and the whole directory is what closure
+     discharges.
+
+     The Orchestrator owns this ticket. Keep state pending until the Orchestrator resolves the ticket;
      only the Orchestrator sets state closed or writes Resolution. -->
 
 | Ticket field | Value |
 |---|---|
 | depends_on | <the ticket ids that must close before this one starts, or `none`> |
-| envelope | <pointer to the frozen artifact holding this task's out-of-scope boundary — what belongs to this task at all, as against this ticket's own scope, which Outcome and Acceptance below already carry — or `none` if the task has no boundary> |
+| envelope | <pointer to the frozen file holding this task's out-of-scope boundary — what belongs to this task at all, as against this ticket's own scope, which Outcome and Acceptance below already carry — or `none` if the task has no boundary> |
 
 ## Outcome
 <!-- State the bounded goal and expected usable result. The Orchestrator owns this contract. -->

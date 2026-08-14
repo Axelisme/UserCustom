@@ -17,6 +17,7 @@ INDEX_FIELDS = ("task_id", "spec")
 TICKET_FIELDS = ("id", "state")
 TICKET_STATES = frozenset({"pending", "closed"})
 FRONTMATTER_MAX_BYTES = 16 * 1024
+TICKET_FILE = "ticket.md"
 
 
 class Refusal(RuntimeError):
@@ -74,8 +75,28 @@ def state_dir(root: Path, location: str, task_id: str) -> Path:
     return root / ".agent_state" / location / task_id
 
 
-def template(name: str) -> str:
-    return (Path(__file__).resolve().parent.parent / "templates" / name).read_text(encoding="utf-8")
+def copy_task_template(container: Path, task_id: str) -> list[str]:
+    """Materialize templates/task/ into a staged container.
+
+    The template directory is the single source of the container's shape: its directories are
+    the frame every task gets, and `.gitkeep` exists only so git carries the empty ones here.
+    Only the task id is substituted, because `locate` refuses an INDEX whose `task_id` does not
+    equal its container; every other section stays a placeholder the Orchestrator authors.
+    """
+    source = Path(__file__).resolve().parent.parent / "templates" / "task"
+    scaffolded: list[str] = []
+    for path in sorted(source.rglob("*")):
+        relative_path = path.relative_to(source)
+        if path.name == ".gitkeep":
+            continue
+        target = container / relative_path
+        if path.is_dir():
+            target.mkdir(parents=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write(target, path.read_text(encoding="utf-8").replace("{{TASK_ID}}", task_id))
+        scaffolded.append(relative_path.as_posix())
+    return scaffolded
 
 
 def atomic_write(path: Path, text: str) -> None:
@@ -191,12 +212,6 @@ def collision_paths(root: Path, location: str, task_id: str) -> tuple[Path, ...]
 
 def command_create(root: Path, arguments: argparse.Namespace) -> None:
     validate_task_id(arguments.task_id)
-    if not arguments.goal.strip() or "\x00" in arguments.goal:
-        raise Refusal(
-            "invalid_argument",
-            "goal must be non-empty text",
-            "Pass non-empty --goal text without NUL characters.",
-        )
     collisions = tuple(
         path
         for location in ("plans", "archives")
@@ -217,12 +232,7 @@ def command_create(root: Path, arguments: argparse.Namespace) -> None:
     temporary = staging / arguments.task_id
     destination = plans / arguments.task_id
     try:
-        (temporary / "tickets").mkdir(parents=True)
-        (temporary / "artifacts").mkdir()
-        initial = template("INDEX.md").replace("{{TASK_ID}}", arguments.task_id).replace(
-            "{{GOAL}}", arguments.goal
-        )
-        atomic_write(temporary / "INDEX.md", initial)
+        scaffolded = copy_task_template(temporary, arguments.task_id)
         os.rename(temporary, destination)
     finally:
         if temporary.exists():
@@ -237,11 +247,7 @@ def command_create(root: Path, arguments: argparse.Namespace) -> None:
         "create",
         ok=True,
         task_id=arguments.task_id,
-        paths=[
-            relative(root, destination / "INDEX.md"),
-            relative(root, destination / "tickets"),
-            relative(root, destination / "artifacts"),
-        ],
+        paths=[relative(root, destination / entry) for entry in scaffolded],
     )
 
 
@@ -384,21 +390,26 @@ def _ticket_counts(directory: Path) -> tuple[dict[str, int | None], dict[str, ob
 
     try:
         with os.scandir(tickets) as entries:
-            paths = sorted(
-                (Path(entry.path) for entry in entries if entry.name.endswith(".md")),
+            directories = sorted(
+                (Path(entry.path) for entry in entries if not entry.name.startswith(".")),
                 key=lambda path: path.name,
             )
     except OSError:
         return _unavailable_ticket_counts("ticket_directory_unreadable", None)
 
     pending = closed = unreadable = 0
-    for path in paths:
+    for owner in directories:
+        path = owner / TICKET_FILE
         try:
+            if owner.is_symlink() or not owner.is_dir():
+                raise ValueError("ticket is not a real directory")
             if path.is_symlink() or not path.is_file():
-                raise ValueError("ticket is not a regular file")
+                raise ValueError(f"{TICKET_FILE} is not a regular file")
             values = _read_yaml_frontmatter(path, TICKET_FIELDS)
             if not SAFE_ID.fullmatch(values["id"]) or not values["id"].isascii():
                 raise ValueError("ticket id is invalid")
+            if values["id"] != owner.name:
+                raise ValueError("ticket id does not match its directory")
             if values["state"] not in TICKET_STATES:
                 raise ValueError("ticket state is not pending or closed")
         except (OSError, UnicodeError, ValueError):
@@ -599,7 +610,6 @@ def parser() -> argparse.ArgumentParser:
     commands = result.add_subparsers(dest="operation", required=True)
     create = commands.add_parser("create")
     create.add_argument("task_id")
-    create.add_argument("--goal", required=True)
     archive = commands.add_parser("archive")
     archive.add_argument("task_id")
     archive.add_argument(
@@ -613,8 +623,9 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
-def main() -> None:
-    arguments = parser().parse_args()
+def main(argv: list[str] | None = None) -> None:
+    """Route one parsed operation against the working directory; a refusal exits non-zero."""
+    arguments = parser().parse_args(argv)
     root = Path.cwd().resolve()
     try:
         if arguments.operation == "create":

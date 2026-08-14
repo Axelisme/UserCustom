@@ -1,6 +1,6 @@
 ---
 name: collab
-description: "Orchestrator coordination for one bounded implementation: use when the Orchestrator places a writer, selects a review procedure, resolves a correction handback, collects, or lands."
+description: "Orchestrator coordination for one bounded change: use when the Orchestrator bounds a change, chooses an execution shape, judges a reviewed lane, collects, or lands."
 ---
 
 # Collab
@@ -8,25 +8,25 @@ description: "Orchestrator coordination for one bounded implementation: use when
 Collab coordinates one bounded change without owning a durable lifecycle. The Orchestrator retains task
 intent, acceptance criteria, final Acceptance judgement, and every scope or authority decision.
 
-**This is the Orchestrator's document; the agent profiles are the workers'.** Writer placement, review
-placement, collection, and landing are decided here, by the Orchestrator. A dispatched writer or reviewer
-carries out one bounded brief inside those decisions, working from its own profile.
+**This is the Orchestrator's document; the agent profiles are the workers'.** Execution shape, writer
+placement, review placement, collection, and landing are decided here, by the Orchestrator. A
+dispatched writer or reviewer carries out one bounded brief inside those decisions, working from its
+own profile.
 
 ## Load-bearing objects
 
 Define each at its first use:
 
-- **Orchestrator** — the agent that holds task intent and every scope or authority decision,
-  dispatches writers and reviewers, and never writes the subject itself.
+- **Orchestrator** — the agent that holds task intent and every scope or authority decision, chooses
+  the execution shape, dispatches writers and reviewers, makes the final Acceptance judgement, and
+  may itself write a bounded change.
 - **Integration branch** — the task-local cumulative result already accepted by the Orchestrator. This is
   the only meaning `accepted` needs here.
 - **Lane** — one writable branch, checkout, worktree, and its lane-owned temporary state, assigned
   to one live writer at a time. A lane is an execution resource, not durable narrative.
-- **Fixed subject** — the immutable state under review; a Git-backed subject is an exact commit and
-  tree. A branch name, `HEAD`, diff summary, or agent claim is not a fixed subject.
-- **Review result** — findings or a verdict tied only to its fixed subject.
-- **Collect** — movement of the Orchestrator-accepted lane subject into integration without introducing
-  another subject.
+- **Protected current lane** — the lane's current clean checkout state while its one writer is
+  stopped; the ordinary object under review.
+- **Collect** — movement of the Orchestrator-accepted current lane into integration.
 - **Land** — movement from task integration into a persistence branch.
 
 ## Core guardrails
@@ -35,78 +35,83 @@ Define each at its first use:
    a checkout carries one live writer, and reassigning it once that writer's run is over is not a
    second writer. That checkout is the lane. Parallelize read-only work; give each concurrent
    writer a separate writable checkout.
-2. **One fixed subject per review result — a verdict is a single-use pass.** Identify the subject
-   with an exact clean Git commit and tree, or an immutable runtime handoff that resolves to one
-   state.
-3. **A changed subject voids the pass.** Corrections return to implementation and review as a new
-   fixed subject needing its own review result. Exception: a change confined to state that a
-   declaring skill marks as non-shipping scaffolding does not void an existing verdict, when the
-   Orchestrator confirms the confinement each time.
+2. **Review reads the protected current lane.** A reviewer inspects the lane's current clean state
+   while its writer is stopped. A correction or collection-time reconciliation changes that lane, so
+   review runs again against its new current state.
+3. **Results carry semantics; identities belong to operations.** Exact commit and tree identities
+   stay with the operations that require them — collection, landing, and runtime tracking. Ordinary
+   worker and reviewer results carry only what workflow branching needs.
 
-These are the universal collaboration invariants. All other placement and procedure choices depend
-on the bounded change.
+## Responsibility boundaries
 
-## Suggested sequence
-
-The sequence below is suggested guidance for one bounded change.
-
-1. **Bound the change.** Give the writer the goal, write scope, constraints, expected result,
-   validation, and stop conditions. Carry needed conclusions inline; point to supporting material
-   with the condition for opening it. Before dispatch, inspect the selected receiver profile's
-   `Preconditions` and `Result` sections and close every required value, path, mutation authority,
-   evidence owner, and stop condition in the brief. This step is complete when the writer can
-   distinguish in-scope implementation from an Orchestrator decision and every receiver field is supplied.
-2. **Place the writer.** Preserve one live writer per writable checkout and account for pre-existing
-   state. Isolate when another writer is active or existing work needs protection. **Runtime
-   pointer:** before dispatching a writer, before collecting a lane (step 6), or before landing,
-   read this skill directory's `runtime-<name>.md` for your runtime when one exists; it carries
-   that runtime's dispatch, limit, resume behaviour, and the operations that carry out collection
-   and landing. A runtime needs no file when ordinary generic means — plain git and ordinary agent
-   dispatch — already carry out everything the core states above; the core is then directly
-   actionable as written. Treat any other absence as unwritten rather than as license to proceed:
-   if your runtime works through specialized tooling the core does not name (an extension, a
-   dedicated API) and no `runtime-<name>.md` documents it, stop and ask before guessing its
+1. **Bound the change.** Close the applicable goal, scope, Acceptance, validation, authority, and
+   stop conditions. Carry needed conclusions inline; point to supporting material with the condition
+   for opening it. Before dispatch, inspect the selected receiver profile's `Preconditions` and
+   `Result` sections and close every required value, path, mutation authority, evidence owner, and
+   stop condition in the brief. This step is complete when the writer can distinguish in-scope
+   implementation from an Orchestrator decision and every receiver field is supplied.
+2. **Choose the execution shape.** The Orchestrator selects direct writing, separate dispatches,
+   runtime composition, or another fitting shape, and safely places the next writer. The
+   Orchestrator may be that writer for a bounded change: one-writer lane exclusivity still applies,
+   and review is performed separately; when delegation would cost about as much as the change, no
+   worker subagent is needed. When implementation is delegated and its brief, delegated Acceptance
+   criteria, placement, mutation authority, and escalation boundary are closed, prefer runtime
+   composition of a worker → reviewer → bounded correction loop; coordinate a transition separately
+   when it depends on Orchestrator judgement. This is a preference, not a restriction on
+   Orchestrator placement. Preserve one live writer per writable checkout and account for
+   pre-existing state; isolate when another writer is active or existing work needs protection.
+   **Runtime pointer:** before dispatching a writer, before collecting (boundary 5), or before
+   landing, read this skill directory's `runtime-<name>.md` for your runtime when one exists; it
+   carries that runtime's dispatch, limit, resume behaviour, and the operations that carry out
+   collection and landing. A runtime needs no file when ordinary generic means — plain git and
+   ordinary agent dispatch — already carry out everything the core states above; the core is then
+   directly actionable as written. Treat any other absence as unwritten rather than as license to
+   proceed: if your runtime works through specialized tooling the core does not name (an extension,
+   a dedicated API) and no `runtime-<name>.md` documents it, stop and ask before guessing its
    mechanics. This step is complete when the writer has one bounded brief and one safe writable
    checkout.
-3. **Implement and identify.** The writer returns the fixed subject identity, changed paths, the
-   validation outcome with the artifact holding its evidence, and residual risks, or a specific
-   blocker or decision. This step is complete when the subject and its evidence are attributable to
-   one immutable state.
-4. **Review the fixed subject.** The Orchestrator selects a review procedure — generic Acceptance below
-   or the specialized [code-review](../code-review/SKILL.md) — and its placement. Use a separate
-   read-only checkout when the writer may continue concurrently, validation may write temporary
-   state, or review duration would lock the writer checkout. Serialized protected, non-mutating
-   review may use the writer checkout. This step is complete when the chosen procedure returns a
-   review result tied to the unchanged subject.
-5. **Resolve the result.** The Orchestrator makes the final Acceptance judgement and selects the next
-   owner. Send a bounded defect for correction; return new scope, product, architecture, or
-   authority decisions to the Orchestrator. A correction returns to step 3. When the task owns an
-   integration branch, an accepted lane subject goes to the collection boundary below before its
-   lane retires. This step is complete when the Orchestrator accepts the result or identifies the
-   unresolved decision and its owner.
-6. **Collect.** Move the Orchestrator-accepted lane subject into the integration branch one lane at a
-   time, without creating another subject. A stale lane is synchronized with current integration
-   first and stops at the new subject or conflict state; that new subject needs its own review and
-   Orchestrator judgement. This step is complete when the accepted subject is the integration head and
-   its lane is retired or its retention is reported.
-7. **Retire the lane.** When a writer or reviewer lane reaches its terminal handoff and will not
+3. **Implement and review.** Execute the chosen shape; for delegated closed work, prefer runtime
+   composition of worker, reviewer, and bounded correction under a finite Orchestrator-supplied
+   correction budget. The runtime pointer under boundary 2 carries the composed recipe and its
+   terminal outcomes. Generic Acceptance below reviews the protected current lane; specialized
+   procedures (such as code-review) remain alternatives with their own identity contracts. This
+   step is complete when the lane carries a worker result and an independent review result, or a
+   terminal blocker or decision request.
+4. **Judge the result.** The Orchestrator makes the final Acceptance judgement and chooses what
+   follows: accept the reviewed lane, return a bounded defect for correction, return a decision
+   request or exhausted correction budget to its owner, or select another shape. A correction
+   returns to boundary 3 against the changed lane. When the task owns an integration branch, an
+   accepted lane goes to the collection boundary below before its lane retires. This step is
+   complete when the Orchestrator accepts the result or identifies the unresolved decision and its
+   owner.
+5. **Collect.** Move the Orchestrator-accepted current lane into the integration branch one lane at
+   a time. A stale lane is synchronized with current integration first and stops at the reconciled
+   lane or a conflict; the reconciled lane needs its own review and Orchestrator judgement before
+   collection. This step is complete when the accepted lane is the integration head and its lane is
+   retired or its retention is reported.
+6. **Retire the lane.** When a writer or reviewer lane reaches its terminal handoff and will not
    resume, inventory and remove its lane-owned worktree registrations, temporary files or
    directories, sessions or processes, and agent-created branches that no longer carry required
-   subject evidence. Preserve pre-existing user state and evidence still needed for Acceptance or
-   landing; give every deliberate retention an owner and discharge condition. This step is complete
-   when no orphaned lane-owned resource remains.
+   evidence. Preserve pre-existing user state and evidence still needed for Acceptance or landing;
+   give every deliberate retention an owner and discharge condition. This step is complete when no
+   orphaned lane-owned resource remains.
 
 ## Continuity is a cache
 
-Evidence carries continuity: the bounded brief, fixed subject, direct observations, and validation
-results. Reusing the same writer or reviewer can preserve useful context and diagnosis, but it is a
-context-cache optimization rather than a liveness or authority requirement.
+Evidence and the protected current lane carry continuity: the bounded brief, direct observations,
+validation results, and the lane's current clean state. Reusing the same writer or reviewer can
+preserve useful context and diagnosis, but it is a context-cache optimization rather than a liveness
+or authority requirement.
 
-**Resume before replacing.** When a writer's run ends before its work does, resume that session
-first; it keeps working context that no record holds. Treat resume as unavailable only after
-confirming it, because an agent that looks unresponsive is often compacting and recovers on its own.
-Replace when resume is genuinely unavailable, or when prior context anchors a rejected approach and
-has become debt; give the replacement the evidence, not unverified role narration.
+**Resume is an Orchestrator option, not a first step.** When a writer's run ends before its work
+does, resume that session only when it preserves the required role, result, and authority contract;
+a resume that drops or weakens the child's structured result or acceptance contract is not an
+option. Otherwise dispatch a fresh compatible child carrying the original bounded contract, the
+current typed blockers, and the applicable validation, authority, and escalation boundary. In the
+composed loop, every correction and rereview is a fresh compatible child: a correction brief carries
+the original bounded worker contract plus the current typed blockers; a rereview brief carries the
+original review expectations and inspects the changed protected current lane. Give the replacement
+the evidence, not unverified role narration.
 
 **A replacement reads its ticket, not the task.** Its context is that ticket and whatever the ticket
 points to; the task record and sibling tickets belong to the Orchestrator, and handing them over invites
@@ -115,58 +120,63 @@ edits are validated, which are not, and what must not be redone or widened. A ti
 replacement to re-derive those is an unfinished brief, not a terse one.
 
 **Mechanical finish.** When a run ends after its semantic work is validated but before the checkout
-is clean and committed, and resume is confirmed unavailable, dispatch a fresh writer for that
-close-out alone: no semantic edits, lane-owned temporary state removed, staged paths and diff
-inspected, ancestry checked, one clean commit. Its result is still a fixed subject and still needs
-a review result.
+is clean and committed, and resuming the run cannot preserve the required role, result, and
+authority contract, dispatch a fresh writer for that close-out alone: no semantic edits, lane-owned
+temporary state removed, staged paths and diff inspected, ancestry checked, one clean commit. The
+lane still needs a review result.
 
-## Validation evidence has one owner
+## Worker results are semantic
 
-The writer's validation artifact owns the commands, their results, and the subject identity they
-ran against. The ticket points to it, the task record points to it, and nobody restates it. A
-changed subject appends a new attempt carrying its own identity and leaves earlier attempts
-untouched: a receipt that is edited no longer attests to anything. Reviewers consume that artifact
-and return a review result; the Orchestrator records it where the task's durable judgement lives.
+Workers report the validation checks they actually ran — each with `check`, `result: PASSED | FAILED`,
+and a concise `summary` — plus residual risks for non-blocking discoveries. A check may be a command
+or direct inspection; guidance prose is not turned into an automated test. Check results are
+observations, not workflow routing: an unrelated failed check may remain on a `COMPLETED` handoff
+when its non-blocking significance is explained in residual risks. Workers write no repo-local
+validation receipt; the run artifact and Git own the evidence, and reviewers read the lane directly.
 
 ## Generic Acceptance
 
-A generic acceptor works read-only against the exact fixed subject and returns only, in this
-order:
+Ordinary Generic Acceptance reviews the protected current lane: the writer is stopped, the lane is
+clean, and the acceptor reads its current state directly, read-only. It returns only, in this order:
 
-- `Verdict`: `PASS | BLOCKED`
-- `Subject`: exact identity reviewed
-- for each blocker:
+- `Verdict`: `PASS | BLOCKED | NEEDS_DECISION`
+- for each blocker (only for `BLOCKED`):
   - `Where`: the affected location
   - `Why`: the violated ticket expectation or Interface promise, plus direct evidence
   - `How to fix`: a bounded advisory suggestion
+- for `NEEDS_DECISION`: why a decision is needed and the exact question
+- `Out-of-envelope findings`: optional non-blocking observations outside the supplied boundary, each
+  with its location and evidence
 
-A `PASS` ends after Verdict and Subject; it needs no empty filler. Common labels such as
-correctness, regression, validation, scope, or their aliases may aid scanning, but the vocabulary
-is non-exhaustive and never replaces Why. The verdict is a review result, not ticket Acceptance:
-the Orchestrator owns the final judgement and closure. A fix that needs a new product, scope,
-architecture, or authority decision goes back to the Orchestrator.
+A `PASS` ends after Verdict and any out-of-envelope findings; it needs no empty filler. The verdict
+is a review result, not ticket Acceptance: the Orchestrator owns the final judgement and closure.
+`NEEDS_DECISION` returns a contract contradiction or new-scope question to the Orchestrator instead
+of routing rework. A correction or reconciliation changes the lane, so review runs again against its
+new current state. Generic Acceptance carries no fixed-subject result fields; specialized
+procedures such as [code-review](../code-review/SKILL.md) keep their own identity contracts.
 
 When delegated red/green validation needs several commands, a fixed working directory, or owned
 temporary state, use [TDD Gate mode](../tdd/gate.md). Keep a one-command loop direct.
 
 ## Review placement and the correction loop
 
-Reviewer placement may be composed by the runtime or an external workflow. One shape that fits a
-single bounded change is a worker → reviewer → bounded correction loop: the Orchestrator supplies a
-bounded brief, the delegated Acceptance criteria, and the escalation boundary, then consumes a
-terminal handoff. The loop may route defects that stay inside the existing contract directly back
-to the worker; scope, architecture, authority, or contract decisions terminate back at the Orchestrator.
-Intermediate rounds stay in workflow context unless an observation independently justifies a
-durable receipt.
+Reviewer placement may be composed by the runtime or an external workflow. For delegated closed work
+— bounded brief, delegated Acceptance criteria, placement, mutation authority, and escalation
+boundary all closed — prefer a runtime-composed worker → reviewer → bounded correction loop that
+consumes one terminal handoff: a reviewed lane, a worker blocker, a decision request, or an
+exhausted correction budget. The Orchestrator supplies a finite correction budget per composed
+workflow; initial implementation does not consume it, each `BLOCKED → writer correction` transition
+consumes one, and exhausting it returns to the Orchestrator without selecting a redesign procedure.
+Scope, architecture, authority, or contract decisions terminate the loop at the Orchestrator.
+Intermediate rounds stay in workflow context unless an observation independently justifies a durable
+record.
 
 Collab does not require a particular workflow engine, retry count, steering mechanism, merge
 strategy, first-parent shape, review procedure, or independent reviewer. Specialized code-review
 remains an alternative source of separate Standards/Spec findings rather than a PASS/BLOCKED
-Acceptance verdict.
-
-The terminal handoff carries the final fixed subject, the reviewed criteria, a verdict or the
-decision that is needed, applicable direct observations, and residual risk. Orchestrator- and
-user-observed Acceptance items are reported there rather than mislabelled as blockers.
+Acceptance verdict. The terminal handoff carries the reviewed lane's outcome, the decision that is
+needed, applicable direct observations, and residual risk. Orchestrator- and user-observed
+Acceptance items are reported there rather than mislabelled as blockers.
 
 ## Collection boundary
 
@@ -174,13 +184,14 @@ When existing work becomes the managed integration, adoption previews its mutati
 authorizing it, and uses an existing branch as the complete managed integration state. It discards
 changes from that integration when their lane has not been collected. It leaves any pre-existing
 lane branch or worktree outside the adopted integration unless a separate lifecycle operation
-retires it. The runtime pointer under "Place the writer" above names the operations that carry
-these out and tells you when their absence means your runtime needs none.
+retires it. The runtime pointer under "Choose the execution shape" above names the operations that
+carry these out and tells you when their absence means your runtime needs none.
 
-The runtime verifies the exact lane tip, that current integration is contained in the judged
-subject, and that managed refs and worktrees are clean and identity-exact, then advances
-integration to the exact subject and retires the lane when it is clean. Dirt or ambiguity in the
-lane is preserved and reported rather than deleted or inferred away.
+The runtime verifies the exact lane tip, that current integration is contained in the judged lane,
+and that managed refs and worktrees are clean and identity-exact, then advances integration to the
+accepted lane and retires it when it is clean. A stale lane is reconciled first; the reconciled
+current lane is reviewed and judged again before collection. Dirt or ambiguity in the lane is
+preserved and reported rather than deleted or inferred away.
 
 This task-local collection is not landing and requires no separate landing grant.
 
@@ -193,9 +204,9 @@ in-force task-scoped user grant authorizes landing under its stated conditions. 
 Orchestrator is running a dev-flow task, verify such a grant in dev-flow's [Custody
 reference](../dev-flow/references/custody.md), which owns how the record holds user authority.
 When landing is authorized and neither the user nor repository guidance names a method, default to
-squash. Landing evidence applies only to the reviewed identity; a changed subject first needs a new
-review result. The runtime pointer under "Place the writer" above names the operation that carries
-out landing.
+squash. Landing evidence applies only to the reviewed lane; a changed lane first needs a new review
+result. The runtime pointer under "Choose the execution shape" above names the operation that
+carries out landing.
 
 Land is the authority boundary Collab owns: its guidance ends once integration has moved into the
 persistence branch. Push and later persistence-branch handling stay outside Collab.

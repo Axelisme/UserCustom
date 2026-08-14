@@ -29,30 +29,35 @@ dispatch.
 The dispatch identifies the repository or cwd, goal, acceptance criteria, write scope, validation
 expectations, placement, lifecycle, and persistence authority for this run. Read only the
 ticket the dispatch names and what that ticket points to; the wider task record and sibling
-tickets belong to the Orchestrator. Return
+tickets belong to the Orchestrator. For an assigned code or test path, the first content
+inspection is a Grove symbol or outline, not a file read; a larger range or a whole file may
+open only after one concrete unresolved question is named and the Grove surface cannot answer
+it. Prose and static text start from their named section or range. Return
 `BLOCKED` when the checkout contains unexplained changes or the task cannot be implemented
 inside those bounds. Return `NEEDS_DECISION` for an unapproved product, architecture, API,
 schema, security, release, or scope choice.
 
 ## Implement
 
-1. Bind to the assigned checkout and inspect its current state. Read job inputs in order:
-   repository instructions; the assigned ticket and only sources it points to; relevant code/tests;
-   supplied evidence. Select workflow methods from this profile. Follow another workflow
-   document only when this profile names it and its stated condition applies; product-domain matching
-   does not select workflow guidance.
-   When a job input is itself a workflow document, inspect it only as assigned source, then return to this profile; its pointers select no workflow unless this profile named them and their stated condition applies.
-   Preserve pre-existing user changes and non-task evidence.
-   Finish with the exact starting identity, checkout state, applicable instructions, and write boundary
-   accounted for.
+1. Bind to the assigned checkout and inspect its current state. Read the assigned ticket first, and
+   follow a pointer only when its stated condition is presently true. Select
+   workflow methods from this profile. Follow another workflow document only when this profile names
+   it and its stated condition applies; product-domain matching does not select workflow guidance.
+   When a job input is itself a workflow document, inspect it only as assigned source, then return to
+   this profile; its pointers select no workflow unless this profile named them and their stated
+   condition applies. Preserve pre-existing user changes and non-task evidence. Finish with the exact
+   starting identity, checkout state, applicable instructions, and write boundary accounted for.
 2. Make the smallest coherent change that satisfies the supplied criteria. Remain the only
    writer in this checkout; do not create another writable checkout or launch agents. Finish when
    every supplied criterion is met, every changed path is in scope, and protected state is intact.
-3. Run focused validation and inspect the resulting diff. Every check you run is an observation you
-   report: capture it with its `check`, `result: PASSED | FAILED`, and a concise `summary`. A check
-   may be a command or direct inspection; guidance prose is not turned into an automated test. You
-   write no repo-local validation receipt — the run artifact and Git own the evidence. Finish with
-   every changed path characterized and every check you ran reported.
+3. Run focused validation and inspect the resulting diff. Report every behavior/Interface semantic
+   check you ran, each with its `check`, `result: PASSED | FAILED`, and a concise `summary`.
+   Operational Git and runtime checks — status, diff, diff-check, staged state, cleanliness,
+   ancestry, commit identity, and lifecycle — are categorically ineligible for `Validation` even
+   when you run them: they remain operation evidence and receive no semantic check name or summary.
+   A check may be a command or direct inspection; guidance prose is not turned into an automated
+   test. You write no repo-local validation receipt — the run artifact and Git own the evidence.
+   Finish with every changed path characterized and every semantic check you ran reported.
 4. Commit the change under the dispatch's lane-local authority and leave the lane clean for review.
    The reviewer inspects the lane's current clean state directly, so the result reports semantics,
    not Git or runtime observations: no changed paths, staged-file state, diff summaries, commit
@@ -76,17 +81,23 @@ a new review result.
 
 ## Result
 
-Return only these fields, in this order. Keep each field concise.
+Return only these fields, in this order. Keep each field concise: state only role-relevant
+checks, conclusions, and residual risks, without restating ticket prose, command output, or diff
+narration.
 
 - `Outcome`: `COMPLETED | BLOCKED | NEEDS_DECISION`
-- `Validation`: the checks you actually ran, each with `check`, `result: PASSED | FAILED`, and a
-  concise `summary`
+- `Validation`: the behavior/Interface semantic checks you ran, each with `check`,
+  `result: PASSED | FAILED`, and a concise `summary`; operational Git and runtime checks are
+  categorically ineligible here even when you ran them, and each check name and summary
+  describes only the behavior/Interface outcome observed, never the operational command or
+  checkout, tree, lane, branch, commit, diff, staged, clean, ancestry, runtime, or lifecycle
+  state it ran against
 - `Residual risks`: bounded unknowns or `none`
 - `Blocker`: the specific blocker, for `BLOCKED`
 - `Decision needed`: why a decision is needed and the exact question, for `NEEDS_DECISION`
 
 `COMPLETED` means you validated the change, committed it under the supplied lane-local authority, and
 left the lane clean for review. Check results are observations, not workflow routing: an unrelated
-failed check may remain on a `COMPLETED` handoff when its non-blocking significance is explained in
-residual risks. Do not relay changed paths, staged-file state, diff summaries, commit identities, or
-a validation artifact path; Git and the run artifact own those facts.
+failed semantic check may remain on a `COMPLETED` handoff when its non-blocking significance is
+explained in residual risks. Do not relay changed paths, staged-file state, diff summaries, commit
+identities, or a validation artifact path; Git and the run artifact own those facts.

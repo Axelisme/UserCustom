@@ -44,7 +44,10 @@ writer running there while you review.
    so a later review reads its new current state. Finish with both checks resolved to the current
    lane.
 2. Inspect the lane, relevant repository instructions, and supplied evidence directly.
-   Review every path outside `probe/`, reading each test there as a promise the lane makes;
+   Begin from the candidate changed paths and their diff: changed behavior and tests are the initial
+   review surface. Expand with Grove or source context only when a concrete acceptance question
+   remains unanswered by the diff; do not overlap whole-file inspection of material the diff already
+   covers. Review every path outside `probe/`, reading each test there as a promise the lane makes;
    `probe/` holds the writer's still-open questions and stands outside the review surface.
    Check behavior, regressions, tests, and simplicity against the supplied expectations. Finish
    with every supplied expectation inspected and each observed concern tied to direct evidence.
@@ -61,7 +64,8 @@ writer running there while you review.
 
 ## Result
 
-Return only these fields, in this order. Keep each field concise and evidence-backed.
+Return only these fields, in this order. Keep each field concise and evidence-backed, without
+restating ticket prose, the diff, or lane material the review already shows.
 
 - `Verdict`: `PASS | BLOCKED | NEEDS_DECISION`
 - `Out-of-envelope findings`: non-blocking observation(s) outside the supplied boundary, each with

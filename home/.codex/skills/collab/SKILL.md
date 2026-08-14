@@ -45,11 +45,14 @@ Define each at its first use:
 ## Responsibility boundaries
 
 1. **Bound the change.** Close the applicable goal, scope, Acceptance, validation, authority, and
-   stop conditions. Carry needed conclusions inline; point to supporting material with the condition
-   for opening it. Before dispatch, inspect the selected receiver profile's `Preconditions` and
-   `Result` sections and close every required value, path, mutation authority, evidence owner, and
-   stop condition in the brief. This step is complete when the writer can distinguish in-scope
-   implementation from an Orchestrator decision and every receiver field is supplied.
+   stop conditions in the ticket. The ticket owns Outcome and Acceptance; a dispatch brief names the
+   ticket and carries only the operational deltas — placement, authority, validation, stop
+   conditions, and role-specific deltas — without copying the ticket's prose. Carry needed
+   conclusions inline; point to supporting material with the condition for opening it. Before
+   dispatch, inspect the selected receiver profile's `Preconditions` and `Result` sections and close
+   every required value, path, mutation authority, evidence owner, and stop condition in the brief.
+   This step is complete when the writer can distinguish in-scope implementation from an Orchestrator
+   decision and every receiver field is supplied.
 2. **Choose the execution shape.** The Orchestrator selects direct writing, separate dispatches,
    runtime composition, or another fitting shape, and safely places the next writer. The
    Orchestrator may be that writer for a bounded change: one-writer lane exclusivity still applies,
@@ -61,9 +64,9 @@ Define each at its first use:
    Orchestrator placement. Preserve one live writer per writable checkout and account for
    pre-existing state; isolate when another writer is active or existing work needs protection.
    **Runtime pointer:** before dispatching a writer, before collecting (boundary 5), or before
-   landing, read this skill directory's `runtime-<name>.md` for your runtime when one exists; it
-   carries that runtime's dispatch, limit, resume behaviour, and the operations that carry out
-   collection and landing. A runtime needs no file when ordinary generic means — plain git and
+   landing, read this skill directory's `runtime-<name>.md` for your runtime when one exists; its
+   Routing section names the section each step reads, and general mechanics stay behind conditional
+   pointers within the file. A runtime needs no file when ordinary generic means — plain git and
    ordinary agent dispatch — already carry out everything the core states above; the core is then
    directly actionable as written. Treat any other absence as unwritten rather than as license to
    proceed: if your runtime works through specialized tooling the core does not name (an extension,
@@ -127,12 +130,22 @@ lane still needs a review result.
 
 ## Worker results are semantic
 
-Workers report the validation checks they actually ran — each with `check`, `result: PASSED | FAILED`,
-and a concise `summary` — plus residual risks for non-blocking discoveries. A check may be a command
-or direct inspection; guidance prose is not turned into an automated test. Check results are
-observations, not workflow routing: an unrelated failed check may remain on a `COMPLETED` handoff
-when its non-blocking significance is explained in residual risks. Workers write no repo-local
-validation receipt; the run artifact and Git own the evidence, and reviewers read the lane directly.
+Worker Validation reports the behavior and Interface semantic checks the worker actually ran — each
+with `check`, `result: PASSED | FAILED`, and a concise `summary` — plus residual risks for
+non-blocking discoveries. Operational Git and runtime checks are categorically ineligible for
+Validation and terminal semantic projection even when the worker runs them: status, diff, diff-check,
+staged state, cleanliness, ancestry, commit identity, and runtime or lifecycle checks remain
+operation evidence and receive no semantic check name or summary. Each semantic check name and
+summary describes only the behavior/Interface outcome observed, never the operational command or
+checkout, tree, lane, branch, commit, diff, staged, clean, ancestry, runtime, or lifecycle state
+it ran against. The obligation to report every check run applies only to behavior/Interface
+semantic checks. A check may be a command or direct
+inspection; guidance prose is not turned into an automated test. Check results are observations, not
+workflow routing: an unrelated failed check may remain on a `COMPLETED` handoff when its non-blocking
+significance is explained in residual risks. Workers write no repo-local validation receipt; the run
+artifact and Git own the evidence, and reviewers read the lane directly. Results state only
+role-relevant checks, conclusions, and residual risks, without restating ticket prose, command
+output, or evidence the ticket, Git, or the run artifact already own.
 
 ## Generic Acceptance
 

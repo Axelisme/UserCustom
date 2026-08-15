@@ -2021,7 +2021,7 @@ async function laneCollect(
   }
 
   const integration = await requireManagedIntegration(controlRepository(repo), task, signal);
-  if (!(await isFullyClean(repo, task.integrationPath, signal))) {
+  if (await isDirty(repo, task.integrationPath, signal)) {
     throw new CollabOpError(
       "dirty_worktree",
       "integration worktree is dirty",

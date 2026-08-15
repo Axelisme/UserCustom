@@ -1436,6 +1436,44 @@ class CollabOpExtensionLaneCollectTests(unittest.TestCase):
             self.assertEqual(event["integration_sha"], lane_sha)
             self.assertTrue(event["cleanup_cleaned"])
 
+    def test_ready_collect_allows_ignored_integration_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text("ignored.tmp\n", encoding="utf-8")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore local files")
+            expected = seed_managed_task(repository)
+            lane = Path(expected["lane"])
+            integration = Path(expected["integration"])
+            (lane / "work.txt").write_text("work\n", encoding="utf-8")
+            git(lane, "add", "work.txt")
+            git(lane, "commit", "-m", "lane work")
+            lane_sha = git(lane, "rev-parse", "HEAD")
+            ignored = integration / "ignored.tmp"
+            ignored.write_text("preserve\n", encoding="utf-8")
+            self.assertEqual(git(integration, "status", "--porcelain=v1"), "")
+            self.assertEqual(
+                git(integration, "status", "--porcelain=v1", "--ignored=matching"),
+                "!! ignored.tmp",
+            )
+
+            observed = invoke(
+                repository,
+                {
+                    "method": "lane_collect",
+                    "task_id": "demo",
+                    "lane_id": "writer-1",
+                    "sha": lane_sha,
+                    "integration_sha": expected["integration_head"],
+                },
+            )
+
+            self.assertFalse(observed["is_error"])
+            self.assertEqual(observed["result"]["state"], "collected")
+            self.assertEqual(observed["result"]["integration_sha"], lane_sha)
+            self.assertEqual(git(integration, "rev-parse", "HEAD"), lane_sha)
+            self.assertEqual(ignored.read_text(encoding="utf-8"), "preserve\n")
+
     def test_ready_collect_creates_no_additional_content_bearing_commit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
@@ -1534,7 +1572,7 @@ class CollabOpExtensionLaneCollectTests(unittest.TestCase):
             self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), lane_sha)
 
     def test_collect_rejects_dirty_or_moved_integration_managed_state(self) -> None:
-        cases = ("integration_dirty", "integration_identity")
+        cases = ("integration_untracked_dirty", "integration_tracked_dirty", "integration_identity")
         for case in cases:
             with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
                 repository, _ = seed_repository(Path(temporary))
@@ -1545,8 +1583,10 @@ class CollabOpExtensionLaneCollectTests(unittest.TestCase):
                 git(lane, "add", "work.txt")
                 git(lane, "commit", "-m", "work")
                 lane_sha = git(lane, "rev-parse", "HEAD")
-                if case == "integration_dirty":
+                if case == "integration_untracked_dirty":
                     (integration / "dirty.txt").write_text("preserve\n", encoding="utf-8")
+                elif case == "integration_tracked_dirty":
+                    (integration / "tracked.txt").write_text("preserve tracked change\n", encoding="utf-8")
                 else:
                     git(integration, "checkout", "--detach")
 
@@ -1562,12 +1602,17 @@ class CollabOpExtensionLaneCollectTests(unittest.TestCase):
                 )
 
                 self.assertTrue(observed["is_error"])
-                expected_code = "dirty_worktree" if case == "integration_dirty" else "worktree_identity_mismatch"
+                expected_code = "worktree_identity_mismatch" if case == "integration_identity" else "dirty_worktree"
                 self.assertEqual(observed["error"]["error"]["code"], expected_code)
                 self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), expected["integration_head"])
                 self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), lane_sha)
-                if case == "integration_dirty":
+                if case == "integration_untracked_dirty":
                     self.assertEqual((integration / "dirty.txt").read_text(encoding="utf-8"), "preserve\n")
+                elif case == "integration_tracked_dirty":
+                    self.assertEqual(
+                        (integration / "tracked.txt").read_text(encoding="utf-8"),
+                        "preserve tracked change\n",
+                    )
 
     def test_collect_rejects_lane_with_active_merge_or_conflict_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -17,6 +17,10 @@ Shared reference that two user-invoked skills both need can live in neither — 
 
 The invocation cut of splitting (the sequence cut lives in `SKILL.md`): split off a model-invoked skill when you have a distinct leading word that should trigger it on its own — a trigger word you actually use in your prompts — or another skill must reach it. You pay context load for the new always-loaded description, so that independent reach has to be worth it.
 
+## Porting
+
+Adapting a skill written for another ecosystem — separating its portable content from its ecosystem bindings, deciding adopt/merge/absorb/skip, and rebinding without rewriting — has its own checklist: [PORTING.md](PORTING.md).
+
 ## Router skills
 
 When user-invoked skills multiply past what you can remember, that piled-up cognitive load is cured by a **router skill**: one user-invoked skill that names the others and when to reach for each, so the human has one skill to remember instead of many. It can only hint, never fire them: user-invoked skills have no description, so nothing but the human can reach them.

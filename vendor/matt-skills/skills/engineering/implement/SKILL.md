@@ -6,10 +6,17 @@ disable-model-invocation: true
 
 Implement the work described by the user in the spec or tickets.
 
-Use /tdd where possible, at pre-agreed seams.
+Choose validation from the work's intent. Use /tdd when the behavior warrants a red-first loop at a
+meaningful seam; otherwise use focused direct checks.
 
-Run typechecking regularly, single test files regularly, and the full test suite once at the end.
+Run typechecking and focused tests regularly, then the applicable full suite at the end.
 
-Once done, use /code-review to review the work.
+When independent review is requested, use /code-review, binding it to the fixed subject that
+procedure requires.
 
-Commit your work to the current branch.
+Commit, land, or otherwise mutate repository history only with applicable user authority; otherwise
+return the validated subject without forcing persistence.
+
+Implementation is complete when every supplied spec or ticket criterion is accounted for, every
+changed path is characterized, every applicable check and outcome is recorded, and unresolved
+blockers or residual risks are reported with the fixed subject.

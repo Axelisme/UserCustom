@@ -40,6 +40,8 @@ Push too little down and the top bloats; push too much and you hide material the
 
 **Co-location** is the within-file companion: where the ladder decides _how far down_ a piece sits, co-location decides _what sits beside it_ once there. Keep a concept's definition, rules, and caveats under one heading rather than scattered, so reading one part brings its neighbours with it. The test: the document should read like documentation written for the agent — grouped material reads that way; scattered material does not. (Distinct from duplication: that repeats one meaning in two places; scattering fragments one meaning across many.)
 
+The sharpest case is a rule's **load-bearing noun** — the term its obligation actually rests on. Define that noun where the rule uses it, in the smallest form that carries the obligation. Leaving it undefined does not read to the agent as missing: each one supplies a plausible meaning and obeys the rule it invented, or leaves the document to hunt the meaning elsewhere, so the defect surfaces as inconsistent behaviour rather than as a question.
+
 **Sprawl** is the failure mode here: a document simply too long, even when every line is live and unique. Attention thins across the excess, and every extra line is one more to keep relevant. The cure is the ladder: disclose reference behind pointers, and split by branch or sequence so each path carries only what it needs.
 
 ## Steps and completion criteria

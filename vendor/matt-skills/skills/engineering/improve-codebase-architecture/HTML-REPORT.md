@@ -6,10 +6,10 @@ The architectural review is rendered as a single self-contained HTML file in the
 
 ```html
 <!doctype html>
-<html lang="en">
+<html lang="zh-Hant">
   <head>
     <meta charset="utf-8" />
-    <title>Architecture review — {{repo name}}</title>
+    <title>架構檢視 — {{repo name}}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
       import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
@@ -35,7 +35,7 @@ The architectural review is rendered as a single self-contained HTML file in the
 
 ## Header
 
-Repo name, date, and a compact legend: solid box = module, dashed line = seam, red arrow = leakage, thick dark box = deep module. No introduction paragraph — straight into the candidates.
+Repo name, date, and a compact Traditional Chinese legend: solid box = module, dashed line = seam, red arrow = leakage, thick dark box = deep module. No introduction paragraph — straight into the candidates.
 
 ## Candidate card
 
@@ -43,14 +43,14 @@ The diagrams carry the weight. Prose is sparse, plain, and uses the glossary ter
 
 Each candidate is one `<article>`:
 
-- **Title** — short, names the deepening (e.g. "Collapse the Order intake pipeline").
-- **Badge row** — recommendation strength (`Strong` = emerald, `Worth exploring` = amber, `Speculative` = slate), plus a tag for the dependency category (`in-process`, `local-substitutable`, `ports & adapters`, `mock`).
-- **Files** — monospaced list, `font-mono text-sm`.
-- **Before / After diagram** — the centrepiece. Two columns, side by side. See patterns below.
-- **Problem** — one sentence. What hurts.
-- **Solution** — one sentence. What changes.
-- **Wins** — bullets, ≤6 words each. e.g. "Tests hit one interface", "Pricing logic stops leaking", "Delete 4 shallow wrappers".
-- **ADR callout** (if applicable) — one line in an amber-tinted box.
+- **Title** — short Traditional Chinese title that names the deepening; keep domain nouns and code identifiers unchanged when needed (e.g. "收斂 Order intake pipeline").
+- **Badge row** — recommendation strength (`強烈建議` = emerald, `值得探索` = amber, `推測性` = slate), plus a tag for the dependency category (`in-process`, `local-substitutable`, `ports & adapters`, `mock`).
+- **涉及檔案** — monospaced list, `font-mono text-sm`.
+- **調整前 / 調整後圖** — the centrepiece. Two columns, side by side. See patterns below.
+- **問題** — one sentence in Traditional Chinese. What hurts.
+- **調整方向** — one sentence in Traditional Chinese. What changes.
+- **收益** — bullets, short Traditional Chinese phrases. e.g. "測試對準一個 interface", "Pricing 不再跨 seam 外漏", "刪除 4 個 shallow module".
+- **ADR 提醒** (if applicable) — one line in an amber-tinted box, written in Traditional Chinese.
 
 No paragraphs of explanation. If the diagram needs a paragraph to be understood, redraw the diagram.
 
@@ -101,11 +101,11 @@ Before: a tree of function calls rendered as nested boxes. After: the same tree 
 
 ## Top recommendation section
 
-One larger card. Candidate name, one sentence on why, anchor link to its card. That's it.
+One larger card with the heading `優先建議`. Candidate name, one Traditional Chinese sentence on why, anchor link to its card. That's it.
 
 ## Tone
 
-Plain English, concise — but the architectural nouns and verbs come straight from the `/codebase-design` skill. Concision is not an excuse to drift.
+Plain Traditional Chinese, concise — but the architectural nouns and verbs come straight from the `/codebase-design` skill. Concision is not an excuse to drift. User-facing prose, headings, labels, legends, captions, badges, and recommendation text must be Traditional Chinese.
 
 **Use exactly:** module, interface, implementation, depth, deep, shallow, seam, adapter, leverage, locality.
 
@@ -113,11 +113,11 @@ Plain English, concise — but the architectural nouns and verbs come straight f
 
 **Phrasings that fit the style:**
 
-- "Order intake module is shallow — interface nearly matches the implementation."
-- "Pricing leaks across the seam."
-- "Deepen: one interface, one place to test."
-- "Two adapters justify the seam: HTTP in prod, in-memory in tests."
+- "Order intake module 太 shallow：interface 幾乎等於 implementation。"
+- "Pricing 跨 seam 外漏。"
+- "Deepen：一個 interface，一個測試入口。"
+- "兩個 adapters 讓 seam 成立：prod 用 HTTP，測試用 in-memory。"
 
-**Wins bullets** name the gain in glossary terms: *"locality: bugs concentrate in one module"*, *"leverage: one interface, N call sites"*, *"interface shrinks; implementation absorbs the wrappers"*. Don't write *"easier to maintain"* or *"cleaner code"* — those terms aren't in the glossary and don't earn their place.
+**收益 bullets** name the gain in glossary terms: *"locality：bug 集中到一個 module"*, *"leverage：一個 interface，N 個 call sites"*, *"interface 縮小；implementation 吸收 wrappers"*. Don't write generic claims like *"更好維護"* or *"更乾淨"* unless they are grounded in the glossary terms.
 
 No hedging, no throat-clearing, no "it's worth noting that…". If a sentence could be a bullet, make it a bullet. If a bullet could be cut, cut it. If a term isn't in the `/codebase-design` glossary, reach for one that is before inventing a new one.

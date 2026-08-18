@@ -22,7 +22,7 @@ The map is a single issue on this repo's issue tracker, labelled `wayfinder:map`
 
 The map is an **index**, not a store. It lists the decisions made and points at the tickets that hold their detail; a decision lives in exactly one place — its ticket — so the map never restates it, only gists it and links.
 
-**Where the map, its child tickets, blocking, and frontier queries physically live is tracker-specific.** The issue tracker should have been provided to you — run `/setup-matt-pocock-skills` if not. Consult the tracker doc's "Wayfinding operations" section for how _this_ repo expresses them. If no tracker has been provided, default to the local-markdown tracker.
+**Where the map, its child tickets, blocking, and frontier queries physically live is repo-specific.** If CLAUDE.md / AGENTS.md documents an issue tracker, follow its conventions for issues, labels, and native blocking links. If it documents none, default to a local-markdown map at `.scratch/wayfinder/<effort-slug>.md`, with its tickets as numbered files beside it and blocking recorded in each ticket's body.
 
 ### The map body
 
@@ -32,6 +32,12 @@ The whole map at low resolution, loaded once per session. Open tickets are **not
 ## Destination
 
 <what reaching the end of this map looks like — the spec, decision, or change this effort is finding its way to. One or two lines; every session orients to it before choosing a ticket.>
+
+## Acceptance staircase
+
+<!-- see "The acceptance staircase": the ordered user-visible states between here and the destination -->
+
+1. <a state the user can see and accept, in one sentence>
 
 ## Notes
 
@@ -100,6 +106,14 @@ Out-of-scope work never graduates — the frontier stops at the destination — 
 
 Ruling something out of scope is a scoping act, not a step on the route. When a ticket that already exists turns out to sit past the destination — mis-scoped in while charting, or exposed by a resolution — **close it** (a closed ticket is unambiguously off the frontier) and leave one line in the **Out of scope** section: the gist plus why it's out of scope, linking the closed ticket. It stays out of **Decisions so far**, which records the route actually walked — a scope boundary isn't a step on it.
 
+## The acceptance staircase
+
+A destination says where the effort ends. It says nothing about whether the user sees anything before then — and an effort that shows its user nothing until the end is one the user cannot steer. So the map also carries a **staircase**: the ordered list of states between here and the destination that a user could look at and accept.
+
+Each step is one sentence in the user's terms — *"the user does X and sees Y"* — not a layer, a module, or a phase of construction. Five to nine steps for a large effort; if a step is too coarse to write that way, it is two steps. Downstream, `to-spec` refines each step into tickets and `to-tickets` refuses tickets that don't inherit the sentence, so a vague staircase quietly becomes a vague build.
+
+The staircase is coarse and it is revisable — a resolution that changes the route rewrites the affected steps. What it may never become is a single step that only completes at the destination. **If the staircase cannot be written, the map is not charted**, whatever else is on it: the effort has a destination and no way for anyone to tell, before the end, whether it is heading there.
+
 ## Invocation
 
 Two modes. Either way, **never resolve more than one ticket per session** — with the exception of research tickets.
@@ -110,10 +124,11 @@ User invokes with a loose idea.
 
 1. **Name the destination.** Run a `/grilling` and `/domain-modeling` session to pin down what this map is finding its way to — the spec, decision, or change. The destination fixes the scope, so it's settled first.
 2. **Map the frontier.** Grill again, **breadth-first** this time: fan out across the whole space rather than deep on any one thread, surfacing the open decisions and the first steps takeable now. **If this surfaces no fog** — the way to the destination is already clear, the whole journey small enough for one session — you don't need a map. Stop and ask the user how they'd like to proceed.
-3. **Create the map** (label `wayfinder:map`): Destination and Notes filled in, Decisions-so-far empty, the fog sketched into **Not yet specified**.
-4. **Create the tickets you can specify now** as child issues of the map — then wire blocking edges in a **second pass** (issues need ids before they can reference each other). Wiring sorts them into the frontier and the blocked; everything you can't yet specify stays in the fog — the **Not yet specified** section.
-5. **Fire the research subagents.** For each `research` ticket you just created, spin up a `/research` subagent to resolve it in parallel, capturing its findings on a throwaway `research/<name>` branch with a context pointer from the ticket.
-6. Stop — charting is one session's work; it hand-resolves nothing.
+3. **Write the acceptance staircase** with the user, before any ticket exists — the ordered user-visible states from here to the destination. It is the coarsest form of the route, and everything downstream inherits its shape.
+4. **Create the map** (label `wayfinder:map`): Destination, staircase and Notes filled in, Decisions-so-far empty, the fog sketched into **Not yet specified**.
+5. **Create the tickets you can specify now** as child issues of the map — then wire blocking edges in a **second pass** (issues need ids before they can reference each other). Wiring sorts them into the frontier and the blocked; everything you can't yet specify stays in the fog — the **Not yet specified** section.
+6. **Fire the research subagents.** For each `research` ticket you just created, spin up a `/research` subagent to resolve it in parallel, capturing its findings on a throwaway `research/<name>` branch with a context pointer from the ticket.
+7. Stop — charting is one session's work; it hand-resolves nothing.
 
 ### Work through the map
 
@@ -123,6 +138,6 @@ User invokes with a map (URL or number). A ticket is **optional** — without on
 2. Choose the ticket. If the user named one, use it. Otherwise take the first frontier ticket in order. **Claim it**: assign it to yourself before any work.
 3. Resolve it — **zoom as needed**: fetch the full body of any related or closed ticket on demand; invoke the skills the `## Notes` block names. If in doubt, use `/grilling` and `/domain-modeling`.
 4. Record the resolution: post the answer as a **resolution comment**, **close** the issue, and **append a context pointer** to the map's Decisions-so-far.
-5. Add newly-surfaced tickets (create-then-wire); graduate any fog the answer has made specifiable, clearing each graduated patch from **Not yet specified** so it lives only as its new ticket. If the answer reveals a ticket — this one or another — sits beyond the destination, **rule it out of scope** rather than resolving it on the route. If the decision invalidates other parts of the map, update or delete those tickets.
+5. Add newly-surfaced tickets (create-then-wire); graduate any fog the answer has made specifiable, clearing each graduated patch from **Not yet specified** so it lives only as its new ticket. If the answer reveals a ticket — this one or another — sits beyond the destination, **rule it out of scope** rather than resolving it on the route. If the decision invalidates other parts of the map, update or delete those tickets, and rewrite any staircase step whose route it changed — a staircase left stale is worse than none, because it still reads as agreed.
 
 The user may run unblocked tickets in parallel, so expect other sessions to be editing the tracker concurrently.

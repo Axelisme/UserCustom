@@ -72,7 +72,8 @@ advance slice by slice — never big-bang. Depth on a single Module waits until 
 usable whole cannot be correct without it. A Slice that leaves this stage is ready for bounded
 Implement; collab owns writer-placement guidance for that work.
 
-**Usable** means one sentence in the user's terms says what they do and what they see. A Slice that
+**Usable**, of a Slice or of the whole a tracer proves, means one sentence in the user's terms says
+what they do and what they see. A Slice that
 takes a paragraph, or that reads as a layer, a Module, or a phase of construction, is not one usable
 Slice; it is either several, or scaffolding for one that has not been stated yet. Write the sentence
 first — it is the cheapest place to find out that a Slice delivers nothing anyone can look at.

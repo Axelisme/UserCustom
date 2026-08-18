@@ -8,8 +8,8 @@ Implement the work described by the user in the spec or tickets.
 
 Validation counts when it exercises the shipped entrypoint: a check that passes against a stand-in
 while the production path stays broken has validated nothing. Use /tdd when that check can be written
-before the behavior exists. Where it cannot — a GUI surface, a hardware edge, a check only a human
-can make — follow the test conventions the repository documents, and say which you used.
+before the behavior exists; where /tdd's own scope note rules the loop out, follow the test
+conventions the repository documents and say which you used.
 
 Run typechecking and focused tests regularly, then the applicable full suite at the end.
 

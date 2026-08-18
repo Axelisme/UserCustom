@@ -147,9 +147,10 @@ audit surfaced them by diffing the vendored tree against pristine upstream, whic
 hand-maintained list could perform on itself.
 
 14. **`implement` is rewritten to this fleet's authority model** — validation graded by whether it
-    exercises the shipped entrypoint rather than always `/tdd`, review bound to a fixed subject, no
-    unilateral commit or history mutation without applicable user authority, and explicit completion
-    criteria. Upstream's version commits to the current branch on its own, which is incompatible with
+    exercises the shipped entrypoint rather than always `/tdd`, with the fallback deferred to `tdd`'s
+    own scope note (deviation 6) rather than restated; the full suite qualified as the *applicable*
+    one, for repositories with more than one; review bound to a fixed subject; no unilateral commit
+    or history mutation without applicable user authority; and explicit completion criteria. Upstream's version commits to the current branch on its own, which is incompatible with
     `collab` owning landing authority. The same validation criterion appears in `ask-matt`, in the
     one sentence the router spends on `/implement`; upstream's is concrete there too, so both files
     are kept concrete rather than trading a directive for adjectives.

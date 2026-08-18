@@ -94,35 +94,10 @@ scaffolding is and when it comes down (for example
 
 ## Graduating a decision to an ADR
 
-The task record is ephemeral: `decisions/` lives inside the task container, which is not tracked
-where this workflow runs, and archival takes it out of reach as well. A decision whose force outlives its task therefore needs a home
-in the repository itself, and one ticket carries it there — a ticket whose whole output is one ADR.
-
-Three conditions govern that ticket:
-
-1. **Timing.** It may be opened only once the task's spec and decisions are settled. Not during, when
-   the decision may still move, and not as a step inside closure, where it would happen by default.
-2. **The user opens it.** Dev-flow supplies the route and never takes it on its own. The rate at
-   which ADRs appear stays a human decision, which is the whole reason this is a separate ticket
-   rather than a closure obligation.
-3. **The ADR is self-contained.** It references nothing under `.agent_state/`: that content is not in
-   git, so the reference dangles for every later reader. What git holds is unrestricted — commit
-   identities, module Interface declarations, source paths, any tracked file.
-
-The third condition is also the cheapest admission test, and it runs first. Attempt the
-self-contained version: a decision that cannot be stated without pointing back into its task record
-has not finished separating from that task, and does not graduate. That much is pass or fail rather
-than opinion, and it settles most candidates before any judgement is required.
-
-Condition 3 makes the ADR **restate** reasoning that `decisions/` already holds, which is the
-opposite of what [the design principles](references/design-principles.md) require everywhere else.
-It is not a second authority: the record it restates is designed to disappear, so the ADR is not a
-competing copy but the heir. Restating is only forbidden while the original owner remains reachable.
-
-Whether a decision qualifies at all, and what an ADR looks like, belong to `domain-modeling`. When
-this ticket is opened, read [its ADR format](../domain-modeling/ADR-FORMAT.md) — the three gates
-under "When to offer an ADR", the template, and the numbering. Neither the gates nor the format is
-restated here.
+A decision whose force outlives its task needs a home outside the task container, which is not
+tracked where this workflow runs. When the user opens a ticket to record one, read
+[references/adr-graduation.md](references/adr-graduation.md) for the two conditions that ticket meets
+and the owner of the format it produces.
 
 ## Reading the record
 

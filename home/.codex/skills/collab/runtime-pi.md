@@ -29,6 +29,13 @@ transition consumes one, and exhausting it is a terminal seam that returns to th
 without selecting a redesign procedure. Do not use turn, tool, or usage budgets as the correction
 budget.
 
+**Profile model contract.** The selected agent profile owns its configured `model` and `thinking`.
+The Orchestrator preserves both unchanged, omitting `model` and `thinking` from the outer
+`subagent(...)` options and every child call. Only a current user instruction that explicitly names
+an override grants authority for that launch; task difficulty, retries, and review results grant
+none. This contract is satisfied only when every workflow- and child-level `model` and `thinking`
+field is absent or directly authorized by that instruction.
+
 A Collab lane is already one writable checkout with one live writer. The delegated worker and its
 reviewer share that lane as `cwd`, and neither initial call asks pi-subagents for a second writer
 worktree around it: both state `worktree: false` explicitly. Every child call — initial
@@ -328,7 +335,8 @@ Read this section only when a run is interrupted or needs status, steering, stop
 
 Inspect a run with `subagent({ action: "status", id })`. Guide a live top-level run with
 `action: "steer"`, stop it with `action: "stop"`, and revive a failed, paused, or completed run with
-`action: "resume"` only when the persisted session preserves the original launch contract.
+`action: "resume"` only when the persisted session preserves the original launch contract. Revival
+restores the persisted profile model contract unchanged.
 Retained foreground continuation does not forward `outputSchema` or an explicit acceptance policy,
 so a workflow child resumed by `runId` loses its `structuredOutput` and falls back to inferred
 generic acceptance; the composed loop above therefore never resumes children and launches a fresh

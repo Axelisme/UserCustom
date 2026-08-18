@@ -146,11 +146,13 @@ The five below were deviations all along and simply were never written down. The
 audit surfaced them by diffing the vendored tree against pristine upstream, which is the check no
 hand-maintained list could perform on itself.
 
-14. **`implement` is rewritten to this fleet's authority model** — validation chosen from the work's
-    intent rather than always `/tdd`, review bound to a fixed subject, no unilateral commit or
-    history mutation without applicable user authority, and explicit completion criteria. Upstream's
-    version commits to the current branch on its own, which is incompatible with `collab` owning
-    landing authority.
+14. **`implement` is rewritten to this fleet's authority model** — validation graded by whether it
+    exercises the shipped entrypoint rather than always `/tdd`, review bound to a fixed subject, no
+    unilateral commit or history mutation without applicable user authority, and explicit completion
+    criteria. Upstream's version commits to the current branch on its own, which is incompatible with
+    `collab` owning landing authority. The same validation criterion appears in `ask-matt`, in the
+    one sentence the router spends on `/implement`; upstream's is concrete there too, so both files
+    are kept concrete rather than trading a directive for adjectives.
 15. **`handoff` is rewritten as routing rather than factual authority** — it points at each owning
     spec, ticket, task record, ADR, commit or evidence artifact instead of copying them, routes
     Dev-flow work to the active guidance, task `INDEX.md` and handed-off ticket, and covers the Pi

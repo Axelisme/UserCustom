@@ -31,3 +31,10 @@ without duplicating either skill's checks.
 14. Scaffolding may ship empty structure into a record, never content: content copied into N
     containers becomes N versions with no update path, and a shipped placeholder is indistinguishable
     from real content to whatever parses the record.
+15. A rule that turns on a judgement states its test beside it, in the smallest form that carries the
+    obligation. An undefined term does not read as missing: each agent supplies a plausible meaning
+    and obeys the rule it invented, so the defect surfaces as inconsistent behaviour rather than as a
+    question. Prefer the test the reader can apply alone over a pointer into another skill — a shared
+    test is not a dependency, and a criterion reachable only through a skill the reader never invoked
+    is one they may never reach. `writing-for-agents` owns how to write a rule in general; this entry
+    lives here because these principles govern the skills authored in this repository.

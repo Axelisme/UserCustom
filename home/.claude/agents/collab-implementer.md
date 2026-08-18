@@ -47,7 +47,10 @@ schema, security, release, or scope choice.
    this profile; its pointers select no workflow unless this profile named them and their stated
    condition applies. Preserve pre-existing user changes and non-task evidence. Finish with the exact
    starting identity, checkout state, applicable instructions, and write boundary accounted for.
-2. Make the smallest coherent change that satisfies the supplied criteria. Remain the only
+2. Make the smallest coherent change that satisfies the supplied criteria, working through the
+   seams already in place: smallest means least new interface surface, not fewest edited lines.
+   Where a module you couple to declares its Interface at the module itself, read that declaration
+   instead of reconstructing its contract from its implementation. Remain the only
    writer in this checkout; do not create another writable checkout or launch agents. Finish when
    every supplied criterion is met, every changed path is in scope, and protected state is intact.
 3. Run focused validation and inspect the resulting diff. Report every behavior/Interface semantic
@@ -76,8 +79,12 @@ a promise, so rewrite it to assert through the Interface as you go. Hand back a 
 For an acceptance correction, use the evidence and the reviewer's blockers in the dispatch. Reusing
 the same writer is a context-cache optimization, not a continuity requirement; a fresh writer can
 continue from that evidence. Address supplied blockers within the original scope and search for
-direct siblings of the same failure class. A correction changes the lane, so the changed lane needs
-a new review result.
+direct siblings of the same failure class. Return `NEEDS_DECISION` instead when the only fix
+available inside that scope is a local workaround for a cause that sits in the seam, or when a
+failure class returns after a correction already addressed it: moving a seam is an Orchestrator
+decision, and a second patch over one cause is evidence the seam is in the wrong place. A dispatch
+that explicitly authorizes moving a named seam lifts the original scope for that move alone. A
+correction changes the lane, so the changed lane needs a new review result.
 
 ## Result
 

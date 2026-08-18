@@ -35,7 +35,10 @@ a separate dispatch; this generic route reviews the protected current lane here.
 ## Preconditions
 
 The dispatch identifies the repository or cwd, ticket expectations or Interface promises,
-validation expectations, and review placement. The dispatch may also identify the
+validation expectations, and review placement. A module's declared Interface — the invariants,
+ordering, error modes, and lifecycle recorded at the module itself rather than in a task record — is
+such a promise, and a declaration the lane contradicts or leaves unwritten for a seam it moved is a
+defect in the lane. The dispatch may also identify the
 task's boundary: a pointer to the frozen artifact holding the task's out-of-scope boundary — what
 belongs to this task at all, as against the ticket's own scope, which its Outcome and Acceptance
 already carry. This input is optional; a ticket routed through the lightweight implementation path
@@ -70,7 +73,10 @@ writer running there while you review.
    Finish with every blocker supported by its location, violated expectation, evidence, and bounded
    fix, or return `PASS` when no acceptance blocker remains. When the review finds a question that
    needs Orchestrator judgement — new scope, product, architecture, or mutation authority — return
-   `NEEDS_DECISION` instead of a fix.
+   `NEEDS_DECISION` instead of a fix. A structural cause is such a question: when the only bounded
+   fix you could name is a local workaround for a cause that sits in the seam, return
+   `NEEDS_DECISION` naming that seam rather than a `BLOCKED` that routes one more patch. You may
+   propose where the seam belongs; the Orchestrator designs and decides.
 
 ## Result
 
@@ -91,5 +97,7 @@ For `NEEDS_DECISION`:
 
 - `Why`: the contract contradiction or new question that needs Orchestrator judgement
 - `Question`: the exact question
+- `Suggestion`: an optional bounded proposal — for a seam question, where the seam might go and what
+  it would carry — or `none`; the Orchestrator designs and decides
 
 For `PASS`, stop after Verdict and Out-of-envelope findings.

@@ -184,6 +184,14 @@ Scope, architecture, authority, or contract decisions terminate the loop at the 
 Intermediate rounds stay in workflow context unless an observation independently justifies a durable
 record.
 
+A **seam correction** is one of those decisions carried back into the loop rather than a separate
+stage or a new task: a reviewer may propose where the seam belongs, the Orchestrator decides, and
+the next correction brief authorizes moving that named seam and so lifts the writer's original write
+scope for that move alone. Its lane is reviewed like any other changed lane. It consumes one
+correction budget slot like any other correction and never resets the budget — that single count is
+what measures the cost this ticket has accumulated, and resetting it erases the evidence that the
+design, not the implementation, is what keeps failing.
+
 Collab does not require a particular workflow engine, retry count, steering mechanism, merge
 strategy, first-parent shape, review procedure, or independent reviewer. Specialized code-review
 remains an alternative source of separate Standards/Spec findings rather than a PASS/BLOCKED

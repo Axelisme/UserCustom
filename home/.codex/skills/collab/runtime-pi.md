@@ -134,8 +134,8 @@ Terminal outcomes:
   latest worker's semantic validation and optional residual risks plus the reviewer's optional
   out-of-envelope findings.
 - `BLOCKED` — the worker returned `BLOCKED`; it carries the worker blocker.
-- `NEEDS_DECISION` — a worker or reviewer returned it; it carries why and the exact question and
-  returns immediately to the Orchestrator.
+- `NEEDS_DECISION` — a worker or reviewer returned it; it carries why, the exact question, and any
+  bounded suggestion the reviewer offered, and returns immediately to the Orchestrator.
 - `CORRECTION_BUDGET_EXHAUSTED` — the reviewer still returns `BLOCKED` after the budget is spent; it
   carries the reviewer's remaining blockers. It is only a terminal seam; it does not start a
   redesign.

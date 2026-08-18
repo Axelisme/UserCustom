@@ -36,6 +36,22 @@ Module depth is a deliverable of this stage, produced deliberately, not a side e
 during Implement. For the vocabulary and technique for designing a deep Module, see
 [`codebase-design`](../../codebase-design/SKILL.md); S0 does not restate it.
 
+**A seam this stage decides lands at the module, not only in this task's `spec/`.** The task record
+is archived when the task ends, while the next module that couples to the seam has to read it long
+after — and a caller that has to reconstruct the contract from the implementation is how a
+downstream writer ends up inventing its own boundary. So every real seam in the design — real in
+`codebase-design`'s sense, something actually varying across it — carries a written declaration of
+its Interface at the module it belongs to, in whatever form this repository already documents for
+module-level material (a module README, a header comment); follow the repository's own conventions
+here rather than imposing a layout.
+
+Declare only what a signature cannot carry: invariants, ordering constraints, error modes, lifecycle
+and ownership, required configuration, performance characteristics. Restating names, types, or
+parameter lists adds the half that goes stale and that an outline already shows. The declaration
+says enough when a caller can couple to the module without reading its implementation. Writing it is
+part of the Slice that creates or moves the seam, never a separate documentation pass and never a
+retroactive sweep across modules this task does not touch.
+
 **An existing mechanism includes third-party packages.** Before designing any Module that provides
 general-purpose infrastructure — schema derivation, validation, serialization, HTTP or WebSocket
 transport, path resolution, file locking, retry, config parsing — check whether a package the
@@ -46,7 +62,8 @@ being written in this repo is not such a reason, and neither is a preference for
 An unrecorded check counts as not performed, because there is nothing later stages can audit.
 
 Design is complete when the end-to-end design identifies the Modules, Interfaces, seams, production
-reachability, and each applicable infrastructure package's adoption or need-grounded rejection.
+reachability, each applicable infrastructure package's adoption or need-grounded rejection, and the
+module each real seam's Interface declaration is owed at.
 
 ## Slicing
 

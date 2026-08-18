@@ -35,7 +35,10 @@ def seed_source(base: Path) -> tuple[Path, Path]:
     script.parent.mkdir(parents=True)
     shutil.copy2(SETUP_SCRIPT, script)
 
+    # Skills bridged onto the vendored upstream tree are symlinks out of home/, so the
+    # vendored tree has to be seeded too or every bridge dangles in the isolated source.
     for relative in (
+        "vendor",
         "home/.codex/skills",
         "home/.pi/agent/skills",
         "home/.pi/agent/extensions",

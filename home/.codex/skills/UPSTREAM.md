@@ -4,50 +4,48 @@ Skills in this directory that come from somewhere else, plus the local changes d
 on top. Most come from [mattpocock/skills](https://github.com/mattpocock/skills); the rest are
 listed under "Skills from other upstreams" with their own sync point.
 
-**mattpocock/skills synced at upstream commit `8b36d4f` (2026-08-05).**
+`mattpocock/skills` is vendored as a git subtree under `vendor/matt-skills`, and each skill under
+this directory is a symlink into it. Which skills are adopted is therefore which symlinks exist, and
+the sync point is the subtree's own commit — neither is restated here, because a restated one goes
+stale and this file would have no way to know.
 
-To find what changed since:
+To sync:
 
 ```sh
-git -C <path-to-skills-repo> log 8b36d4f..HEAD -- skills/
+git subtree pull --prefix=vendor/matt-skills https://github.com/mattpocock/skills.git main --squash
 ```
 
-Then re-apply the deviations below onto whatever you take. A conflict that lands on a listed
-deviation is expected — resolve it in favour of the deviation unless the reason for it has gone
-away. A conflict anywhere else means the local copy drifted without being recorded here, which is
-the thing this file exists to prevent.
+Both flags matter: `--prefix` must be exact, and omitting `--squash` floods this repository's log
+with upstream's entire history.
 
-## Skills tracking upstream
+git then does the three-way merge, and the conflicts are the work. Resolve one in favour of the
+deviation unless the reason recorded for it below has gone away — and read the reason before
+deciding, because a conflict is not always a side to pick. Upstream sometimes makes a change that is
+orthogonal to the deviation but lands inside the same text; there the deviation is kept **and** the
+orthogonal change is absorbed. Mechanically keeping our side would drop it silently, leaving no
+conflict behind to notice.
 
-| Local | Upstream path |
-| --- | --- |
-| `ask-matt` | `skills/engineering/ask-matt` |
-| `code-review` | `skills/engineering/code-review` |
-| `codebase-design` | `skills/engineering/codebase-design` |
-| `diagnosing-bugs` | `skills/engineering/diagnosing-bugs` |
-| `domain-modeling` | `skills/engineering/domain-modeling` |
-| `grill-me` | `skills/productivity/grill-me` |
-| `grill-with-docs` | `skills/engineering/grill-with-docs` |
-| `grilling` | `skills/productivity/grilling` |
-| `handoff` | `skills/productivity/handoff` |
-| `implement` | `skills/engineering/implement` |
-| `improve-codebase-architecture` | `skills/engineering/improve-codebase-architecture` |
-| `prototype` | `skills/engineering/prototype` |
-| `research` | `skills/engineering/research` |
-| `tdd` | `skills/engineering/tdd` |
-| `to-spec` | `skills/engineering/to-spec` |
-| `to-tickets` | `skills/engineering/to-tickets` |
-| `wait-what` | `skills/productivity/wait-what` |
-| `wayfinder` | `skills/engineering/wayfinder` |
-| `writing-for-agents` | `skills/productivity/writing-for-agents` |
+A conflict anywhere other than a recorded deviation means the local copy drifted without being
+recorded here, which is the thing this file exists to prevent.
+
+## Skills not taken from upstream
+
+An absent symlink cannot say whether a skill was declined or merely missed, so the declines are
+listed. Everything upstream ships that is neither symlinked nor listed here is unexamined, and the
+next sync should classify it.
 
 Not taken from upstream: `triage` (no external request surface here — `candidate-backlog` covers
 internal discoveries), `setup-matt-pocock-skills` (its generated config is replaced by the
 "repo's documented conventions win" rule below), and — both graduated out of `in-progress` at the
-`8b36d4f` sync but not adopted here — `to-questionnaire` (sending someone else a questionnaire) and
+2026-08-05 sync but not adopted here — `to-questionnaire` (sending someone else a questionnaire) and
 `wizard` (generating an interactive bash wizard for human-only setup steps).
 
 ## Skills from other upstreams
+
+`grove` is **still a hand-ported copy**, not a subtree: it is under observation and was deliberately
+left out of the migration. Adopting the mechanism for it needs one more `git subtree add` under a
+second prefix and one symlink, and nothing else — the machinery is per-upstream, not global. Until
+then the sync point below is a hand-maintained claim, with the staleness that implies.
 
 `grove` — from [Entelligentsia/grove](https://github.com/Entelligentsia/grove), `skills/grove/SKILL.md`,
 **synced at grove `v0.5.0`**. Ported CLI-only; the deviations below were each verified against the
@@ -133,3 +131,40 @@ which is what keeps the coupling out of every other file.
     Fowler code smells (*Refactoring*, ch.3)"; since that sentence is pasted verbatim into the
     Standards sub-agent prompt, it is amended here to say Fowler's plus one local addition, and the
     entry itself is marked. Take upstream's wording again only if this smell is dropped.
+
+13. **Upstream's `CLAUDE.md` and `AGENTS.md` are deleted inside the prefix.** They arrive with
+    `subtree add` and would otherwise be the nearest — and, this repository having no root
+    instruction file, the only — directory-scoped instructions for any work under `vendor/`. Nested
+    instruction files are additive, so a file placed above the prefix would be read alongside them
+    rather than suppressing them. Nothing in them applies here: they maintain upstream's
+    `plugin.json`, bucket `README.md`s and `docs/` pages, and one line tells an agent to run
+    `scripts/link-skills.sh`, which symlinks upstream skills into `~/.claude/skills` and collides
+    with this repository's own overlay. **Expect a modify/delete conflict** whenever upstream edits
+    them; the resolution is always to keep them deleted.
+
+The five below were deviations all along and simply were never written down. The subtree migration's
+audit surfaced them by diffing the vendored tree against pristine upstream, which is the check no
+hand-maintained list could perform on itself.
+
+14. **`implement` is rewritten to this fleet's authority model** — validation chosen from the work's
+    intent rather than always `/tdd`, review bound to a fixed subject, no unilateral commit or
+    history mutation without applicable user authority, and explicit completion criteria. Upstream's
+    version commits to the current branch on its own, which is incompatible with `collab` owning
+    landing authority.
+15. **`handoff` is rewritten as routing rather than factual authority** — it points at each owning
+    spec, ticket, task record, ADR, commit or evidence artifact instead of copying them, routes
+    Dev-flow work to the active guidance, task `INDEX.md` and handed-off ticket, and covers the Pi
+    `handoff_context` transition without authorizing it. A handoff that restates content becomes a
+    second status store, which `dev-flow` exists to prevent.
+16. **`code-review` gains `references/wip-review.md`** — the advisory procedure for reviewing dirty
+    work in progress, which the skill's own description already promises and upstream has no
+    equivalent of. Upstream's procedure pins a fixed candidate and has nothing to say about staged,
+    unstaged, or untracked files.
+17. **`tdd` gains `gate.md`, `contract-review.md` and `assets/gate.sh`** — the delegated red/green
+    validation gate and the fixed red-surface contract review. `collab` points at `gate.md` for
+    delegated validation needing several commands, a fixed working directory, or owned temporary
+    state, so a local skill depends on this addition.
+18. **`writing-for-agents` adds the load-bearing noun rule** — define the term a rule's obligation
+    rests on where the rule uses it. An undefined one does not read as missing: each agent supplies
+    a plausible meaning and obeys the rule it invented, so the defect surfaces as inconsistent
+    behaviour rather than as a question.

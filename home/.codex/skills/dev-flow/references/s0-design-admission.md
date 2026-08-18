@@ -73,10 +73,13 @@ usable whole cannot be correct without it. A Slice that leaves this stage is rea
 Implement; collab owns writer-placement guidance for that work.
 
 **Usable**, of a Slice or of the whole a tracer proves, means one sentence in the user's terms says
-what they do and what they see. A Slice that
-takes a paragraph, or that reads as a layer, a Module, or a phase of construction, is not one usable
-Slice; it is either several, or scaffolding for one that has not been stated yet. Write the sentence
-first — it is the cheapest place to find out that a Slice delivers nothing anyone can look at.
+what they do and what they see. Write that sentence before the Slice — it is the cheapest place to
+find out that a Slice delivers nothing anyone can look at.
+
+A Slice too small to carry a whole sentence names the one it partly delivers, and a later Slice
+completes it. What that rules out is the Slice naming no sentence at all — a layer, a Module, or a
+phase of construction is scaffolding for a sentence nobody has written yet. A named sentence no
+Slice ever completes is the same defect, found later and more expensively.
 
 **Concurrency is decided here, once, so the downstream steps stay decision-free.** Read the
 candidates off the ticket DAG: a set may run together when it forms an antichain — no member
@@ -92,9 +95,10 @@ outside Module scope and counts as no intersection. An edit that reorders entrie
 surface, or rewrites an existing entry is Module scope. Judge that on the shape of the actual diff:
 a regenerated lockfile grows by one logical entry and rewrites the file.
 
-Slicing is complete when every admitted implementation requirement belongs to a bounded usable Slice,
-and each Slice's dependency edge, Module write scope, applicable production-path validation, and
-concurrency disposition are explicit.
+Slicing is complete when every admitted implementation requirement belongs to a bounded Slice that
+states its own sentence or names the one it partly delivers, every named sentence has a Slice that
+completes it, and each Slice's dependency edge, Module write scope, applicable production-path
+validation, and concurrency disposition are explicit.
 
 ## Triage
 

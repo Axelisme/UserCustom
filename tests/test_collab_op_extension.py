@@ -1571,8 +1571,12 @@ class CollabOpExtensionLaneCollectTests(unittest.TestCase):
             self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), expected["integration_head"])
             self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), lane_sha)
 
-    def test_collect_rejects_dirty_or_moved_integration_managed_state(self) -> None:
-        cases = ("integration_untracked_dirty", "integration_tracked_dirty", "integration_identity")
+    def test_collect_stops_at_integration_tracked_dirt_and_preserves_it(self) -> None:
+        cases = (
+            "integration_tracked_unstaged",
+            "integration_tracked_staged",
+            "integration_tracked_staged_new",
+        )
         for case in cases:
             with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
                 repository, _ = seed_repository(Path(temporary))
@@ -1583,12 +1587,24 @@ class CollabOpExtensionLaneCollectTests(unittest.TestCase):
                 git(lane, "add", "work.txt")
                 git(lane, "commit", "-m", "work")
                 lane_sha = git(lane, "rev-parse", "HEAD")
-                if case == "integration_untracked_dirty":
-                    (integration / "dirty.txt").write_text("preserve\n", encoding="utf-8")
-                elif case == "integration_tracked_dirty":
-                    (integration / "tracked.txt").write_text("preserve tracked change\n", encoding="utf-8")
+                if case == "integration_tracked_unstaged":
+                    (integration / "tracked.txt").write_text(
+                        "preserve unstaged tracked change\n", encoding="utf-8"
+                    )
+                elif case == "integration_tracked_staged":
+                    (integration / "tracked.txt").write_text(
+                        "preserve staged tracked change\n", encoding="utf-8"
+                    )
+                    git(integration, "add", "tracked.txt")
                 else:
-                    git(integration, "checkout", "--detach")
+                    (integration / "newly-staged.txt").write_text(
+                        "preserve newly staged path\n", encoding="utf-8"
+                    )
+                    git(integration, "add", "newly-staged.txt")
+                self.assertEqual(
+                    git(integration, "status", "--porcelain=v1", "--untracked-files=no"),
+                    git(integration, "status", "--porcelain=v1"),
+                )
 
                 observed = invoke(
                     repository,
@@ -1602,17 +1618,96 @@ class CollabOpExtensionLaneCollectTests(unittest.TestCase):
                 )
 
                 self.assertTrue(observed["is_error"])
-                expected_code = "worktree_identity_mismatch" if case == "integration_identity" else "dirty_worktree"
-                self.assertEqual(observed["error"]["error"]["code"], expected_code)
+                self.assertEqual(observed["error"]["error"]["code"], "dirty_worktree")
                 self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), expected["integration_head"])
                 self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), lane_sha)
-                if case == "integration_untracked_dirty":
-                    self.assertEqual((integration / "dirty.txt").read_text(encoding="utf-8"), "preserve\n")
-                elif case == "integration_tracked_dirty":
+                if case == "integration_tracked_unstaged":
                     self.assertEqual(
                         (integration / "tracked.txt").read_text(encoding="utf-8"),
-                        "preserve tracked change\n",
+                        "preserve unstaged tracked change\n",
                     )
+                elif case == "integration_tracked_staged":
+                    self.assertEqual(
+                        (integration / "tracked.txt").read_text(encoding="utf-8"),
+                        "preserve staged tracked change\n",
+                    )
+                else:
+                    self.assertEqual(
+                        (integration / "newly-staged.txt").read_text(encoding="utf-8"),
+                        "preserve newly staged path\n",
+                    )
+
+    def test_collect_rejects_moved_integration_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            expected = seed_managed_task(repository)
+            lane = Path(expected["lane"])
+            integration = Path(expected["integration"])
+            (lane / "work.txt").write_text("work\n", encoding="utf-8")
+            git(lane, "add", "work.txt")
+            git(lane, "commit", "-m", "work")
+            lane_sha = git(lane, "rev-parse", "HEAD")
+            git(integration, "checkout", "--detach")
+
+            observed = invoke(
+                repository,
+                {
+                    "method": "lane_collect",
+                    "task_id": "demo",
+                    "lane_id": "writer-1",
+                    "sha": lane_sha,
+                    "integration_sha": expected["integration_head"],
+                },
+            )
+
+            self.assertTrue(observed["is_error"])
+            self.assertEqual(observed["error"]["error"]["code"], "worktree_identity_mismatch")
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), expected["integration_head"])
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), lane_sha)
+
+    def test_ready_collect_allows_disposable_integration_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text("ignored.tmp\nignored-dir/\n", encoding="utf-8")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore local state")
+            expected = seed_managed_task(repository)
+            lane = Path(expected["lane"])
+            integration = Path(expected["integration"])
+            (lane / "work.txt").write_text("work\n", encoding="utf-8")
+            git(lane, "add", "work.txt")
+            git(lane, "commit", "-m", "lane work")
+            lane_sha = git(lane, "rev-parse", "HEAD")
+            (integration / "ignored.tmp").write_text("ignored runtime\n", encoding="utf-8")
+            (integration / "ignored-dir").mkdir()
+            (integration / "untracked.txt").write_text("untracked runtime\n", encoding="utf-8")
+            self.assertEqual(git(integration, "status", "--porcelain=v1"), "?? untracked.txt")
+            self.assertNotEqual(
+                git(integration, "status", "--porcelain=v1", "--ignored=matching"),
+                "",
+            )
+            ignored_before = (integration / "ignored.tmp").read_text(encoding="utf-8")
+            untracked_before = (integration / "untracked.txt").read_text(encoding="utf-8")
+
+            observed = invoke(
+                repository,
+                {
+                    "method": "lane_collect",
+                    "task_id": "demo",
+                    "lane_id": "writer-1",
+                    "sha": lane_sha,
+                    "integration_sha": expected["integration_head"],
+                },
+            )
+
+            self.assertFalse(observed["is_error"])
+            self.assertEqual(observed["result"]["state"], "collected")
+            self.assertEqual(observed["result"]["integration_sha"], lane_sha)
+            self.assertEqual(git(integration, "rev-parse", "HEAD"), lane_sha)
+            # Non-colliding disposable integration state is left alone.
+            self.assertEqual((integration / "ignored.tmp").read_text(encoding="utf-8"), ignored_before)
+            self.assertEqual((integration / "untracked.txt").read_text(encoding="utf-8"), untracked_before)
+            self.assertTrue((integration / "ignored-dir").is_dir())
 
     def test_collect_rejects_lane_with_active_merge_or_conflict_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1897,16 +1992,23 @@ class CollabOpExtensionLaneCollectTests(unittest.TestCase):
             self.assertEqual(collected["result"]["integration_sha"], synced_sha)
             self.assertFalse(lane.exists())
 
-    def test_collect_preserves_dirty_lane_and_reports_retention(self) -> None:
+    def test_ready_collect_retires_lane_with_disposable_state_and_disposes_it(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text("ignored.tmp\nignored-dir/\n", encoding="utf-8")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore local state")
             expected = seed_managed_task(repository)
             lane = Path(expected["lane"])
             (lane / "work.txt").write_text("work\n", encoding="utf-8")
             git(lane, "add", "work.txt")
             git(lane, "commit", "-m", "work")
             lane_sha = git(lane, "rev-parse", "HEAD")
-            (lane / "operator-dirt.txt").write_text("preserve\n", encoding="utf-8")
+            (lane / "ignored.tmp").write_text("ignored runtime\n", encoding="utf-8")
+            (lane / "ignored-dir").mkdir()
+            (lane / "operator-dirt.txt").write_text("disposable\n", encoding="utf-8")
+            self.assertNotEqual(git(lane, "status", "--porcelain=v1", "--ignored=matching"), "")
+            self.assertEqual(git(lane, "status", "--porcelain=v1", "--untracked-files=no"), "")
 
             observed = invoke(
                 repository,
@@ -1922,12 +2024,459 @@ class CollabOpExtensionLaneCollectTests(unittest.TestCase):
             self.assertFalse(observed["is_error"])
             self.assertEqual(observed["result"]["state"], "collected")
             self.assertEqual(observed["result"]["integration_sha"], lane_sha)
-            self.assertFalse(observed["result"]["cleanup"]["cleaned"])
-            self.assertTrue(any("retained: worktree is dirty" in warning for warning in observed["result"]["warnings"]))
-            self.assertTrue(lane.exists())
-            self.assertEqual((lane / "operator-dirt.txt").read_text(encoding="utf-8"), "preserve\n")
-            self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), lane_sha)
+            self.assertTrue(observed["result"]["cleanup"]["cleaned"])
+            self.assertFalse(lane.exists())
+            self.assertEqual(git(repository, "branch", "--list", "wave/demo/writer-1"), "")
             self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), lane_sha)
+            self.assertEqual(git(Path(expected["integration"]), "rev-parse", "HEAD"), lane_sha)
+
+    def test_collect_stops_at_lane_tracked_dirt_and_preserves_it(self) -> None:
+        cases = ("lane_tracked_unstaged", "lane_tracked_staged", "lane_tracked_staged_new")
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+                repository, _ = seed_repository(Path(temporary))
+                expected = seed_managed_task(repository)
+                lane = Path(expected["lane"])
+                (lane / "work.txt").write_text("work\n", encoding="utf-8")
+                git(lane, "add", "work.txt")
+                git(lane, "commit", "-m", "work")
+                lane_sha = git(lane, "rev-parse", "HEAD")
+                if case == "lane_tracked_unstaged":
+                    (lane / "tracked.txt").write_text("preserve unstaged tracked change\n", encoding="utf-8")
+                elif case == "lane_tracked_staged":
+                    (lane / "tracked.txt").write_text("preserve staged tracked change\n", encoding="utf-8")
+                    git(lane, "add", "tracked.txt")
+                else:
+                    (lane / "newly-staged.txt").write_text("preserve newly staged path\n", encoding="utf-8")
+                    git(lane, "add", "newly-staged.txt")
+                self.assertNotEqual(git(lane, "status", "--porcelain=v1", "--untracked-files=no"), "")
+
+                observed = invoke(
+                    repository,
+                    {
+                        "method": "lane_collect",
+                        "task_id": "demo",
+                        "lane_id": "writer-1",
+                        "sha": lane_sha,
+                        "integration_sha": expected["integration_head"],
+                    },
+                )
+
+                self.assertTrue(observed["is_error"])
+                self.assertEqual(observed["error"]["error"]["code"], "dirty_worktree")
+                self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), expected["integration_head"])
+                self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), lane_sha)
+                self.assertTrue(lane.exists())
+                if case == "lane_tracked_unstaged":
+                    self.assertEqual(
+                        (lane / "tracked.txt").read_text(encoding="utf-8"),
+                        "preserve unstaged tracked change\n",
+                    )
+                elif case == "lane_tracked_staged":
+                    self.assertEqual(
+                        (lane / "tracked.txt").read_text(encoding="utf-8"),
+                        "preserve staged tracked change\n",
+                    )
+                else:
+                    self.assertEqual(
+                        (lane / "newly-staged.txt").read_text(encoding="utf-8"),
+                        "preserve newly staged path\n",
+                    )
+
+    def test_stale_collect_allows_disposable_lane_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text("ignored.tmp\nignored-dir/\n", encoding="utf-8")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore local state")
+            expected = seed_managed_task(repository)
+            lane = Path(expected["lane"])
+            integration = Path(expected["integration"])
+            (lane / "work.txt").write_text("work\n", encoding="utf-8")
+            git(lane, "add", "work.txt")
+            git(lane, "commit", "-m", "lane work")
+            judged_sha = git(lane, "rev-parse", "HEAD")
+            (integration / "advance.txt").write_text("advance\n", encoding="utf-8")
+            git(integration, "add", "advance.txt")
+            git(integration, "commit", "-m", "integration advance")
+            integration_sha = git(repository, "rev-parse", "wave/demo/integration")
+            # Disposable lane state: ignored file, ignored empty directory, and a
+            # non-ignored untracked file, none colliding with the sync merge.
+            (lane / "ignored.tmp").write_text("ignored runtime\n", encoding="utf-8")
+            (lane / "ignored-dir").mkdir()
+            (lane / "runtime.txt").write_text("untracked runtime\n", encoding="utf-8")
+            self.assertNotEqual(git(lane, "status", "--porcelain=v1", "--ignored=matching"), "")
+            self.assertEqual(git(lane, "status", "--porcelain=v1", "--untracked-files=no"), "")
+
+            observed = invoke(
+                repository,
+                {
+                    "method": "lane_collect",
+                    "task_id": "demo",
+                    "lane_id": "writer-1",
+                    "sha": judged_sha,
+                    "integration_sha": expected["integration_head"],
+                },
+            )
+
+            self.assertFalse(observed["is_error"])
+            result = observed["result"]
+            self.assertEqual(result["state"], "reconciled")
+            self.assertFalse(result["collected"])
+            self.assertEqual(result["integration_sha"], integration_sha)
+            synced_sha = result["lane_sha"]
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), synced_sha)
+            self.assertTrue(git(repository, "merge-base", "--is-ancestor", integration_sha, synced_sha) == "")
+            # Non-colliding disposable state survives the sync merge untouched.
+            self.assertEqual((lane / "ignored.tmp").read_text(encoding="utf-8"), "ignored runtime\n")
+            self.assertEqual((lane / "runtime.txt").read_text(encoding="utf-8"), "untracked runtime\n")
+            self.assertTrue((lane / "ignored-dir").is_dir())
+
+            collected = invoke(
+                repository,
+                {
+                    "method": "lane_collect",
+                    "task_id": "demo",
+                    "lane_id": "writer-1",
+                    "sha": synced_sha,
+                    "integration_sha": integration_sha,
+                },
+            )
+            self.assertFalse(collected["is_error"])
+            self.assertEqual(collected["result"]["state"], "collected")
+            self.assertTrue(collected["result"]["cleanup"]["cleaned"])
+            self.assertFalse(lane.exists())
+
+    def test_stale_collect_disposes_colliding_disposable_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            expected = seed_managed_task(repository)
+            lane = Path(expected["lane"])
+            integration = Path(expected["integration"])
+            (integration / "collide.txt").write_text("tracked integration content\n", encoding="utf-8")
+            git(integration, "add", "collide.txt")
+            git(integration, "commit", "-m", "integration adds collide.txt")
+            integration_sha = git(repository, "rev-parse", "wave/demo/integration")
+            lane_sha = git(repository, "rev-parse", "wave/demo/writer-1")
+            # The lane has an untracked file at the exact path the sync merge must
+            # write; it is disposable and collection may remove it to proceed.
+            (lane / "collide.txt").write_text("disposable collision\n", encoding="utf-8")
+
+            observed = invoke(
+                repository,
+                {
+                    "method": "lane_collect",
+                    "task_id": "demo",
+                    "lane_id": "writer-1",
+                    "sha": lane_sha,
+                    "integration_sha": expected["integration_head"],
+                },
+            )
+
+            self.assertFalse(observed["is_error"])
+            result = observed["result"]
+            self.assertEqual(result["state"], "reconciled")
+            self.assertFalse(result["collected"])
+            self.assertEqual(result["integration_sha"], integration_sha)
+            synced_sha = result["lane_sha"]
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), synced_sha)
+            self.assertTrue(git(repository, "merge-base", "--is-ancestor", integration_sha, synced_sha) == "")
+            # The disposable collision was disposed and replaced by tracked content.
+            self.assertEqual((lane / "collide.txt").read_text(encoding="utf-8"), "tracked integration content\n")
+            self.assertEqual(git(lane, "status", "--porcelain=v1", "--untracked-files=no"), "")
+
+    def test_stale_collect_disposes_colliding_trailing_whitespace_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            expected = seed_managed_task(repository)
+            lane = Path(expected["lane"])
+            integration = Path(expected["integration"])
+            collision = "collide "
+            (integration / collision).write_text("tracked integration content\n", encoding="utf-8")
+            git(integration, "add", collision)
+            git(integration, "commit", "-m", "integration adds colliding trailing-space path")
+            integration_sha = git(repository, "rev-parse", "wave/demo/integration")
+            lane_sha = git(repository, "rev-parse", "wave/demo/writer-1")
+            # The lane has an untracked file whose name ends in whitespace at the
+            # exact path the sync merge must write; git's human-readable failure
+            # message prints that name with the trailing space intact, so a parser
+            # that trims it would delete nothing and then report success.
+            (lane / collision).write_text("disposable collision\n", encoding="utf-8")
+
+            observed = invoke(
+                repository,
+                {
+                    "method": "lane_collect",
+                    "task_id": "demo",
+                    "lane_id": "writer-1",
+                    "sha": lane_sha,
+                    "integration_sha": expected["integration_head"],
+                },
+            )
+
+            self.assertFalse(observed["is_error"])
+            result = observed["result"]
+            self.assertEqual(result["state"], "reconciled")
+            self.assertFalse(result["collected"])
+            self.assertEqual(result["integration_sha"], integration_sha)
+            synced_sha = result["lane_sha"]
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), synced_sha)
+            self.assertTrue(git(repository, "merge-base", "--is-ancestor", integration_sha, synced_sha) == "")
+            # The disposable collision was disposed and replaced by tracked content
+            # at the exact trailing-space name.
+            self.assertEqual((lane / collision).read_text(encoding="utf-8"), "tracked integration content\n")
+            self.assertEqual(git(lane, "status", "--porcelain=v1", "--untracked-files=no"), "")
+
+    def test_stale_collect_disposes_colliding_special_filename_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            expected = seed_managed_task(repository)
+            lane = Path(expected["lane"])
+            integration = Path(expected["integration"])
+            collisions = ['quo"te', "ta\tb", "new\nline"]
+            for name in collisions:
+                (integration / name).write_text(f"tracked {name!r}\n", encoding="utf-8")
+                git(integration, "add", name)
+            git(integration, "commit", "-m", "integration adds colliding special-name paths")
+            integration_sha = git(repository, "rev-parse", "wave/demo/integration")
+            lane_sha = git(repository, "rev-parse", "wave/demo/writer-1")
+            # Untracked lane files with names git encodes lossily in human-readable
+            # diagnostics: a double quote, a tab, and an embedded newline (which
+            # splits the one-path-per-line failure output).
+            survivor = 'unrelated "keep"'
+            for name in collisions:
+                (lane / name).write_text(f"disposable {name!r}\n", encoding="utf-8")
+            (lane / survivor).write_text("untracked unrelated\n", encoding="utf-8")
+
+            observed = invoke(
+                repository,
+                {
+                    "method": "lane_collect",
+                    "task_id": "demo",
+                    "lane_id": "writer-1",
+                    "sha": lane_sha,
+                    "integration_sha": expected["integration_head"],
+                },
+            )
+
+            self.assertFalse(observed["is_error"])
+            result = observed["result"]
+            self.assertEqual(result["state"], "reconciled")
+            self.assertFalse(result["collected"])
+            self.assertEqual(result["integration_sha"], integration_sha)
+            synced_sha = result["lane_sha"]
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), synced_sha)
+            self.assertTrue(git(repository, "merge-base", "--is-ancestor", integration_sha, synced_sha) == "")
+            # Each disposable collision was disposed and replaced by tracked content
+            # at its exact special-character name.
+            for name in collisions:
+                self.assertEqual((lane / name).read_text(encoding="utf-8"), f"tracked {name!r}\n")
+            # Disposal stays bounded: a non-colliding untracked special-name path
+            # survives the sync merge untouched.
+            self.assertEqual((lane / survivor).read_text(encoding="utf-8"), "untracked unrelated\n")
+            self.assertEqual(git(lane, "status", "--porcelain=v1", "--untracked-files=no"), "")
+
+    def test_stale_collect_disposes_colliding_directory_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            expected = seed_managed_task(repository)
+            lane = Path(expected["lane"])
+            integration = Path(expected["integration"])
+            (integration / "dirpath").write_text("tracked file content\n", encoding="utf-8")
+            git(integration, "add", "dirpath")
+            git(integration, "commit", "-m", "integration adds file where the lane has an untracked directory")
+            integration_sha = git(repository, "rev-parse", "wave/demo/integration")
+            lane_sha = git(repository, "rev-parse", "wave/demo/writer-1")
+            # The lane holds an untracked directory full of disposable files at the
+            # exact path the sync merge must write as a tracked file.
+            (lane / "dirpath").mkdir()
+            (lane / "dirpath/junk.txt").write_text("disposable collision\n", encoding="utf-8")
+            (lane / "dirpath/more.txt").write_text("disposable collision too\n", encoding="utf-8")
+
+            observed = invoke(
+                repository,
+                {
+                    "method": "lane_collect",
+                    "task_id": "demo",
+                    "lane_id": "writer-1",
+                    "sha": lane_sha,
+                    "integration_sha": expected["integration_head"],
+                },
+            )
+
+            self.assertFalse(observed["is_error"])
+            result = observed["result"]
+            self.assertEqual(result["state"], "reconciled")
+            self.assertFalse(result["collected"])
+            self.assertEqual(result["integration_sha"], integration_sha)
+            synced_sha = result["lane_sha"]
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), synced_sha)
+            self.assertTrue(git(repository, "merge-base", "--is-ancestor", integration_sha, synced_sha) == "")
+            # The untracked directory was disposed and replaced by the tracked file.
+            self.assertTrue((lane / "dirpath").is_file())
+            self.assertEqual((lane / "dirpath").read_text(encoding="utf-8"), "tracked file content\n")
+            self.assertEqual(git(lane, "status", "--porcelain=v1", "--untracked-files=no"), "")
+
+    def test_stale_collect_disposes_untracked_file_blocking_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            expected = seed_managed_task(repository)
+            lane = Path(expected["lane"])
+            integration = Path(expected["integration"])
+            (integration / "sub").mkdir()
+            (integration / "sub/a.txt").write_text("tracked directory content\n", encoding="utf-8")
+            git(integration, "add", "sub")
+            git(integration, "commit", "-m", "integration adds a tracked directory")
+            integration_sha = git(repository, "rev-parse", "wave/demo/integration")
+            lane_sha = git(repository, "rev-parse", "wave/demo/writer-1")
+            # An untracked file stands where the sync merge must create a tracked
+            # directory; it is disposable and collection may remove it to proceed.
+            (lane / "sub").write_text("disposable blocker\n", encoding="utf-8")
+
+            observed = invoke(
+                repository,
+                {
+                    "method": "lane_collect",
+                    "task_id": "demo",
+                    "lane_id": "writer-1",
+                    "sha": lane_sha,
+                    "integration_sha": expected["integration_head"],
+                },
+            )
+
+            self.assertFalse(observed["is_error"])
+            result = observed["result"]
+            self.assertEqual(result["state"], "reconciled")
+            self.assertFalse(result["collected"])
+            self.assertEqual(result["integration_sha"], integration_sha)
+            synced_sha = result["lane_sha"]
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), synced_sha)
+            self.assertTrue(git(repository, "merge-base", "--is-ancestor", integration_sha, synced_sha) == "")
+            # The disposable blocker was removed and the tracked directory written.
+            self.assertTrue((lane / "sub").is_dir())
+            self.assertEqual((lane / "sub/a.txt").read_text(encoding="utf-8"), "tracked directory content\n")
+            self.assertEqual(git(lane, "status", "--porcelain=v1", "--untracked-files=no"), "")
+
+    def test_ready_collect_disposes_colliding_integration_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            expected = seed_managed_task(repository)
+            lane = Path(expected["lane"])
+            integration = Path(expected["integration"])
+            (lane / "fresh.txt").write_text("lane fresh content\n", encoding="utf-8")
+            git(lane, "add", "fresh.txt")
+            git(lane, "commit", "-m", "lane adds fresh.txt")
+            lane_sha = git(lane, "rev-parse", "HEAD")
+            # The integration worktree holds an untracked file at the path the
+            # integration update must write; git reset replaces it, disposing it.
+            (integration / "fresh.txt").write_text("disposable collision\n", encoding="utf-8")
+            (integration / "unrelated.txt").write_text("untracked unrelated\n", encoding="utf-8")
+
+            observed = invoke(
+                repository,
+                {
+                    "method": "lane_collect",
+                    "task_id": "demo",
+                    "lane_id": "writer-1",
+                    "sha": lane_sha,
+                    "integration_sha": expected["integration_head"],
+                },
+            )
+
+            self.assertFalse(observed["is_error"])
+            self.assertEqual(observed["result"]["state"], "collected")
+            self.assertEqual(observed["result"]["integration_sha"], lane_sha)
+            self.assertEqual(git(integration, "rev-parse", "HEAD"), lane_sha)
+            self.assertEqual((integration / "fresh.txt").read_text(encoding="utf-8"), "lane fresh content\n")
+            self.assertEqual((integration / "unrelated.txt").read_text(encoding="utf-8"), "untracked unrelated\n")
+
+    def test_collect_stops_at_integration_merge_or_conflict_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            expected = seed_managed_task(repository)
+            lane = Path(expected["lane"])
+            integration = Path(expected["integration"])
+            (integration / "tracked.txt").write_text("integration change\n", encoding="utf-8")
+            git(integration, "add", "tracked.txt")
+            git(integration, "commit", "-m", "integration side")
+            integration_sha = git(repository, "rev-parse", "wave/demo/integration")
+            lane_sha = git(repository, "rev-parse", "wave/demo/writer-1")
+            (repository / "tracked.txt").write_text("main change\n", encoding="utf-8")
+            git(repository, "add", "tracked.txt")
+            git(repository, "commit", "-m", "main side")
+            conflicted = subprocess.run(
+                ["git", "-C", str(integration), "merge", "--no-commit", "main"],
+                text=True,
+                capture_output=True,
+            )
+            self.assertNotEqual(conflicted.returncode, 0)
+            self.assertIn("UU tracked.txt", git(integration, "status", "--porcelain=v1"))
+
+            observed = invoke(
+                repository,
+                {
+                    "method": "lane_collect",
+                    "task_id": "demo",
+                    "lane_id": "writer-1",
+                    "sha": lane_sha,
+                    "integration_sha": integration_sha,
+                },
+            )
+
+            self.assertTrue(observed["is_error"])
+            self.assertEqual(observed["error"]["error"]["code"], "dirty_worktree")
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), integration_sha)
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), lane_sha)
+            self.assertIn("UU tracked.txt", git(integration, "status", "--porcelain=v1"))
+            self.assertIn("main change", (integration / "tracked.txt").read_text(encoding="utf-8"))
+            self.assertIn("integration change", (integration / "tracked.txt").read_text(encoding="utf-8"))
+
+    def test_collect_disposal_is_bounded_to_managed_worktrees(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            expected = seed_managed_task(repository)
+            other_expected = seed_managed_task(repository, "other")
+            other_lane = repository / ".agent_state/worktrees/other/lanes/writer-1"
+            other_integration = repository / ".agent_state/worktrees/other/integration"
+            lane = Path(expected["lane"])
+            integration = Path(expected["integration"])
+            (lane / "work.txt").write_text("work\n", encoding="utf-8")
+            git(lane, "add", "work.txt")
+            git(lane, "commit", "-m", "work")
+            lane_sha = git(lane, "rev-parse", "HEAD")
+            (lane / "disposable-lane.txt").write_text("disposable\n", encoding="utf-8")
+            # Disposable state outside the selected managed worktrees: the caller
+            # worktree (repository root), the other task's lane and integration.
+            (repository / "caller-untracked.txt").write_text("caller preserve\n", encoding="utf-8")
+            (other_lane / "other-disposable.txt").write_text("other lane preserve\n", encoding="utf-8")
+            (other_integration / "other-disposable.txt").write_text("other integration preserve\n", encoding="utf-8")
+
+            observed = invoke(
+                repository,
+                {
+                    "method": "lane_collect",
+                    "task_id": "demo",
+                    "lane_id": "writer-1",
+                    "sha": lane_sha,
+                    "integration_sha": expected["integration_head"],
+                },
+            )
+
+            self.assertFalse(observed["is_error"])
+            self.assertEqual(observed["result"]["state"], "collected")
+            self.assertEqual((repository / "caller-untracked.txt").read_text(encoding="utf-8"), "caller preserve\n")
+            self.assertEqual(
+                (other_lane / "other-disposable.txt").read_text(encoding="utf-8"),
+                "other lane preserve\n",
+            )
+            self.assertEqual(
+                (other_integration / "other-disposable.txt").read_text(encoding="utf-8"),
+                "other integration preserve\n",
+            )
+            self.assertEqual(git(repository, "rev-parse", "wave/other/writer-1"), other_expected["integration_head"])
+            self.assertEqual(git(repository, "rev-parse", "wave/other/integration"), other_expected["integration_head"])
+            self.assertEqual(git(repository, "rev-parse", "main"), expected["base"])
+            self.assertFalse(lane.exists())
 
     def test_collect_without_task_container_warns_without_creating_one(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

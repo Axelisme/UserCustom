@@ -407,7 +407,11 @@ points to. No other method in this set takes `dry_run`.
   integration when the Orchestrator explicitly chooses the separate pre-step. Collection normally
   relies on `lane_collect`'s stale-lane handling instead.
 - `lane_collect` — Collect: moves an Orchestrator-accepted lane into the integration branch and
-  retires the lane when clean. `collected` completes collection; `reconciled` stops before
+  retires the lane. Tracked modifications — staged or unstaged changes to tracked paths, including
+  newly staged paths — and active merge or conflict state in the exact managed lane or integration
+  worktree block collection and are preserved. Non-index state in those selected managed worktrees
+  (untracked files, ignored files, ignored empty directories) is disposable and may be removed by
+  collection. `collected` completes collection; `reconciled` stops before
   collection for rereview and a fresh Orchestrator judgement; `conflicted` returns to the
   Orchestrator.
 - `lane_drop` — Retire the lane: removes a lane's managed branch and worktree without collecting

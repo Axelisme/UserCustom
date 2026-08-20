@@ -67,7 +67,7 @@ judgement remains with the TDD loop.
 
 ## Cost bound
 
-A green stop runs every applicable command, so its `STOP_SECONDS` is the task's standing cost —
+A green stop runs every applicable command, so its `STOP_SECONDS` is the task's standing cost:
 every remaining ticket pays it again. Keep a green stop under **two minutes**, unless the repository
 documents a different bound.
 

@@ -7,5 +7,5 @@ disable-model-invocation: true
 Call the Skill tool twice, for "grilling" and "domain-modeling", running domain-modeling in
 **checkpoint mode**:
 accumulate glossary/ADR changes while the interview runs, and write them in batches at
-natural checkpoints (a settled decision cluster, or session end) — the interview keeps its
+natural checkpoints (a settled decision cluster, or session end), and the interview keeps its
 rhythm, the docs still land.

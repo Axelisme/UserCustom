@@ -36,9 +36,11 @@ next sync should classify it.
 
 Not taken from upstream: `triage` (no external request surface here — `candidate-backlog` covers
 internal discoveries), `setup-matt-pocock-skills` (its generated config is replaced by the
-"repo's documented conventions win" rule below), and — both graduated out of `in-progress` at the
-2026-08-05 sync but not adopted here — `to-questionnaire` (sending someone else a questionnaire) and
-`wizard` (generating an interactive bash wizard for human-only setup steps).
+"repo's documented conventions win" rule below), `resolving-merge-conflicts` (a dedicated conflict
+resolution workflow is not needed here), and `teach` (a stateful teaching workspace is not needed
+here). Also not taken: `to-questionnaire` (sending someone else a questionnaire) and `wizard`
+(generating an interactive bash wizard for human-only setup steps), both graduated out of
+`in-progress` at the 2026-08-05 sync but not adopted here.
 
 ## Skills from other upstreams
 

@@ -1,6 +1,6 @@
 # HTML Report Format
 
-The architectural review is rendered as a single self-contained HTML file in the OS temp directory. Tailwind and Mermaid both come from CDNs. Mermaid handles graph-shaped diagrams reliably; hand-built divs and inline SVG handle the more editorial visuals (mass diagrams, cross-sections). Mix the two — don't lean on Mermaid for everything, it'll start to look generic.
+The architectural review is rendered as a single self-contained HTML file in the OS temp directory. Tailwind and Mermaid both come from CDNs. Mermaid handles graph-shaped diagrams reliably; hand-built divs and inline SVG handle the more editorial visuals (mass diagrams, cross-sections). Mix the two: don't lean on Mermaid for everything, it'll start to look generic.
 
 ## Scaffold
 
@@ -9,7 +9,7 @@ The architectural review is rendered as a single self-contained HTML file in the
 <html lang="zh-Hant">
   <head>
     <meta charset="utf-8" />
-    <title>架構檢視 — {{repo name}}</title>
+    <title>架構檢視：{{repo name}}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
       import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
@@ -35,7 +35,7 @@ The architectural review is rendered as a single self-contained HTML file in the
 
 ## Header
 
-Repo name, date, and a compact Traditional Chinese legend: solid box = module, dashed line = seam, red arrow = leakage, thick dark box = deep module. No introduction paragraph — straight into the candidates.
+Repo name, date, and a compact Traditional Chinese legend: solid box = module, dashed line = seam, red arrow = leakage, thick dark box = deep module. No introduction paragraph. Straight into the candidates.
 
 ## Candidate card
 
@@ -43,20 +43,20 @@ The diagrams carry the weight. Prose is sparse, plain, and uses the glossary ter
 
 Each candidate is one `<article>`:
 
-- **Title** — short Traditional Chinese title that names the deepening; keep domain nouns and code identifiers unchanged when needed (e.g. "收斂 Order intake pipeline").
-- **Badge row** — recommendation strength (`強烈建議` = emerald, `值得探索` = amber, `推測性` = slate), plus a tag for the dependency category (`in-process`, `local-substitutable`, `ports & adapters`, `mock`).
-- **涉及檔案** — monospaced list, `font-mono text-sm`.
-- **調整前 / 調整後圖** — the centrepiece. Two columns, side by side. See patterns below.
-- **問題** — one sentence in Traditional Chinese. What hurts.
-- **調整方向** — one sentence in Traditional Chinese. What changes.
-- **收益** — bullets, short Traditional Chinese phrases. e.g. "測試對準一個 interface", "Pricing 不再跨 seam 外漏", "刪除 4 個 shallow module".
-- **ADR 提醒** (if applicable) — one line in an amber-tinted box, written in Traditional Chinese.
+- **Title**: short Traditional Chinese title that names the deepening; keep domain nouns and code identifiers unchanged when needed (e.g. "收斂 Order intake pipeline").
+- **Badge row**: recommendation strength (`強烈建議` = emerald, `值得探索` = amber, `推測性` = slate), plus a tag for the dependency category (`in-process`, `local-substitutable`, `ports & adapters`, `mock`).
+- **涉及檔案**: monospaced list, `font-mono text-sm`.
+- **調整前 / 調整後圖**: the centrepiece. Two columns, side by side. See patterns below.
+- **問題**: one sentence in Traditional Chinese. What hurts.
+- **調整方向**: one sentence in Traditional Chinese. What changes.
+- **收益**: bullets, short Traditional Chinese phrases. e.g. "測試對準一個 interface", "Pricing 不再跨 seam 外漏", "刪除 4 個 shallow module".
+- **ADR 提醒** (if applicable): one line in an amber-tinted box, written in Traditional Chinese.
 
 No paragraphs of explanation. If the diagram needs a paragraph to be understood, redraw the diagram.
 
 ## Diagram patterns
 
-Pick the pattern that fits the candidate. Mix them. Don't make every diagram look the same — variety is part of the point.
+Pick the pattern that fits the candidate. Mix them. Don't make every diagram look the same. Variety is part of the point.
 
 ### Mermaid graph (the workhorse for dependencies / call flow)
 
@@ -77,7 +77,7 @@ Use a Mermaid `flowchart` or `graph` when the point is "X calls Y calls Z, and l
 
 ### Hand-built boxes-and-arrows (when Mermaid's layout fights you)
 
-Modules as `<div>`s with borders and labels. Arrows as inline SVG `<line>` or `<path>` elements positioned absolutely over a relative container. Reach for this when you want the "after" diagram to feel like one thick-bordered deep module with greyed-out internals — Mermaid won't render that with the right weight.
+Modules as `<div>`s with borders and labels. Arrows as inline SVG `<line>` or `<path>` elements positioned absolutely over a relative container. Reach for this when you want the "after" diagram to feel like one thick-bordered deep module with greyed-out internals, since Mermaid won't render that with the right weight.
 
 ### Cross-section (good for layered shallowness)
 
@@ -85,7 +85,7 @@ Stack horizontal bands (`h-12 border-l-4`) to show layers a call passes through.
 
 ### Mass diagram (good for "interface as wide as implementation")
 
-Two rectangles per module — one for interface surface area, one for implementation. Before: interface rectangle is nearly as tall as the implementation rectangle (shallow). After: interface rectangle is short, implementation rectangle is tall (deep).
+Two rectangles per module: one for interface surface area, one for implementation. Before: interface rectangle is nearly as tall as the implementation rectangle (shallow). After: interface rectangle is short, implementation rectangle is tall (deep).
 
 ### Call-graph collapse
 
@@ -96,8 +96,8 @@ Before: a tree of function calls rendered as nested boxes. After: the same tree 
 - Lean editorial, not corporate-dashboard. Generous whitespace. Serif optional for headings (`font-serif` works well with stone/slate).
 - Colour sparingly: one accent (emerald or indigo) plus red for leakage and amber for warnings.
 - Keep diagrams ~320px tall so before/after sits comfortably side by side without scrolling.
-- Use `text-xs uppercase tracking-wider` for module labels inside diagrams — they should read as schematic, not as UI.
-- The only scripts are the Tailwind CDN and the Mermaid ESM import. The report is otherwise static — no app code, no interactivity beyond Mermaid's own rendering.
+- Use `text-xs uppercase tracking-wider` for module labels inside diagrams, so they read as schematic, not as UI.
+- The only scripts are the Tailwind CDN and the Mermaid ESM import. The report is otherwise static: no app code, no interactivity beyond Mermaid's own rendering.
 
 ## Top recommendation section
 
@@ -105,7 +105,7 @@ One larger card with the heading `優先建議`. Candidate name, one Traditional
 
 ## Tone
 
-Plain Traditional Chinese, concise — but the architectural nouns and verbs come straight from the `/codebase-design` skill. Concision is not an excuse to drift. User-facing prose, headings, labels, legends, captions, badges, and recommendation text must be Traditional Chinese.
+Plain Traditional Chinese, concise, but the architectural nouns and verbs come straight from the `/codebase-design` skill. Concision is not an excuse to drift. User-facing prose, headings, labels, legends, captions, badges, and recommendation text must be Traditional Chinese.
 
 **Use exactly:** module, interface, implementation, depth, deep, shallow, seam, adapter, leverage, locality.
 

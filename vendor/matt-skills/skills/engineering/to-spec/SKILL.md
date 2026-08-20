@@ -1,9 +1,9 @@
 ---
 name: to-spec
-description: Turn the current conversation into a spec and publish it where this repo tracks work — no interview, just synthesis of what you've already discussed.
+description: "Turn the current conversation into a spec and publish it where this repo tracks work: no interview, just synthesis of what you've already discussed."
 ---
 
-This skill takes the current conversation context and codebase understanding and produces a spec. Do NOT interview the user — just synthesize what you already know.
+This skill takes the current conversation context and codebase understanding and produces a spec. Do NOT interview the user; just synthesize what you already know.
 
 **Where the spec lives is repo-specific.** If CLAUDE.md / AGENTS.md documents an issue tracker, follow it. If it documents none, default to local markdown at `.scratch/<feature-slug>/spec.md`.
 
@@ -15,7 +15,7 @@ This skill takes the current conversation context and codebase understanding and
 
 Check with the user that these seams match their expectations.
 
-3. Write the spec using the template below, publish it as an **entry file**, then apply the tracker's `ready-for-agent` label equivalent if it uses a triage vocabulary — no need for additional triage.
+3. Write the spec using the template below, publish it as an **entry file**, then apply the tracker's `ready-for-agent` label equivalent if it uses a triage vocabulary; no need for additional triage.
 
 ## Keep the spec an entry file
 
@@ -24,18 +24,18 @@ clause. Its length is a cost each of them pays in full: one 37KB spec cost a wor
 ticket whose whole delivery was five files and 77 lines, and the clauses it actually needed were two
 sections of thirty lines.
 
-So the published spec is an **entry file** — what every reader needs, plus one pointer per section
+So the published spec is an **entry file**: what every reader needs, plus one pointer per section
 that only some readers reach.
 
-- **Stays in the entry** — Problem Statement, Solution, Out of Scope, and any frozen clause a later
+- **Stays in the entry**: Problem Statement, Solution, Out of Scope, and any frozen clause a later
   gate cites by name (a usage envelope, a hard gate). Frozen clauses are quoted from, so they live
   where the quote is checked.
-- **Moves behind a pointer** — long interface and contract detail, a per-slice or per-phase map,
+- **Moves behind a pointer**: long interface and contract detail, a per-slice or per-phase map,
   anything one kind of reader opens and the others never do. One file per section, beside the spec.
 
 **Write each pointer as a condition, not a path.** *When you need the wire format, read
 `spec/protocol.md`* reaches the reader who needs it. A bare list of paths under a heading reads as
-an instruction to open all of them, and gets obeyed — measured on an admission that listed four
+an instruction to open all of them, and gets obeyed; measured on an admission that listed four
 supporting reports and had all four opened by a worker that needed none of them.
 
 Splitting a spec that already exists is a **move**, never a rewrite: every section keeps its bytes,
@@ -77,7 +77,7 @@ A list of implementation decisions that were made. This can include:
 
 Do NOT include specific file paths or code snippets. They may end up being outdated very quickly.
 
-Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo, just the important bits.
+Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts, not a working demo, just the important bits.
 
 ## Testing Decisions
 

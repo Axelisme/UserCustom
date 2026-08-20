@@ -79,7 +79,7 @@ test("calculateTotal sums line items", () => {
 **Setup-heavy tests**: the prologue that reaches the behaviour dwarfs the claim about it.
 
 ```python
-# BAD: six construction steps, then the claim — repeated verbatim in every test in the file
+# BAD: six construction steps, then the claim, repeated verbatim in every test in the file
 def test_late_terminal_does_not_pollute_next_start() -> None:
     source = FakeSource()
     module = ApplicationModule(source=source, lifecycle=FakeLifecycle(), owner=ManualScheduler())
@@ -133,6 +133,6 @@ def expect_started(result: CommandOutcome) -> OperationStarted:
 assert expect_started(gateway.dispatch(envelope)).token.operation_id == "41"
 ```
 
-`assert x is not None and isinstance(x, T)` is redundant in both halves — `isinstance` already
+`assert x is not None and isinstance(x, T)` is redundant in both halves because `isinstance` already
 excludes `None`. At scale this pattern is a reliable sign the suite is being written to satisfy a
 type checker rather than to describe behaviour.

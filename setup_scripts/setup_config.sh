@@ -70,17 +70,18 @@ disable_legacy_entry \
 for relative in \
   .config \
   .codex/skills \
+  .codex/agents \
   .pi/agent/skills \
   .pi/agent/extensions \
-  .claude/skills \
-  .codex/agents \
   .pi/agent/agents \
+  .claude/skills \
   .claude/agents \
   .local/include; do
   link_directory_contents "$repo_root/home/$relative" "$HOME/$relative"
 done
 
 for relative in \
+  .pi/settings.json \
   .pi/agent/settings.json \
   .pi/acp.json \
   .codex/AGENTS.md \

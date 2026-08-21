@@ -236,6 +236,7 @@ type ResolveSubagentLaunchContract = (input: {
   task: string;
   context: "fresh";
   outputSchema: Record<string, unknown>;
+  agentContract?: { version: 1 };
   availableModels?: readonly unknown[];
 }) => Promise<{ ok: true } | { ok: false; message: string }>;
 
@@ -243,6 +244,7 @@ type ReviewedLaneRoleSpec = {
   agent: "collab-implementer" | "collab-acceptor";
   task: string;
   outputSchema: Record<string, unknown>;
+  agentContract?: { version: 1 };
 };
 
 let resolveSubagentLaunchContract: ResolveSubagentLaunchContract | undefined;
@@ -365,8 +367,17 @@ const runChild = (key, agent, task, outputSchema) => runs.run(key, {
   worktree: false,
   context: "fresh",
   task,
-  outputSchema
+  outputSchema,
+  ...(agent === "collab-implementer" ? { agentContract: { version: 1 } } : {})
 });
+const completedWriterHasMutation = (child) => child.results?.some(
+  (result) => result.effects?.fileMutation?.status === "observed"
+) === true;
+const requireCompletedWriterMutation = (child) => {
+  if (child.structuredOutput.outcome === "COMPLETED" && !completedWriterHasMutation(child)) {
+    throw new Error("A COMPLETED collab-implementer result requires an observed file mutation.");
+  }
+};
 const projectNeedsDecision = (child) => ({
   outcome: "NEEDS_DECISION",
   why: child.structuredOutput.decision.why,
@@ -377,6 +388,7 @@ const projectWorkerStop = (child) => child.structuredOutput.outcome === "BLOCKED
   : projectNeedsDecision(child);
 let writer = await runChild("impl-0", "collab-implementer", ${JSON.stringify(input.workerBrief)}, workerSchema);
 if (writer.structuredOutput.outcome !== "COMPLETED") return projectWorkerStop(writer);
+requireCompletedWriterMutation(writer);
 let reviewer = await runChild("review-0", "collab-acceptor", ${JSON.stringify(input.reviewBrief)}, reviewerSchema);
 if (reviewer.structuredOutput.verdict === "NEEDS_DECISION") return projectNeedsDecision(reviewer);
 let round = 1;
@@ -388,6 +400,7 @@ while (reviewer.structuredOutput.verdict === "BLOCKED" && round <= budget) {
     workerSchema
   );
   if (writer.structuredOutput.outcome !== "COMPLETED") return projectWorkerStop(writer);
+  requireCompletedWriterMutation(writer);
   reviewer = await runChild(
     "review-" + round,
     "collab-acceptor",
@@ -477,6 +490,7 @@ export async function runReviewedLane(
       agent: "collab-implementer",
       task: workerTask,
       outputSchema: reviewedLaneWorkerSchema,
+      agentContract: { version: 1 },
     },
     {
       agent: "collab-acceptor",
@@ -493,6 +507,7 @@ export async function runReviewedLane(
         task: spec.task,
         context: "fresh",
         outputSchema: spec.outputSchema,
+        ...(spec.agentContract ? { agentContract: spec.agentContract } : {}),
         ...(availableModels ? { availableModels } : {}),
       }),
     })),

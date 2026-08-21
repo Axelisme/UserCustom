@@ -196,9 +196,11 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
         )
         for call in execution["calls"]:
             options = call["options"]
-            self.assertEqual(
-                set(options), {"agent", "cwd", "worktree", "context", "task", "outputSchema"}
-            )
+            expected_keys = {"agent", "cwd", "worktree", "context", "task", "outputSchema"}
+            if options["agent"] == "collab-implementer":
+                expected_keys.add("agentContract")
+                self.assertEqual(options["agentContract"], {"version": 1})
+            self.assertEqual(set(options), expected_keys)
             self.assertEqual(options["cwd"], expected["lane"])
             self.assertIs(options["worktree"], False)
             self.assertEqual(options["context"], "fresh")
@@ -206,6 +208,64 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
             self.assertNotIn("model", options)
             self.assertNotIn("thinking", options)
             self.assertNotIn("runId", options)
+
+    def test_schema_valid_writer_stop_survives_the_runtime_no_edit_guard(self) -> None:
+        blocked = {"outcome": "BLOCKED", "blocker": "required input is missing"}
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, _, capture, observed = self.launch_case(base)
+            self.assertFalse(observed["is_error"], observed)
+            run = subprocess.run(
+                [
+                    "node",
+                    str(SCRIPT_HARNESS),
+                    str(capture),
+                    json.dumps([
+                        {
+                            "structuredOutput": blocked,
+                            "noMutationStop": True,
+                            "mutationStatus": "missing",
+                        }
+                    ]),
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            execution = json.loads(run.stdout)
+
+        self.assertEqual(execution["result"], blocked)
+        self.assertEqual(len(execution["calls"]), 1)
+        self.assertEqual(execution["calls"][0]["options"]["agentContract"], {"version": 1})
+
+    def test_completed_writer_still_requires_observed_mutation(self) -> None:
+        completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, _, capture, observed = self.launch_case(base)
+            self.assertFalse(observed["is_error"], observed)
+            run = subprocess.run(
+                [
+                    "node",
+                    str(SCRIPT_HARNESS),
+                    str(capture),
+                    json.dumps([
+                        {
+                            "structuredOutput": completed,
+                            "mutationStatus": "missing",
+                        }
+                    ]),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn(
+            "A COMPLETED collab-implementer result requires an observed file mutation.",
+            run.stderr,
+        )
 
     def test_terminal_branches_are_typed_and_zero_budget_is_terminal(self) -> None:
         completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
@@ -348,10 +408,11 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
                 self.assertEqual(execution["result"], expected_result)
                 self.assertEqual([call["key"] for call in execution["calls"]], expected_keys)
                 for call in execution["calls"]:
-                    self.assertEqual(
-                        set(call["options"]),
-                        {"agent", "cwd", "worktree", "context", "task", "outputSchema"},
-                    )
+                    expected_options = {"agent", "cwd", "worktree", "context", "task", "outputSchema"}
+                    if call["options"]["agent"] == "collab-implementer":
+                        expected_options.add("agentContract")
+                        self.assertEqual(call["options"]["agentContract"], {"version": 1})
+                    self.assertEqual(set(call["options"]), expected_options)
                     self.assertIs(call["options"]["worktree"], False)
                     self.assertEqual(call["options"]["context"], "fresh")
                     self.assertIsInstance(call["options"]["outputSchema"], dict)

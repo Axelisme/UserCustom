@@ -96,7 +96,10 @@ The reviewed-lane tool owns concrete JSON Schema objects for its worker and revi
 Collab and the profiles express the same semantics without repeating the schema. Each child finishes
 through Pi's structured-output protocol instead of free-form Markdown, so formatting cannot change
 control flow. The parsed child result is `structuredOutput`; free-form output never drives control
-flow. When the temporary efficiency probe is enabled, its stdout record and implementer sidecar are
+flow. Implementer launches use Pi's v1 effects projection so a schema-valid `BLOCKED` or
+`NEEDS_DECISION` result can stop without mutation; the composition separately requires an observed
+file mutation before routing any `COMPLETED` result to review. This effects check changes no typed
+result field. When the temporary efficiency probe is enabled, its stdout record and implementer sidecar are
 operation evidence retained by the child/lane artifacts and add no property to either schema below.
 They never drive workflow branching. Use one structured result per child and do not combine it with
 Pi's generic acceptance report:

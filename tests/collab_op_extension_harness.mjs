@@ -2,9 +2,9 @@
 import { pathToFileURL } from "node:url";
 import { createInterface } from "node:readline";
 
-const [packageEntry, extensionPath, cwd] = process.argv.slice(2);
+const [packageEntry, extensionPath, cwd, supportExtensionPath] = process.argv.slice(2);
 if (!packageEntry || !extensionPath || !cwd) {
-  throw new Error("usage: harness <pi-package-entry> <extension-path> <cwd>");
+  throw new Error("usage: harness <pi-package-entry> <extension-path> <cwd> [support-extension-path]");
 }
 
 const { DefaultResourceLoader, SettingsManager } = await import(pathToFileURL(packageEntry));
@@ -12,7 +12,7 @@ const settingsManager = SettingsManager.inMemory({});
 const loader = new DefaultResourceLoader({
   cwd,
   agentDir: `${cwd}/.empty-pi-agent`,
-  additionalExtensionPaths: [extensionPath],
+  additionalExtensionPaths: [extensionPath, ...(supportExtensionPath ? [supportExtensionPath] : [])],
   settingsManager,
 });
 await loader.reload();
@@ -59,9 +59,19 @@ async function execute(envelope) {
       },
     };
   }
-  const request = envelope.tool === undefined
-    ? envelope
-    : Object.fromEntries(Object.entries(envelope).filter(([key]) => key !== "tool"));
+  const rpcConfig = registrations.get("_collab_test_rpc_config");
+  if (rpcConfig && envelope.__rpc !== undefined) {
+    await rpcConfig.definition.execute(
+      "test-rpc-config",
+      envelope.__rpc,
+      undefined,
+      undefined,
+      { cwd },
+    );
+  }
+  const request = Object.fromEntries(
+    Object.entries(envelope).filter(([key]) => key !== "tool" && key !== "__rpc"),
+  );
   try {
     const result = await registration.definition.execute(
       "test-call",

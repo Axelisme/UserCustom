@@ -75,8 +75,8 @@ Define each at its first use:
    checkout.
 3. **Implement and review.** Execute the chosen shape; for delegated closed work, prefer runtime
    composition of worker, reviewer, and bounded correction under a finite Orchestrator-supplied
-   correction budget. The runtime pointer under boundary 2 carries the composed recipe and its
-   terminal outcomes. Generic Acceptance below reviews the protected current lane; specialized
+   correction budget. The runtime pointer under boundary 2 carries the registered composition path
+   and its terminal outcomes. Generic Acceptance below reviews the protected current lane; specialized
    procedures (such as code-review) remain alternatives with their own identity contracts. This
    step is complete when the lane carries a worker result and an independent review result, or a
    terminal blocker or decision request.

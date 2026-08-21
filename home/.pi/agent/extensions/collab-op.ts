@@ -2,11 +2,15 @@ import { randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import { lstat, mkdir, open, readdir, readFile, rename, rm, rmdir, unlink } from "node:fs/promises";
 import path from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import {
+  registeredReviewedLaneParameters,
+  runReviewedLane,
+} from "./collab-reviewed-lane.ts";
 const TOOL_VERSION = 1;
 const IDENTIFIER = /^[a-z0-9][a-z0-9._-]*$/;
 type GitResult = { code: number; stdout: string; stderr: string };
-type WorktreeRecord = {
+export type WorktreeRecord = {
   worktree?: string;
   HEAD?: string;
   branch?: string;
@@ -18,20 +22,20 @@ type RefRecord = {
   symbolicTarget: string | null;
 };
 
-type GitRunner = (
+export type GitRunner = (
   cwd: string,
   args: readonly string[],
   signal?: AbortSignal,
 ) => Promise<GitResult>;
 
-type Repository = {
+export type Repository = {
   worktreeRoot: string;
   controlRoot: string;
   gitDir: string;
   git: GitRunner;
 };
 
-class TaskLayout {
+export class TaskLayout {
   readonly root: string;
   readonly integrationBranch: string;
   readonly integrationBaseRef: string;
@@ -380,7 +384,7 @@ async function requireGit(
   return result.stdout.trim();
 }
 
-async function discoverRepository(
+export async function discoverRepository(
   run: GitRunner,
   cwd: string,
   signal?: AbortSignal,
@@ -1262,7 +1266,7 @@ function controlRepository(repo: Repository): Repository {
   return { ...repo, worktreeRoot: repo.controlRoot };
 }
 
-async function requireManagedIntegration(
+export async function requireManagedIntegration(
   repo: Repository,
   task: TaskLayout,
   signal?: AbortSignal,
@@ -1323,11 +1327,12 @@ async function requireManagedIntegration(
   return { tip, base, records };
 }
 
-async function laneInventory(
+export async function laneInventory(
   repo: Repository,
   task: TaskLayout,
   laneId: string,
   signal?: AbortSignal,
+  worktreeRecordsInput?: readonly WorktreeRecord[],
 ) {
   const gitRepo = controlRepository(repo);
   const branchRef = `refs/heads/${task.laneBranch(laneId)}`;
@@ -1347,7 +1352,9 @@ async function laneInventory(
     await Promise.all([
       commitAt(gitRepo, branchRef, signal),
       symbolicRefTarget(gitRepo, branchRef, signal),
-      worktreeRecords(gitRepo, signal),
+      worktreeRecordsInput
+        ? Promise.resolve(worktreeRecordsInput as WorktreeRecord[])
+        : worktreeRecords(gitRepo, signal),
       pathMetadata(lanePath),
       pathMetadata(lanesPath),
       pathMetadata(stateRoot),
@@ -1387,6 +1394,8 @@ async function laneInventory(
     pathCustodySafe,
   };
 }
+
+export type LaneInventory = Awaited<ReturnType<typeof laneInventory>>;
 
 function requireLaneId(value: unknown): string {
   const laneId = requireIdentifier(value, "lane id");
@@ -2807,7 +2816,7 @@ async function treeAt(
   return tree;
 }
 
-function laneIsComplete(
+export function laneIsComplete(
   inventory: Awaited<ReturnType<typeof laneInventory>>,
 ): boolean {
   return (
@@ -4037,6 +4046,21 @@ function registeredMutationResult(
 
 export default function collabOpExtension(pi: ExtensionAPI): void {
   const runGit = gitRunner(pi);
+  const reviewedLaneDependencies = {
+    discoverRepository,
+    createTask: (repo: Repository, taskId: string) => new TaskLayout(repo, taskId),
+    requireTaskId: (value: unknown) => requireIdentifier(value, "task id"),
+    requireLaneId,
+    requireManagedIntegration,
+    laneInventory,
+    laneIsComplete,
+    error: (
+      code: string,
+      message: string,
+      repair?: string,
+      details?: Record<string, unknown>,
+    ) => new CollabOpError(code, message, repair, details),
+  };
   // Every task-mutating handler executes under one shared task-scoped exclusive
   // lock so independent tools cannot interleave resource mutations.
   function taskLocked(
@@ -4056,6 +4080,41 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
       return withTaskLock(repo, taskId, () => handler(request, signal, ctx));
     };
   }
+
+  pi.registerTool({
+    name: "collab_run_reviewed_lane",
+    label: "Run reviewed Collab lane",
+    description: "Asynchronously launch fresh implementer and acceptor rounds in one exact managed lane with bounded corrections.",
+    parameters: registeredReviewedLaneParameters,
+    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
+      const result = await executeRegisteredTool(
+        request as Record<string, unknown>,
+        ctx,
+        (value, innerSignal, innerCtx) => {
+          const params = validateRegisteredRequest(
+            value,
+            "collab_run_reviewed_lane",
+            ["task_id", "ticket_id", "lane_id", "worker_brief", "review_brief", "correction_budget"],
+            ["task_id", "ticket_id", "lane_id", "worker_brief", "review_brief", "correction_budget"],
+          );
+          return runReviewedLane(
+            pi,
+            runGit,
+            innerCtx.cwd,
+            params,
+            innerCtx,
+            reviewedLaneDependencies,
+            innerSignal,
+          );
+        },
+        signal,
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        details: result,
+      };
+    },
+  });
 
   pi.registerTool({
     name: "collab_integration_create",

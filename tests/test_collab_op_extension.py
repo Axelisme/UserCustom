@@ -18,6 +18,7 @@ EXTENSION = ROOT / "home/.pi/agent/extensions/collab-op.ts"
 HARNESS = ROOT / "tests/collab_op_extension_harness.mjs"
 PI_PACKAGE = Path("/usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js")
 _HARNESSES: dict[Path, subprocess.Popen[str]] = {}
+_HARNESS_SUPPORT: dict[Path, Path | None] = {}
 
 
 def close_harness(process: subprocess.Popen[str]) -> None:
@@ -42,6 +43,7 @@ def close_harnesses() -> None:
     for process in _HARNESSES.values():
         close_harness(process)
     _HARNESSES.clear()
+    _HARNESS_SUPPORT.clear()
 
 
 atexit.register(close_harnesses)
@@ -57,23 +59,39 @@ def git(repository: Path, *arguments: str) -> str:
     return result.stdout.strip()
 
 
-def invoke(repository: Path, request: dict[str, object]) -> dict[str, object]:
-    for stale in [path for path in _HARNESSES if not path.exists()]:
+def invoke(
+    repository: Path,
+    request: dict[str, object],
+    *,
+    support_extension: Path | None = None,
+) -> dict[str, object]:
+    for stale in [key for key in _HARNESSES if not key.exists()]:
         close_harness(_HARNESSES.pop(stale))
+        _HARNESS_SUPPORT.pop(stale, None)
 
     key = repository.resolve()
+    support = support_extension.resolve() if support_extension is not None else None
     process = _HARNESSES.get(key)
+    if process is not None and _HARNESS_SUPPORT.get(key) != support:
+        close_harness(process)
+        _HARNESSES.pop(key, None)
+        _HARNESS_SUPPORT.pop(key, None)
+        process = None
     if process is None or process.poll() is not None:
         if process is not None:
             close_harness(process)
+        command = ["node", str(HARNESS), str(PI_PACKAGE), str(EXTENSION), str(key)]
+        if support is not None:
+            command.append(str(support))
         process = subprocess.Popen(
-            ["node", str(HARNESS), str(PI_PACKAGE), str(EXTENSION), str(key)],
+            command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
         )
         _HARNESSES[key] = process
+        _HARNESS_SUPPORT[key] = support
 
     stdin = process.stdin
     stdout = process.stdout
@@ -255,6 +273,7 @@ def spawn_raw_harness(repository: Path) -> subprocess.Popen[str]:
         text=True,
     )
     _HARNESSES[repository.resolve()] = process
+    _HARNESS_SUPPORT[repository.resolve()] = None
     return process
 
 
@@ -282,7 +301,9 @@ def wait_until(predicate, timeout: float = 30.0) -> bool:
 
 
 def close_harness_for(repository: Path) -> None:
-    process = _HARNESSES.pop(repository.resolve(), None)
+    key = repository.resolve()
+    process = _HARNESSES.pop(key, None)
+    _HARNESS_SUPPORT.pop(key, None)
     if process is not None:
         close_harness(process)
 
@@ -1486,6 +1507,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                     "collab_lane_drop",
                     "collab_lane_reconcile",
                     "collab_report",
+                    "collab_run_reviewed_lane",
                     "collab_status",
                 ],
             )
@@ -2367,6 +2389,7 @@ class CollabOpExtensionStatusTests(unittest.TestCase):
                     "collab_lane_drop",
                     "collab_lane_reconcile",
                     "collab_report",
+                    "collab_run_reviewed_lane",
                     "collab_status",
                 ],
             )

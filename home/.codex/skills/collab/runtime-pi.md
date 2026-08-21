@@ -96,7 +96,10 @@ The reviewed-lane tool owns concrete JSON Schema objects for its worker and revi
 Collab and the profiles express the same semantics without repeating the schema. Each child finishes
 through Pi's structured-output protocol instead of free-form Markdown, so formatting cannot change
 control flow. The parsed child result is `structuredOutput`; free-form output never drives control
-flow. Use one structured result per child and do not combine it with Pi's generic acceptance report:
+flow. When the temporary efficiency probe is enabled, its stdout record and implementer sidecar are
+operation evidence retained by the child/lane artifacts and add no property to either schema below.
+They never drive workflow branching. Use one structured result per child and do not combine it with
+Pi's generic acceptance report:
 both default Collab profiles set `acceptance: { level: none, ... }` with a reason, and a launch needing
 another acceptance policy selects it explicitly.
 

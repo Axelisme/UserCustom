@@ -40,7 +40,30 @@ Define each at its first use:
    review runs again against its new current state.
 3. **Results carry semantics; identities belong to operations.** Exact commit and tree identities
    stay with the operations that require them — collection, landing, and runtime tracking. Ordinary
-   worker and reviewer results carry only what workflow branching needs.
+   worker and reviewer results carry only what workflow branching needs. Temporary efficiency
+   telemetry remains operation evidence in the child run artifact or lane-owned sidecar; it does not
+   add fields to the typed semantic result or move commit or tree identity into it.
+
+## Dispatch brief Interface
+
+A dispatch names the ticket and carries only operational deltas. Before sending it, the Orchestrator
+closes the receiver profile's required fields with explicit values rather than repository guesses.
+For a writer, include these compact blocks:
+
+- `Orientation`: the owning Module or class, plus each named seam that deserves attention; use `none`
+  when no seam is relevant. Do not supply a symbol inventory or predicted call chain.
+- `Execution parameters`: the exact authorized command runtime or interpreter (or `none`), exact
+  environment variables (or `none`), lane-local pytest basetemp (or `not-applicable`), ticket-specific
+  test budgets or exceptions (or `none`), and cleanup or retention exceptions (or `none`).
+
+Every collab role dispatch states `efficiency_probe = enabled | disabled`. When enabled, include a
+lowercase filename-safe run label matching `[a-z0-9][a-z0-9._-]*`. An implementer dispatch also names
+`.pi/telemetry/efficiency/` as its lane-relative target and an Orchestrator-owned custody destination
+outside the lane; those values authorize exclusive creation of exactly one ignored telemetry file and
+its byte-for-byte preservation before lane retirement. An acceptor remains read-only and emits its
+probe data only as a distinct stdout record retained by the child run artifact, before returning the
+unchanged typed verdict. Missing or unsafe required values stop at the receiver rather than
+selecting fallback environment or identity.
 
 ## Responsibility boundaries
 
@@ -93,11 +116,15 @@ Define each at its first use:
    collection. This step is complete when the accepted lane is the integration head and its lane is
    retired or its retention is reported.
 6. **Retire the lane.** When a writer or reviewer lane reaches its terminal handoff and will not
-   resume, inventory and remove its lane-owned worktree registrations, temporary files or
-   directories, sessions or processes, and agent-created branches that no longer carry required
-   evidence. Preserve pre-existing user state and evidence still needed for Acceptance or landing;
-   give every deliberate retention an owner and discharge condition. This step is complete when no
-   orphaned lane-owned resource remains.
+   resume, first discharge any enabled implementer efficiency artifact: inventory the canonical
+   lane directory, resolve the unique file for the dispatched label and recorded runtime identity,
+   copy it byte-for-byte to the dispatched custody destination, verify the copy, and preserve its
+   role, label, and runtime identity. Then inventory and remove lane-owned
+   worktree registrations, temporary files or directories, sessions or processes, and agent-created
+   branches that no longer carry required evidence. Preserve pre-existing user state and evidence
+   still needed for Acceptance or landing; give every deliberate retention an owner and discharge
+   condition. This step is complete when required telemetry has custody and no orphaned lane-owned
+   resource remains.
 
 ## Continuity is a cache
 

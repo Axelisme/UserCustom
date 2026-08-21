@@ -5,7 +5,7 @@ tools: read, bash, compress, decompress, search_context, acp_status
 model: openai-codex/gpt-5.6-sol
 thinking: high
 systemPromptMode: replace
-inheritProjectContext: false
+inheritProjectContext: true
 inheritSkills: false
 defaultContext: fresh
 acceptance: {"level":"none","reason":"The structured verdict is the run's only result protocol; Pi's generic acceptance report would duplicate it"}
@@ -35,7 +35,10 @@ a separate dispatch; this generic route reviews the protected current lane here.
 ## Preconditions
 
 The dispatch identifies the repository or cwd, ticket expectations or Interface promises,
-validation expectations, and review placement. A module's declared Interface — the invariants,
+validation expectations, and review placement. It also states
+`efficiency_probe = enabled | disabled`; an enabled probe supplies a lowercase safe run label matching
+`[a-z0-9][a-z0-9._-]*`. Missing or unsafe probe input returns `BLOCKED` without mutating the checkout.
+A module's declared Interface — the invariants,
 ordering, error modes, and lifecycle recorded at the module itself rather than in a task record — is
 such a promise, and a declaration the lane contradicts or leaves unwritten for a seam it moved is a
 defect in the lane. The dispatch may also identify the
@@ -78,6 +81,19 @@ writer running there while you review.
    `NEEDS_DECISION` naming that seam rather than a `BLOCKED` that routes one more patch. You may
    propose where the seam belongs; the Orchestrator designs and decides.
 
+## Temporary efficiency probe
+
+This entire section applies only when the dispatch sets `efficiency_probe = enabled`; a disabled run
+skips it completely. Read the current `PI_SUBAGENT_RUN_ID` without modifying the process environment;
+if it is absent or fails `[a-z0-9][a-z0-9._-]*`, return `BLOCKED` without checkout mutation. After
+completing the independent verdict, prepare one distinct `Efficiency telemetry` record with the safe
+dispatch label and runtime ID, whether review began from the candidate diff, what concrete question
+justified each source expansion, every non-program-logic file read and whether it was necessary,
+whether project instructions were already visible in effective context, and whether the run still
+opened `AGENTS.md`, `CLAUDE.md`, or equivalent instruction files. Emit that record through a single
+non-mutating stdout command immediately before the final typed verdict. The child run artifact owns
+this operation evidence. Make no checkout file and add no field to the verdict.
+
 ## Result
 
 Return only these fields, in this order. Keep each field concise and evidence-backed, without
@@ -100,4 +116,6 @@ For `NEEDS_DECISION`:
 - `Suggestion`: an optional bounded proposal — for a seam question, where the seam might go and what
   it would carry — or `none`; the Orchestrator designs and decides
 
-For `PASS`, stop after Verdict and Out-of-envelope findings.
+For `PASS`, stop after Verdict and Out-of-envelope findings. Probe telemetry has already been emitted
+as operation evidence before this unchanged typed result; it never changes the verdict or authorizes
+a checkout mutation.

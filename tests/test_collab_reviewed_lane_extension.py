@@ -17,6 +17,9 @@ from tests.test_collab_op_extension import (
 ROOT = Path(__file__).resolve().parents[1]
 RPC_MOCK = ROOT / "tests/collab_rpc_mock_extension.ts"
 SCRIPT_HARNESS = ROOT / "tests/collab_workflow_script_harness.mjs"
+EXTENSION_HARNESS = ROOT / "tests/collab_op_extension_harness.mjs"
+PI_PACKAGE = Path("/usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js")
+COMPANION = ROOT / "home/.pi/agent/extensions/collab-reviewed-lane.ts"
 TOOL = "collab_run_reviewed_lane"
 
 
@@ -58,6 +61,28 @@ def valid_request(capture: Path, **overrides: Any) -> dict[str, Any]:
 
 
 class CollabReviewedLaneExtensionTests(unittest.TestCase):
+    def test_companion_is_loadable_as_top_level_extension(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            run = subprocess.run(
+                [
+                    "node",
+                    str(EXTENSION_HARNESS),
+                    str(PI_PACKAGE),
+                    str(COMPANION),
+                    temporary,
+                ],
+                input='{"tool":"missing"}\n',
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(run.returncode, 0, run.stderr)
+        observed = json.loads(run.stdout)
+        self.assertEqual(observed["tools"], [])
+        self.assertTrue(observed["is_error"])
+        self.assertEqual(observed["error"]["error"]["code"], "unknown_tool")
+
     def managed_repository(self, base: Path) -> tuple[Path, dict[str, str]]:
         repository, _ = seed_repository(base)
         seed_profiles(repository)

@@ -569,3 +569,8 @@ export async function runReviewedLane(
   }
   return { workflow_id: runId, async_id: asyncId, async_dir: asyncDir };
 }
+
+// This companion is both imported by collab-op.ts and discovered by Pi's
+// top-level extension loader. The factory intentionally registers nothing;
+// collab-op.ts owns the public tool registrations.
+export default function collabReviewedLaneCompanion(): void {}

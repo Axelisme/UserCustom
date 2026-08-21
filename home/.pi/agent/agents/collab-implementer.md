@@ -2,7 +2,7 @@
 name: collab-implementer
 description: Implement one bounded change as the sole writer, validate it, and return a semantic handoff without owning orchestration or lifecycle.
 tools: read, write, edit, bash, compress, decompress, search_context, acp_status
-model: opencode-go/deepseek-v4-flash
+model: openai-codex/gpt-5.6-luna
 thinking: max
 systemPromptMode: replace
 inheritProjectContext: false

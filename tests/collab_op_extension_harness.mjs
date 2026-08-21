@@ -23,16 +23,47 @@ if (loaded.errors.length > 0) {
 }
 
 const tools = loaded.extensions.flatMap((extension) => [...extension.tools.keys()]).sort();
-const registrations = loaded.extensions
-  .map((extension) => extension.tools.get("collab_op"))
-  .filter(Boolean);
-if (registrations.length !== 1) {
-  throw new Error(`expected one collab_op registration, found ${registrations.length}`);
-}
+const registrations = new Map(
+  loaded.extensions.flatMap((extension) => [...extension.tools.entries()]),
+);
+const schemas = Object.fromEntries(
+  [...registrations.entries()]
+    .filter(([name]) => name.startsWith("collab_"))
+    .map(([name, tool]) => [
+      name,
+      {
+        label: tool.definition.label,
+        description: tool.definition.description,
+        parameters: tool.definition.parameters,
+      },
+    ]),
+);
 
-async function execute(request) {
+async function execute(envelope) {
+  const toolName = typeof envelope.tool === "string" ? envelope.tool : "collab_op";
+  const registration = registrations.get(toolName);
+  if (!registration) {
+    return {
+      tools,
+      schemas,
+      tool: toolName,
+      is_error: true,
+      error: {
+        ok: false,
+        tool_version: 1,
+        error: {
+          code: "unknown_tool",
+          message: `${toolName} is not registered`,
+          repair: "Choose one of the registered Collab tools.",
+        },
+      },
+    };
+  }
+  const request = envelope.tool === undefined
+    ? envelope
+    : Object.fromEntries(Object.entries(envelope).filter(([key]) => key !== "tool"));
   try {
-    const result = await registrations[0].definition.execute(
+    const result = await registration.definition.execute(
       "test-call",
       request,
       undefined,
@@ -40,15 +71,15 @@ async function execute(request) {
       { cwd },
     );
     const text = result.content.find((part) => part.type === "text")?.text;
-    return { tools, is_error: false, result: JSON.parse(text) };
+    return { tools, schemas, tool: toolName, is_error: false, result: JSON.parse(text) };
   } catch (error) {
-    let envelope;
+    let errorEnvelope;
     try {
-      envelope = JSON.parse(error instanceof Error ? error.message : String(error));
+      errorEnvelope = JSON.parse(error instanceof Error ? error.message : String(error));
     } catch {
-      envelope = { raw: error instanceof Error ? error.message : String(error) };
+      errorEnvelope = { raw: error instanceof Error ? error.message : String(error) };
     }
-    return { tools, is_error: true, error: envelope };
+    return { tools, schemas, tool: toolName, is_error: true, error: errorEnvelope };
   }
 }
 

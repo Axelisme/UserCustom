@@ -5,20 +5,6 @@ import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 const TOOL_VERSION = 1;
 const IDENTIFIER = /^[a-z0-9][a-z0-9._-]*$/;
-const METHODS = [
-  "integration_create",
-  "integration_adopt",
-  "integration_land",
-  "integration_reconcile",
-  "integration_remove",
-  "integration_migrate",
-  "lane_create",
-  "lane_collect",
-  "lane_reconcile",
-  "lane_drop",
-  "status",
-] as const;
-
 type GitResult = { code: number; stdout: string; stderr: string };
 type WorktreeRecord = {
   worktree?: string;
@@ -52,10 +38,6 @@ class TaskLayout {
   readonly integrationPath: string;
   readonly persistenceRef: string;
   readonly landedRef: string;
-  readonly acceptedRef: string;
-  readonly acceptanceOpenRef: string;
-  readonly legacyUserAcceptedRef: string;
-  readonly acceptancePath: string;
 
   constructor(
     readonly repo: Repository,
@@ -67,10 +49,6 @@ class TaskLayout {
     this.integrationPath = path.join(this.root, "integration");
     this.persistenceRef = `refs/orchestrate/${taskId}/persistence`;
     this.landedRef = `refs/orchestrate/${taskId}/landed`;
-    this.acceptedRef = `refs/orchestrate/${taskId}/accepted`;
-    this.acceptanceOpenRef = `refs/orchestrate/${taskId}/acceptance-open`;
-    this.legacyUserAcceptedRef = `refs/orchestrate/${taskId}/user-accepted`;
-    this.acceptancePath = path.join(this.root, "acceptance");
   }
 
   laneBranch(laneId: string): string {
@@ -107,13 +85,6 @@ function requireIdentifier(value: unknown, label: string): string {
 function gitRunner(pi: ExtensionAPI): GitRunner {
   return async (cwd, args, signal) => {
     const result = await pi.exec("git", [...args], { cwd, signal });
-    return { code: result.code, stdout: result.stdout, stderr: result.stderr };
-  };
-}
-
-function shellRunner(pi: ExtensionAPI): GitRunner {
-  return async (cwd, args, signal) => {
-    const result = await pi.exec("sh", [...args], { cwd, signal });
     return { code: result.code, stdout: result.stdout, stderr: result.stderr };
   };
 }
@@ -395,29 +366,6 @@ async function withTaskLock<T>(
   }
 }
 
-// Every public task mutator (all except status) refuses while any migration
-// sentinel namespace resource exists; only integration_migrate may advance a
-// committed migration.
-async function assertNoMigrationSentinel(
-  repo: Repository,
-  taskId: string,
-  signal?: AbortSignal,
-): Promise<void> {
-  const names = await refNames(
-    controlRepository(repo),
-    `refs/orchestrate/${taskId}/migration`,
-    signal,
-  );
-  if (names.length > 0) {
-    throw new CollabOpError(
-      "task_recovery_required",
-      `task ${taskId} has an incomplete migration that must be resumed or resolved first`,
-      "Run integration_migrate for the task to resume and finish the migration.",
-      { task_id: taskId },
-    );
-  }
-}
-
 async function requireGit(
   run: GitRunner,
   cwd: string,
@@ -626,26 +574,6 @@ async function hasTrackedDirt(
   return result.stdout.length > 0;
 }
 
-function operationFor(method: string): string {
-  return method.replaceAll("_", "-");
-}
-
-function errorEnvelope(method: string, error: unknown): Record<string, unknown> {
-  const known = error instanceof CollabOpError;
-  const body: Record<string, unknown> = {
-    code: known ? error.code : "git_error",
-    message: known ? error.message : error instanceof Error ? error.message : String(error),
-  };
-  if (known && error.repair) body.repair = error.repair;
-  if (known && error.details && Object.keys(error.details).length > 0) body.details = error.details;
-  return {
-    ok: false,
-    operation: operationFor(method),
-    tool_version: TOOL_VERSION,
-    error: body,
-  };
-}
-
 async function warnManagedWorktree(
   repo: Repository,
   records: readonly WorktreeRecord[],
@@ -749,7 +677,12 @@ async function requireLocalBranch(
   label: string,
   signal?: AbortSignal,
 ): Promise<{ name: string; ref: string }> {
-  if (typeof value !== "string" || value.length === 0 || value.startsWith("-")) {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.startsWith("-") ||
+    value.startsWith("refs/")
+  ) {
     throw new CollabOpError(
       "invalid_branch",
       `${label} must be a local branch name`,
@@ -816,6 +749,27 @@ async function symbolicRefTarget(
 ): Promise<string | null> {
   const result = await repo.git(repo.worktreeRoot, ["symbolic-ref", "--quiet", ref], signal);
   return result.code === 0 ? result.stdout.trim() : null;
+}
+
+async function taskPersistenceBranch(
+  repo: Repository,
+  task: TaskLayout,
+  signal?: AbortSignal,
+): Promise<{ name: string; ref: string }> {
+  const target = await symbolicRefTarget(controlRepository(repo), task.persistenceRef, signal);
+  if (target === null || !target.startsWith("refs/heads/") || target === "refs/heads/") {
+    throw new CollabOpError(
+      "task_state_invalid",
+      `managed task ${task.taskId} is missing its persistence symbolic ref`,
+      "Restore the task-owned persistence symbolic ref to an existing local branch before retrying.",
+    );
+  }
+  return requireLocalBranch(
+    controlRepository(repo),
+    target.slice("refs/heads/".length),
+    "persistence",
+    signal,
+  );
 }
 
 async function taskInventory(
@@ -2145,17 +2099,22 @@ async function laneCollect(
   cwd: string,
   request: Record<string, unknown>,
   signal?: AbortSignal,
+  currentTips = false,
 ): Promise<Record<string, unknown>> {
   const repo = await discoverRepository(run, cwd, signal);
   const taskId = requireIdentifier(request.task_id, "task id");
   const laneId = requireLaneId(request.lane_id);
-  const requestedSha = await exactSha(repo, request.sha, "sha", signal);
-  const judgedIntegrationSha = await exactSha(
-    repo,
-    request.integration_sha,
-    "integration_sha",
-    signal,
-  );
+  const requestedSha = currentTips
+    ? null
+    : await exactSha(repo, request.sha, "sha", signal);
+  const judgedIntegrationSha = currentTips
+    ? null
+    : await exactSha(
+        repo,
+        request.integration_sha,
+        "integration_sha",
+        signal,
+      );
   const task = new TaskLayout(repo, taskId);
   const lane = await laneInventory(repo, task, laneId, signal);
   if (!laneCoreIsComplete(lane)) {
@@ -2173,7 +2132,7 @@ async function laneCollect(
     );
   }
   const laneSha = lane.branchTip as string;
-  if (laneSha !== requestedSha) {
+  if (!currentTips && laneSha !== requestedSha) {
     throw new CollabOpError(
       "lane_sha_mismatch",
       "supplied sha is not the exact current lane tip",
@@ -2216,7 +2175,7 @@ async function laneCollect(
     laneSha,
     signal,
   );
-  const comparisonMatches = judgedIntegrationSha === integration.tip;
+  const comparisonMatches = currentTips || judgedIntegrationSha === integration.tip;
 
   if (!comparisonMatches && subjectContainsIntegration) {
     const warnings = [
@@ -2655,8 +2614,8 @@ async function integrationReconcile(
   const repo = await discoverRepository(run, cwd, signal);
   const taskId = requireIdentifier(request.task_id, "task id");
   const laneId = requireLaneId(request.lane_id);
-  const persistBranch = await requireLocalBranch(repo, request.persist, "persist", signal);
   const task = new TaskLayout(repo, taskId);
+  const persistBranch = await taskPersistenceBranch(repo, task, signal);
   const integration = await requireManagedIntegration(controlRepository(repo), task, signal);
   if (!(await isFullyClean(repo, task.integrationPath, signal))) {
     throw new CollabOpError(
@@ -2869,81 +2828,6 @@ function laneIsComplete(
     inventory.branchRecords[0].HEAD === inventory.branchTip &&
     inventory.pathRecords[0].branch === inventory.branchRef
   );
-}
-
-async function laneDrop(
-  run: GitRunner,
-  cwd: string,
-  request: Record<string, unknown>,
-  signal?: AbortSignal,
-): Promise<Record<string, unknown>> {
-  const repo = await discoverRepository(run, cwd, signal);
-  const taskId = requireIdentifier(request.task_id, "task id");
-  const laneId = requireLaneId(request.lane_id);
-  if (request.abandon !== undefined && typeof request.abandon !== "boolean") {
-    throw new CollabOpError("invalid_abandon", "abandon must be a boolean when provided");
-  }
-  const abandon = request.abandon === true;
-  const task = new TaskLayout(repo, taskId);
-  const inventory = await laneInventory(repo, task, laneId, signal);
-  if (abandon) {
-    return laneAbandon(repo, task, laneId, inventory, signal);
-  }
-
-  if (!laneCoreIsComplete(inventory)) {
-    throw new CollabOpError(
-      "lane_inventory_incomplete",
-      `managed lane ${taskId}/${laneId} inventory is incomplete`,
-      "Restore the complete canonical lane branch and worktree before retrying.",
-    );
-  }
-  if (!laneIsComplete(inventory)) {
-    throw new CollabOpError(
-      "worktree_identity_mismatch",
-      "lane worktree registration does not match its canonical branch and path",
-      "Restore the canonical lane worktree registration before retrying.",
-    );
-  }
-  const laneSha = inventory.branchTip as string;
-  const integration = await requireManagedIntegration(controlRepository(repo), task, signal);
-  if (!(await isFullyClean(repo, inventory.lanePath, signal)) || (await hasMergeOrConflictState(repo, inventory.lanePath, signal))) {
-    throw new CollabOpError(
-      "dirty_worktree",
-      "lane worktree is dirty or has an active merge/conflict state",
-      "Clean the lane worktree and finish or abort its merge before retiring it.",
-    );
-  }
-  if (!(await isAncestor(controlRepository(repo), laneSha, integration.tip, signal))) {
-    throw new CollabOpError(
-      "lane_uncollected",
-      "lane contains commits that are not reachable from integration",
-      "Collect or abandon the lane before retiring it.",
-    );
-  }
-
-  const retired = await retireCollectedLane(repo, task, laneId, laneSha);
-  if (!retired.cleaned) {
-    throw new CollabOpError(
-      "git_error",
-      retired.warnings[0] || "lane could not be retired",
-    );
-  }
-
-  const warnings: string[] = [];
-  const telemetryWarning = await recordEvent(task, "lane-drop", "success", {
-    lane_id: laneId,
-    lane_sha: laneSha,
-    disposition: "retired",
-  });
-  if (telemetryWarning) warnings.push(telemetryWarning);
-  return {
-    ok: true,
-    operation: "lane-drop",
-    tool_version: TOOL_VERSION,
-    lane_sha: laneSha,
-    disposition: "retired",
-    ...(warnings.length ? { warnings } : {}),
-  };
 }
 
 async function laneAbandon(
@@ -3242,9 +3126,9 @@ async function integrationLand(
 ): Promise<Record<string, unknown>> {
   const repo = await discoverRepository(run, cwd, signal);
   const taskId = requireIdentifier(request.task_id, "task id");
-  const persistBranch = await requireLocalBranch(repo, request.persist, "persist", signal);
-  const message = requireLandingMessage(request.message, taskId);
   const task = new TaskLayout(repo, taskId);
+  const persistBranch = await taskPersistenceBranch(repo, task, signal);
+  const message = requireLandingMessage(request.message, taskId);
   const integration = await requireManagedIntegration(controlRepository(repo), task, signal);
   const integrationSha = integration.tip;
   const persistence = await requirePersistenceCheckout(repo, task, persistBranch, signal);
@@ -3452,19 +3336,18 @@ async function writeAtomicReportFile(
   await rename(temporary, destination);
 }
 
-async function writeRemovalReport(
+type RemovalReportSnapshot = {
+  telemetry: string;
+  baseSha: string | null;
+  integrationSha: string | null;
+  integrationDiff: Record<string, unknown> | null;
+  landedSha: string | null;
+};
+
+async function captureRemovalReportSnapshot(
   task: TaskLayout,
-  outputDir: string,
-  facts: Record<string, unknown>,
-): Promise<{ reportPath: string; telemetryPath: string }> {
-  const destination = path.resolve(task.repo.controlRoot, outputDir);
-  const metadata = await pathMetadata(destination);
-  if (metadata?.isSymbolicLink() || (metadata !== null && !metadata.isDirectory())) {
-    throw new CollabOpError("report_collision", "report destination is not a regular directory");
-  }
-  await mkdir(destination, { recursive: true });
-  const reportPath = path.join(destination, "collab-report.json");
-  const telemetryPath = path.join(destination, "collab-telemetry.jsonl");
+  signal?: AbortSignal,
+): Promise<RemovalReportSnapshot> {
   const source = await telemetryFileForTask(task);
   let telemetry = "";
   if (source !== null && (await pathMetadata(source)) !== null) {
@@ -3477,7 +3360,52 @@ async function writeRemovalReport(
       );
     }
   }
+  const baseSha = await commitAt(controlRepository(task.repo), task.integrationBaseRef, signal);
+  const integrationSha = await commitAt(
+    controlRepository(task.repo),
+    `refs/heads/${task.integrationBranch}`,
+    signal,
+  );
+  let integrationDiff: Record<string, unknown> | null = null;
+  if (baseSha !== null && integrationSha !== null) {
+    const commits = Number.parseInt(
+      await requireGit(
+        task.repo.git,
+        mutationCwd(task.repo),
+        ["rev-list", "--count", `${baseSha}..${integrationSha}`],
+        signal,
+      ),
+      10,
+    );
+    const files = await nulPathList(
+      task.repo,
+      mutationCwd(task.repo),
+      ["diff", "--name-only", "-z", baseSha, integrationSha, "--"],
+      signal,
+    );
+    integrationDiff = { base_sha: baseSha, integration_sha: integrationSha, commits, files };
+  }
+  const landedSha = await commitAt(controlRepository(task.repo), task.landedRef, signal);
+  return { telemetry, baseSha, integrationSha, integrationDiff, landedSha };
+}
 
+async function writeRemovalReport(
+  task: TaskLayout,
+  outputDir: string,
+  facts: Record<string, unknown>,
+  snapshot?: RemovalReportSnapshot,
+  signal?: AbortSignal,
+): Promise<{ reportPath: string; telemetryPath: string }> {
+  const destination = path.resolve(task.repo.controlRoot, outputDir);
+  const metadata = await pathMetadata(destination);
+  if (metadata?.isSymbolicLink() || (metadata !== null && !metadata.isDirectory())) {
+    throw new CollabOpError("report_collision", "report destination is not a regular directory");
+  }
+  await mkdir(destination, { recursive: true });
+  const reportPath = path.join(destination, "collab-report.json");
+  const telemetryPath = path.join(destination, "collab-telemetry.jsonl");
+  const captured = snapshot ?? await captureRemovalReportSnapshot(task, signal);
+  const telemetry = captured.telemetry;
   const events: Record<string, unknown>[] = [];
   const reportWarnings = Array.isArray(facts.warnings)
     ? facts.warnings.filter((value): value is string => typeof value === "string").slice(0, 32)
@@ -3517,30 +3445,8 @@ async function writeRemovalReport(
       }
     }
   }
-  const baseSha = await commitAt(controlRepository(task.repo), task.integrationBaseRef);
-  const integrationSha = await commitAt(
-    controlRepository(task.repo),
-    `refs/heads/${task.integrationBranch}`,
-  );
-  let integrationDiff: Record<string, unknown> | null = null;
-  if (baseSha !== null && integrationSha !== null) {
-    const commits = Number.parseInt(
-      await requireGit(
-        task.repo.git,
-        mutationCwd(task.repo),
-        ["rev-list", "--count", `${baseSha}..${integrationSha}`],
-      ),
-      10,
-    );
-    const files = await nulPathList(
-      task.repo,
-      mutationCwd(task.repo),
-      ["diff", "--name-only", "-z", baseSha, integrationSha, "--"],
-    );
-    integrationDiff = { base_sha: baseSha, integration_sha: integrationSha, commits, files };
-  }
   const authorities = {
-    landed: await commitAt(controlRepository(task.repo), task.landedRef),
+    landed: captured.landedSha,
   };
   const taskTiming = times.length
     ? {
@@ -3555,7 +3461,7 @@ async function writeRemovalReport(
     task_id: task.taskId,
     ...facts,
     counts: { operations: operationCounts, outcomes: outcomeCounts },
-    integration_diff: integrationDiff,
+    integration_diff: captured.integrationDiff,
     authorities,
     lane_durations: laneDurations,
     task_timing: taskTiming,
@@ -3565,6 +3471,53 @@ async function writeRemovalReport(
   await writeAtomicReportFile(reportPath, `${JSON.stringify(report)}\n`);
   await writeAtomicReportFile(telemetryPath, telemetry);
   return { reportPath, telemetryPath };
+}
+
+async function collabReport(
+  run: GitRunner,
+  cwd: string,
+  request: Record<string, unknown>,
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>> {
+  const repo = await discoverRepository(run, cwd, signal);
+  const taskId = requireIdentifier(request.task_id, "task id");
+  const outputDir = request.output_dir;
+  if (typeof outputDir !== "string" || outputDir.length === 0) {
+    throw new CollabOpError(
+      "invalid_output_dir",
+      "output_dir must be a non-empty path",
+      "Pass a non-empty report destination; relative paths resolve from the repository control root.",
+    );
+  }
+
+  const task = new TaskLayout(repo, taskId);
+  const captured = await withTaskLock(repo, taskId, async () => {
+    const state = await status(run, cwd, taskId, signal);
+    const reportSnapshot = await captureRemovalReportSnapshot(task, signal);
+    const lanes = state.lanes && typeof state.lanes === "object"
+      ? Object.keys(state.lanes as Record<string, unknown>).sort()
+      : [];
+    const warnings = Array.isArray(state.warnings)
+      ? state.warnings.filter((value): value is string => typeof value === "string")
+      : [];
+    return {
+      snapshot: reportSnapshot,
+      facts: {
+        integration_sha: reportSnapshot.integrationSha,
+        base_sha: reportSnapshot.baseSha,
+        landed_sha: reportSnapshot.landedSha,
+        lanes,
+        warnings,
+      },
+      warnings,
+    };
+  });
+  await writeRemovalReport(task, outputDir, captured.facts, captured.snapshot, signal);
+  return {
+    ok: true,
+    tool_version: TOOL_VERSION,
+    ...(captured.warnings.length > 0 ? { warnings: captured.warnings } : {}),
+  };
 }
 
 function removalLaneIds(
@@ -3600,7 +3553,7 @@ async function removeIntegrationWorktree(
   return null;
 }
 
-async function integrationRemove(
+async function integrationRemoveBestEffort(
   run: GitRunner,
   cwd: string,
   request: Record<string, unknown>,
@@ -3609,1115 +3562,144 @@ async function integrationRemove(
   const repo = await discoverRepository(run, cwd, signal);
   const taskId = requireIdentifier(request.task_id, "task id");
   const task = new TaskLayout(repo, taskId);
-  const abandon = request.abandon === true;
-  if (request.abandon !== undefined && typeof request.abandon !== "boolean") {
-    throw new CollabOpError("invalid_abandon", "abandon must be a boolean when provided");
-  }
-  const outputValue = request.output_dir;
-  const noReport = request.no_report === true;
-  if ((outputValue !== undefined && noReport) || (outputValue === undefined && !noReport)) {
-    throw new CollabOpError(
-      "invalid_report_choice",
-      "choose exactly one of output_dir or no_report",
-      "Pass a report destination or set no_report to true.",
-    );
-  }
-  if (outputValue !== undefined && (typeof outputValue !== "string" || outputValue.length === 0)) {
-    throw new CollabOpError("invalid_report_choice", "output_dir must be a non-empty path");
-  }
-
-  const inventory = await taskInventory(controlRepository(repo), task, signal);
-  const laneIds = removalLaneIds(task, inventory.ownedBranches);
-  const integrationTip = await commitAt(controlRepository(repo), `refs/heads/${task.integrationBranch}`, signal);
-  const baseSha = await commitAt(controlRepository(repo), task.integrationBaseRef, signal);
-  if (integrationTip === null || baseSha === null) {
-    throw new CollabOpError("task_state_invalid", `managed task ${taskId} is missing its integration branch or base ref`);
-  }
-
-  if (!abandon) {
-    const integration = await requireManagedIntegration(controlRepository(repo), task, signal);
-    const persistenceTarget = await symbolicRefTarget(controlRepository(repo), task.persistenceRef, signal);
-    if (persistenceTarget === null || !persistenceTarget.startsWith("refs/heads/")) {
-      throw new CollabOpError("task_state_invalid", "persistence symbolic ref is missing or invalid");
-    }
-    await requirePersistenceCheckout(
-      repo,
-      task,
-      { name: persistenceTarget.slice("refs/heads/".length), ref: persistenceTarget },
-      signal,
-    );
-    if (!(await isFullyClean(repo, task.integrationPath, signal)) || (await hasMergeOrConflictState(repo, task.integrationPath, signal))) {
-      throw new CollabOpError("dirty_worktree", "integration worktree is dirty or conflicted");
-    }
-    if (laneIds.length > 0) {
-      throw new CollabOpError("active_lanes", "managed lanes are still active");
-    }
-    const unexpectedRegistrations = inventory.registeredUnderRoot.filter(
-      (record) => record.worktree !== task.integrationPath,
-    );
-    if (unexpectedRegistrations.length > 0) {
-      throw new CollabOpError("task_inventory_incomplete", "managed task worktree inventory is incomplete");
-    }
-    const landed = await directAuthority(repo, task.landedRef, "landed", signal);
-    const baseTree = await treeAt(repo, baseSha, signal);
-    const integrationTree = await treeAt(repo, integration.tip, signal);
-    const unchanged = baseTree === integrationTree;
-    if (!unchanged && landed !== integration.tip) {
-      throw new CollabOpError("task_not_ready", "integration is neither reverted to base nor landed");
-    }
-    const allowedRefs = new Set([
-      task.integrationBaseRef,
-      task.persistenceRef,
-      task.landedRef,
-    ]);
-    if (inventory.ownedRefs.some((name) => !allowedRefs.has(name))) {
-      throw new CollabOpError("task_inventory_incomplete", "managed task refs contain unknown resources");
-    }
-    const facts = {
-      integration_sha: integration.tip,
-      base_sha: baseSha,
-      landed_sha: landed,
-      lanes: [],
-      warnings: unchanged ? ["task reverted to its integration base"] : [],
-    };
-    const report = outputValue === undefined ? null : await writeRemovalReport(task, outputValue as string, facts);
-    const removalError = await removeIntegrationWorktree(repo, task);
-    if (removalError) throw new CollabOpError("git_error", removalError);
-    await requireGit(repo.git, mutationCwd(repo), ["update-ref", "--no-deref", "-d", `refs/heads/${task.integrationBranch}`, integration.tip]);
-    for (const ref of [task.integrationBaseRef, task.landedRef]) {
-      const value = await commitAt(controlRepository(repo), ref);
-      if (value !== null) await requireGit(repo.git, mutationCwd(repo), ["update-ref", "--no-deref", "-d", ref, value]);
-    }
-    if (persistenceTarget !== null) await requireGit(repo.git, mutationCwd(repo), ["symbolic-ref", "--delete", task.persistenceRef]);
-    await removeEmptyDirectory(path.join(task.root, "lanes"));
-    await removeEmptyDirectory(task.root);
-    await removeEmptyDirectory(path.join(repo.controlRoot, ".agent_state", "worktrees"));
-    const warnings = [...(facts.warnings as string[])];
-    const telemetryWarning = await recordEvent(task, "integration-remove", "success", facts);
-    if (telemetryWarning) warnings.push(telemetryWarning);
-    return {
-      ok: true,
-      operation: "integration-remove",
-      tool_version: TOOL_VERSION,
-      ...(report ? { report_dir: path.dirname(report.reportPath) } : {}),
-      ...(warnings.length ? { warnings } : {}),
-    };
-  }
-
   const warnings: string[] = [];
-  const report = outputValue === undefined
-    ? null
-    : await writeRemovalReport(task, outputValue as string, { disposition: "abandoned", warnings: [] });
-  for (const laneId of laneIds) {
+  const inventory = await taskInventory(controlRepository(repo), task, signal);
+  const integrationBranchRef = `refs/heads/${task.integrationBranch}`;
+  const hasRecognizableTaskResource =
+    inventory.ownedRefs.some(
+      (ref) => ref === task.integrationBaseRef || ref === task.persistenceRef || ref === task.landedRef,
+    ) ||
+    inventory.ownedBranches.some((ref) => ref === integrationBranchRef || laneIdFromRef(ref, `refs/heads/wave/${task.taskId}/`) !== null) ||
+    inventory.registeredUnderRoot.length > 0;
+  if (!hasRecognizableTaskResource) {
+    throw new CollabOpError(
+      "task_not_found",
+      `managed task ${taskId} does not have recognizable current-layout resources`,
+      "Use a current managed task identifier or inspect the repository inventory before retrying.",
+    );
+  }
+  const laneIds = new Set(removalLaneIds(task, inventory.ownedBranches));
+  const lanePrefix = `refs/heads/wave/${task.taskId}/`;
+  for (const record of inventory.registeredUnderRoot) {
+    if (record.branch?.startsWith(lanePrefix)) {
+      const laneId = laneIdFromRef(record.branch, lanePrefix);
+      if (laneId) laneIds.add(laneId);
+    }
+  }
+
+  for (const laneId of [...laneIds].sort()) {
     try {
       const lane = await laneInventory(repo, task, laneId, signal);
-      const pathResult = await retireLaneWorktree(repo, lane, true);
-      warnings.push(...pathResult.warnings.map((warning) => `lane ${laneId}: ${warning}`));
-      if (lane.branchNames.length === 1 && lane.branchNames[0] === lane.branchRef && lane.branchTip !== null) {
-        const result = await repo.git(mutationCwd(repo), ["update-ref", "--no-deref", "-d", lane.branchRef, lane.branchTip]);
-        if (result.code !== 0) warnings.push(`lane ${laneId}: branch retained`);
-      }
+      const dropped = await laneAbandon(repo, task, laneId, lane, signal);
+      warnings.push(...(Array.isArray(dropped.warnings) ? dropped.warnings.map((warning) => `lane ${laneId}: ${warning}`) : []));
     } catch (error) {
       warnings.push(`lane ${laneId}: ${boundedGitText(error instanceof Error ? error.message : String(error))}`);
     }
   }
-  const integrationBranchRef = `refs/heads/${task.integrationBranch}`;
-  const integrationRecords = (await worktreeRecords(controlRepository(repo), signal)).filter(
-    (record) => record.branch === integrationBranchRef,
-  );
-  if (
-    integrationRecords.length === 1 &&
-    integrationRecords[0].worktree === task.integrationPath &&
-    isActualDirectory(await pathMetadata(task.integrationPath))
-  ) {
-    if (await isFullyClean(repo, task.integrationPath, signal)) {
-      const integrationRemoval = await removeIntegrationWorktree(repo, task);
-      if (integrationRemoval) warnings.push(integrationRemoval);
+
+  try {
+    const removalError = await removeIntegrationWorktree(repo, task);
+    if (removalError) warnings.push(removalError);
+  } catch (error) {
+    warnings.push(`integration worktree: ${boundedGitText(error instanceof Error ? error.message : String(error))}`);
+  }
+
+  try {
+    const records = await worktreeRecords(controlRepository(repo), signal);
+    if (records.some((record) => record.branch === integrationBranchRef)) {
+      warnings.push("integration branch retained: worktree registration remains");
     } else {
-      warnings.push("integration retained: worktree is dirty");
+      const names = await refNames(controlRepository(repo), integrationBranchRef, signal);
+      if (names.length === 1 && names[0] === integrationBranchRef) {
+        const tip = await commitAt(controlRepository(repo), integrationBranchRef, signal);
+        if (tip === null) {
+          warnings.push("integration branch retained: it does not resolve to a commit");
+        } else {
+          const removed = await repo.git(
+            mutationCwd(repo),
+            ["update-ref", "--no-deref", "-d", integrationBranchRef, tip],
+            signal,
+          );
+          if (removed.code !== 0) {
+            warnings.push(`integration branch retained: ${boundedGitText(removed.stderr || removed.stdout)}`);
+          }
+        }
+      } else if (names.length > 0) {
+        warnings.push("integration branch retained: ref inventory is incomplete or colliding");
+      }
     }
-  } else {
-    warnings.push("integration worktree registration is incomplete or unsafe; path preserved");
+  } catch (error) {
+    warnings.push(`integration branch: ${boundedGitText(error instanceof Error ? error.message : String(error))}`);
   }
-  const remainingIntegrationRecords = (await worktreeRecords(controlRepository(repo), signal)).filter(
-    (record) => record.branch === integrationBranchRef,
-  );
-  if (remainingIntegrationRecords.length > 0) {
-    warnings.push("integration branch retained: worktree registration remains");
-  } else {
-    const branchNames = await refNames(controlRepository(repo), integrationBranchRef, signal);
-    if (branchNames.length === 1 && branchNames[0] === integrationBranchRef) {
-      const tip = await commitAt(controlRepository(repo), integrationBranchRef, signal);
-      const result = tip === null
-        ? await repo.git(mutationCwd(repo), ["update-ref", "--no-deref", "-d", integrationBranchRef])
-        : await repo.git(mutationCwd(repo), ["update-ref", "--no-deref", "-d", integrationBranchRef, tip]);
-      if (result.code !== 0) warnings.push("integration branch retained");
-    }
-  }
-  if (await symbolicRefTarget(controlRepository(repo), task.persistenceRef, signal)) {
-    const result = await repo.git(mutationCwd(repo), ["symbolic-ref", "--delete", task.persistenceRef]);
-    if (result.code !== 0) warnings.push("persistence symbolic ref retained");
-  }
-  for (const ref of [task.integrationBaseRef, task.landedRef]) {
-    const names = await refNames(controlRepository(repo), ref, signal);
-    if (names.length === 1 && names[0] === ref) {
+
+  const removableRefs = [task.integrationBaseRef, task.landedRef];
+  for (const ref of removableRefs) {
+    try {
+      const names = await refNames(controlRepository(repo), ref, signal);
+      if (names.length === 0) continue;
+      if (names.length !== 1 || names[0] !== ref || (await symbolicRefTarget(controlRepository(repo), ref, signal)) !== null) {
+        warnings.push(`ref retained: ${ref}`);
+        continue;
+      }
       const value = await commitAt(controlRepository(repo), ref, signal);
-      const result = value === null
-        ? await repo.git(mutationCwd(repo), ["update-ref", "--no-deref", "-d", ref])
-        : await repo.git(mutationCwd(repo), ["update-ref", "--no-deref", "-d", ref, value]);
-      if (result.code !== 0) warnings.push(`ref retained: ${ref}`);
+      if (value === null) {
+        warnings.push(`ref retained: ${ref} does not resolve to a commit`);
+        continue;
+      }
+      const removed = await repo.git(
+        mutationCwd(repo),
+        ["update-ref", "--no-deref", "-d", ref, value],
+        signal,
+      );
+      if (removed.code !== 0) warnings.push(`ref retained: ${ref}`);
+    } catch (error) {
+      warnings.push(`ref ${ref}: ${boundedGitText(error instanceof Error ? error.message : String(error))}`);
     }
   }
+
+  try {
+    const names = await refNames(controlRepository(repo), task.persistenceRef, signal);
+    if (names.length > 0) {
+      const target = await symbolicRefTarget(controlRepository(repo), task.persistenceRef, signal);
+      if (names.length !== 1 || names[0] !== task.persistenceRef || target === null) {
+        warnings.push(`persistence ref retained: ${task.persistenceRef}`);
+      } else {
+        const removed = await repo.git(
+          mutationCwd(repo),
+          ["symbolic-ref", "--delete", task.persistenceRef],
+          signal,
+        );
+        if (removed.code !== 0) warnings.push(`persistence ref retained: ${task.persistenceRef}`);
+      }
+    }
+  } catch (error) {
+    warnings.push(`persistence ref: ${boundedGitText(error instanceof Error ? error.message : String(error))}`);
+  }
+
+  const knownRefs = new Set([task.integrationBaseRef, task.persistenceRef, task.landedRef]);
+  const unknownRefs = inventory.ownedRefs.filter((ref) => !knownRefs.has(ref));
+  if (unknownRefs.length > 0) {
+    warnings.push(`unrecognized task refs retained: ${unknownRefs.slice(0, 8).join(", ")}`);
+  }
+  const unknownBranches = inventory.ownedBranches.filter(
+    (ref) => ref !== integrationBranchRef && laneIdFromRef(ref, lanePrefix) === null,
+  );
+  if (unknownBranches.length > 0) {
+    warnings.push(`unrecognized task branches retained: ${unknownBranches.slice(0, 8).join(", ")}`);
+  }
+
   await removeEmptyDirectory(path.join(task.root, "lanes"));
   await removeEmptyDirectory(task.root);
   await removeEmptyDirectory(path.join(repo.controlRoot, ".agent_state", "worktrees"));
-  const facts = { disposition: "abandoned", warnings: warnings.slice(0, 32) };
-  const telemetryWarning = await recordEvent(task, "integration-remove", "success", facts);
+  const telemetryWarning = await recordEvent(task, "integration-remove", "success", {
+    warnings: warnings.slice(0, 32),
+  });
   if (telemetryWarning) warnings.push(telemetryWarning);
   return {
     ok: true,
-    operation: "integration-remove",
     tool_version: TOOL_VERSION,
-    disposition: "abandoned",
-    ...(report ? { report_dir: path.dirname(report.reportPath) } : {}),
-    warnings: warnings.slice(0, 33),
+    ...(warnings.length ? { warnings: warnings.slice(0, 64) } : {}),
   };
-}
-
-type MigrationLegacyRef = { ref: string; sha: string };
-
-type MigrationBaseline = {
-  integrationSha: string;
-  integrationBaseSha: string;
-  persistenceTarget: string;
-  landedSha: string | null;
-  acceptancePresent: boolean;
-  acceptanceSha: string | null;
-  legacyRefs: MigrationLegacyRef[];
-};
-
-type MigrationDescriptor = {
-  version: 1;
-  task_id: string;
-  nonce: string;
-  acceptance_present: boolean;
-  integration_sha: string;
-  integration_base_sha: string;
-  persistence_target: string;
-  landed_sha: string | null;
-  acceptance_sha: string | null;
-  legacy_refs: MigrationLegacyRef[];
-};
-
-// Exact canonical descriptor key set, in canonical serialization order.
-const DESCRIPTOR_KEYS = [
-  "version",
-  "task_id",
-  "nonce",
-  "acceptance_present",
-  "integration_sha",
-  "integration_base_sha",
-  "persistence_target",
-  "landed_sha",
-  "acceptance_sha",
-  "legacy_refs",
-];
-
-function migrationSentinelRef(taskId: string): string {
-  return `refs/orchestrate/${taskId}/migration`;
-}
-
-function serializeMigrationDescriptor(descriptor: MigrationDescriptor): string {
-  return `${JSON.stringify({
-    version: descriptor.version,
-    task_id: descriptor.task_id,
-    nonce: descriptor.nonce,
-    acceptance_present: descriptor.acceptance_present,
-    integration_sha: descriptor.integration_sha,
-    integration_base_sha: descriptor.integration_base_sha,
-    persistence_target: descriptor.persistence_target,
-    landed_sha: descriptor.landed_sha,
-    acceptance_sha: descriptor.acceptance_sha,
-    legacy_refs: descriptor.legacy_refs.map(({ ref, sha }) => ({ ref, sha })),
-  })}\n`;
-}
-
-async function exactObjectIdPattern(
-  repo: Repository,
-  signal?: AbortSignal,
-): Promise<RegExp> {
-  const length = (await repositoryObjectFormat(repo, signal)) === "sha256" ? 64 : 40;
-  return new RegExp(`^[0-9a-f]{${length}}$`);
-}
-
-// Strict canonical parsing: exact key set and types, exact object-id lengths
-// for the repository format, recognized sorted unique legacy refs, consistent
-// acceptance identity pairing, and byte-identical canonical serialization
-// (duplicate keys, reordered keys, extra whitespace, or trailing content are
-// malformed).
-async function parseMigrationDescriptor(
-  repo: Repository,
-  task: TaskLayout,
-  content: string,
-  signal?: AbortSignal,
-): Promise<MigrationDescriptor> {
-  const fail = (reason: string, details?: Record<string, unknown>): never => {
-    throw new CollabOpError(
-      "migration_recovery_required",
-      `the migration descriptor for this task is malformed or from an unsupported version: ${reason}`,
-      "Inspect and resolve the sentinel namespace only after verifying the task's refs and worktrees.",
-      { sentinel: migrationSentinelRef(task.taskId), task_id: task.taskId, ...(details ?? {}) },
-    );
-  };
-  const gitRepo = controlRepository(repo);
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(content);
-  } catch (error) {
-    return fail("descriptor is not valid JSON", {
-      error: boundedGitText(error instanceof Error ? error.message : String(error)),
-    });
-  }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return fail("descriptor is not a JSON object");
-  }
-  const raw = parsed as Record<string, unknown>;
-  const keys = Object.keys(raw);
-  if (
-    keys.length !== DESCRIPTOR_KEYS.length ||
-    keys.some((key) => !DESCRIPTOR_KEYS.includes(key))
-  ) {
-    return fail("descriptor key set is not exact", { fields: keys });
-  }
-  if (raw.version !== 1) {
-    return fail("unsupported descriptor version", { version: raw.version });
-  }
-  if (raw.task_id !== task.taskId) {
-    return fail("descriptor task does not match the task", { task_id: raw.task_id });
-  }
-  if (typeof raw.nonce !== "string" || !UUID_PATTERN.test(raw.nonce)) {
-    return fail("nonce is malformed");
-  }
-  if (typeof raw.acceptance_present !== "boolean") {
-    return fail("acceptance_present is not a boolean");
-  }
-  const exactOid = await exactObjectIdPattern(repo, signal);
-  const integrationSha = raw.integration_sha;
-  if (typeof integrationSha !== "string" || !exactOid.test(integrationSha)) {
-    return fail("integration_sha is not a full object id");
-  }
-  const integrationBaseSha = raw.integration_base_sha;
-  if (typeof integrationBaseSha !== "string" || !exactOid.test(integrationBaseSha)) {
-    return fail("integration_base_sha is not a full object id");
-  }
-  const persistenceTarget = raw.persistence_target;
-  if (
-    typeof persistenceTarget !== "string" ||
-    !persistenceTarget.startsWith("refs/heads/") ||
-    (await repo.git(gitRepo.worktreeRoot, ["check-ref-format", persistenceTarget], signal)).code !== 0
-  ) {
-    return fail("persistence_target is not a valid direct branch ref");
-  }
-  const landedSha = raw.landed_sha;
-  if (landedSha !== null && (typeof landedSha !== "string" || !exactOid.test(landedSha))) {
-    return fail("landed_sha is malformed");
-  }
-  const acceptanceSha = raw.acceptance_sha;
-  if (acceptanceSha !== null && (typeof acceptanceSha !== "string" || !exactOid.test(acceptanceSha))) {
-    return fail("acceptance_sha is malformed");
-  }
-  if (raw.acceptance_present !== (acceptanceSha !== null)) {
-    return fail("acceptance_present is inconsistent with acceptance_sha");
-  }
-  const legacyRefsValue = raw.legacy_refs;
-  if (!Array.isArray(legacyRefsValue) || legacyRefsValue.length === 0) {
-    return fail("legacy_refs must be a non-empty array");
-  }
-  const laneBasePrefix = `refs/orchestrate/${task.taskId}/`;
-  const legacyRefs: MigrationLegacyRef[] = [];
-  for (const item of legacyRefsValue) {
-    if (typeof item !== "object" || item === null || Array.isArray(item)) {
-      return fail("legacy ref entry is not an object");
-    }
-    const entry = item as Record<string, unknown>;
-    const entryKeys = Object.keys(entry);
-    if (entryKeys.length !== 2 || !entryKeys.includes("ref") || !entryKeys.includes("sha")) {
-      return fail("legacy ref entry key set is not exact");
-    }
-    const ref = entry.ref;
-    const sha = entry.sha;
-    if (typeof ref !== "string" || typeof sha !== "string" || !exactOid.test(sha)) {
-      return fail("legacy ref entry is malformed");
-    }
-    const recognized =
-      ref === task.acceptedRef ||
-      ref === task.acceptanceOpenRef ||
-      ref === task.legacyUserAcceptedRef ||
-      laneIdFromRef(ref, laneBasePrefix, "/base") !== null;
-    if (!recognized) {
-      return fail("legacy ref name is not recognized", { ref });
-    }
-    legacyRefs.push({ ref, sha });
-  }
-  for (let index = 1; index < legacyRefs.length; index += 1) {
-    if (legacyRefs[index].ref <= legacyRefs[index - 1].ref) {
-      return fail("legacy refs must be sorted with unique names");
-    }
-  }
-  const openEntry = legacyRefs.find((item) => item.ref === task.acceptanceOpenRef);
-  if (raw.acceptance_present !== (openEntry !== undefined)) {
-    return fail("acceptance_present is inconsistent with the recorded legacy refs");
-  }
-  if (acceptanceSha !== null && openEntry !== undefined && openEntry.sha !== acceptanceSha) {
-    return fail("acceptance_sha does not match the acceptance-open legacy ref");
-  }
-  const descriptor: MigrationDescriptor = {
-    version: 1,
-    task_id: task.taskId,
-    nonce: raw.nonce as string,
-    acceptance_present: raw.acceptance_present as boolean,
-    integration_sha: integrationSha as string,
-    integration_base_sha: integrationBaseSha as string,
-    persistence_target: persistenceTarget as string,
-    landed_sha: landedSha as string | null,
-    acceptance_sha: acceptanceSha as string | null,
-    legacy_refs: legacyRefs,
-  };
-  if (serializeMigrationDescriptor(descriptor) !== content) {
-    return fail("descriptor is not canonically serialized");
-  }
-  return descriptor;
-}
-
-type MigrationSentinel =
-  | { state: "absent" }
-  | { state: "exact"; blob: string; content: string; descriptor: MigrationDescriptor }
-  | { state: "invalid"; details: Record<string, unknown> };
-
-// The sentinel must be exactly one direct ref to a blob in the migration
-// namespace; any colliding, multiple, symbolic, wrong-type, unreadable, or
-// malformed resource stops without mutation.
-async function inspectMigrationSentinel(
-  repo: Repository,
-  task: TaskLayout,
-  signal?: AbortSignal,
-): Promise<MigrationSentinel> {
-  const gitRepo = controlRepository(repo);
-  const sentinelRef = migrationSentinelRef(task.taskId);
-  const snapshot = await refSnapshot(gitRepo, [sentinelRef], signal);
-  const names = [...snapshot.keys()].sort();
-  if (names.length === 0) return { state: "absent" };
-  if (names.length !== 1 || names[0] !== sentinelRef) {
-    return { state: "invalid", details: { sentinel: sentinelRef, refs: names.slice(0, 32) } };
-  }
-  const record = snapshot.get(sentinelRef);
-  if (record === undefined || record.symbolicTarget !== null) {
-    return { state: "invalid", details: { sentinel: sentinelRef, kind: "symbolic" } };
-  }
-  const oid = record.object;
-  if (oid === null) {
-    return { state: "invalid", details: { sentinel: sentinelRef, kind: "unresolvable" } };
-  }
-  const type = await repo.git(gitRepo.worktreeRoot, ["cat-file", "-t", oid], signal);
-  if (type.code !== 0 || type.stdout.trim() !== "blob") {
-    return {
-      state: "invalid",
-      details: {
-        sentinel: sentinelRef,
-        kind: "wrong-type",
-        object: oid,
-        type: type.stdout.trim() || null,
-      },
-    };
-  }
-  const contentResult = await repo.git(gitRepo.worktreeRoot, ["cat-file", "blob", oid], signal);
-  if (contentResult.code !== 0) {
-    return { state: "invalid", details: { sentinel: sentinelRef, kind: "unreadable", object: oid } };
-  }
-  let descriptor: MigrationDescriptor;
-  try {
-    descriptor = await parseMigrationDescriptor(repo, task, contentResult.stdout, signal);
-  } catch (error) {
-    if (error instanceof CollabOpError && error.code === "migration_recovery_required") {
-      return {
-        state: "invalid",
-        details: { sentinel: sentinelRef, object: oid, ...(error.details ?? {}) },
-      };
-    }
-    throw error;
-  }
-  return { state: "exact", blob: oid, content: contentResult.stdout, descriptor };
-}
-
-// Live lane detection: any wave branch for the task except the canonical
-// integration branch, and any worktree registration under the task root
-// except the canonical integration and acceptance paths (and caller-provided
-// exclusions).
-async function liveLaneViolations(
-  repo: Repository,
-  task: TaskLayout,
-  signal?: AbortSignal,
-  extraExclusions: readonly string[] = [],
-): Promise<{ branches: string[]; worktrees: string[] }> {
-  const gitRepo = controlRepository(repo);
-  const wavePrefix = `refs/heads/wave/${task.taskId}`;
-  const integrationBranchRef = `refs/heads/${task.integrationBranch}`;
-  const waveRefs = await refNames(gitRepo, wavePrefix, signal);
-  const branches = waveRefs.filter((name) => name !== integrationBranchRef);
-  const records = await worktreeRecords(gitRepo, signal);
-  const excluded = new Set<string>([
-    task.acceptancePath,
-    task.integrationPath,
-    ...extraExclusions,
-  ]);
-  const underRoot = records.filter(
-    (record) =>
-      record.worktree === task.root ||
-      record.worktree?.startsWith(`${task.root}${path.sep}`),
-  );
-  const worktrees = underRoot
-    .filter((record) => {
-      if (record.worktree === undefined) return false;
-      return ![...excluded].some(
-        (candidate) =>
-          record.worktree === candidate ||
-          record.worktree?.startsWith(`${candidate}${path.sep}`),
-      );
-    })
-    .map((record) => record.worktree ?? "");
-  return { branches, worktrees };
-}
-
-async function assertNoLiveLanes(
-  repo: Repository,
-  task: TaskLayout,
-  signal?: AbortSignal,
-  extraExclusions: readonly string[] = [],
-): Promise<void> {
-  const violations = await liveLaneViolations(repo, task, signal, extraExclusions);
-  if (violations.branches.length > 0 || violations.worktrees.length > 0) {
-    throw new CollabOpError(
-      "active_lanes",
-      "managed lanes are still active",
-      "Drop or collect every lane before migrating legacy state.",
-      {
-        branches: violations.branches.slice(0, 32),
-        worktrees: violations.worktrees.slice(0, 32),
-      },
-    );
-  }
-}
-
-// Full read-only preflight: exact clean canonical integration custody,
-// meaningful base/persistence/landed identities, no live lanes, no unknown
-// task ref, registration, or task-root entry, only exact recognized direct
-// legacy refs, and the acceptance-open/worktree pair both absent or both
-// present at an identical exact OID/path/registration.
-async function assessMigrationBaseline(
-  repo: Repository,
-  task: TaskLayout,
-  signal?: AbortSignal,
-): Promise<MigrationBaseline> {
-  const gitRepo = controlRepository(repo);
-  const integration = await requireManagedIntegration(gitRepo, task, signal);
-  if (!(await isFullyClean(repo, task.integrationPath, signal))) {
-    throw new CollabOpError(
-      "dirty_worktree",
-      "integration worktree is dirty",
-      "Clean the canonical integration worktree before migrating it.",
-    );
-  }
-  if (await hasMergeOrConflictState(repo, task.integrationPath, signal)) {
-    throw new CollabOpError(
-      "dirty_worktree",
-      "integration worktree has an active merge or conflict state",
-      "Finish or abort the integration merge before migrating it.",
-    );
-  }
-  const persistenceTarget = await symbolicRefTarget(gitRepo, task.persistenceRef, signal);
-  if (
-    persistenceTarget === null ||
-    !persistenceTarget.startsWith("refs/heads/") ||
-    (await repo.git(gitRepo.worktreeRoot, ["check-ref-format", persistenceTarget], signal)).code !== 0
-  ) {
-    throw new CollabOpError("task_state_invalid", "persistence symbolic ref is missing or invalid");
-  }
-  const landedSha = await directAuthority(repo, task.landedRef, "landed", signal);
-
-  const orchestratePrefix = `refs/orchestrate/${task.taskId}`;
-  const [orchestrateRefs, records] = await Promise.all([
-    refNames(gitRepo, orchestratePrefix, signal),
-    worktreeRecords(gitRepo, signal),
-  ]);
-  // Exact recognized direct legacy refs; anything symbolic, blob-pointing,
-  // colliding, or unknown refuses without mutation. Canonical integration
-  // head is the sole accepted state; legacy accepted values are exact
-  // resources to retire, never sources of truth.
-  const accepted = await directAuthority(repo, task.acceptedRef, "accepted", signal);
-  const acceptanceOpen = await directAuthority(repo, task.acceptanceOpenRef, "acceptance-open", signal);
-  const userAccepted = await directAuthority(repo, task.legacyUserAcceptedRef, "user-accepted", signal);
-  const laneBaseRefs = orchestrateRefs
-    .filter((name) => laneIdFromRef(name, `${orchestratePrefix}/`, "/base") !== null)
-    .sort();
-  const laneBases: MigrationLegacyRef[] = [];
-  for (const ref of laneBaseRefs) {
-    const sha = await directAuthority(repo, ref, "lane-base ref", signal);
-    laneBases.push({ ref, sha });
-  }
-  const knownRefs = new Set<string>([
-    task.integrationBaseRef,
-    task.persistenceRef,
-    task.landedRef,
-    task.acceptedRef,
-    task.acceptanceOpenRef,
-    task.legacyUserAcceptedRef,
-    ...laneBaseRefs,
-  ]);
-  for (const name of orchestrateRefs) {
-    if (!knownRefs.has(name)) {
-      throw new CollabOpError(
-        "task_inventory_incomplete",
-        "managed task refs contain unrecognized resources",
-        undefined,
-        { refs: [name] },
-      );
-    }
-  }
-  await assertNoLiveLanes(repo, task, signal);
-
-  const legacyRefs = [
-    ...(accepted === null ? [] : [{ ref: task.acceptedRef, sha: accepted }]),
-    ...(acceptanceOpen === null ? [] : [{ ref: task.acceptanceOpenRef, sha: acceptanceOpen }]),
-    ...(userAccepted === null ? [] : [{ ref: task.legacyUserAcceptedRef, sha: userAccepted }]),
-    ...laneBases,
-  ].sort((left, right) => (left.ref < right.ref ? -1 : left.ref > right.ref ? 1 : 0));
-
-  // Acceptance-open and the canonical detached acceptance worktree must be
-  // both absent or both present at an identical exact OID/path/registration.
-  const acceptanceRecords = records.filter((record) => record.worktree === task.acceptancePath);
-  const acceptanceDescendants = records.filter(
-    (record) => record.worktree?.startsWith(`${task.acceptancePath}${path.sep}`),
-  );
-  const acceptanceMetadata = await pathMetadata(task.acceptancePath);
-  const acceptancePresent =
-    acceptanceRecords.length > 0 ||
-    acceptanceDescendants.length > 0 ||
-    acceptanceMetadata !== null;
-  let acceptanceSha: string | null = null;
-  if (acceptancePresent) {
-    const recordedHead = acceptanceRecords[0]?.HEAD ?? null;
-    const registrationExact =
-      acceptanceRecords.length === 1 &&
-      acceptanceDescendants.length === 0 &&
-      acceptanceRecords[0].detached === true &&
-      acceptanceRecords[0].branch === undefined &&
-      typeof recordedHead === "string" &&
-      /^[0-9a-f]{40,64}$/.test(recordedHead) &&
-      (await commitAt(gitRepo, recordedHead, signal)) === recordedHead &&
-      isActualDirectory(acceptanceMetadata);
-    if (!registrationExact || acceptanceOpen === null || acceptanceOpen !== recordedHead) {
-      throw new CollabOpError(
-        "worktree_identity_mismatch",
-        "acceptance-open and the canonical detached acceptance worktree must be both present at an identical exact commit",
-        "Restore the exact detached acceptance worktree at the acceptance-open subject, or close the gate before migrating.",
-        { path: task.acceptancePath },
-      );
-    }
-    if (!(await isFullyClean(repo, task.acceptancePath, signal))) {
-      throw new CollabOpError(
-        "dirty_worktree",
-        "acceptance worktree is dirty",
-        "Clean the legacy acceptance worktree before migrating it.",
-      );
-    }
-    if (await hasMergeOrConflictState(repo, task.acceptancePath, signal)) {
-      throw new CollabOpError(
-        "dirty_worktree",
-        "acceptance worktree has an active merge or conflict state",
-        "Finish or abort the legacy acceptance worktree merge before migrating it.",
-      );
-    }
-    acceptanceSha = acceptanceOpen;
-  } else if (acceptanceOpen !== null) {
-    throw new CollabOpError(
-      "worktree_identity_mismatch",
-      "acceptance-open is present without the canonical acceptance worktree",
-      "Restore the exact detached acceptance worktree at the acceptance-open subject, or remove the orphaned gate ref.",
-      { ref: task.acceptanceOpenRef },
-    );
-  }
-
-  const rootEntries = await readdir(task.root);
-  for (const entry of rootEntries) {
-    if (entry === "integration" || entry === "acceptance") continue;
-    if (entry === "lanes") {
-      const lanesPath = path.join(task.root, "lanes");
-      const lanesMetadata = await pathMetadata(lanesPath);
-      if (!isActualDirectory(lanesMetadata) || (await readdir(lanesPath)).length > 0) {
-        throw new CollabOpError("task_inventory_incomplete", "lanes path contains unrecognized contents");
-      }
-      continue;
-    }
-    throw new CollabOpError(
-      "task_inventory_incomplete",
-      "managed task resources contain unrecognized entries",
-      undefined,
-      { entries: [entry] },
-    );
-  }
-
-  return {
-    integrationSha: integration.tip,
-    integrationBaseSha: integration.base,
-    persistenceTarget,
-    landedSha,
-    acceptancePresent,
-    acceptanceSha,
-    legacyRefs,
-  };
-}
-
-// Write the descriptor as an unreferenced immutable Git blob; a crash here
-// leaves only harmless unreachable object data.
-async function writeDescriptorBlob(
-  repo: Repository,
-  task: TaskLayout,
-  content: string,
-  signal?: AbortSignal,
-): Promise<string> {
-  const directory = lockDirectory(repo);
-  const pathname = path.join(directory, `${task.taskId}.migration-descriptor`);
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  const stale = await pathMetadata(pathname);
-  if (stale !== null) {
-    try {
-      await unlink(pathname);
-    } catch {
-      // A concurrent writer owns the path; the create below fails explicitly.
-    }
-  }
-  const handle = await open(
-    pathname,
-    fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | fsConstants.O_NOFOLLOW,
-    0o600,
-  );
-  try {
-    await handle.writeFile(content, { encoding: "utf8" });
-  } finally {
-    await handle.close();
-  }
-  try {
-    const result = await repo.git(mutationCwd(repo), ["hash-object", "-w", pathname], signal);
-    if (result.code !== 0) {
-      throw new CollabOpError(
-        "git_error",
-        `could not write the migration descriptor blob: ${boundedGitText(result.stderr || result.stdout) || `exit ${result.code}`}`,
-      );
-    }
-    const blob = result.stdout.trim();
-    if (!/^[0-9a-f]{40,64}$/.test(blob)) {
-      throw new CollabOpError("git_error", "the migration descriptor blob has an invalid object id");
-    }
-    return blob;
-  } finally {
-    try {
-      await unlink(pathname);
-    } catch {
-      // The descriptor file is transient coordination state.
-    }
-  }
-}
-
-function migrationRecoveryError(reason: string, details?: Record<string, unknown>): CollabOpError {
-  return new CollabOpError(
-    "migration_recovery_required",
-    `migration recovery is required: ${reason}`,
-    "Resolve the reported state, then re-run integration_migrate to resume or finish.",
-    details,
-  );
-}
-
-// Forward-only resume inventory: every recorded legacy ref absent, fixed
-// identities exactly equal to the descriptor, no live lane or unknown ref,
-// registration, or task-root resource, and exact clean canonical integration
-// custody.
-async function assertResumeInventory(
-  repo: Repository,
-  task: TaskLayout,
-  descriptor: MigrationDescriptor,
-  signal?: AbortSignal,
-): Promise<void> {
-  const gitRepo = controlRepository(repo);
-  for (const { ref } of descriptor.legacy_refs) {
-    if ((await refNames(gitRepo, ref, signal)).length > 0) {
-      throw migrationRecoveryError(`legacy ref ${ref} reappeared after the migration transaction`, {
-        ref,
-      });
-    }
-  }
-  const tip = await commitAt(gitRepo, `refs/heads/${task.integrationBranch}`, signal);
-  const base = await commitAt(gitRepo, task.integrationBaseRef, signal);
-  const persistenceTarget = await symbolicRefTarget(gitRepo, task.persistenceRef, signal);
-  const landed = await directAuthority(repo, task.landedRef, "landed", signal);
-  if (
-    tip !== descriptor.integration_sha ||
-    base !== descriptor.integration_base_sha ||
-    persistenceTarget !== descriptor.persistence_target ||
-    landed !== descriptor.landed_sha
-  ) {
-    throw migrationRecoveryError("fixed task identities changed since the migration descriptor", {
-      expected: {
-        integration_sha: descriptor.integration_sha,
-        integration_base_sha: descriptor.integration_base_sha,
-        persistence_target: descriptor.persistence_target,
-        landed_sha: descriptor.landed_sha,
-      },
-      observed: {
-        integration_sha: tip,
-        integration_base_sha: base,
-        persistence_target: persistenceTarget,
-        landed_sha: landed,
-      },
-    });
-  }
-  await assertNoLiveLanes(repo, task, signal);
-  const orchestrateRefs = await refNames(gitRepo, `refs/orchestrate/${task.taskId}`, signal);
-  const known = new Set<string>([
-    task.integrationBaseRef,
-    task.persistenceRef,
-    task.landedRef,
-    migrationSentinelRef(task.taskId),
-  ]);
-  for (const name of orchestrateRefs) {
-    if (!known.has(name)) {
-      throw migrationRecoveryError("an unknown managed ref exists", { refs: [name] });
-    }
-  }
-  const rootEntries = await readdir(task.root);
-  for (const entry of rootEntries) {
-    if (entry === "integration" || entry === "acceptance") continue;
-    if (entry === "lanes") {
-      const lanesPath = path.join(task.root, "lanes");
-      const lanesMetadata = await pathMetadata(lanesPath);
-      if (!isActualDirectory(lanesMetadata) || (await readdir(lanesPath)).length > 0) {
-        throw migrationRecoveryError("lanes path contains unrecognized contents");
-      }
-      continue;
-    }
-    throw migrationRecoveryError("an unknown task-root entry exists", { entries: [entry] });
-  }
-  const integration = await requireManagedIntegration(gitRepo, task, signal);
-  if (
-    integration.tip !== descriptor.integration_sha ||
-    integration.base !== descriptor.integration_base_sha
-  ) {
-    throw migrationRecoveryError("canonical integration custody changed since the migration descriptor");
-  }
-  if (!(await isFullyClean(repo, task.integrationPath, signal))) {
-    throw migrationRecoveryError("the canonical integration worktree is dirty");
-  }
-  // The canonical integration custody must also be free of any active merge
-  // or unresolved conflict state (MERGE_HEAD or unmerged index entries). A
-  // clean-index in-progress merge would otherwise pass the porcelain check
-  // and let migration complete destructively; this is the same refusal the
-  // initial preflight applies. assertResumeInventory runs both before
-  // acceptance cleanup and again before the sentinel compare-and-swap
-  // deletion, so one shared check guards both phases.
-  if (await hasMergeOrConflictState(repo, task.integrationPath, signal)) {
-    throw migrationRecoveryError(
-      "the canonical integration worktree has an active merge or conflict state",
-    );
-  }
-}
-
-// One atomic compare-and-swap ref transaction via git update-ref --stdin with
-// prepare/commit: every update applies or none does. A unique transaction file
-// per attempt keeps a crashed transaction's input from ever colliding with a
-// later one; stale files are inert coordination state. Output is captured to a
-// file so an orphaned transaction surviving a crashed parent does not die on a
-// closed pipe before its compare-and-swap commits.
-async function atomicRefTransaction(
-  repo: Repository,
-  shell: GitRunner,
-  taskId: string,
-  updates: readonly { ref: string; newSha: string | null; oldSha: string | null }[],
-  signal?: AbortSignal,
-): Promise<void> {
-  const zero = await zeroOidFor(repo, signal);
-  const lines = ["start"];
-  for (const { ref, newSha, oldSha } of updates) {
-    lines.push(`update ${ref} ${newSha ?? zero} ${oldSha ?? zero}`);
-  }
-  lines.push("prepare");
-  lines.push("commit");
-  const directory = lockDirectory(repo);
-  const txnPath = path.join(directory, `${taskId}.${process.pid}.${randomUUID()}.txn`);
-  const outPath = `${txnPath}.out`;
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  const handle = await open(
-    txnPath,
-    fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | fsConstants.O_NOFOLLOW,
-    0o600,
-  );
-  try {
-    await handle.writeFile(`${lines.join("\n")}\n`, { encoding: "utf8" });
-  } finally {
-    await handle.close();
-  }
-  try {
-    const result = await shell(
-      mutationCwd(repo),
-      ["-c", `git update-ref --stdin < "$1" >"$2" 2>&1`, "collab-op", txnPath, outPath],
-      signal,
-    );
-    if (result.code !== 0) {
-      let detail = "";
-      try {
-        detail = (await readFile(outPath, "utf8")).trim();
-      } catch {
-        // The output file is best-effort diagnostics.
-      }
-      throw new CollabOpError(
-        "git_error",
-        `atomic legacy ref transaction failed: ${boundedGitText(detail) || `exit ${result.code}`}`,
-      );
-    }
-  } finally {
-    try {
-      await unlink(txnPath);
-    } catch {
-      // The transaction file is ephemeral coordination state.
-    }
-    try {
-      await unlink(outPath);
-    } catch {
-      // The output file is ephemeral coordination state.
-    }
-  }
-}
-
-// Forward-only cleanup with a committed sentinel: validate the descriptor
-// baseline, remove only the exact clean canonical detached acceptance worktree
-// without force (or accept already-completed cleanup), re-read the complete
-// inventory, then compare-and-swap delete the exact sentinel. Never recreate
-// legacy refs. Every dirt, mismatch, partial custody, unknown state, or failed
-// removal preserves what remains plus the sentinel and returns
-// migration_recovery_required.
-async function forwardCleanup(
-  repo: Repository,
-  shell: GitRunner,
-  task: TaskLayout,
-  sentinel: { blob: string; descriptor: MigrationDescriptor },
-  signal?: AbortSignal,
-): Promise<Record<string, unknown>> {
-  const gitRepo = controlRepository(repo);
-  const descriptor = sentinel.descriptor;
-  try {
-    await assertResumeInventory(repo, task, descriptor, signal);
-    const records = await worktreeRecords(gitRepo, signal);
-    const canonicalRegistrations = records.filter(
-      (record) =>
-        record.worktree === task.acceptancePath ||
-        record.worktree?.startsWith(`${task.acceptancePath}${path.sep}`),
-    );
-    const canonicalMetadata = await pathMetadata(task.acceptancePath);
-    if (!descriptor.acceptance_present) {
-      // Acceptance-absent mode: the canonical acceptance path and its
-      // registrations must remain absent; any occupant is preserved.
-      if (canonicalRegistrations.length > 0 || canonicalMetadata !== null) {
-        throw migrationRecoveryError(
-          "the canonical acceptance path is occupied in acceptance-absent mode; the occupant is preserved",
-          {
-            path: task.acceptancePath,
-            registrations: canonicalRegistrations.slice(0, 16).map((record) => record.worktree),
-            entries: canonicalMetadata?.isDirectory()
-              ? (await readdir(task.acceptancePath)).slice(0, 16)
-              : [],
-          },
-        );
-      }
-    } else if (canonicalRegistrations.length === 0 && canonicalMetadata === null) {
-      // Cleanup already completed.
-    } else {
-      const exactRemovable =
-        canonicalRegistrations.length === 1 &&
-        canonicalRegistrations[0].worktree === task.acceptancePath &&
-        canonicalRegistrations[0].detached === true &&
-        canonicalRegistrations[0].branch === undefined &&
-        canonicalRegistrations[0].HEAD === descriptor.acceptance_sha &&
-        isActualDirectory(canonicalMetadata);
-      if (!exactRemovable) {
-        throw migrationRecoveryError(
-          "the canonical acceptance worktree identity does not match the migration descriptor",
-          {
-            path: task.acceptancePath,
-            expected_head: descriptor.acceptance_sha,
-            registrations: canonicalRegistrations.map((record) => ({
-              worktree: record.worktree,
-              HEAD: record.HEAD ?? null,
-            })),
-          },
-        );
-      }
-      if (!(await isFullyClean(repo, task.acceptancePath, signal))) {
-        throw migrationRecoveryError("the canonical acceptance worktree is dirty and is preserved");
-      }
-      if (await hasMergeOrConflictState(repo, task.acceptancePath, signal)) {
-        throw migrationRecoveryError(
-          "the canonical acceptance worktree has an active merge or conflict state and is preserved",
-        );
-      }
-      const removal = await repo.git(
-        mutationCwd(repo),
-        ["worktree", "remove", task.acceptancePath],
-        signal,
-      );
-      if (removal.code !== 0) {
-        throw migrationRecoveryError(
-          `the canonical acceptance worktree could not be removed without force: ${boundedGitText(removal.stderr || removal.stdout) || `exit ${removal.code}`}`,
-        );
-      }
-    }
-    // Re-read the fixed identities, refs, and worktree inventory, and require
-    // the canonical acceptance custody absent before deleting the sentinel.
-    await assertResumeInventory(repo, task, descriptor, signal);
-    const finalRecords = await worktreeRecords(gitRepo, signal);
-    const finalRegistrations = finalRecords.filter(
-      (record) =>
-        record.worktree === task.acceptancePath ||
-        record.worktree?.startsWith(`${task.acceptancePath}${path.sep}`),
-    );
-    if (finalRegistrations.length > 0 || (await pathMetadata(task.acceptancePath)) !== null) {
-      throw migrationRecoveryError("canonical acceptance custody remains after cleanup");
-    }
-    try {
-      await atomicRefTransaction(
-        repo,
-        shell,
-        task.taskId,
-        [{ ref: migrationSentinelRef(task.taskId), newSha: null, oldSha: sentinel.blob }],
-        signal,
-      );
-    } catch (error) {
-      const failure =
-        error instanceof CollabOpError
-          ? error
-          : new CollabOpError("git_error", error instanceof Error ? error.message : String(error));
-      throw migrationRecoveryError("the migration sentinel could not be deleted", {
-        original_error: describeError(failure),
-      });
-    }
-  } catch (error) {
-    if (error instanceof CollabOpError && error.code === "migration_recovery_required") {
-      throw error;
-    }
-    const failure =
-      error instanceof CollabOpError
-        ? error
-        : new CollabOpError("git_error", error instanceof Error ? error.message : String(error));
-    throw migrationRecoveryError(`migration could not be resumed: ${failure.message}`, {
-      original_error: describeError(failure),
-    });
-  }
-  return {
-    ok: true,
-    operation: "integration-migrate",
-    tool_version: TOOL_VERSION,
-    state: "migrated",
-    integration_sha: descriptor.integration_sha,
-  };
-}
-
-function describeError(error: unknown): { code: string; message: string; details?: Record<string, unknown> } {
-  if (error instanceof CollabOpError) {
-    return {
-      code: error.code,
-      message: error.message,
-      ...(error.details && Object.keys(error.details).length > 0 ? { details: error.details } : {}),
-    };
-  }
-  return { code: "git_error", message: error instanceof Error ? error.message : String(error) };
-}
-
-// No sentinel: complete the read-only preflight, write the descriptor as an
-// unreferenced blob, then one compare-and-swap ref transaction creates the
-// absent sentinel and deletes every recorded legacy ref, and the same
-// invocation rolls the committed cleanup forward. Sentinel present: strict
-// parse and roll forward only. Malformed, wrong-type, colliding, multiple, or
-// inconsistent sentinel resources stop without mutation.
-async function migrationRunOrResume(
-  repo: Repository,
-  shell: GitRunner,
-  task: TaskLayout,
-  signal?: AbortSignal,
-): Promise<Record<string, unknown>> {
-  const sentinel = await inspectMigrationSentinel(repo, task, signal);
-  if (sentinel.state === "absent") {
-    const baseline = await assessMigrationBaseline(repo, task, signal);
-    if (baseline.legacyRefs.length === 0) {
-      return {
-        ok: true,
-        operation: "integration-migrate",
-        tool_version: TOOL_VERSION,
-        state: "already_current",
-        integration_sha: baseline.integrationSha,
-      };
-    }
-    const descriptor: MigrationDescriptor = {
-      version: 1,
-      task_id: task.taskId,
-      nonce: randomUUID(),
-      acceptance_present: baseline.acceptancePresent,
-      integration_sha: baseline.integrationSha,
-      integration_base_sha: baseline.integrationBaseSha,
-      persistence_target: baseline.persistenceTarget,
-      landed_sha: baseline.landedSha,
-      acceptance_sha: baseline.acceptanceSha,
-      legacy_refs: baseline.legacyRefs.map(({ ref, sha }) => ({ ref, sha })),
-    };
-    const blob = await writeDescriptorBlob(
-      repo,
-      task,
-      serializeMigrationDescriptor(descriptor),
-      signal,
-    );
-    const updates: { ref: string; newSha: string | null; oldSha: string | null }[] = [
-      { ref: migrationSentinelRef(task.taskId), newSha: blob, oldSha: null },
-      ...baseline.legacyRefs.map(({ ref, sha }) => ({ ref, newSha: null, oldSha: sha })),
-    ];
-    // Transaction failure leaves the original refs and worktree intact and no
-    // sentinel; there is no rollback. The committed transaction is the only
-    // phase change.
-    await atomicRefTransaction(repo, shell, task.taskId, updates, signal);
-    return forwardCleanup(repo, shell, task, { blob, descriptor }, signal);
-  }
-  if (sentinel.state === "invalid") {
-    throw new CollabOpError(
-      "migration_recovery_required",
-      "the migration sentinel namespace is malformed, colliding, or inconsistent",
-      "Inspect and resolve the sentinel namespace only after verifying the task's refs and worktrees.",
-      sentinel.details,
-    );
-  }
-  return forwardCleanup(
-    repo,
-    shell,
-    task,
-    { blob: sentinel.blob, descriptor: sentinel.descriptor },
-    signal,
-  );
-}
-async function integrationMigrate(
-  run: GitRunner,
-  shell: GitRunner,
-  cwd: string,
-  request: Record<string, unknown>,
-  signal?: AbortSignal,
-): Promise<Record<string, unknown>> {
-  const repo = await discoverRepository(run, cwd, signal);
-  const taskId = requireIdentifier(request.task_id, "task id");
-  const task = new TaskLayout(repo, taskId);
-  return withTaskLock(repo, taskId, () => migrationRunOrResume(repo, shell, task, signal));
 }
 
 async function status(
@@ -4803,53 +3785,260 @@ async function status(
     );
   }
 
-  // Status is read-only: while the exact or malformed sentinel namespace is
-  // present it reports only that recovery is required, never descriptor
-  // contents.
-  let recoveryRequired = false;
-  if ((await refNames(repo, `refs/orchestrate/${taskId}/migration`, signal)).length > 0) {
-    recoveryRequired = true;
-  }
-
   return {
     tool_version: TOOL_VERSION,
     task_id: taskId,
-    ...(recoveryRequired ? { recovery_required: true } : {}),
     integration: { worktree: task.integrationPath, HEAD: integrationHead, stale },
     lanes,
     warnings,
   };
 }
 
-const parameters = {
+const registeredTaskId = {
+  type: "string",
+  pattern: IDENTIFIER.source,
+  description: "Lowercase task identifier for the Git-managed task.",
+} as const;
+
+const registeredBranch = {
+  type: "string",
+  minLength: 1,
+  pattern: "^(?!-)(?!refs/)[^\\u0000-\\u001f\\u007f]+$",
+  description: "Short name of an existing local branch below refs/heads/; remote refs are invalid.",
+} as const;
+
+const registeredBaseSha = {
+  type: "string",
+  minLength: 40,
+  maxLength: 64,
+  pattern: "^[0-9a-f]{40,64}$",
+  description: "Full lowercase commit ID that exists and is an ancestor of both branch tips.",
+} as const;
+
+const registeredOutputDir = {
+  type: "string",
+  minLength: 1,
+  description: "Non-empty report destination; relative paths resolve from the repository control root.",
+} as const;
+
+const registeredLaneId = {
+  type: "string",
+  pattern: IDENTIFIER.source,
+  not: { const: "integration" },
+  description: "Lowercase lane identifier for the Git-managed task; integration is reserved.",
+} as const;
+
+const registeredLaneComment = {
+  type: "string",
+  minLength: 1,
+  maxLength: 500,
+  description: "Optional trimmed comment of 1-500 Unicode characters without control characters.",
+} as const;
+
+const registeredLaneCreateParameters = {
   type: "object",
+  description: "Create a Git-managed lane from the current integration tip.",
   additionalProperties: false,
   properties: {
-    method: { type: "string", enum: METHODS },
-    task_id: { type: "string" },
-    source_branch: { type: "string" },
-    persist: { type: "string" },
-    base_sha: { type: "string" },
-    message: { type: "string" },
-    output_dir: { type: "string" },
-    no_report: { type: "boolean" },
-    abandon: { type: "boolean" },
-    dry_run: { type: "boolean" },
-    lane_id: { type: "string" },
-    comment: { type: "string" },
-    sha: { type: "string" },
-    integration_sha: { type: "string" },
+    task_id: registeredTaskId,
+    lane_id: registeredLaneId,
+    comment: registeredLaneComment,
   },
-  required: ["method"],
+  required: ["task_id", "lane_id"],
 } as const;
+
+const registeredLaneReconcileParameters = {
+  type: "object",
+  description: "Reconcile the current integration tip into a Git-managed lane.",
+  additionalProperties: false,
+  properties: {
+    task_id: registeredTaskId,
+    lane_id: registeredLaneId,
+  },
+  required: ["task_id", "lane_id"],
+} as const;
+
+const registeredLaneCollectParameters = {
+  type: "object",
+  description: "Collect a Git-managed lane using its current lane and integration tips.",
+  additionalProperties: false,
+  properties: {
+    task_id: registeredTaskId,
+    lane_id: registeredLaneId,
+  },
+  required: ["task_id", "lane_id"],
+} as const;
+
+const registeredLaneDropParameters = {
+  type: "object",
+  description: "Best-effort removal of a Git-managed lane and its recognizable resources.",
+  additionalProperties: false,
+  properties: {
+    task_id: registeredTaskId,
+    lane_id: registeredLaneId,
+  },
+  required: ["task_id", "lane_id"],
+} as const;
+
+const registeredIntegrationCreateParameters = {
+  type: "object",
+  description: "Create the managed integration worktree and Git refs from the current attached branch and HEAD.",
+  additionalProperties: false,
+  properties: {
+    task_id: registeredTaskId,
+  },
+  required: ["task_id"],
+} as const;
+
+const registeredIntegrationAdoptParameters = {
+  type: "object",
+  description: "Adopt a local branch into the managed integration using an exact common Git base commit.",
+  additionalProperties: false,
+  properties: {
+    task_id: registeredTaskId,
+    source_branch: registeredBranch,
+    persist: registeredBranch,
+    base_sha: registeredBaseSha,
+  },
+  required: ["task_id", "source_branch", "persist", "base_sha"],
+} as const;
+
+const registeredIntegrationReconcileParameters = {
+  type: "object",
+  description: "Reconcile the task-owned persistence branch into a Git-managed lane.",
+  additionalProperties: false,
+  properties: {
+    task_id: registeredTaskId,
+    lane_id: registeredLaneId,
+  },
+  required: ["task_id", "lane_id"],
+} as const;
+
+const registeredIntegrationLandParameters = {
+  type: "object",
+  description: "Land the current integration into the task-owned persistence branch.",
+  additionalProperties: false,
+  properties: {
+    task_id: registeredTaskId,
+    message: {
+      type: "string",
+      minLength: 1,
+      maxLength: 200,
+      description: "Optional single-line landing subject of 1-200 characters without control characters.",
+    },
+  },
+  required: ["task_id"],
+} as const;
+
+const registeredIntegrationRemoveParameters = {
+  type: "object",
+  description: "Best-effort removal of a task's recognizable managed integration resources.",
+  additionalProperties: false,
+  properties: {
+    task_id: registeredTaskId,
+  },
+  required: ["task_id"],
+} as const;
+
+const registeredStatusParameters = {
+  type: "object",
+  description: "List managed tasks or inspect one task's Git worktree and lane state.",
+  additionalProperties: false,
+  properties: {
+    task_id: registeredTaskId,
+  },
+} as const;
+
+const registeredReportParameters = {
+  type: "object",
+  description: "Snapshot task state and telemetry without cleanup or readiness judgement.",
+  additionalProperties: false,
+  properties: {
+    task_id: registeredTaskId,
+    output_dir: registeredOutputDir,
+  },
+  required: ["task_id", "output_dir"],
+} as const;
+
+function validateRegisteredRequest(
+  request: Record<string, unknown>,
+  toolName: string,
+  required: readonly string[],
+  allowed: readonly string[],
+): Record<string, unknown> {
+  const unknown = Object.keys(request).filter((key) => !allowed.includes(key));
+  if (unknown.length > 0) {
+    throw new CollabOpError(
+      "invalid_parameters",
+      `${toolName} does not accept parameter(s): ${unknown.join(", ")}`,
+      `Remove unsupported parameter(s) and pass only: ${allowed.join(", ")}.`,
+    );
+  }
+  const missing = required.filter((key) => request[key] === undefined);
+  if (missing.length > 0) {
+    throw new CollabOpError(
+      "invalid_parameters",
+      `${toolName} requires parameter(s): ${missing.join(", ")}`,
+      `Provide the required parameter(s): ${missing.join(", ")}.`,
+    );
+  }
+  return request;
+}
+
+function registeredErrorEnvelope(error: unknown): Record<string, unknown> {
+  const known = error instanceof CollabOpError;
+  const message = known
+    ? error.message
+    : error instanceof Error && error.message
+      ? error.message
+      : "The operation failed unexpectedly.";
+  const body: Record<string, unknown> = {
+    code: known ? error.code : "git_error",
+    message,
+    repair:
+      known && error.repair?.trim()
+        ? error.repair
+        : "Inspect the repository Git and filesystem state, correct the reported condition, and retry.",
+  };
+  if (known && error.details && Object.keys(error.details).length > 0) body.details = error.details;
+  return { ok: false, tool_version: TOOL_VERSION, error: body };
+}
+
+async function executeRegisteredTool(
+  request: Record<string, unknown>,
+  ctx: ExtensionContext,
+  handler: (
+    request: Record<string, unknown>,
+    signal: AbortSignal | undefined,
+    ctx: ExtensionContext,
+  ) => Promise<Record<string, unknown>>,
+  signal: AbortSignal | undefined,
+): Promise<Record<string, unknown>> {
+  try {
+    return await handler(request, signal, ctx);
+  } catch (error) {
+    throw new Error(JSON.stringify(registeredErrorEnvelope(error)));
+  }
+}
+
+function registeredMutationResult(
+  result: Record<string, unknown>,
+  fields: readonly string[] = [],
+): Record<string, unknown> {
+  const output: Record<string, unknown> = { ok: true, tool_version: TOOL_VERSION };
+  for (const field of fields) {
+    if (result[field] !== undefined) output[field] = result[field];
+  }
+  if (Array.isArray(result.warnings) && result.warnings.length > 0) {
+    output.warnings = result.warnings;
+  }
+  return output;
+}
 
 export default function collabOpExtension(pi: ExtensionAPI): void {
   const runGit = gitRunner(pi);
-  const runShell = shellRunner(pi);
-  // Every task-mutating handler (all except status) executes under one shared
-  // task-scoped exclusive lock, and refuses while any migration sentinel
-  // namespace resource exists; integration_migrate takes the same lock itself
-  // so it can resume or finish that migration.
+  // Every task-mutating handler executes under one shared task-scoped exclusive
+  // lock so independent tools cannot interleave resource mutations.
   function taskLocked(
     handler: (
       request: Record<string, unknown>,
@@ -4864,76 +4053,344 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     return async (request, signal, ctx) => {
       const repo = await discoverRepository(runGit, ctx.cwd, signal);
       const taskId = requireIdentifier(request.task_id, "task id");
-      return withTaskLock(repo, taskId, async () => {
-        await assertNoMigrationSentinel(repo, taskId, signal);
-        return handler(request, signal, ctx);
-      });
+      return withTaskLock(repo, taskId, () => handler(request, signal, ctx));
     };
   }
 
-  const handlers: Record<
-    string,
-    (
-      request: Record<string, unknown>,
-      signal: AbortSignal | undefined,
-      ctx: ExtensionContext,
-    ) => Promise<Record<string, unknown>>
-  > = {
-    integration_create: taskLocked((request, signal, ctx) =>
-      integrationCreate(runGit, ctx.cwd, request, signal),
-    ),
-    integration_land: taskLocked((request, signal, ctx) =>
-      integrationLand(runGit, ctx.cwd, request, signal),
-    ),
-    integration_remove: taskLocked((request, signal, ctx) =>
-      integrationRemove(runGit, ctx.cwd, request, signal),
-    ),
-    integration_migrate: (request, signal, ctx) =>
-      integrationMigrate(runGit, runShell, ctx.cwd, request, signal),
-    integration_adopt: taskLocked((request, signal, ctx) =>
-      integrationAdopt(runGit, ctx.cwd, request, signal),
-    ),
-    lane_create: taskLocked((request, signal, ctx) =>
-      laneCreate(runGit, ctx.cwd, request, signal),
-    ),
-    integration_reconcile: taskLocked((request, signal, ctx) =>
-      integrationReconcile(runGit, ctx.cwd, request, signal),
-    ),
-    lane_reconcile: taskLocked((request, signal, ctx) =>
-      laneReconcile(runGit, ctx.cwd, request, signal),
-    ),
-    lane_collect: taskLocked((request, signal, ctx) =>
-      laneCollect(runGit, ctx.cwd, request, signal),
-    ),
-    lane_drop: taskLocked((request, signal, ctx) =>
-      laneDrop(runGit, ctx.cwd, request, signal),
-    ),
-    status: (request, signal, ctx) => status(runGit, ctx.cwd, request.task_id, signal),
-  };
+  pi.registerTool({
+    name: "collab_integration_create",
+    label: "Create Collab integration",
+    description: "Create a Git-managed integration worktree from the current attached local branch and HEAD.",
+    parameters: registeredIntegrationCreateParameters,
+    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
+      const result = await executeRegisteredTool(
+        request as Record<string, unknown>,
+        ctx,
+        (value, innerSignal, innerCtx) => {
+          const params = validateRegisteredRequest(
+            value,
+            "collab_integration_create",
+            ["task_id"],
+            ["task_id"],
+          );
+          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
+            integrationCreate(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((created) =>
+              registeredMutationResult(created),
+            ),
+          )(params, innerSignal, innerCtx);
+        },
+        signal,
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        details: result,
+      };
+    },
+  });
 
   pi.registerTool({
-    name: "collab_op",
-    label: "Collab operation",
-    description: "Operate Orchestrator-gated lanes and the task-local integration, or inspect its status.",
-    parameters,
+    name: "collab_integration_adopt",
+    label: "Adopt Collab integration",
+    description: "Adopt an existing local branch into a Git-managed integration using an exact common base commit.",
+    parameters: registeredIntegrationAdoptParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
-      const method = String(request.method ?? "");
-      try {
-        const handler = handlers[method];
-        if (!handler) {
-          throw new CollabOpError(
-            "method_not_implemented",
-            `${method || "requested method"} is not implemented in this extension build`,
+      const result = await executeRegisteredTool(
+        request as Record<string, unknown>,
+        ctx,
+        (value, innerSignal, innerCtx) => {
+          const params = validateRegisteredRequest(
+            value,
+            "collab_integration_adopt",
+            ["task_id", "source_branch", "persist", "base_sha"],
+            ["task_id", "source_branch", "persist", "base_sha"],
           );
-        }
-        const result = await handler(request, signal, ctx);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-          details: result,
-        };
-      } catch (error) {
-        throw new Error(JSON.stringify(errorEnvelope(method || "unknown", error)));
-      }
+          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
+            integrationAdopt(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((adopted) =>
+              registeredMutationResult(adopted, ["source_branch", "integration_branch"]),
+            ),
+          )(params, innerSignal, innerCtx);
+        },
+        signal,
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "collab_integration_reconcile",
+    label: "Reconcile Collab integration",
+    description: "Reconcile the task-owned persistence branch into a Git-managed lane.",
+    parameters: registeredIntegrationReconcileParameters,
+    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
+      const result = await executeRegisteredTool(
+        request as Record<string, unknown>,
+        ctx,
+        (value, innerSignal, innerCtx) => {
+          const params = validateRegisteredRequest(
+            value,
+            "collab_integration_reconcile",
+            ["task_id", "lane_id"],
+            ["task_id", "lane_id"],
+          );
+          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
+            integrationReconcile(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((reconciled) =>
+              registeredMutationResult(reconciled, ["state", "lane_id", "lane_sha"]),
+            ),
+          )(params, innerSignal, innerCtx);
+        },
+        signal,
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "collab_integration_land",
+    label: "Land Collab integration",
+    description: "Land the current integration into the task-owned persistence branch.",
+    parameters: registeredIntegrationLandParameters,
+    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
+      const result = await executeRegisteredTool(
+        request as Record<string, unknown>,
+        ctx,
+        (value, innerSignal, innerCtx) => {
+          const params = validateRegisteredRequest(
+            value,
+            "collab_integration_land",
+            ["task_id"],
+            ["task_id", "message"],
+          );
+          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
+            integrationLand(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((landed) =>
+              registeredMutationResult(landed),
+            ),
+          )(params, innerSignal, innerCtx);
+        },
+        signal,
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "collab_integration_remove",
+    label: "Remove Collab integration",
+    description: "Best-effort removal of a task's recognizable managed integration resources.",
+    parameters: registeredIntegrationRemoveParameters,
+    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
+      const result = await executeRegisteredTool(
+        request as Record<string, unknown>,
+        ctx,
+        (value, innerSignal, innerCtx) => {
+          const params = validateRegisteredRequest(
+            value,
+            "collab_integration_remove",
+            ["task_id"],
+            ["task_id"],
+          );
+          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
+            integrationRemoveBestEffort(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((removed) =>
+              registeredMutationResult(removed),
+            ),
+          )(params, innerSignal, innerCtx);
+        },
+        signal,
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "collab_status",
+    label: "Inspect Collab status",
+    description: "Inspect Git-managed task status, or list discoverable managed tasks when task_id is omitted.",
+    parameters: registeredStatusParameters,
+    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
+      const result = await executeRegisteredTool(
+        request as Record<string, unknown>,
+        ctx,
+        (value, innerSignal, innerCtx) => {
+          const params = validateRegisteredRequest(
+            value,
+            "collab_status",
+            [],
+            ["task_id"],
+          );
+          return status(runGit, innerCtx.cwd, params.task_id, innerSignal);
+        },
+        signal,
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "collab_report",
+    label: "Report Collab state",
+    description: "Snapshot task state and telemetry to fixed report artifacts; no cleanup or readiness judgement is performed.",
+    parameters: registeredReportParameters,
+    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
+      const result = await executeRegisteredTool(
+        request as Record<string, unknown>,
+        ctx,
+        (value, innerSignal, innerCtx) => {
+          const params = validateRegisteredRequest(
+            value,
+            "collab_report",
+            ["task_id", "output_dir"],
+            ["task_id", "output_dir"],
+          );
+          return collabReport(runGit, innerCtx.cwd, params, innerSignal);
+        },
+        signal,
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "collab_lane_create",
+    label: "Create Collab lane",
+    description: "Create a Git-managed lane from the current integration tip.",
+    parameters: registeredLaneCreateParameters,
+    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
+      const result = await executeRegisteredTool(
+        request as Record<string, unknown>,
+        ctx,
+        (value, innerSignal, innerCtx) => {
+          const params = validateRegisteredRequest(
+            value,
+            "collab_lane_create",
+            ["task_id", "lane_id"],
+            ["task_id", "lane_id", "comment"],
+          );
+          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
+            laneCreate(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((created) =>
+              registeredMutationResult(created),
+            ),
+          )(params, innerSignal, innerCtx);
+        },
+        signal,
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "collab_lane_reconcile",
+    label: "Reconcile Collab lane",
+    description: "Reconcile the current integration tip into a Git-managed lane.",
+    parameters: registeredLaneReconcileParameters,
+    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
+      const result = await executeRegisteredTool(
+        request as Record<string, unknown>,
+        ctx,
+        (value, innerSignal, innerCtx) => {
+          const params = validateRegisteredRequest(
+            value,
+            "collab_lane_reconcile",
+            ["task_id", "lane_id"],
+            ["task_id", "lane_id"],
+          );
+          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
+            laneReconcile(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((reconciled) =>
+              registeredMutationResult(reconciled, ["state"]),
+            ),
+          )(params, innerSignal, innerCtx);
+        },
+        signal,
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "collab_lane_collect",
+    label: "Collect Collab lane",
+    description: "Collect a Git-managed lane using its current lane and integration tips.",
+    parameters: registeredLaneCollectParameters,
+    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
+      const result = await executeRegisteredTool(
+        request as Record<string, unknown>,
+        ctx,
+        (value, innerSignal, innerCtx) => {
+          const params = validateRegisteredRequest(
+            value,
+            "collab_lane_collect",
+            ["task_id", "lane_id"],
+            ["task_id", "lane_id"],
+          );
+          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
+            laneCollect(runGit, lockedCtx.cwd, lockedRequest, lockedSignal, true).then((collected) =>
+              registeredMutationResult(collected, ["state"]),
+            ),
+          )(params, innerSignal, innerCtx);
+        },
+        signal,
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "collab_lane_drop",
+    label: "Drop Collab lane",
+    description: "Best-effort removal of a Git-managed lane and its recognizable resources.",
+    parameters: registeredLaneDropParameters,
+    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
+      const result = await executeRegisteredTool(
+        request as Record<string, unknown>,
+        ctx,
+        (value, innerSignal, innerCtx) => {
+          const params = validateRegisteredRequest(
+            value,
+            "collab_lane_drop",
+            ["task_id", "lane_id"],
+            ["task_id", "lane_id"],
+          );
+          return taskLocked(async (lockedRequest, lockedSignal, lockedCtx) => {
+            const repo = await discoverRepository(runGit, lockedCtx.cwd, lockedSignal);
+            const taskId = requireIdentifier(lockedRequest.task_id, "task id");
+            const laneId = requireLaneId(lockedRequest.lane_id);
+            const task = new TaskLayout(repo, taskId);
+            const inventory = await laneInventory(repo, task, laneId, lockedSignal);
+            const dropped = await laneAbandon(repo, task, laneId, inventory, lockedSignal);
+            return registeredMutationResult(dropped);
+          })(params, innerSignal, innerCtx);
+        },
+        signal,
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        details: result,
+      };
     },
   });
 }

@@ -118,7 +118,7 @@ stop at the receiver rather than selecting fallback environment or identity.
    collection. This step is complete when the accepted lane is the integration head and its lane is
    retired or its retention is reported.
 6. **Retire the lane.** When a writer or reviewer lane reaches its terminal handoff and will not
-   resume, first discharge any enabled implementer efficiency artifact: inventory the canonical
+   continue, first discharge any enabled implementer efficiency artifact: inventory the canonical
    lane directory, resolve the unique file for the dispatched label and recorded runtime identity,
    copy it byte-for-byte to the dispatched custody destination, verify the copy, and preserve its
    role, label, and runtime identity. Then inventory and remove lane-owned
@@ -131,17 +131,13 @@ stop at the receiver rather than selecting fallback environment or identity.
 ## Continuity is a cache
 
 Evidence and the protected current lane carry continuity: the bounded brief, direct observations,
-validation results, and the lane's current clean state. Reusing the same writer or reviewer can
-preserve useful context and diagnosis, but it is a context-cache optimization rather than a liveness
-or authority requirement.
+validation results, and the lane's current clean state.
 
-**Resume is an Orchestrator option, not a first step.** When a writer's run ends before its work
-does, resume that session only when it preserves the required role, result, and authority contract;
-a resume that drops or weakens the child's structured result or acceptance contract is not an
-option. Otherwise dispatch a fresh compatible child carrying the original bounded contract, the
-current typed blockers, and the applicable validation, authority, and escalation boundary. In the
-composed loop, every correction and rereview is a fresh compatible child: a correction brief carries
-the original bounded worker contract plus the current typed blockers; a rereview brief carries the
+When a writer's run ends before its work does, dispatch a fresh compatible child carrying the original
+bounded contract, the current typed blockers, and the applicable validation, authority, and escalation
+boundary. In the composed loop, every correction and rereview is a fresh compatible child: a
+correction brief carries the original bounded worker contract plus the current typed blockers; a
+rereview brief carries the
 original review expectations and inspects the changed protected current lane. Give the replacement
 the evidence, not unverified role narration.
 
@@ -152,8 +148,7 @@ edits are validated, which are not, and what must not be redone or widened. A ti
 replacement to re-derive those is an unfinished brief, not a terse one.
 
 **Mechanical finish.** When a run ends after its semantic work is validated but before the checkout
-is clean and committed, and resuming the run cannot preserve the required role, result, and
-authority contract, dispatch a fresh writer for that close-out alone: no semantic edits, lane-owned
+is clean and committed, dispatch a fresh writer for that close-out alone: no semantic edits, lane-owned
 temporary state removed, staged paths and diff inspected, ancestry checked, one clean commit. The
 lane still needs a review result.
 

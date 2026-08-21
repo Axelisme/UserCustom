@@ -12,7 +12,6 @@ sections rather than being copied here.
 
 - **Capability selection** — [Capability check](#capability-check)
 - **Initial implementation, review, correction, or rereview** — [Composed delegation](#composed-delegation)
-- **Continuation after a correction** — [Continuity](#continuity)
 - **Worker or reviewer terminal handoff** — [Terminal handoff](#terminal-handoff)
 - **Selecting the saved Workflow instead of native composition** — [Saved-Workflow
   selection](#saved-workflow-selection)
@@ -46,26 +45,13 @@ correction bounds, and escalation.
    `collab-acceptor` against the protected current lane. The acceptor uses its read-only profile and
    independently reviews the current state.
 3. **Authorized correction:** when the acceptor returns a bounded blocker and the Orchestrator
-   authorizes correction, dispatch a compatible implementer with the original role, Result, and
-   authority contract plus the current typed evidence. Use [Continuity](#continuity) only to choose
-   whether that child reuses context.
+   authorizes correction, dispatch a fresh compatible implementer with the original role, Result,
+   and authority contract plus the current typed evidence.
 4. **Rereview:** after any correction, mutation stops again and a fresh `collab-acceptor` reviews the
    changed protected lane. A previous review never covers a changed lane.
 5. **Completion:** project the worker and acceptor semantic Results through the shared Collab
    handoff. Return blockers or decisions to the Orchestrator; do not perform final Acceptance,
    collection, landing, or escalation inside this binding.
-
-## Continuity
-
-Continuity is only a context-cache optimization. A resumed implementer is permitted only when it
-preserves the `collab-implementer` role, its declared Result, and the original authority contract.
-A fresh compatible implementer can continue from the bounded brief and current evidence without a
-resume and is the default when context preservation is uncertain. See [Continuity is a
-cache](SKILL.md#continuity-is-a-cache).
-
-Every review and rereview uses a fresh compatible `collab-acceptor`; implementer context is never
-carried into independent review. Session identity is not an Acceptance identity and is not durable
-Collab state.
 
 ## Saved-Workflow selection
 

@@ -4,6 +4,7 @@ description: Implement one bounded change as the sole writer, validate it, and r
 tools: read, write, edit, bash, compress, decompress, search_context, acp_status
 model: openai-codex/gpt-5.6-luna
 thinking: max
+timeoutMs: 3600000
 systemPromptMode: replace
 inheritProjectContext: true
 inheritSkills: false

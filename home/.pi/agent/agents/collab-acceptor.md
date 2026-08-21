@@ -4,6 +4,7 @@ description: Independently accept, block, or defer one reviewed lane using read-
 tools: read, bash, compress, decompress, search_context, acp_status
 model: openai-codex/gpt-5.6-sol
 thinking: high
+timeoutMs: 3600000
 systemPromptMode: replace
 inheritProjectContext: true
 inheritSkills: false

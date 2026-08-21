@@ -13,7 +13,7 @@ Typed results states its own enabling condition.
 - **Typed results** — the typed terminal outcomes returned by the reviewed-lane workflow.
 - **Post-launch** — after launching an asynchronous workflow: the ordinary return-or-yield step
   that lets completion wake the session.
-- **Run control** — only when a run is interrupted or needs status, steering, or revival.
+- **Run control** — only when a run is interrupted or needs status, steering, or stopping.
 - **Placement** — only when the canonical lane placement does not fit the chosen shape.
 - **Collection** — only after the Orchestrator judges the reviewed lane and chooses collection.
 - **Operations** — only when selecting which `collab_*` tool carries out a Collab step.
@@ -41,8 +41,8 @@ A Collab lane is already one writable checkout with one live writer. The reviewe
 the delegated worker and reviewer on that exact lane, with fresh role-specific structured results;
 corrections carry the original bounded contract plus current typed blockers, and rereviews carry the
 original review expectations against the changed protected lane. Child run IDs remain runtime
-operation evidence, not continuation handles, and appear in no terminal projection. Every branch and
-terminal projection reads parsed `structuredOutput`, never free-form output text.
+operation evidence and appear in no terminal projection. Every branch and terminal projection reads
+parsed `structuredOutput`, never free-form output text.
 
 Supply the tool only these bounded fields:
 
@@ -78,12 +78,11 @@ Terminal outcomes:
   redesign.
 
 The tool returns only an asynchronous launch receipt — `workflow_id`, `async_id`, and `async_dir`.
-The receipt is not Acceptance or a continuation handle: the ordinary asynchronous workflow result
-must wake the session through the Post-launch guidance, and the Orchestrator judges the typed result
-while the lane remains available. Child run IDs remain runtime operation evidence; Git, the lane
-runtime, and the Orchestrator own later coordination. Any correction, rereview, or
-collection-time reconciliation review uses a fresh compatible child under the tool's bounded
-contract rather than resuming a run.
+The receipt is not Acceptance: the ordinary asynchronous workflow result must wake the session
+through the Post-launch guidance, and the Orchestrator judges the typed result while the lane remains
+available. Child run IDs remain runtime operation evidence; Git, the lane runtime, and the
+Orchestrator own later coordination. Any correction, rereview, or collection-time reconciliation
+review uses a fresh compatible child under the tool's bounded contract.
 
 The launch fails closed before spawn when the exact managed lane, either configured profile, or the
 pi-subagents Extension RPC v1 `spawn`/`asyncSpawn` capability is missing or incompatible. There is
@@ -278,18 +277,12 @@ a child more authoritative.
 
 ## Run control
 
-Read this section only when a run is interrupted or needs status, steering, stopping, or revival.
+Read this section only when a run is interrupted or needs status, steering, or stopping.
 
 Inspect a run with `subagent({ action: "status", id })`. Guide a live top-level run with
-`action: "steer"`, stop it with `action: "stop"`, and revive a failed, paused, or completed run with
-`action: "resume"` only when the persisted session preserves the original launch contract. Revival
-restores the persisted profile model contract unchanged.
-Retained foreground continuation does not forward `outputSchema` or an explicit acceptance policy,
-so a workflow child resumed by `runId` loses its `structuredOutput` and falls back to inferred
-generic acceptance; the composed loop above therefore never resumes children and launches a fresh
-compatible child with the full launch controls instead. Turn, tool, runtime, and usage budgets are
-optional controls rather than role-wide defaults and are not a correction budget. After a writing
-run is interrupted, inspect its changed files and commit state before choosing the next owner.
+`action: "steer"` and stop it with `action: "stop"`. Turn, tool, runtime, and usage budgets do not
+replace the correction budget. After a writing run is interrupted, inspect its changed files and
+commit state before choosing the next owner.
 
 ## Placement
 

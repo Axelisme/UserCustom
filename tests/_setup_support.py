@@ -43,6 +43,7 @@ def seed_source(base: Path) -> tuple[Path, Path]:
         "home/.pi/agent/skills",
         "home/.pi/agent/extensions",
         "home/.claude/skills",
+        "home/.claude/workflows",
         "home/.codex/agents",
         "home/.pi/agent/agents",
         "home/.claude/agents",

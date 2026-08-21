@@ -14,6 +14,8 @@ sections rather than being copied here.
 - **Initial implementation, review, correction, or rereview** — [Composed delegation](#composed-delegation)
 - **Continuation after a correction** — [Continuity](#continuity)
 - **Worker or reviewer terminal handoff** — [Terminal handoff](#terminal-handoff)
+- **Selecting the saved Workflow instead of native composition** — [Saved-Workflow
+  selection](#saved-workflow-selection)
 - **Collection** — [Collab collection boundary](SKILL.md#collection-boundary), only after the
   Orchestrator judges the reviewed lane
 - **Landing** — [Collab land boundary](SKILL.md#land), only when its authority is present
@@ -64,6 +66,27 @@ cache](SKILL.md#continuity-is-a-cache).
 Every review and rereview uses a fresh compatible `collab-acceptor`; implementer context is never
 carried into independent review. Session identity is not an Acceptance identity and is not durable
 Collab state.
+
+## Saved-Workflow selection
+
+`collab-reviewed-lane` is an optional saved Claude Workflow that composes the same exact
+`collab-implementer` and `collab-acceptor` roles as [Composed delegation](#composed-delegation). It
+is an Orchestrator execution-shape selection over that same composition, not a new lifecycle,
+authority, or Result contract.
+
+Select it only after current implementation authority is closed, one pre-provisioned lane exists, and
+the complete bounded input is closed. Discussion, planning, and unbounded requests do not produce
+authority to select it. Its input is the five values: assigned lane, starting head, ticket pointer,
+envelope pointer or `null`, and a correction budget of `0` or `1`. The Workflow itself owns its
+Result schemas and terminal projection; this adapter does not restate them.
+
+Native composition through [Composed delegation](#composed-delegation) remains the default and stays
+complete whenever the Workflow is not selected.
+
+The Workflows feature is host and plan gated and can be absent from a correctly installed
+environment: account entitlement, plan default, a remote gate, or a `disableWorkflows` setting each
+turn it off, none of which is visible from this repository. Finding no `collab-reviewed-lane` means
+the feature is unavailable here, not that the installation is broken; fall back to native composition.
 
 ## State and authority
 

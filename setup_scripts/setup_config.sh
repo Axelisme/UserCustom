@@ -75,6 +75,7 @@ for relative in \
   .pi/agent/extensions \
   .pi/agent/agents \
   .claude/skills \
+  .claude/workflows \
   .claude/agents \
   .local/include; do
   link_directory_contents "$repo_root/home/$relative" "$HOME/$relative"

@@ -18,6 +18,7 @@ INSTALL_DIRECTORIES = (
     Path(".pi/agent/skills"),
     Path(".pi/agent/extensions"),
     Path(".claude/skills"),
+    Path(".claude/workflows"),
     Path(".codex/agents"),
     Path(".pi/agent/agents"),
     Path(".claude/agents"),
@@ -256,6 +257,22 @@ class SetupConfigTests(unittest.TestCase):
             collab = home / ".codex/skills/collab"
             self.assertTrue(collab.is_symlink())
             self.assertTrue(os.path.samefile(collab, source / "home/.codex/skills/collab"))
+
+    def test_setup_ships_saved_workflow_through_claude_workflows_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source, home = support.seed_source(Path(temporary))
+
+            result = support.run_setup(source, home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            workflow = home / ".claude/workflows/collab-reviewed-lane.js"
+            self.assertTrue(workflow.is_symlink())
+            self.assertTrue(
+                os.path.samefile(
+                    workflow,
+                    source / "home/.claude/workflows/collab-reviewed-lane.js",
+                )
+            )
 
 
 if __name__ == "__main__":

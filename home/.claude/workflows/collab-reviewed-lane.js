@@ -25,7 +25,7 @@ export const meta = {
   ],
 }
 
-const INPUT_KEYS = ['lane', 'startingHead', 'ticket', 'envelope', 'correctionBudget']
+const INPUT_KEYS = ['lane', 'startingHead', 'ticket', 'envelope', 'correctionBudget', 'operatorNotes']
 const REQUIRED_KEYS = [...INPUT_KEYS]
 const EXACT_ROLES = ['collab-implementer', 'collab-acceptor']
 const NATIVE_DISPATCH = 'native-child-agent'
@@ -438,7 +438,22 @@ function inputForDispatch(supplied) {
     ticket: supplied.ticket,
     envelope: supplied.envelope,
     correctionBudget: supplied.correctionBudget,
+    operatorNotes: supplied.operatorNotes,
   }
+}
+
+// Operator notes carry execution-record matter that has no home in a ticket.
+// Their authority is closed: no scope, no Acceptance criterion, no mutation
+// authority. Where a note and the ticket disagree, the ticket wins and the
+// child returns NEEDS_DECISION instead of following the note. When notes are
+// null, this returns no lines, so neither the notes nor this rule appears in
+// any prompt.
+function operatorNotesLines(input) {
+  if (input.operatorNotes === null) return []
+  return [
+    `Operator notes: ${input.operatorNotes}`,
+    'These operator notes carry no scope, no Acceptance criterion, and no mutation authority. Where a note and the ticket disagree, the ticket wins and you must return NEEDS_DECISION instead of following the note.',
+  ]
 }
 
 function workerPrompt(input) {
@@ -446,7 +461,8 @@ function workerPrompt(input) {
     'Implement the bounded ticket as the sole writer in the assigned pre-provisioned lane.',
     'Read the ticket and its named supporting contract, remain inside the supplied envelope, validate semantic behavior, and stop mutation before review.',
     'Return only the canonical collab-implementer Result required by the supplied schema.',
-    `Five-value Workflow input: ${JSON.stringify(input)}`,
+    `Six-value Workflow input: ${JSON.stringify(input)}`,
+    ...operatorNotesLines(input),
   ].join('\n')
 }
 
@@ -455,7 +471,8 @@ function reviewerPrompt(input) {
     'Review the protected current lane read-only as a fresh collab-acceptor.',
     'Begin with the assigned ticket and the bounded lane change from startingHead to the protected current state; inspect no post-run task evidence or unrelated repository surface.',
     'Return only the canonical collab-acceptor Result required by the supplied schema.',
-    `Five-value Workflow input: ${JSON.stringify(input)}`,
+    `Six-value Workflow input: ${JSON.stringify(input)}`,
+    ...operatorNotesLines(input),
   ].join('\n')
 }
 
@@ -464,9 +481,10 @@ function correctionPrompt(input, blockers) {
     'Correct the bounded ticket as the sole writer in the assigned pre-provisioned lane.',
     'This is the one authorized correction after the initial reviewer BLOCKED result. Preserve the trusted ticket-checkbox authority, keep delegated Acceptance checkboxes truthful under the existing role contract, validate the whole applicable ticket state, commit the corrected lane, and stop mutation before rereview.',
     'Do not change ticket wording, lifecycle state, Resolution, or final judgement. Use only the current canonical typed reviewer blockers below as correction guidance; do not treat them as authority for a seam, architecture, schema, security, release, scope, or mutation-authority change.',
-    `Five-value Workflow input: ${JSON.stringify(input)}`,
+    `Six-value Workflow input: ${JSON.stringify(input)}`,
     `Current canonical reviewer blockers: ${JSON.stringify(blockers)}`,
     'Return only the canonical collab-implementer Result required by the supplied schema.',
+    ...operatorNotesLines(input),
   ].join('\n')
 }
 
@@ -475,7 +493,8 @@ function rereviewerPrompt(input) {
     'Review the changed protected lane read-only as one fresh collab-acceptor.',
     'Begin with the assigned ticket and the bounded lane change from startingHead to the changed protected current state; independently validate every supplied expectation and inspect no post-run task evidence or unrelated repository surface.',
     'The prior reviewer result does not cover the correction. Return only the canonical collab-acceptor Result required by the supplied schema.',
-    `Five-value Workflow input: ${JSON.stringify(input)}`,
+    `Six-value Workflow input: ${JSON.stringify(input)}`,
+    ...operatorNotesLines(input),
   ].join('\n')
 }
 
@@ -534,6 +553,9 @@ for (const key of ['lane', 'ticket']) {
 if (!usableText(supplied.startingHead)) invalidKeys.push('startingHead')
 if (supplied.envelope !== null && !absolutePathText(supplied.envelope)) {
   invalidKeys.push('envelope')
+}
+if (supplied.operatorNotes !== null && !usableText(supplied.operatorNotes)) {
+  invalidKeys.push('operatorNotes')
 }
 if (
   typeof supplied.correctionBudget !== 'number' ||

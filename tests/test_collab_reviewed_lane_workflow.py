@@ -22,6 +22,7 @@ VALID_INPUT = {
     "ticket": "/tmp/ticket.md",
     "envelope": None,
     "correctionBudget": 0,
+    "operatorNotes": None,
 }
 
 
@@ -656,12 +657,17 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(result["reviewResult"]["verdict"], "PASS")
 
-    def test_invalid_inputs_dispatch_no_child_and_preserve_five_value_interface(self) -> None:
+    def test_invalid_inputs_dispatch_no_child_and_preserve_six_value_interface(self) -> None:
         cases = (
             (
                 {key: value for key, value in VALID_INPUT.items() if key != "envelope"},
                 "MISSING_INPUT",
                 {"envelope"},
+            ),
+            (
+                {key: value for key, value in VALID_INPUT.items() if key != "operatorNotes"},
+                "MISSING_INPUT",
+                {"operatorNotes"},
             ),
             ({**VALID_INPUT, "extra": True}, "UNKNOWN_INPUT", {"extra"}),
             ({**VALID_INPUT, "correctionBudget": 2}, "UNUSABLE_INPUT", {"correctionBudget"}),
@@ -669,6 +675,13 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
             ({**VALID_INPUT, "ticket": "ticket.md"}, "UNUSABLE_INPUT", {"ticket"}),
             ({**VALID_INPUT, "envelope": "envelope.md"}, "UNUSABLE_INPUT", {"envelope"}),
             ({**VALID_INPUT, "startingHead": "   "}, "UNUSABLE_INPUT", {"startingHead"}),
+            ({**VALID_INPUT, "operatorNotes": ""}, "UNUSABLE_INPUT", {"operatorNotes"}),
+            ({**VALID_INPUT, "operatorNotes": 42}, "UNUSABLE_INPUT", {"operatorNotes"}),
+            (
+                {**VALID_INPUT, "operatorNotes": "x" * 4097},
+                "UNUSABLE_INPUT",
+                {"operatorNotes"},
+            ),
             ([], "INVALID_INPUT", {"args"}),
         )
         for args, code, fields in cases:
@@ -685,6 +698,37 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
                 self.assertEqual(result["error"]["code"], code)
                 self.assertEqual(set(result["error"]["fields"]), fields)
                 self.assertEqual(result["capability"], {"status": "NOT_CHECKED"})
+
+    def test_operator_notes_reach_all_four_prompts_with_authority_rule(self) -> None:
+        notes = "Runtime caution: the sandbox network is offline for this run."
+        args = {**VALID_INPUT, "correctionBudget": 1, "operatorNotes": notes}
+        output = self.run_installed(args, scenario="correction-rereview-pass")
+
+        self.assert_dispatch_shape(
+            output,
+            [
+                "collab-implementer",
+                "collab-acceptor",
+                "collab-implementer",
+                "collab-acceptor",
+            ],
+        )
+        self.assertEqual(output["calls"], 4)
+        authority_phrase = "ticket wins"
+        for prompt, _options in output["invocations"]:
+            self.assertIn(notes, prompt)
+            self.assertIn(authority_phrase, prompt)
+            self.assertIn("no scope", prompt)
+            self.assertIn("NEEDS_DECISION", prompt)
+
+    def test_operator_notes_absent_from_all_prompts_when_null(self) -> None:
+        args = {**VALID_INPUT, "correctionBudget": 1, "operatorNotes": None}
+        output = self.run_installed(args, scenario="correction-rereview-pass")
+
+        self.assertEqual(output["calls"], 4)
+        for prompt, _options in output["invocations"]:
+            self.assertNotIn("Operator notes:", prompt)
+            self.assertNotIn("ticket wins", prompt)
 
     def test_role_schemas_are_flat_tool_input_schemas_with_enum_discriminator(
         self,

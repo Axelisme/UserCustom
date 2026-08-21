@@ -4331,7 +4331,11 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_lane_collect",
     label: "Collect Collab lane",
-    description: "Collect a Git-managed lane using its current lane and integration tips.",
+    description:
+      "Collect a Git-managed lane using its current lane and integration tips. On success this " +
+      "retires the lane by force-removing its worktree, so any untracked or ignored files left " +
+      "there are lost. If the worktree still has tracked changes or an active merge or conflict " +
+      "state, the lane is kept instead of removed, and a warning is returned.",
     parameters: registeredLaneCollectParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(

@@ -16,7 +16,7 @@ Typed results states its own enabling condition.
 - **Run control** — only when a run is interrupted or needs status, steering, or revival.
 - **Placement** — only when the canonical lane placement does not fit the chosen shape.
 - **Collection** — only after the Orchestrator judges the reviewed lane and chooses collection.
-- **Operations** — only when carrying out the named `collab_op` method.
+- **Operations** — only when selecting which `collab_*` tool carries out a Collab step.
 
 ## Composed delegation
 
@@ -389,40 +389,30 @@ const reconciledReview = await runs.run("review-reconcile-1", {
 
 ## Operations
 
-Read this section only when carrying out the named method.
+Read this section only when selecting which `collab_*` tool carries out a Collab step. Each tool is
+independently registered; its own description and parameter schema are authoritative for what it
+accepts and returns. This section states only which Collab step selects which tool.
 
-Placement, collection, and landing are carried out through the `collab_op` tool's `method`
-parameter. `integration_adopt` accepts `dry_run: true` to preview the adoption it would perform;
-preview it before authorizing the mutation, per the preview-before-mutation discipline the core
-points to. No other method in this set takes `dry_run`.
-
-- `integration_create` — establishes the task-local integration branch collection needs before any
-  lane can be collected into it.
-- `integration_adopt` — the Collection boundary's adoption step: makes an existing branch, passed
-  as `source_branch`, the complete managed integration state. Preview with `dry_run: true` before
-  authorizing.
-- `lane_create` — Choose the execution shape: creates the one writable branch, checkout, worktree,
-  and lane-owned state a dispatched writer needs.
-- `lane_reconcile` — optional lane-side synchronization: brings a stale lane up to current
-  integration when the Orchestrator explicitly chooses the separate pre-step. Collection normally
-  relies on `lane_collect`'s stale-lane handling instead.
-- `lane_collect` — Collect: moves an Orchestrator-accepted lane into the integration branch and
-  retires the lane. Tracked modifications — staged or unstaged changes to tracked paths, including
-  newly staged paths — and active merge or conflict state in the exact managed lane or integration
-  worktree block collection and are preserved. Non-index state in those selected managed worktrees
-  (untracked files, ignored files, ignored empty directories) is disposable and may be removed by
-  collection. `collected` completes collection; `reconciled` stops before
-  collection for rereview and a fresh Orchestrator judgement; `conflicted` returns to the
-  Orchestrator.
-- `lane_drop` — Retire the lane: removes a lane's managed branch and worktree without collecting
-  it, for a lane whose work is not going into integration.
-- `integration_reconcile` — keeps the integration branch able to receive collection by merging
-  current persistence back into it through a lane, when persistence has moved ahead of integration.
-- `integration_land` — Land: moves the exact current integration result into a persistence branch,
-  preserving the integration tree under a new commit identity.
-- `integration_remove` — Retire the lane, at task scope: tears down the managed integration and its
-  remaining lanes once the task's collab-owned state is no longer needed.
-- `integration_migrate` — housekeeping: brings a managed task's on-disk layout up to the running
-  tool version; it serves no single semantic step and is resume-safe if interrupted.
-- `status` — read-only inspection of a task's integration and lane state; supports every step above
-  without mutating anything.
+- Establishes the task-local integration branch collection needs before any lane can be collected
+  into it — `collab_integration_create`.
+- The Collection boundary's adoption step: makes an existing branch, passed as `source_branch`, the
+  complete managed integration state — `collab_integration_adopt`.
+- Choose the execution shape: creates the one writable branch, checkout, worktree, and lane-owned
+  state a dispatched writer needs — `collab_lane_create`.
+- Optional lane-side synchronization: brings a stale lane up to current integration when the
+  Orchestrator explicitly chooses the separate pre-step. Collection normally relies on
+  `collab_lane_collect`'s stale-lane handling instead — `collab_lane_reconcile`.
+- Collect: moves an Orchestrator-accepted lane into the integration branch and retires the lane —
+  `collab_lane_collect`.
+- Retire the lane: removes a lane's managed branch and worktree without collecting it, for a lane
+  whose work is not going into integration — `collab_lane_drop`.
+- Keeps the integration branch able to receive collection by merging current persistence back into
+  it through a lane, when persistence has moved ahead of integration — `collab_integration_reconcile`.
+- Land: moves the exact current integration result into a persistence branch, preserving the
+  integration tree under a new commit identity — `collab_integration_land`.
+- Retire the lane, at task scope: tears down the managed integration and its remaining lanes once
+  the task's collab-owned state is no longer needed — `collab_integration_remove`.
+- Read-only inspection of a task's integration and lane state; supports every step above without
+  mutating anything — `collab_status`.
+- Snapshot task state and telemetry to fixed report artifacts, with no cleanup or readiness
+  judgement performed — `collab_report`.

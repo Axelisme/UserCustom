@@ -76,9 +76,11 @@ authority, or Result contract.
 
 Select it only after current implementation authority is closed, one pre-provisioned lane exists, and
 the complete bounded input is closed. Discussion, planning, and unbounded requests do not produce
-authority to select it. Its input is the five values: assigned lane, starting head, ticket pointer,
-envelope pointer or `null`, and a correction budget of `0` or `1`. The Workflow itself owns its
-Result schemas and terminal projection; this adapter does not restate them.
+authority to select it. Its input is the six values: assigned lane, starting head, ticket pointer,
+envelope pointer or `null`, a correction budget of `0` or `1`, and operator notes (free-form text or
+`null`) whose authority is closed — no scope, no Acceptance criterion, no mutation authority, and a
+note that contradicts the ticket means the ticket wins. The Workflow itself owns its Result schemas
+and terminal projection; this adapter does not restate them.
 
 Native composition through [Composed delegation](#composed-delegation) remains the default and stays
 complete whenever the Workflow is not selected.

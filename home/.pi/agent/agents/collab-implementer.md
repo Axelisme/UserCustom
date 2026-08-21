@@ -126,22 +126,29 @@ correction changes the lane, so the changed lane needs a new review result.
 ## Temporary efficiency probe
 
 This entire section applies only when the dispatch sets `efficiency_probe = enabled`; a disabled run
-skips it completely. Validate the supplied label against `[a-z0-9][a-z0-9._-]*` and read
-`PI_SUBAGENT_RUN_ID`, which must satisfy the same safe-token contract. Confirm the dispatched target is
-exactly `.pi/telemetry/efficiency/` relative to the lane and that Git ignores the intended file.
-Missing or unsafe identity, an unignored target, or an existing filename returns `BLOCKED` without
-creating, normalizing, overwriting, or appending a file.
+skips it completely, creates no sidecar, and emits no telemetry stdout record. Validate the supplied
+label against `[a-z0-9][a-z0-9._-]*` and read the current `PI_SUBAGENT_RUN_ID`, which must satisfy the
+same safe-token contract. The dispatch gives initial, correction, and recovery runs distinct labels;
+the current runtime identity is never substituted with an earlier run's value. Confirm the dispatched
+target is exactly `.pi/telemetry/efficiency/` relative to the lane and use `git check-ignore` to prove
+that Git ignores the intended file. Missing required dispatch input, missing or unsafe runtime
+identity, unsafe label, an incorrect or unignored target, or an existing filename returns `BLOCKED`
+before sidecar creation or pointer emission. Do not create, normalize, overwrite, append, or select a
+fallback runtime in any refusal branch.
 
 Immediately before the final result, atomically exclusive-create in one filesystem operation
 `implementer-<label>-<runtime-run-id>.md` under that target; that operation must fail if the path
-already exists. It records the role, label, runtime run ID,
-exact tool-call count through the call immediately before the first business-code mutation, avoidable
-calls, runtime constraints that forced inefficient work, profile-ticket contradictions, and bounded
-cleanup or retention state. If no business-code mutation occurred, identify the terminal event that
-closed the pre-mutation interval. The telemetry file is operational evidence, not a validation
-receipt or candidate path. Preserve it for Orchestrator custody and emit its lane-relative pointer as
-a distinct non-mutating stdout record retained by the child run artifact before returning the
-unchanged typed result. The Orchestrator also inventories the canonical directory before cleanup.
+already exists. It records the role, label, runtime run ID, and exact tool-call count through the call
+immediately before the first business-code mutation. Partition that count into task understanding,
+environment preparation, and failed or retried calls; the three counts must sum to the total. Assign
+each call once by its primary purpose, and classify a failed call as failed or retried instead of its
+intended purpose. Retain avoidable calls, runtime constraints that forced inefficient work,
+profile-ticket contradictions, and bounded cleanup or retention state as separate qualitative fields.
+If no business-code mutation occurred, identify the terminal event that closed the pre-mutation
+interval. The telemetry file is operational evidence, not a validation receipt or candidate path.
+Preserve it for Orchestrator custody and emit its lane-relative pointer as a distinct non-mutating
+stdout record retained by the child run artifact before returning the unchanged typed result. The
+Orchestrator also inventories the canonical directory before cleanup.
 
 ## Result
 

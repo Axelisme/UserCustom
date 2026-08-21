@@ -37,7 +37,8 @@ a separate dispatch; this generic route reviews the protected current lane here.
 The dispatch identifies the repository or cwd, ticket expectations or Interface promises,
 validation expectations, and review placement. It also states
 `efficiency_probe = enabled | disabled`; an enabled probe supplies a lowercase safe run label matching
-`[a-z0-9][a-z0-9._-]*`. Missing or unsafe probe input returns `BLOCKED` without mutating the checkout.
+`[a-z0-9][a-z0-9._-]*`, distinct for every initial review and rereview. Missing or unsafe probe input
+returns `BLOCKED` without mutating the checkout.
 A module's declared Interface — the invariants,
 ordering, error modes, and lifecycle recorded at the module itself rather than in a task record — is
 such a promise, and a declaration the lane contradicts or leaves unwritten for a seam it moved is a
@@ -84,7 +85,8 @@ writer running there while you review.
 ## Temporary efficiency probe
 
 This entire section applies only when the dispatch sets `efficiency_probe = enabled`; a disabled run
-skips it completely. Read the current `PI_SUBAGENT_RUN_ID` without modifying the process environment;
+skips it completely and emits no telemetry stdout record. Read the current `PI_SUBAGENT_RUN_ID`
+without modifying the process environment;
 if it is absent or fails `[a-z0-9][a-z0-9._-]*`, return `BLOCKED` without checkout mutation. After
 completing the independent verdict, prepare one distinct `Efficiency telemetry` record with the safe
 dispatch label and runtime ID, whether review began from the candidate diff, what concrete question

@@ -57,13 +57,15 @@ For a writer, include these compact blocks:
   test budgets or exceptions (or `none`), and cleanup or retention exceptions (or `none`).
 
 Every collab role dispatch states `efficiency_probe = enabled | disabled`. When enabled, include a
-lowercase filename-safe run label matching `[a-z0-9][a-z0-9._-]*`. An implementer dispatch also names
-`.pi/telemetry/efficiency/` as its lane-relative target and an Orchestrator-owned custody destination
-outside the lane; those values authorize exclusive creation of exactly one ignored telemetry file and
-its byte-for-byte preservation before lane retirement. An acceptor remains read-only and emits its
-probe data only as a distinct stdout record retained by the child run artifact, before returning the
-unchanged typed verdict. Missing or unsafe required values stop at the receiver rather than
-selecting fallback environment or identity.
+lowercase filename-safe run label matching `[a-z0-9][a-z0-9._-]*`. Give every initial, correction,
+recovery, and rereview dispatch its own label; the current runtime run ID supplies the second distinct
+identity component, and neither component is normalized or reused as another run's identity. An
+implementer dispatch also names `.pi/telemetry/efficiency/` as its lane-relative target and an
+Orchestrator-owned custody destination outside the lane; those values authorize exclusive creation of
+exactly one ignored telemetry file and its byte-for-byte preservation before lane retirement. An
+acceptor remains read-only and emits its probe data only as a distinct stdout record retained by the
+child run artifact, before returning the unchanged typed verdict. Missing or unsafe required values
+stop at the receiver rather than selecting fallback environment or identity.
 
 ## Responsibility boundaries
 

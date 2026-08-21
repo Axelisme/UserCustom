@@ -46,14 +46,17 @@ lane target, and an Orchestrator custody destination. Return `BLOCKED` before so
 validation when a required value is absent or unsafe; do not discover a fallback environment.
 
 Read only the ticket the dispatch names and what that ticket points to; the wider task record and
-sibling tickets belong to the Orchestrator. For an assigned code or test path, the first content
-inspection uses one of these canonical Grove forms:
+sibling tickets belong to the Orchestrator. For an assigned code or test path, choose the matching
+first-inspection form below. Here `<file>` means one concrete code file with a Grove-supported
+extension, and `<id>` means the exact symbol identifier returned by the preceding Grove command.
 
 - named symbol: `grove symbols <root> --name <name>`, then `grove source <id>`;
-- unfamiliar code file: `grove outline <file>`, then `grove source <id>`;
+- unfamiliar code file: `grove outline <file>`, then select the relevant returned identifier with
+  `grove source <id>`;
 - known file and unique name: `grove source <file> <name>`.
 
-Use the bundled Grove skill for callers, definitions, maps, parser limits, or setup branches. A larger
+These forms stay synchronized with the bundled Grove skill's Navigate table. Use that skill for
+callers, definitions, maps, parser limits, or setup branches. A larger
 range or a whole file may open only after one concrete unresolved question is named and the Grove
 surface cannot answer it. Prose and static text start from their named section or range. Return
 `BLOCKED` when the checkout contains unexplained changes or the task cannot be implemented inside

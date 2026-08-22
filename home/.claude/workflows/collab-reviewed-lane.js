@@ -500,7 +500,7 @@ function reviewerPrompt(input) {
 function correctionPrompt(input, blockers) {
   return [
     'Correct the bounded ticket as the sole writer in the assigned pre-provisioned lane.',
-    'This is the one authorized correction after the initial reviewer BLOCKED result. Preserve the trusted ticket-checkbox authority, keep delegated Acceptance checkboxes truthful under the existing role contract, validate the whole applicable ticket state, commit the corrected lane, and stop mutation before rereview.',
+    'This is the one authorized correction after the initial reviewer BLOCKED result. Validate the whole applicable ticket state, commit the corrected lane, and stop mutation before rereview.',
     'Do not change ticket wording, lifecycle state, Resolution, or final judgement. Use only the current canonical typed reviewer blockers below as correction guidance; do not treat them as authority for a seam, architecture, schema, security, release, scope, or mutation-authority change.',
     `Six-value Workflow input: ${JSON.stringify(input)}`,
     `Current canonical reviewer blockers: ${JSON.stringify(blockers)}`,

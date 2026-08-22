@@ -359,6 +359,48 @@ def command_bind(args: argparse.Namespace, base: Path) -> dict[str, Any]:
     return meta
 
 
+def latest_appended_evidence(meta: dict[str, Any]) -> str | None:
+    """Return the full suffix written by the item's most recent append-evidence
+    call, or None when the evidence carries none.
+
+    An append stamps its paragraph with the same instant it stores in
+    ``updated_at``, so only that generated paragraph can sit behind the
+    ``\n\n[<updated_at>] `` marker. Timestamp-shaped lines that arrived any
+    other way — user-authored original evidence or interior lines of an
+    appended paragraph — never match the current stamp and stay inside the
+    compared suffix instead of being mistaken for append boundaries.
+    """
+    evidence = meta["evidence"]
+    marker = f"\n\n[{meta['updated_at']}] "
+    start = evidence.rfind(marker)
+    if start == -1:
+        return None
+    return evidence[start + len(marker) :]
+
+
+def command_append_evidence(args: argparse.Namespace, base: Path) -> dict[str, Any]:
+    path, meta = find_item(base, args.item_id)
+    if meta["status"] not in ("inbox", "planned"):
+        raise Refusal(
+            "invalid_transition", "only inbox or planned items accept evidence"
+        )
+    text = required_text("evidence", args.evidence)
+    latest = latest_appended_evidence(meta)
+    if latest is not None and latest.strip() == text:
+        raise Refusal(
+            "duplicate_evidence",
+            "latest appended evidence is identical; not appended again",
+        )
+    # Existing evidence bytes stay untouched up to the separator. The marker
+    # reuses the exact instant stored in updated_at so latest-append detection
+    # can correlate the generated paragraph with that field.
+    timestamp = now()
+    meta["evidence"] = f"{meta['evidence']}\n\n[{timestamp}] {text}"
+    meta["updated_at"] = timestamp
+    atomic_write(path, render(meta))
+    return meta
+
+
 def command_close(args: argparse.Namespace, base: Path) -> dict[str, Any]:
     path, meta = find_item(base, args.item_id)
     if meta["status"] not in ("inbox", "planned"):
@@ -432,6 +474,9 @@ def parser() -> argparse.ArgumentParser:
     bind = sub.add_parser("bind")
     bind.add_argument("item_id")
     bind.add_argument("--task-id", required=True)
+    append_evidence = sub.add_parser("append-evidence")
+    append_evidence.add_argument("item_id")
+    append_evidence.add_argument("--evidence", required=True)
     close = sub.add_parser("close")
     close.add_argument("item_id")
     close.add_argument("--resolution", choices=RESOLUTIONS, required=True)
@@ -455,6 +500,8 @@ def main() -> int:
             payload = command_list(args, base)
         elif operation == "bind":
             payload = command_bind(args, base)
+        elif operation == "append-evidence":
+            payload = command_append_evidence(args, base)
         else:
             payload = command_close(args, base)
     except Refusal as refusal:

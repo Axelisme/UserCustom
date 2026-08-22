@@ -216,6 +216,132 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
             self.assertNotIn("thinking", options)
             self.assertNotIn("runId", options)
 
+    def test_initial_reviewer_dispatch_receives_runtime_integration_baseline(self) -> None:
+        worker = {
+            "outcome": "COMPLETED",
+            "validation": [{"check": "behavior", "result": "PASSED", "summary": "works"}],
+            "residualRisks": [],
+        }
+        reviewer = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, expected, capture, observed = self.launch_case(base)
+            self.assertFalse(observed["is_error"], observed)
+            rpc = json.loads(capture.read_text(encoding="utf-8").strip())
+            workflow_script = rpc["params"]["workflowScript"]
+            self.assertIn(expected["integration_head"], workflow_script)
+            self.assertIn("git diff --find-renames ", workflow_script)
+            execution = json.loads(
+                subprocess.run(
+                    ["node", str(SCRIPT_HARNESS), str(capture), json.dumps([completed_step(worker), reviewer])],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout
+            )
+
+        review_task = execution["calls"][1]["options"]["task"]
+        self.assertIn(expected["integration_head"], review_task)
+        self.assertIn(
+            f"git diff --find-renames {expected['integration_head']}...HEAD --",
+            review_task,
+        )
+        self.assertIn("complete candidate lane diff", review_task)
+        # The baseline is reviewer dispatch context; the worker brief carries none.
+        self.assertNotIn(expected["integration_head"], execution["calls"][0]["options"]["task"])
+
+    def test_every_rereview_keeps_the_same_immutable_baseline(self) -> None:
+        worker = {
+            "outcome": "COMPLETED",
+            "validation": [],
+            "residualRisks": [],
+        }
+        blocked = {
+            "verdict": "BLOCKED",
+            "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}],
+            "outOfEnvelopeFindings": [],
+        }
+        passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, expected, capture, observed = self.launch_case(base, correction_budget=2)
+            self.assertFalse(observed["is_error"], observed)
+            execution = json.loads(
+                subprocess.run(
+                    [
+                        "node",
+                        str(SCRIPT_HARNESS),
+                        str(capture),
+                        json.dumps([
+                            completed_step(worker),
+                            blocked,
+                            completed_step(worker),
+                            blocked,
+                            completed_step(worker),
+                            passed,
+                        ]),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout
+            )
+
+        sha = expected["integration_head"]
+        canonical = f"git diff --find-renames {sha}...HEAD --"
+        review_tasks = {
+            call["key"]: call["options"]["task"]
+            for call in execution["calls"]
+            if call["key"].startswith("review-")
+        }
+        self.assertEqual(set(review_tasks), {"review-0", "review-1", "review-2"})
+        for key, task in review_tasks.items():
+            self.assertIn(sha, task, key)
+            self.assertIn(canonical, task, key)
+            self.assertIn("complete candidate lane diff", task, key)
+        # Rereviews inspect the complete current lane diff after correction,
+        # not only the latest change.
+        for key in ("review-1", "review-2"):
+            self.assertIn("complete current lane diff", review_tasks[key], key)
+        # The correction does not move the baseline: every round names the same
+        # runtime-owned integration tip and the same canonical complete-diff command.
+        self.assertEqual(len(execution["calls"]), 6)
+
+    def test_public_input_admits_no_caller_baseline_and_typed_results_carry_none(self) -> None:
+        worker = {
+            "outcome": "COMPLETED",
+            "validation": [{"check": "behavior", "result": "PASSED", "summary": "works"}],
+            "residualRisks": [],
+        }
+        reviewer = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, expected, capture, observed = self.launch_case(base)
+            self.assertFalse(observed["is_error"], observed)
+            schema = observed["schemas"][TOOL]["parameters"]
+            self.assertFalse(schema["additionalProperties"])
+            for forbidden in (
+                "baseline",
+                "integration_tip",
+                "integration_sha",
+                "base_sha",
+                "starting_head",
+                "diff_command",
+            ):
+                self.assertNotIn(forbidden, schema["properties"])
+            execution = json.loads(
+                subprocess.run(
+                    ["node", str(SCRIPT_HARNESS), str(capture), json.dumps([completed_step(worker), reviewer])],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout
+            )
+
+        # Baseline identity stays in dispatch context; it never enters the typed
+        # terminal semantic result.
+        self.assertNotIn(expected["integration_head"], json.dumps(execution["result"]))
+
     def test_schema_valid_writer_stop_survives_the_runtime_no_edit_guard(self) -> None:
         blocked = {"outcome": "BLOCKED", "blocker": "required input is missing"}
         with tempfile.TemporaryDirectory() as temporary:

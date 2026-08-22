@@ -1769,7 +1769,9 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 {"tool": "collab_integration_land", "task_id": "demo", "message": "Ship lane work"},
             )
             self.assertFalse(landed["is_error"])
-            self.assertEqual(set(landed["result"]), {"ok", "tool_version"})
+            self.assertEqual(landed["result"]["ok"], True)
+            self.assertEqual(landed["result"]["tool_version"], 1)
+            self.assertIn("warnings", landed["result"])
 
             removed = invoke(
                 repository,
@@ -2752,7 +2754,17 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
 
             self.assertFalse(observed["is_error"])
-            self.assertEqual(observed["result"], {"ok": True, "tool_version": 1})
+            self.assertEqual(
+                observed["result"],
+                {
+                    "ok": True,
+                    "tool_version": 1,
+                    "warnings": [
+                        "preserved unstaged tracked changes",
+                        "preserved untracked files",
+                    ],
+                },
+            )
             landing = git(repository, "rev-parse", "main")
             self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected["integration_head"])
             message = git(repository, "show", "-s", "--format=%B", landing)
@@ -2766,6 +2778,108 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             event = last_telemetry_event(repository)
             self.assertEqual(event["operation"], "integration-land")
             self.assertEqual(event["integration_sha"], expected["integration_head"])
+
+    def test_land_merges_separate_unstaged_hunks_in_one_file_and_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / "tracked.txt").write_text("a\nb\nc\nd\ne\nf\n", encoding="utf-8")
+            (repository / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
+            git(repository, "add", "tracked.txt", ".gitignore")
+            git(repository, "commit", "-m", "multiline base")
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            integration = Path(expected["integration"])
+            (integration / "tracked.txt").write_text("a\nB\nc\nd\ne\nf\n", encoding="utf-8")
+            git(integration, "add", "tracked.txt")
+            git(integration, "commit", "-m", "integration hunk")
+            expected["integration_head"] = git(integration, "rev-parse", "HEAD")
+            (repository / "tracked.txt").write_text("a\nb\nc\nd\nE\nf\n", encoding="utf-8")
+
+            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+
+            self.assertFalse(observed["is_error"])
+            self.assertIn("preserved unstaged tracked changes", observed["result"]["warnings"])
+            self.assertLessEqual(len(observed["result"]["warnings"]), 3)
+            self.assertEqual((repository / "tracked.txt").read_text(encoding="utf-8"), "a\nB\nc\nd\nE\nf\n")
+            self.assertEqual(git(repository, "status", "--porcelain=v1", "--untracked-files=no"), "M tracked.txt")
+            self.assertEqual(git(repository, "diff", "--cached", "--quiet"), "")
+            self.assertEqual(
+                git(repository, "rev-parse", "HEAD^{tree}"),
+                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+            )
+
+    def test_land_conflicting_unstaged_hunks_preserves_all_snapshots(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / "tracked.txt").write_text("a\nb\nc\nd\ne\nf\n", encoding="utf-8")
+            (repository / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
+            git(repository, "add", "tracked.txt", ".gitignore")
+            git(repository, "commit", "-m", "multiline base")
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            integration = Path(expected["integration"])
+            (integration / "tracked.txt").write_text("a\nB\nc\nd\ne\nf\n", encoding="utf-8")
+            git(integration, "add", "tracked.txt")
+            git(integration, "commit", "-m", "integration hunk")
+            expected["integration_head"] = git(integration, "rev-parse", "HEAD")
+            (repository / "tracked.txt").write_text("a\nX\nc\nd\ne\nf\n", encoding="utf-8")
+            before_refs = managed_ref_snapshot(repository)
+            before_head = git(repository, "rev-parse", "HEAD")
+            before_landed = git(repository, "rev-parse", "refs/orchestrate/demo/landed")
+            before_status = git(repository, "status", "--porcelain=v1", "--ignored=matching")
+            before_file = (repository / "tracked.txt").read_text(encoding="utf-8")
+
+            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+
+            self.assertTrue(observed["is_error"])
+            self.assertEqual(observed["error"]["error"]["code"], "path_collision")
+            self.assertEqual(managed_ref_snapshot(repository), before_refs)
+            self.assertEqual(git(repository, "rev-parse", "HEAD"), before_head)
+            self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), before_landed)
+            self.assertEqual(git(repository, "status", "--porcelain=v1", "--ignored=matching"), before_status)
+            self.assertEqual((repository / "tracked.txt").read_text(encoding="utf-8"), before_file)
+
+    def test_land_untracked_only_state_survives_with_bounded_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore managed state")
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            (repository / "local.txt").write_text("operator\n", encoding="utf-8")
+
+            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+
+            self.assertFalse(observed["is_error"])
+            self.assertIn("preserved untracked files", observed["result"]["warnings"])
+            self.assertLessEqual(len(observed["result"]["warnings"]), 3)
+            self.assertEqual((repository / "local.txt").read_text(encoding="utf-8"), "operator\n")
+            self.assertEqual(
+                git(repository, "rev-parse", "HEAD^{tree}"),
+                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+            )
+
+    def test_land_ignored_only_state_survives_with_bounded_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text(".agent_state/\nignored.tmp\n", encoding="utf-8")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore managed state and runtime")
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            (repository / "ignored.tmp").write_text("operator\n", encoding="utf-8")
+
+            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+
+            self.assertFalse(observed["is_error"])
+            self.assertIn("preserved ignored files", observed["result"]["warnings"])
+            self.assertLessEqual(len(observed["result"]["warnings"]), 3)
+            self.assertEqual((repository / "ignored.tmp").read_text(encoding="utf-8"), "operator\n")
+            self.assertEqual(
+                git(repository, "rev-parse", "HEAD^{tree}"),
+                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+            )
 
     def test_land_refuses_collisions_staged_changes_and_stale_persistence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -2794,6 +2908,32 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), expected["integration_head"])
             self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected_base)
 
+    def test_land_refuses_intent_to_add_entry_and_preserves_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            (repository / "valuable.txt").write_text("operator\n", encoding="utf-8")
+            git(repository, "add", "--intent-to-add", "valuable.txt")
+            before_refs = managed_ref_snapshot(repository)
+            before_head = git(repository, "rev-parse", "HEAD")
+            before_status = git(repository, "status", "--porcelain=v1", "--ignored=matching")
+
+            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+
+            self.assertTrue(observed["is_error"])
+            self.assertEqual(observed["error"]["error"]["code"], "dirty_index")
+            self.assertEqual(managed_ref_snapshot(repository), before_refs)
+            self.assertEqual(git(repository, "rev-parse", "HEAD"), before_head)
+            self.assertEqual(git(repository, "status", "--porcelain=v1", "--ignored=matching"), before_status)
+            self.assertEqual((repository / "valuable.txt").read_text(encoding="utf-8"), "operator\n")
+            self.assertIn(
+                # The intent-to-add entry keeps the empty blob and must survive.
+                "100644 e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 0\tvaluable.txt",
+                git(repository, "ls-files", "--stage"),
+            )
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), expected["integration_head"])
+
     def test_land_refuses_ordinary_untracked_collision(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
@@ -2811,15 +2951,227 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             self.assertEqual((repository / "new.txt").read_text(encoding="utf-8"), "operator\n")
             self.assertEqual(git(repository, "rev-parse", "main"), expected["base"])
 
+    def test_land_preserves_directory_replacement_of_unchanged_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / "shape.txt").write_text("base\n", encoding="utf-8")
+            (repository / "stable.txt").write_text("stable\n", encoding="utf-8")
+            (repository / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
+            git(repository, "add", "shape.txt", "stable.txt", ".gitignore")
+            git(repository, "commit", "-m", "shape base")
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            # Replace the integration-unchanged tracked file with a local
+            # directory, then land the unrelated accepted tracked.txt edit.
+            repository.joinpath("shape.txt").unlink()
+            (repository / "shape.txt").mkdir()
+            (repository / "shape.txt/local.txt").write_text("operator\n", encoding="utf-8")
+            (repository / "stable.txt").write_text("stable local\n", encoding="utf-8")
+            before_integration = git(repository, "rev-parse", "wave/demo/integration")
+            before_base_ref = git(repository, "rev-parse", "refs/orchestrate/demo/integration/base")
+
+            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+
+            self.assertFalse(observed["is_error"])
+            self.assertIn("preserved unstaged tracked changes", observed["result"]["warnings"])
+            self.assertIn("preserved untracked files", observed["result"]["warnings"])
+            self.assertTrue((repository / "shape.txt").is_dir())
+            self.assertEqual(
+                (repository / "shape.txt/local.txt").read_text(encoding="utf-8"),
+                "operator\n",
+            )
+            self.assertEqual((repository / "stable.txt").read_text(encoding="utf-8"), "stable local\n")
+            self.assertEqual(
+                git(repository, "status", "--porcelain=v1", "--untracked-files=all"),
+                # The helper strips the leading status column of the first line.
+                "D shape.txt\n M stable.txt\n?? shape.txt/local.txt",
+            )
+            self.assertEqual(git(repository, "diff", "--cached", "--quiet"), "")
+            self.assertEqual(
+                git(repository, "rev-parse", "HEAD^{tree}"),
+                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+            )
+            self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected["integration_head"])
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), before_integration)
+            self.assertEqual(
+                git(repository, "rev-parse", "refs/orchestrate/demo/integration/base"),
+                before_base_ref,
+            )
+            # The index holds exactly the accepted integration tree while the
+            # local directory replacement and stable.txt edit stay unstaged.
+            self.assertEqual(git(repository, "write-tree"), git(repository, "rev-parse", "HEAD^{tree}"))
+
+    def test_land_accepted_rename_leaves_only_destination_and_clean_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / "old.txt").write_text("base\n", encoding="utf-8")
+            (repository / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
+            git(repository, "add", "old.txt", ".gitignore")
+            git(repository, "commit", "-m", "rename base")
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            integration = Path(expected["integration"])
+            git(integration, "mv", "old.txt", "new.txt")
+            git(integration, "commit", "-m", "accepted rename")
+            expected["integration_head"] = git(integration, "rev-parse", "HEAD")
+            before_integration = git(repository, "rev-parse", "wave/demo/integration")
+
+            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+
+            self.assertFalse(observed["is_error"])
+            # The rename source must leave the worktree with the accepted
+            # transition; a destination-only transition path list would
+            # strand it as untracked residue behind a success report.
+            self.assertEqual(git(repository, "status", "--porcelain=v1", "--untracked-files=all"), "")
+            self.assertFalse((repository / "old.txt").exists())
+            self.assertEqual((repository / "new.txt").read_text(encoding="utf-8"), "base\n")
+            self.assertEqual(
+                git(repository, "write-tree"),
+                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+            )
+            self.assertEqual(
+                git(repository, "rev-parse", "HEAD^{tree}"),
+                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+            )
+            self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected["integration_head"])
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), before_integration)
+
+    def test_land_refuses_directory_to_file_transition_over_untracked_dirt(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / "pair").mkdir()
+            (repository / "pair/gen.txt").write_text("gen\n", encoding="utf-8")
+            (repository / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
+            git(repository, "add", "pair/gen.txt", ".gitignore")
+            git(repository, "commit", "-m", "pair base")
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            integration = Path(expected["integration"])
+            git(integration, "rm", "pair/gen.txt")
+            (integration / "pair").write_text("collapsed\n", encoding="utf-8")
+            git(integration, "add", "pair")
+            git(integration, "commit", "-m", "collapse pair")
+            expected["integration_head"] = git(integration, "rev-parse", "HEAD")
+            (repository / "pair/local.txt").write_text("operator\n", encoding="utf-8")
+            before_refs = managed_ref_snapshot(repository)
+            before_head = git(repository, "rev-parse", "HEAD")
+            before_status = git(repository, "status", "--porcelain=v1", "--ignored=matching")
+            before_files = {
+                name: path.read_text(encoding="utf-8")
+                for name, path in {
+                    "gen": repository / "pair/gen.txt",
+                    "local": repository / "pair/local.txt",
+                }.items()
+            }
+
+            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+
+            self.assertTrue(observed["is_error"])
+            self.assertEqual(observed["error"]["error"]["code"], "path_collision")
+            self.assertEqual(observed["error"]["error"]["details"]["paths"], ["pair/local.txt"])
+            self.assertEqual(managed_ref_snapshot(repository), before_refs)
+            self.assertEqual(git(repository, "rev-parse", "HEAD"), before_head)
+            self.assertEqual(
+                git(repository, "status", "--porcelain=v1", "--ignored=matching"),
+                before_status,
+            )
+            self.assertEqual((repository / "pair/gen.txt").read_text(encoding="utf-8"), before_files["gen"])
+            self.assertEqual((repository / "pair/local.txt").read_text(encoding="utf-8"), before_files["local"])
+            self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected["base"])
+
+    def test_land_clean_directory_to_file_transition_lands(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / "pair").mkdir()
+            (repository / "pair/gen.txt").write_text("gen\n", encoding="utf-8")
+            (repository / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
+            git(repository, "add", "pair/gen.txt", ".gitignore")
+            git(repository, "commit", "-m", "pair base")
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            integration = Path(expected["integration"])
+            git(integration, "rm", "pair/gen.txt")
+            (integration / "pair").write_text("collapsed\n", encoding="utf-8")
+            git(integration, "add", "pair")
+            git(integration, "commit", "-m", "collapse pair")
+            expected["integration_head"] = git(integration, "rev-parse", "HEAD")
+            before_integration = git(repository, "rev-parse", "wave/demo/integration")
+
+            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+
+            self.assertFalse(observed["is_error"])
+            # The clean D/F transition must land: ordinary Git merge accepts
+            # it, so the restore set may not ask Git to match a path under a
+            # source entry the transition collapsed.
+            self.assertFalse((repository / "pair/gen.txt").exists())
+            self.assertTrue((repository / "pair").is_file())
+            self.assertEqual((repository / "pair").read_text(encoding="utf-8"), "collapsed\n")
+            self.assertEqual(git(repository, "status", "--porcelain=v1", "--untracked-files=all"), "")
+            self.assertEqual(
+                git(repository, "write-tree"),
+                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+            )
+            self.assertEqual(
+                git(repository, "rev-parse", "HEAD^{tree}"),
+                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+            )
+            self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected["integration_head"])
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), before_integration)
+
+    def test_land_clean_file_to_directory_transition_lands(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / "pair").write_text("expanded\n", encoding="utf-8")
+            (repository / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
+            git(repository, "add", "pair", ".gitignore")
+            git(repository, "commit", "-m", "pair file base")
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            integration = Path(expected["integration"])
+            git(integration, "rm", "pair")
+            (integration / "pair").mkdir()
+            (integration / "pair/gen.txt").write_text("generated\n", encoding="utf-8")
+            git(integration, "add", "pair/gen.txt")
+            git(integration, "commit", "-m", "expand pair")
+            expected["integration_head"] = git(integration, "rev-parse", "HEAD")
+            before_integration = git(repository, "rev-parse", "wave/demo/integration")
+
+            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+
+            self.assertFalse(observed["is_error"])
+            # The reverse flip is the same seam sibling: the collapsed file
+            # must leave room for the accepted directory in one landing.
+            self.assertFalse((repository / "pair").is_file())
+            self.assertTrue((repository / "pair/gen.txt").is_file())
+            self.assertEqual(
+                (repository / "pair/gen.txt").read_text(encoding="utf-8"),
+                "generated\n",
+            )
+            self.assertEqual(git(repository, "status", "--porcelain=v1", "--untracked-files=all"), "")
+            self.assertEqual(
+                git(repository, "write-tree"),
+                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+            )
+            self.assertEqual(
+                git(repository, "rev-parse", "HEAD^{tree}"),
+                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+            )
+            self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected["integration_head"])
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), before_integration)
+
     def test_land_commit_failure_restores_persistence_and_authority(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
             expected = seed_managed_task(repository)
+            seed_task_container(repository)
             before = git(repository, "rev-parse", "main")
             (repository / "operator.txt").write_text("keep\n", encoding="utf-8")
-            hook = repository / ".git/hooks/pre-commit"
-            hook.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
-            hook.chmod(0o755)
+            # A signing key with no secret key makes the publication commit
+            # itself fail deterministically without involving hooks.
+            git(repository, "config", "commit.gpgsign", "true")
+            git(repository, "config", "user.signingkey", "collab-absent-signing-key")
+            before_refs = managed_ref_snapshot(repository)
+            before_status = git(repository, "status", "--porcelain=v1", "--ignored=matching")
 
             observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
 
@@ -2827,30 +3179,43 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             self.assertEqual(observed["error"]["error"]["code"], "git_error")
             self.assertTrue(observed["error"]["error"]["details"]["rollback"]["restored"])
             self.assertEqual(git(repository, "rev-parse", "main"), before)
+            self.assertEqual(managed_ref_snapshot(repository), before_refs)
+            self.assertEqual(
+                git(repository, "status", "--porcelain=v1", "--ignored=matching"),
+                before_status,
+            )
             self.assertEqual((repository / "operator.txt").read_text(encoding="utf-8"), "keep\n")
             self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected["base"])
             self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), expected["integration_head"])
 
-    def test_land_refuses_unexpected_tree_change_and_rolls_back(self) -> None:
+    def test_land_success_does_not_invoke_mutating_hooks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore managed state")
             expected = seed_managed_task(repository)
-            before = git(repository, "rev-parse", "main")
+            seed_task_container(repository)
+            (repository / "untracked.txt").write_text("preserve\n", encoding="utf-8")
             hook = repository / ".git/hooks/pre-commit"
             hook.write_text(
-                "#!/bin/sh\necho 'hook change' >> tracked.txt\ngit add tracked.txt\n",
+                "#!/bin/sh\necho 'hook ran' > hook-output.txt\necho 'hook change' >> tracked.txt\nexit 1\n",
                 encoding="utf-8",
             )
             hook.chmod(0o755)
 
             observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
 
-            self.assertTrue(observed["is_error"])
-            self.assertEqual(observed["error"]["error"]["code"], "git_error")
-            self.assertTrue(observed["error"]["error"]["details"]["rollback"]["restored"])
-            self.assertEqual(git(repository, "rev-parse", "main"), before)
-            self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected["base"])
-            self.assertEqual((repository / "tracked.txt").read_text(encoding="utf-8"), "base\n")
+            self.assertFalse(observed["is_error"])
+            self.assertFalse((repository / "hook-output.txt").exists())
+            self.assertEqual((repository / "tracked.txt").read_text(encoding="utf-8"), "base\nintegration\n")
+            self.assertEqual((repository / "untracked.txt").read_text(encoding="utf-8"), "preserve\n")
+            self.assertEqual(git(repository, "status", "--porcelain=v1"), "?? untracked.txt")
+            self.assertEqual(
+                git(repository, "rev-parse", "HEAD^{tree}"),
+                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+            )
+            self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected["integration_head"])
 
     def test_land_optional_message_and_duplicate_are_actionable(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -45,12 +45,20 @@ description: Capture evidence-backed discoveries that are valuable but outside t
 <repo-python> <skill-dir>/scripts/backlog.py add --kind <kind> --area <area> --source-task <task-id> --title <title> --observation <text> --evidence <text> --impact <text> --desired-outcome <text>
 <repo-python> <skill-dir>/scripts/backlog.py list [--status inbox|planned|resolved|closed] [--kind <kind>] [--area <area>] [--full]
 <repo-python> <skill-dir>/scripts/backlog.py bind <id> --task-id <task-id>
+<repo-python> <skill-dir>/scripts/backlog.py append-evidence <id> --evidence <text>
 <repo-python> <skill-dir>/scripts/backlog.py close <id> --resolution implemented --task-id <task-id> --commit <sha> --validation <text>
 <repo-python> <skill-dir>/scripts/backlog.py close <id> --resolution duplicate --duplicate-of <canonical-id>
 ```
 
 CLI 使用 UTC timestamp、UTF-8 與 atomic replace；輸出恆為單行 JSON envelope（成功與錯誤皆印到
 stdout，`ok`/`operation`/`backlog_version` 固定欄位）。不要繞過 transition 或直接覆寫 metadata。
+
+`append-evidence` 只接受 `inbox` 或 `planned` 的項目（resolved/closed 拒絕且不變更任何狀態）。
+它把一段 UTC 標時的證據段落**附加**到既有 evidence 尾端，不改寫、不刪減原有文字；`source_task`、
+status、kind、binding（`planned_task`）、observation、impact、desired outcome 皆維持不變。證據文字
+僅去除頭尾空白後儲存，大小寫、Unicode 與內部空白原樣保留。若新證據去頭尾空白後與最後一個附加
+段落的文字完全相同（不做大小寫或 Unicode 正規化），CLI 拒絕重複附加。此命令不是通用的 metadata
+編輯介面；需要 provenance 就寫進證據文字本身。
 
 `list` 預設只回 `id`／`title`／`kind`／`area`／`status`／`priority_hint`，並標記 `detail: summary`。
 四個散文欄位（`observation`／`evidence`／`impact`／`desired_outcome`）才是一筆 item 的全部重量，

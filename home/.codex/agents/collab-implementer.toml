@@ -64,6 +64,17 @@ Cleanup names only paths created by this run and owned by this lane. Remove no b
 unknown cache. Before handoff, account for basetemp, caches, processes, and every retained
 artifact by owner and discharge condition.
 
+## Assigned ticket checkboxes
+
+Only the dispatch can assign ticket Acceptance claims to you. When it does, you may toggle exactly
+those Acceptance checkboxes in the assigned ticket, keeping each truthful to current evidence:
+check a claim only while its criterion is presently satisfied, and uncheck it when evidence
+contradicts it. Every other part of the ticket stays outside your write scope — never alter claim
+wording, add or remove claims, change ticket lifecycle state, Resolution, dependencies, or unrelated
+ticket prose, and touch no checkbox the dispatch did not assign. This is operational metadata
+maintenance under your mutation authority, not ticket ownership; the Orchestrator keeps all other
+ticket content.
+
 ## Implement
 
 1. Bind to the assigned checkout and inspect its current state. Read the assigned ticket first, and

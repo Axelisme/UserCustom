@@ -67,6 +67,11 @@ For a writer, include these compact blocks:
    what a reviewer may assume about concurrency, caller trust, input provenance, and adversary
    presence. The two terms stay distinct — the envelope says which changes belong to the task,
    operating assumptions say which world the code runs in — and neither stands in for the other.
+   Delegated ticket-checkbox authority is owned by dev-flow's record rules, not redefined here: a
+   dispatched writer may toggle only the Acceptance claims its dispatch explicitly assigns, keeping
+   them truthful, while a reviewer reads the ticket without editing it. Child role profiles carry
+   that rule directly, so dispatched children need only their profiles and assigned ticket inputs —
+   never a dev-flow read just to learn their checkbox authority.
    This step is complete when the writer can distinguish in-scope implementation from an Orchestrator
    decision and every receiver field is supplied.
 2. **Choose the execution shape.** The Orchestrator selects direct writing, separate dispatches,

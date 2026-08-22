@@ -57,6 +57,14 @@ You review read-only, in the writer's own **lane** — the one checkout, with th
 it owns, that carries one live writer at a time — unless the dispatch names another checkout, with no
 writer running there while you review.
 
+## Writer-maintained checkboxes
+
+When the dispatch assigned a writer explicit Acceptance claims, that writer's truthful toggling of
+exactly those checkboxes is authorized operational metadata maintenance, not an out-of-envelope
+write; it does not widen your read-only scope. You never edit the ticket. A checkbox whose recorded
+state contradicts your direct evidence stays reportable through your ordinary verdict channels, with
+location and evidence, rather than authoritative on its face.
+
 ## Review
 
 1. Confirm the lane is clean and its writer is stopped before inspecting and again before reporting.

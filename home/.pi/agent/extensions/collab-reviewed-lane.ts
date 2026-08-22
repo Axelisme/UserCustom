@@ -33,7 +33,6 @@ const reviewedLaneId = {
 
 export const registeredReviewedLaneParameters = {
   type: "object",
-  description: "Launch one implement-and-review workflow with bounded fresh correction rounds in an existing managed lane.",
   additionalProperties: false,
   properties: {
     task_id: reviewedLaneTaskId,
@@ -248,12 +247,16 @@ export function reviewedLaneWorkflowScript(input: {
   workerBrief: string;
   reviewBrief: string;
   correctionBudget: number;
+  /** Runtime-owned immutable comparison baseline for every reviewer round. */
+  integrationTip: string;
 }): string {
   const workerSchema = JSON.stringify(reviewedLaneWorkerSchema);
   const reviewerSchema = JSON.stringify(reviewedLaneReviewerSchema);
   return `
 const budget = ${input.correctionBudget};
 const lane = ${JSON.stringify(input.lane)};
+const integrationTip = ${JSON.stringify(input.integrationTip)};
+const reviewerBaseline = "Immutable comparison baseline — runtime-owned integration tip " + integrationTip + ". Review the complete candidate lane diff with this read-only canonical command: git diff --find-renames " + integrationTip + "...HEAD --";
 const workerSchema = ${workerSchema};
 const reviewerSchema = ${reviewerSchema};
 const runChild = (key, agent, task, outputSchema) => runs.run(key, {
@@ -286,7 +289,7 @@ const projectWorkerStop = (child) => child.structuredOutput.outcome === "BLOCKED
 let writer = await runChild("impl-0", "collab-implementer", ${JSON.stringify(input.workerBrief)}, workerSchema);
 if (writer.structuredOutput.outcome !== "COMPLETED") return projectWorkerStop(writer);
 requireCompletedWriterMutation(writer);
-let reviewer = await runChild("review-0", "collab-acceptor", ${JSON.stringify(input.reviewBrief)}, reviewerSchema);
+let reviewer = await runChild("review-0", "collab-acceptor", ${JSON.stringify(input.reviewBrief)} + "\\n\\n" + reviewerBaseline, reviewerSchema);
 if (reviewer.structuredOutput.verdict === "NEEDS_DECISION") return projectNeedsDecision(reviewer);
 let round = 1;
 while (reviewer.structuredOutput.verdict === "BLOCKED" && round <= budget) {
@@ -301,7 +304,7 @@ while (reviewer.structuredOutput.verdict === "BLOCKED" && round <= budget) {
   reviewer = await runChild(
     "review-" + round,
     "collab-acceptor",
-    ${JSON.stringify(input.reviewBrief)} + " — rereview the changed protected current lane",
+    ${JSON.stringify(input.reviewBrief)} + " — rereview the complete current lane diff against the same immutable baseline.\\n\\n" + reviewerBaseline,
     reviewerSchema
   );
   if (reviewer.structuredOutput.verdict === "NEEDS_DECISION") return projectNeedsDecision(reviewer);
@@ -451,6 +454,7 @@ export async function runReviewedLane(
       workerBrief: workerTask,
       reviewBrief: reviewerTask,
       correctionBudget,
+      integrationTip: integration.tip,
     }),
     async: true,
   }, dependencies.error, signal);

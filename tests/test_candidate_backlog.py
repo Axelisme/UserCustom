@@ -430,5 +430,500 @@ class CandidateBacklogTests(unittest.TestCase):
             )
 
 
+    # --- append-evidence ------------------------------------------------
+
+    def add_item(self, root: Path, title: str) -> str:
+        added = self.assert_ok(run_backlog(root, *add_args(root, title)), "add")
+        return str(added["id"])
+
+    def read_meta(self, path: Path) -> dict[str, object]:
+        match = re.match(
+            r"\A<!-- backlog-metadata\n(.+?)\n-->\n",
+            path.read_text(encoding="utf-8"),
+            re.DOTALL,
+        )
+        assert match is not None
+        return json.loads(match.group(1))
+
+    def item_path(self, root: Path, item_id: str, status: str) -> Path:
+        return root / ".agent_state" / "backlog" / status / f"{item_id}.md"
+
+    def test_appends_utc_dated_paragraph_to_inbox_and_planned(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            item_id = self.add_item(root, "Append inbox item")
+            body = self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "newer observation",
+                ),
+                "append-evidence",
+            )
+            self.assertEqual(body["status"], "inbox")
+            meta = self.read_meta(self.item_path(root, item_id, "inbox"))
+            evidence = str(meta["evidence"])
+            self.assertRegex(
+                evidence,
+                r"\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z\] newer observation$",
+            )
+            self.assert_ok(
+                run_backlog(root, "--root", str(root), "bind", item_id,
+                            "--task-id", "T001"),
+                "bind",
+            )
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "planned stage note",
+                ),
+                "append-evidence",
+            )
+            meta = self.read_meta(self.item_path(root, item_id, "planned"))
+            self.assertTrue(str(meta["evidence"]).endswith("planned stage note"))
+
+    def test_append_preserves_original_evidence_and_task_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            item_id = self.add_item(root, "Preserve fields on append")
+            path = self.item_path(root, item_id, "inbox")
+            before = dict(self.read_meta(path))
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "append-only note with	interior spacing",
+                ),
+                "append-evidence",
+            )
+            after = dict(self.read_meta(path))
+            self.assertNotEqual(before["updated_at"], after["updated_at"])
+            for key in (
+                "id",
+                "source_task",
+                "status",
+                "kind",
+                "observation",
+                "impact",
+                "desired_outcome",
+            ):
+                self.assertEqual(before[key], after[key], key)
+            evidence = str(after["evidence"])
+            separator = evidence.index("\n\n[")
+            self.assertEqual(evidence[:separator], before["evidence"])
+
+    def test_append_trims_only_leading_trailing_whitespace(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            item_id = self.add_item(root, "Trim rule on append")
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "  MiXeD case Ｕｎｉｃｏｄｅ and   inner  gaps  ",
+                ),
+                "append-evidence",
+            )
+            meta = self.read_meta(self.item_path(root, item_id, "inbox"))
+            self.assertTrue(
+                str(meta["evidence"]).endswith("MiXeD case Ｕｎｉｃｏｄｅ and   inner  gaps")
+            )
+
+    def test_append_requires_existing_item_and_non_empty_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            self.assert_refusal(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    "BL-20260101T000000000000Z-ghost",
+                    "--evidence",
+                    "x",
+                ),
+                "append-evidence",
+                "item_missing",
+            )
+            item_id = self.add_item(root, "Empty evidence refusal")
+            path = self.item_path(root, item_id, "inbox")
+            before = path.read_text(encoding="utf-8")
+            for bad in ("", "   \n\t "):
+                self.assert_refusal(
+                    run_backlog(
+                        root,
+                        "--root",
+                        str(root),
+                        "append-evidence",
+                        item_id,
+                        "--evidence",
+                        bad,
+                    ),
+                    "append-evidence",
+                    "invalid_argument",
+                )
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+
+    def test_append_refuses_resolved_and_closed_without_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            resolved_id = self.add_item(root, "Resolved append target")
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "close",
+                    resolved_id,
+                    "--resolution",
+                    "implemented",
+                    "--task-id",
+                    "T001",
+                    "--commit",
+                    "deadbeef",
+                    "--validation",
+                    "ran tests",
+                ),
+                "close",
+            )
+            closed_id = self.add_item(root, "Closed append target")
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "close",
+                    closed_id,
+                    "--resolution",
+                    "declined",
+                ),
+                "close",
+            )
+            frozen: dict[Path, str] = {}
+            for item_id in (resolved_id, closed_id):
+                done = run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "late note",
+                )
+                self.assert_refusal(done, "append-evidence", "invalid_transition")
+                for status in ("resolved", "closed"):
+                    path = self.item_path(root, item_id, status)
+                    if path.exists():
+                        frozen[path] = path.read_text(encoding="utf-8")
+            self.assertEqual(len(frozen), 2)
+            for path, text in frozen.items():
+                self.assertEqual(path.read_text(encoding="utf-8"), text)
+
+    def test_append_retry_refused_only_on_exact_trimmed_latest_match(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            item_id = self.add_item(root, "Retry refusal target")
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "same text",
+                ),
+                "append-evidence",
+            )
+            self.assert_refusal(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "  same text  ",
+                ),
+                "append-evidence",
+                "duplicate_evidence",
+            )
+            # Different interior whitespace, case, or Unicode is not a retry.
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "same  text",
+                ),
+                "append-evidence",
+            )
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "Same Text",
+                ),
+                "append-evidence",
+            )
+            # Only the latest appended paragraph participates in the comparison.
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "latest note",
+                ),
+                "append-evidence",
+            )
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "same text",
+                ),
+                "append-evidence",
+            )
+
+    def test_append_retry_refuses_identical_multiline_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            item_id = self.add_item(root, "Multiline retry refusal target")
+            evidence = "first line\nsecond line"
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    evidence,
+                ),
+                "append-evidence",
+            )
+            path = self.item_path(root, item_id, "inbox")
+            before_retry = path.read_text(encoding="utf-8")
+            self.assert_refusal(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    evidence,
+                ),
+                "append-evidence",
+                "duplicate_evidence",
+            )
+            self.assertEqual(path.read_text(encoding="utf-8"), before_retry)
+
+    def test_append_retry_refused_when_repeated_text_embeds_marker_shaped_line(
+        self,
+    ) -> None:
+        # A repeated text carrying an embedded timestamp-shaped line must be
+        # compared as one whole suffix against the generated paragraph, not
+        # split at the interior marker into a non-matching tail.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            item_id = self.add_item(root, "Embedded marker retry target")
+            evidence = "first line\n\n[2026-01-02T03:04:05Z] embedded line"
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    evidence,
+                ),
+                "append-evidence",
+            )
+            path = self.item_path(root, item_id, "inbox")
+            before_retry = path.read_text(encoding="utf-8")
+            self.assert_refusal(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    evidence,
+                ),
+                "append-evidence",
+                "duplicate_evidence",
+            )
+            self.assertEqual(path.read_text(encoding="utf-8"), before_retry)
+
+    def test_append_ignores_timestamp_shaped_lines_in_original_evidence(self) -> None:
+        # Original (non-appended) evidence may legitimately contain
+        # timestamp-shaped lines; they are not append boundaries, so a first
+        # append whose text coincides with one of them is not a retry.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            added = self.assert_ok(
+                run_backlog(
+                    root,
+                    *add_args(root, "Coincidental stamp evidence item"),
+                    "--evidence",
+                    "[2026-01-02T03:04:05Z] coincidental\n\n"
+                    "[2026-01-02T03:04:06Z] second stamped line",
+                ),
+                "add",
+            )
+            item_id = str(added["id"])
+            path = self.item_path(root, item_id, "inbox")
+            original = dict(self.read_meta(path))["evidence"]
+            for text in ("coincidental", "second stamped line"):
+                self.assert_ok(
+                    run_backlog(
+                        root,
+                        "--root",
+                        str(root),
+                        "append-evidence",
+                        item_id,
+                        "--evidence",
+                        text,
+                    ),
+                    "append-evidence",
+                )
+            meta = self.read_meta(path)
+            self.assertTrue(str(meta["evidence"]).startswith(str(original)))
+
+    def test_append_after_paragraph_with_interior_marker_line_compares_whole_suffix(
+        self,
+    ) -> None:
+        # An interior timestamp-shaped line inside the latest appended paragraph
+        # does not shorten it: only the full suffix participates in the exact
+        # comparison, so a text equal to just that interior line appends.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            item_id = self.add_item(root, "Interior marker boundary target")
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "outer note\n\n[2026-01-02T03:04:05Z] inner stamped line",
+                ),
+                "append-evidence",
+            )
+            path = self.item_path(root, item_id, "inbox")
+            earlier = dict(self.read_meta(path))["evidence"]
+            # The bare interior line alone differs from the whole latest suffix.
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "[2026-01-02T03:04:05Z] inner stamped line",
+                ),
+                "append-evidence",
+            )
+            meta = self.read_meta(path)
+            evidence = str(meta["evidence"])
+            self.assertTrue(evidence.startswith(f"{earlier}\n\n"))
+            self.assertTrue(evidence.endswith("[2026-01-02T03:04:05Z] inner stamped line"))
+            self.assertIn(
+                "\n\n[2026-01-02T03:04:05Z] inner stamped line\n\n", evidence
+            )
+            # And repeating the now-latest full suffix is still refused.
+            self.assert_refusal(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "[2026-01-02T03:04:05Z] inner stamped line",
+                ),
+                "append-evidence",
+                "duplicate_evidence",
+            )
+
+    def test_append_keeps_summary_listing_unchanged_and_full_readable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            item_id = self.add_item(root, "List shape after append")
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "append-evidence",
+                    item_id,
+                    "--evidence",
+                    "listed evidence",
+                ),
+                "append-evidence",
+            )
+            summary = self.assert_ok(run_backlog(root, "--root", str(root), "list"), "list")
+            [item] = items_of(summary)
+            self.assertEqual(
+                set(item), {"id", "title", "kind", "area", "status", "priority_hint"}
+            )
+            full = self.assert_ok(
+                run_backlog(root, "--root", str(root), "list", "--full"), "list"
+            )
+            [detailed] = items_of(full)
+            evidence = detailed["evidence"]
+            assert isinstance(evidence, str)
+            self.assertIn("listed evidence", evidence)
+            rendered = self.item_path(root, item_id, "inbox").read_text(encoding="utf-8")
+            self.assertIn("listed evidence", rendered)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { lstat, mkdir, open, readdir, readFile, rename, rm, rmdir, unlink } from "node:fs/promises";
+import { cp, lstat, mkdir, open, readdir, readFile, readlink, rename, rm, rmdir, symlink, unlink } from "node:fs/promises";
 import path from "node:path";
 import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
@@ -3018,18 +3018,67 @@ function pathOverlaps(left: string, right: string): boolean {
   );
 }
 
+// Refuse untracked or ignored dirt only when the accepted transition itself
+// would overwrite it, matching how ordinary Git merge treats D/F overlaps.
+// Writing a file at a changed path clobbers dirt at that path and any
+// directory standing where the file must land; deleting a changed path
+// leaves directories holding untracked content in place, so a deletion
+// collides only on the exact path.
+function transitionOverwrites(
+  dirty: string,
+  changed: string,
+  writtenPaths: ReadonlySet<string>,
+): boolean {
+  if (!pathOverlaps(dirty, changed)) return false;
+  if (dirty === changed) return true;
+  return writtenPaths.has(changed);
+}
+
+// The index is clean only when every cached entry matches HEAD exactly.
+// `git diff --cached --quiet` misses intent-to-add entries — their cached
+// blob is the empty blob for paths HEAD does not have — so compare the full
+// cached index, including unmerged stages, against the HEAD tree instead.
 async function persistenceIndexClean(
   repo: Repository,
   worktree: string,
   signal?: AbortSignal,
 ): Promise<boolean> {
-  const result = await repo.git(worktree, ["diff", "--cached", "--quiet"], signal);
-  if (result.code === 0) return true;
-  if (result.code === 1) return false;
-  throw new CollabOpError(
-    "git_error",
-    `could not inspect persistence index: ${result.stderr.trim() || result.stdout.trim()}`,
+  const head = await repo.git(worktree, ["ls-tree", "-r", "-z", "HEAD"], signal);
+  if (head.code !== 0) {
+    throw new CollabOpError(
+      "git_error",
+      `could not inspect persistence index: ${head.stderr.trim() || head.stdout.trim()}`,
+    );
+  }
+  const index = await repo.git(
+    worktree,
+    ["ls-files", "--cached", "--stage", "-z"],
+    signal,
   );
+  if (index.code !== 0) {
+    throw new CollabOpError(
+      "git_error",
+      `could not inspect persistence index: ${index.stderr.trim() || index.stdout.trim()}`,
+    );
+  }
+  const headEntries = new Set<string>();
+  for (const entry of head.stdout.split("\0").filter(Boolean)) {
+    const tab = entry.indexOf("\t");
+    const [mode, , object] = entry.slice(0, tab).split(" ");
+    headEntries.add(`${mode} ${object} ${entry.slice(tab + 1)}`);
+  }
+  let cachedEntries = 0;
+  for (const entry of index.stdout.split("\0").filter(Boolean)) {
+    const tab = entry.indexOf("\t");
+    const [mode, object, stage] = entry.slice(0, tab).split(" ");
+    // Unmerged stages are a non-HEAD index state.
+    if (stage !== "0") return false;
+    cachedEntries += 1;
+    // Staged additions, modifications, mode changes, and intent-to-add
+    // entries all diverge from HEAD here; staged deletions shrink the set.
+    if (!headEntries.has(`${mode} ${object} ${entry.slice(tab + 1)}`)) return false;
+  }
+  return cachedEntries === headEntries.size;
 }
 
 function requireLandingMessage(value: unknown, taskId: string): string {
@@ -3070,61 +3119,326 @@ async function landingMessageMatches(
   return actual === expected;
 }
 
+type LandingPreflight = {
+  oursTree: string;
+  mergedTree: string;
+};
+
+async function copyTrackedPath(
+  sourceRoot: string,
+  destinationRoot: string,
+  pathname: string,
+): Promise<void> {
+  const source = path.join(sourceRoot, ...pathname.split("/"));
+  const destination = path.join(destinationRoot, ...pathname.split("/"));
+  const metadata = await pathMetadata(source);
+  await rm(destination, { recursive: true, force: true });
+  if (metadata === null) return;
+  await mkdir(path.dirname(destination), { recursive: true });
+  if (metadata.isSymbolicLink()) {
+    await symlink(await readlink(source), destination);
+  } else if (metadata.isDirectory()) {
+    await cp(source, destination, { recursive: true, force: true });
+  } else if (metadata.isFile()) {
+    await cp(source, destination, { force: true });
+  } else {
+    throw new CollabOpError(
+      "git_error",
+      `could not safely inspect tracked persistence path: ${pathname}`,
+    );
+  }
+}
+
+function landingConflictPaths(output: string): string[] {
+  const paths: string[] = [];
+  for (const line of output.split("\n")) {
+    const match = line.match(/\s[123](?:\s|\t)(.+)$/u);
+    if (match?.[1] && !paths.includes(match[1])) paths.push(match[1]);
+  }
+  return paths.slice(0, 32);
+}
+
+async function discardLandingWorktree(
+  repo: Repository,
+  temporary: string,
+): Promise<void> {
+  const temporaryPath = path.resolve(temporary);
+  await rm(temporaryPath, { recursive: true, force: true });
+  const administration = path.join(repo.gitDir, "worktrees");
+  let entries: string[];
+  try {
+    entries = await readdir(administration);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
+  }
+  for (const entry of entries) {
+    const record = path.join(administration, entry);
+    try {
+      const gitdir = (await readFile(path.join(record, "gitdir"), "utf8")).trim();
+      if (path.resolve(gitdir) === path.join(temporaryPath, ".git")) {
+        await rm(record, { recursive: true, force: true });
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+}
+
+// Build the local tracked tree in a disposable worktree, then let Git's
+// tree-level merge prove whether it can be combined with integration without
+// touching the persistence checkout.
+async function landingPreflight(
+  repo: Repository,
+  persistencePath: string,
+  beforeSha: string,
+  integrationSha: string,
+  signal?: AbortSignal,
+): Promise<LandingPreflight> {
+  const control = controlRepository(repo);
+  const trackedPaths = await nulPathList(
+    repo,
+    persistencePath,
+    ["ls-files", "--cached", "-z"],
+    signal,
+  );
+  const temporary = path.join(repo.controlRoot, `.collab-land-preflight-${randomUUID()}`);
+  let worktreeAdded = false;
+  try {
+    const addedWorktree = await repo.git(
+      control.worktreeRoot,
+      ["worktree", "add", "--detach", temporary, beforeSha],
+      signal,
+    );
+    if (addedWorktree.code !== 0) {
+      throw new CollabOpError(
+        "git_error",
+        `could not prepare landing preservation proof: ${boundedGitText(addedWorktree.stderr || addedWorktree.stdout)}`,
+      );
+    }
+    worktreeAdded = true;
+    for (const pathname of trackedPaths) {
+      await copyTrackedPath(persistencePath, temporary, pathname);
+    }
+    const added = await repo.git(temporary, ["add", "-u", "--"], signal);
+    if (added.code !== 0) {
+      throw new CollabOpError(
+        "git_error",
+        `could not capture unstaged persistence changes: ${boundedGitText(added.stderr || added.stdout)}`,
+      );
+    }
+    const oursTree = await requireGit(repo.git, temporary, ["write-tree"], signal);
+    const oursCommit = await requireGit(
+      repo.git,
+      temporary,
+      [
+        "-c",
+        "user.name=Collab landing preflight",
+        "-c",
+        "user.email=collab-landing-preflight@localhost",
+        "commit-tree",
+        oursTree,
+        "-p",
+        beforeSha,
+        "-m",
+        "Collab landing preservation preflight",
+      ],
+      signal,
+    );
+    const merged = await repo.git(
+      temporary,
+      ["merge-tree", "--write-tree", oursCommit, integrationSha],
+      signal,
+    );
+    if (merged.code === 1) {
+      const paths = landingConflictPaths(merged.stdout);
+      throw new CollabOpError(
+        "path_collision",
+        "unstaged persistence changes conflict with the integration tree",
+        "Resolve the conflicting unstaged persistence changes before landing.",
+        paths.length > 0 ? { paths } : undefined,
+      );
+    }
+    if (merged.code !== 0) {
+      throw new CollabOpError(
+        "git_error",
+        `could not prove safe landing preservation: ${boundedGitText(merged.stderr || merged.stdout)}`,
+      );
+    }
+    const mergedTree = merged.stdout.split("\n", 1)[0].trim();
+    if (!/^[0-9a-f]{40,64}$/u.test(mergedTree)) {
+      throw new CollabOpError(
+        "git_error",
+        "could not prove safe landing preservation: Git returned no merge tree",
+      );
+    }
+    return { oursTree, mergedTree };
+  } finally {
+    if (!worktreeAdded) {
+      await discardLandingWorktree(repo, temporary);
+    } else {
+      const removedWorktree = await repo.git(
+        control.worktreeRoot,
+        ["worktree", "remove", "--force", temporary],
+        signal,
+      );
+      if (removedWorktree.code !== 0) {
+        await discardLandingWorktree(repo, temporary);
+        throw new CollabOpError(
+          "git_error",
+          `could not clean landing preservation proof: ${boundedGitText(removedWorktree.stderr || removedWorktree.stdout)}`,
+        );
+      }
+    }
+  }
+}
+
+// A D/F flip inside one accepted transition puts both endpoints in the
+// transition path list, but a restore source tree can never hold both
+// sides of the flip: asking Git to match a strict descendant of a changed
+// ancestor fails outright ("did not match any file(s) known to git") when
+// the ancestor now occupies its place as a file, or as a directory above
+// it. The changed ancestor already covers everything beneath it — no-overlay
+// removal clears deleted children and Git's checkout machinery clears a
+// conflicting file when a descendant needs the directory — so the restore
+// set keeps only maximal paths. Collision analysis and post-landing
+// verification keep the full transition list.
+function maximalRestorePaths(paths: readonly string[]): string[] {
+  const unique = [...new Set(paths)];
+  return unique.filter((p) => !unique.some((q) => q !== p && p.startsWith(`${q}/`)));
+}
+
+// Apply the preflight-proven tracked tree over exactly the accepted
+// transition paths, then put the accepted integration tree in the index.
+// Scoping the worktree restore keeps unchanged paths — including local
+// directory replacements of files the integration does not touch — from
+// being rewritten, while no-overlay deletions still clear cleanly tracked
+// paths the transition deleted. This keeps local merged content unstaged
+// without using a stash or a reset.
+async function restoreLandingWorktree(
+  repo: Repository,
+  persistencePath: string,
+  worktreeTree: string,
+  indexTree: string,
+  transitionPaths: readonly string[],
+  signal?: AbortSignal,
+): Promise<void> {
+  await requireGit(
+    repo.git,
+    persistencePath,
+    [
+      "restore",
+      "--source",
+      worktreeTree,
+      "--staged",
+      "--worktree",
+      "--no-overlay",
+      "--",
+      ...maximalRestorePaths(transitionPaths),
+    ],
+    signal,
+  );
+  await requireGit(
+    repo.git,
+    persistencePath,
+    ["restore", "--source", indexTree, "--staged", "--", "."],
+    signal,
+  );
+}
+
 async function rollbackLanding(
   repo: Repository,
   task: TaskLayout,
   persistBranch: { ref: string },
   persistencePath: string,
   beforeSha: string,
+  beforeTree: string,
+  oursTree: string,
+  transitionPaths: readonly string[],
   landingSha: string | null,
   previousLanded: string | null,
-  landedChanged: boolean,
+  signal?: AbortSignal,
 ): Promise<Record<string, unknown>> {
   const evidence: Record<string, unknown> = {
     persistence_sha_before: beforeSha,
     landing_sha: landingSha,
   };
+  let branchRestored = false;
+  let landedRestored = false;
+  let worktreeRestored = false;
   try {
-    const current = await commitAt(controlRepository(repo), persistBranch.ref);
-    const records = await worktreeRecords(controlRepository(repo));
-    const matches = records.filter((record) => record.branch === persistBranch.ref);
-    const persistenceRecord = matches.length === 1 ? matches[0] : undefined;
-    const canReset =
-      (landingSha === null ? current === beforeSha : current === landingSha) &&
-      persistenceRecord?.worktree === persistencePath &&
-      (await pathMetadata(persistencePath))?.isDirectory() === true;
-    evidence.safe_to_reset = canReset;
-    if (canReset) {
-      const reset = await repo.git(persistenceRecord!.worktree!, ["reset", "--merge", beforeSha]);
-      evidence.reset = reset.code === 0;
-      if (reset.code !== 0) evidence.reset_error = boundedGitText(reset.stderr || reset.stdout);
-    }
-    if (landedChanged) {
-      const currentLanded = await commitAt(controlRepository(repo), task.landedRef);
-      if (currentLanded !== null) {
-        const restored = previousLanded === null
-          ? await repo.git(mutationCwd(repo), ["update-ref", "--no-deref", "-d", task.landedRef, currentLanded])
-          : await repo.git(mutationCwd(repo), ["update-ref", "--no-deref", task.landedRef, previousLanded, currentLanded]);
-        evidence.landed_restored = restored.code === 0;
+    const current = await commitAt(controlRepository(repo), persistBranch.ref, signal);
+    if (current === beforeSha) {
+      branchRestored = true;
+    } else if (current !== null) {
+      const restored = await repo.git(
+        mutationCwd(repo),
+        ["update-ref", "--no-deref", persistBranch.ref, beforeSha, current],
+        signal,
+      );
+      branchRestored = restored.code === 0;
+      if (!branchRestored) {
+        evidence.persistence_ref_restore_error = boundedGitText(restored.stderr || restored.stdout);
       }
+    } else {
+      evidence.persistence_ref_restore_error = "persistence branch disappeared during landing";
     }
-    const after = await commitAt(controlRepository(repo), persistBranch.ref);
-    const afterRecords = await worktreeRecords(controlRepository(repo));
-    const afterMatch = afterRecords.filter((record) => record.branch === persistBranch.ref);
-    evidence.persistence_sha_after = after;
-    evidence.persistence_index_clean =
-      afterMatch.length === 1 && afterMatch[0].worktree !== undefined
-        ? await persistenceIndexClean(repo, afterMatch[0].worktree)
-        : false;
-    evidence.restored =
-      after === beforeSha &&
-      afterMatch.length === 1 &&
-      afterMatch[0].HEAD === beforeSha &&
-      evidence.persistence_index_clean === true;
   } catch (error) {
-    evidence.restored = false;
-    evidence.rollback_error = boundedGitText(error instanceof Error ? error.message : String(error));
+    evidence.persistence_ref_restore_error = boundedGitText(error instanceof Error ? error.message : String(error));
   }
+  try {
+    const currentLanded = await commitAt(controlRepository(repo), task.landedRef, signal);
+    if (currentLanded === previousLanded) {
+      landedRestored = true;
+    } else if (currentLanded !== null) {
+      const restored = previousLanded === null
+        ? await repo.git(
+            mutationCwd(repo),
+            ["update-ref", "--no-deref", "-d", task.landedRef, currentLanded],
+            signal,
+          )
+        : await repo.git(
+            mutationCwd(repo),
+            ["update-ref", "--no-deref", task.landedRef, previousLanded, currentLanded],
+            signal,
+          );
+      landedRestored = restored.code === 0;
+      if (!landedRestored) {
+        evidence.landed_ref_restore_error = boundedGitText(restored.stderr || restored.stdout);
+      }
+    } else if (previousLanded === null) {
+      landedRestored = true;
+    } else {
+      evidence.landed_ref_restore_error = "landed ref disappeared during landing";
+    }
+  } catch (error) {
+    evidence.landed_ref_restore_error = boundedGitText(error instanceof Error ? error.message : String(error));
+  }
+  try {
+    await restoreLandingWorktree(repo, persistencePath, oursTree, beforeTree, transitionPaths, signal);
+    worktreeRestored = true;
+  } catch (error) {
+    evidence.worktree_restore_error = boundedGitText(error instanceof Error ? error.message : String(error));
+  }
+  try {
+    evidence.persistence_sha_after = await commitAt(controlRepository(repo), persistBranch.ref, signal);
+    evidence.landed_sha_after = await commitAt(controlRepository(repo), task.landedRef, signal);
+    evidence.persistence_index_tree = await requireGit(
+      repo.git,
+      persistencePath,
+      ["write-tree"],
+      signal,
+    );
+  } catch (error) {
+    evidence.verification_error = boundedGitText(error instanceof Error ? error.message : String(error));
+  }
+  evidence.restored =
+    branchRestored &&
+    landedRestored &&
+    worktreeRestored &&
+    evidence.persistence_sha_after === beforeSha &&
+    evidence.landed_sha_after === previousLanded &&
+    evidence.persistence_index_tree === beforeTree;
   return evidence;
 }
 
@@ -3171,10 +3485,15 @@ async function integrationLand(
       "current integration would not change the persistence tree",
     );
   }
+  // Rename detection reports only a rename's destination, which would
+  // strand the source in the worktree behind a success report: restore,
+  // collision checks, rollback, and verification all scope to this list.
+  // Disabling detection makes each rename appear as its delete/add pair so
+  // the set carries both endpoints of the accepted transition.
   const changedPaths = await nulPathList(
     repo,
     controlRepository(repo).worktreeRoot,
-    ["diff", "--name-only", "-z", persistence.tip, integrationSha, "--"],
+    ["diff", "--no-renames", "--name-only", "-z", persistence.tip, integrationSha, "--"],
     signal,
   );
   const trackedDirt = await nulPathList(
@@ -3183,20 +3502,18 @@ async function integrationLand(
     ["diff", "--name-only", "-z", "--"],
     signal,
   );
-  const untrackedDirt = [
-    ...(await nulPathList(
-      repo,
-      persistence.record.worktree!,
-      ["ls-files", "--others", "--exclude-standard", "-z", "--"],
-      signal,
-    )),
-    ...(await nulPathList(
-      repo,
-      persistence.record.worktree!,
-      ["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--"],
-      signal,
-    )),
-  ];
+  const ordinaryUntracked = await nulPathList(
+    repo,
+    persistence.record.worktree!,
+    ["ls-files", "--others", "--exclude-standard", "-z", "--"],
+    signal,
+  );
+  const ignoredDirt = await nulPathList(
+    repo,
+    persistence.record.worktree!,
+    ["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--"],
+    signal,
+  );
   const integrationPaths = new Set(
     await nulPathList(
       repo,
@@ -3205,40 +3522,55 @@ async function integrationLand(
       signal,
     ),
   );
-  const collisions = [
-    ...trackedDirt.filter((dirty) => changedPaths.some((changed) => pathOverlaps(dirty, changed))),
-    ...untrackedDirt.filter(
-      (dirty) =>
-        changedPaths.some((changed) => pathOverlaps(dirty, changed)) ||
-        [...integrationPaths].some((pathname) => pathOverlaps(dirty, pathname)),
-    ),
-  ];
-  if (collisions.length > 0) {
+  const untrackedCollisions = [...ordinaryUntracked, ...ignoredDirt].filter(
+    (dirty) =>
+      changedPaths.some((changed) =>
+        transitionOverwrites(dirty, changed, integrationPaths),
+      ),
+  );
+  if (untrackedCollisions.length > 0) {
     throw new CollabOpError(
       "path_collision",
-      "existing persistence dirt collides with the integration tree transition",
+      "untracked or ignored persistence dirt collides with the integration tree",
       "Move or clean the colliding persistence paths before landing.",
-      { paths: [...new Set(collisions)].slice(0, 32) },
+      { paths: [...new Set(untrackedCollisions)].slice(0, 32) },
     );
   }
 
+  const beforeTree = persistenceTree;
+  const preflight = await landingPreflight(
+    repo,
+    persistence.record.worktree!,
+    persistence.tip,
+    integrationSha,
+    signal,
+  );
+
   let landingSha: string | null = null;
-  let landedChanged = false;
   try {
-    const checkout = await repo.git(
+    await restoreLandingWorktree(
+      repo,
       persistence.record.worktree!,
-      ["checkout", "--no-overlay", integrationSha, "--", ...changedPaths],
+      preflight.mergedTree,
+      integrationTree,
+      changedPaths,
       signal,
     );
-    if (checkout.code !== 0) {
-      throw new CollabOpError(
-        "git_error",
-        `Git command failed: ${checkout.stderr.trim() || checkout.stdout.trim()}`,
-      );
-    }
     const commit = await repo.git(
       persistence.record.worktree!,
-      ["commit", "-m", message, "-m", `Task: ${taskId}\nLanded: ${integrationSha}`],
+      [
+        // Synthetic publication must not invoke operator hooks: a trusted
+        // hook may mutate the checkout or index and still fail, which would
+        // leave untracked residue behind an otherwise restored report.
+        // /dev/null is a path no hook script can live under.
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "-m",
+        message,
+        "-m",
+        `Task: ${taskId}\nLanded: ${integrationSha}`,
+      ],
       signal,
     );
     if (commit.code !== 0) {
@@ -3252,6 +3584,31 @@ async function integrationLand(
       throw new CollabOpError(
         "git_error",
         "landing commit did not preserve the integration tree",
+      );
+    }
+    const indexTree = await requireGit(
+      repo.git,
+      persistence.record.worktree!,
+      ["write-tree"],
+      signal,
+    );
+    if (indexTree !== integrationTree) {
+      throw new CollabOpError(
+        "git_error",
+        "landing index did not preserve the integration tree",
+      );
+    }
+    const worktree = await repo.git(
+      persistence.record.worktree!,
+      ["diff", "--quiet", preflight.mergedTree, "--", ...changedPaths],
+      signal,
+    );
+    if (worktree.code !== 0) {
+      throw new CollabOpError(
+        "git_error",
+        worktree.code === 1
+          ? "landing worktree did not preserve local changes"
+          : `could not verify landing worktree: ${worktree.stderr.trim() || worktree.stdout.trim()}`,
       );
     }
     if (!(await landingMessageMatches(repo, landingSha, message, taskId, integrationSha))) {
@@ -3272,7 +3629,6 @@ async function integrationLand(
       ],
       signal,
     );
-    landedChanged = true;
   } catch (error) {
     const rollback = await rollbackLanding(
       repo,
@@ -3280,9 +3636,12 @@ async function integrationLand(
       persistBranch,
       persistence.record.worktree!,
       persistence.tip,
+      beforeTree,
+      preflight.oursTree,
+      changedPaths,
       landingSha,
       previousLanded,
-      landedChanged,
+      signal,
     );
     throw new CollabOpError(
       "git_error",
@@ -3293,6 +3652,9 @@ async function integrationLand(
   }
 
   const warnings: string[] = [];
+  if (trackedDirt.length > 0) warnings.push("preserved unstaged tracked changes");
+  if (ordinaryUntracked.length > 0) warnings.push("preserved untracked files");
+  if (ignoredDirt.length > 0) warnings.push("preserved ignored files");
   const telemetryWarning = await recordEvent(task, "integration-land", "success", {
     integration_sha: integrationSha,
     persistence_sha: landingSha,
@@ -3879,7 +4241,6 @@ const registeredLaneComment = {
 
 const registeredLaneCreateParameters = {
   type: "object",
-  description: "Create a Git-managed lane from the current integration tip.",
   additionalProperties: false,
   properties: {
     task_id: registeredTaskId,
@@ -3891,7 +4252,6 @@ const registeredLaneCreateParameters = {
 
 const registeredLaneReconcileParameters = {
   type: "object",
-  description: "Reconcile the current integration tip into a Git-managed lane.",
   additionalProperties: false,
   properties: {
     task_id: registeredTaskId,
@@ -3902,7 +4262,6 @@ const registeredLaneReconcileParameters = {
 
 const registeredLaneCollectParameters = {
   type: "object",
-  description: "Collect a Git-managed lane using its current lane and integration tips.",
   additionalProperties: false,
   properties: {
     task_id: registeredTaskId,
@@ -3913,7 +4272,6 @@ const registeredLaneCollectParameters = {
 
 const registeredLaneDropParameters = {
   type: "object",
-  description: "Best-effort removal of a Git-managed lane and its recognizable resources.",
   additionalProperties: false,
   properties: {
     task_id: registeredTaskId,
@@ -3924,7 +4282,6 @@ const registeredLaneDropParameters = {
 
 const registeredIntegrationCreateParameters = {
   type: "object",
-  description: "Create the managed integration worktree and Git refs from the current attached branch and HEAD.",
   additionalProperties: false,
   properties: {
     task_id: registeredTaskId,
@@ -3934,7 +4291,6 @@ const registeredIntegrationCreateParameters = {
 
 const registeredIntegrationAdoptParameters = {
   type: "object",
-  description: "Adopt a local branch into the managed integration using an exact common Git base commit.",
   additionalProperties: false,
   properties: {
     task_id: registeredTaskId,
@@ -3947,7 +4303,6 @@ const registeredIntegrationAdoptParameters = {
 
 const registeredIntegrationReconcileParameters = {
   type: "object",
-  description: "Reconcile the task-owned persistence branch into a Git-managed lane.",
   additionalProperties: false,
   properties: {
     task_id: registeredTaskId,
@@ -3958,7 +4313,6 @@ const registeredIntegrationReconcileParameters = {
 
 const registeredIntegrationLandParameters = {
   type: "object",
-  description: "Land the current integration into the task-owned persistence branch.",
   additionalProperties: false,
   properties: {
     task_id: registeredTaskId,
@@ -3974,7 +4328,6 @@ const registeredIntegrationLandParameters = {
 
 const registeredIntegrationRemoveParameters = {
   type: "object",
-  description: "Best-effort removal of a task's recognizable managed integration resources.",
   additionalProperties: false,
   properties: {
     task_id: registeredTaskId,
@@ -3984,7 +4337,6 @@ const registeredIntegrationRemoveParameters = {
 
 const registeredStatusParameters = {
   type: "object",
-  description: "List managed tasks or inspect one task's Git worktree and lane state.",
   additionalProperties: false,
   properties: {
     task_id: registeredTaskId,
@@ -3993,7 +4345,6 @@ const registeredStatusParameters = {
 
 const registeredReportParameters = {
   type: "object",
-  description: "Snapshot task state and telemetry without cleanup or readiness judgement.",
   additionalProperties: false,
   properties: {
     task_id: registeredTaskId,

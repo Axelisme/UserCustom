@@ -18,7 +18,7 @@ for an ack: at each item boundary run that item's targeted acceptance, report ev
 start the next queued item. Queued items never expand authority — semantic forks still stop
 the queue and escalate. When the queue is exhausted, end the turn with a summary.
 
-Send an `assigned_work_completed` event when done; report blocked or needs_decision
+End the turn with the terminal report when done; report blocked or needs_decision
 immediately. Keep the report terse.
 
 ## Report

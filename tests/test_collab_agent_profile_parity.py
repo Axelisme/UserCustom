@@ -15,11 +15,13 @@ PROFILE_NAMES = (
     "collab-acceptor",
     "collab-implementer",
     "contract-reviewer",
+    "repo-investigator",
+    "mechanical-implementer",
 )
 
 
 class CollabAgentProfileParityTests(unittest.TestCase):
-    def test_three_copies_are_identical_in_body(self) -> None:
+    def test_allowed_copies_are_identical_in_body(self) -> None:
         for name in PROFILE_NAMES:
             with self.subTest(profile=name):
                 profile = support.load_runtime_profile(HOME, name)

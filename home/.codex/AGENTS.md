@@ -5,3 +5,4 @@
 3. A file-based or authorized context handoff routes and guides; factual claims remain owned by the documents it identifies. Point to owning specs, tickets, records, decisions, commits, diffs, and evidence rather than copying them.
 4. After compaction or handoff, reread the active skill. For Dev-flow, begin with its guidance, the task `INDEX.md`, and handed-off ticket, then follow only their pointers needed for current work. Maintain an insufficient record instead of scanning all tickets, artifacts, or the task DAG to infer focus.
 5. Protect pre-existing user dirt and non-task evidence; never stash, reset, overwrite, or delete it.
+6. Use progressive guardrails when a known risk has no evidence-backed control strength: start with the weakest positive guidance that makes the desired behavior observable, then let a concrete failure class justify each move to an explicit prohibition or runtime enforcement.

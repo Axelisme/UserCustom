@@ -2,7 +2,7 @@ import { constants as fsConstants } from "node:fs";
 import { lstat, mkdir, open, readFile, readdir, unlink, link } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { isValidStructuredOutput } from "./collab-result-schema.ts";
+import { isValidStructuredOutput } from "./result-schema.ts";
 
 export const REPORT_VERSION = 1;
 

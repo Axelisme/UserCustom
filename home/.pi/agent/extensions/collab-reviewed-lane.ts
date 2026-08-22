@@ -9,11 +9,11 @@ import type {
   TaskLayout,
   WorktreeRecord,
 } from "./collab-op.ts";
-import { handleReviewedLaneCompletion } from "./collab-report.ts";
+import { handleReviewedLaneCompletion } from "./collab-shared/report.ts";
 import {
   reviewedLaneWorkerSchema,
   reviewedLaneReviewerSchema,
-} from "./collab-result-schema.ts";
+} from "./collab-shared/result-schema.ts";
 
 const DEV_FLOW_TICKET_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const REVIEWED_LANE_IDENTIFIER = /^[a-z0-9][a-z0-9._-]*$/;

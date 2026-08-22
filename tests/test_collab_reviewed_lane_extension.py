@@ -577,7 +577,7 @@ def make_session(
 
 import textwrap
 
-COLLREPORT = ROOT / "home/.pi/agent/extensions/collab-report.ts"
+COLLREPORT = ROOT / "home/.pi/agent/extensions/collab-shared/report.ts"
 
 def run_report_node(request: dict) -> dict:
     inner = json.dumps(request)
@@ -1281,7 +1281,7 @@ def run_feedback_node(request: dict) -> dict:
     finally:
         Path(fname).unlink(missing_ok=True)
 
-COLL_RESULT_SCHEMA = ROOT / "home/.pi/agent/extensions/collab-result-schema.ts"
+COLL_RESULT_SCHEMA = ROOT / "home/.pi/agent/extensions/collab-shared/result-schema.ts"
 
 def run_schema_validation(request: dict) -> dict:
     inner = json.dumps(request)

@@ -7,7 +7,7 @@ import {
   registeredReviewedLaneParameters,
   runReviewedLane,
 } from "./collab-reviewed-lane.ts";
-import { preflightSnapshot, snapshotLaneLoopFeedback, snapshotLaneLoopReport } from "./collab-report.ts";
+import { preflightSnapshot, snapshotLaneLoopFeedback, snapshotLaneLoopReport } from "./collab-shared/report.ts";
 const TOOL_VERSION = 1;
 const IDENTIFIER = /^[a-z0-9][a-z0-9._-]*$/;
 type GitResult = { code: number; stdout: string; stderr: string };

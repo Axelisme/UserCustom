@@ -30,6 +30,8 @@ INSTALL_FILES = (
     Path(".codex/AGENTS.md"),
     Path(".pi/agent/APPEND_SYSTEM.md"),
 )
+PI_PACKAGE = Path("/usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js")
+EXTENSION_HARNESS = support.ROOT / "tests/collab_op_extension_harness.mjs"
 
 
 class SetupConfigTests(unittest.TestCase):
@@ -53,6 +55,30 @@ class SetupConfigTests(unittest.TestCase):
                 with self.subTest(destination=destination):
                     self.assertTrue(destination.is_symlink(), destination)
                     self.assertTrue(os.path.samefile(destination, shipped))
+
+    def test_every_installed_top_level_extension_loads_through_pi(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source, home = support.seed_source(Path(temporary))
+            result = support.run_setup(source, home)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            installed = home / ".pi/agent/extensions"
+            for extension in sorted(installed.glob("*.ts")):
+                with self.subTest(extension=extension.name):
+                    loaded = subprocess.run(
+                        [
+                            "/usr/bin/node",
+                            str(EXTENSION_HARNESS),
+                            str(PI_PACKAGE),
+                            str(extension),
+                            str(source),
+                        ],
+                        input='{"tool":"missing"}\n',
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(loaded.returncode, 0, loaded.stdout + loaded.stderr)
 
     def test_rerun_leaves_current_symlinks_unchanged(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

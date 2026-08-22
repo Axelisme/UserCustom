@@ -3760,7 +3760,7 @@ class CollabReportT06SnapshotTests(unittest.TestCase):
             import json as js
             import subprocess, textwrap, tempfile as tf
             from pathlib import Path as P
-            collreport = P(__file__).resolve().parents[1] / "home/.pi/agent/extensions/collab-report.ts"
+            collreport = P(__file__).resolve().parents[1] / "home/.pi/agent/extensions/collab-shared/report.ts"
             script = textwrap.dedent(f'''
                 import {{ pathToFileURL }} from "node:url";
                 const mod = await import(pathToFileURL("{collreport}").href);
@@ -3798,7 +3798,7 @@ class CollabOpT07FeedbackTests(unittest.TestCase):
                     # explicit empty and 10000 should survive via direct publish
                     import json as js, subprocess, textwrap, tempfile as tf
                     from pathlib import Path as P
-                    collreport = P(__file__).resolve().parents[1] / "home/.pi/agent/extensions/collab-report.ts"
+                    collreport = P(__file__).resolve().parents[1] / "home/.pi/agent/extensions/collab-shared/report.ts"
                     for feedback, label in [("", "empty"), ("a"*10000, "bmp_10000"), ("😀"*10000, "nonbmp_10000")]:
                         child = f"bbbbbbbb-bbbb-bbbb-bbbb-{label[:4]}11111111"[:36]
                         # ensure valid uuid-like (use fixed)
@@ -3885,7 +3885,7 @@ class CollabOpT07FeedbackTests(unittest.TestCase):
                     (async_dir / "status.json").write_text(js.dumps(status), encoding="utf-8")
                     import subprocess, textwrap, tempfile as tf
                     from pathlib import Path as P
-                    collreport = P(__file__).resolve().parents[1] / "home/.pi/agent/extensions/collab-report.ts"
+                    collreport = P(__file__).resolve().parents[1] / "home/.pi/agent/extensions/collab-shared/report.ts"
                     script = textwrap.dedent(f'''
                         import {{ pathToFileURL }} from "node:url";
                         const mod = await import(pathToFileURL("{collreport}").href);
@@ -3914,7 +3914,7 @@ class CollabOpT07FeedbackTests(unittest.TestCase):
             seed_managed_task(repo)
             import json as js, subprocess, textwrap, tempfile as tf
             from pathlib import Path as P
-            collreport = P(__file__).resolve().parents[1] / "home/.pi/agent/extensions/collab-report.ts"
+            collreport = P(__file__).resolve().parents[1] / "home/.pi/agent/extensions/collab-shared/report.ts"
             child = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
             fb = "same"
             for i in range(2):
@@ -3963,7 +3963,7 @@ class CollabOpT07FeedbackTests(unittest.TestCase):
             seed_managed_task(repo)
             import json as js, subprocess, textwrap, tempfile as tf
             from pathlib import Path as P
-            collreport = P(__file__).resolve().parents[1] / "home/.pi/agent/extensions/collab-report.ts"
+            collreport = P(__file__).resolve().parents[1] / "home/.pi/agent/extensions/collab-shared/report.ts"
             child = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
             # trigger warning via invalid length twice, check dedup
             fb = "a"*10001

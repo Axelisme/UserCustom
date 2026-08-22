@@ -39,8 +39,28 @@ stew install install_scripts/Stewfile
 `home/.codex/skills/UPSTREAM.md`；只有本地自有的 skill 與尚未納入 subtree 的 `grove` 是實體目錄。
 `home/.claude/agents/*.md` 與 `home/.codex/agents/*.toml` 是 agent profile
 （同一角色雙格式，修改請同 commit 動兩檔）。`setup_config.sh` 會把指定的設定項目以 symbolic
-link 安裝到 `$HOME`；既有且不是正確 link 的項目會先改名為同路徑的 `.bak`（已有備份時使用
-numbered backup）。
+link 安裝到 `$HOME`。安裝清單在腳本末段，一行一個項目：`link_each` 逐一連結該目錄底下的每個
+entry，`link_one` 連結該 path 本身；要停裝某一項就把那一行註解掉。
+
+每個安裝項目固定輸出一行狀態，不管成功或失敗；真正動過的東西（link、backup、prune）
+再縮排列在該行底下。單項失敗只記錄不中止，其餘項目照裝，最後才回報失敗數並以 exit 1 收尾。
+
+```
+.config                     11 unchanged
+.claude/skills              25 unchanged, 1 pruned
+    prune  ~/.claude/skills/orchestrate.bak
+.pi/acp.json                backed up + linked
+    backup  ~/.pi/acp.json -> ~/.pi/acp.json.bak
+.codex/AGENTS.md            FAILED
+    missing source  home/.codex/AGENTS.md
+```
+
+安裝時的處置規則：
+
+- 清單上的來源在 `home/` 底下不存在會標記為 FAILED，不會靜默略過。
+- 既有的真實檔案或外來 symlink 會先改名讓路，第一次是 `.bak`，之後依序 `.bak.1`、`.bak.2`。
+- 指向本 repo 但來源已被移除的孤兒 link 會直接清掉——這類 link 過去會一直殘留在 `$HOME`。
+- 從 linked worktree 執行會被拒絕，否則 `$HOME` 的設定會被指向那棵暫時的樹。
 
 **注意**：symbolic link 會直接反映 `home/` 下的更新——包含穿過 `vendor/` 的那一段，所以同步
 上游之後不需要重跑安裝。重跑 `./setup_scripts/setup_config.sh` 只會略過已正確連結的項目。產生的 `.bak` 可自行刪除。

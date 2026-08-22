@@ -2,20 +2,13 @@ from __future__ import annotations
 
 import json
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 
-try:
-    from tests import _setup_support as support
-except ImportError:  # Direct test-file execution keeps tests/ on sys.path.
-    import _setup_support as support
-
-
 ROOT = Path(__file__).resolve().parents[1]
 HARNESS = ROOT / "tests/collab_reviewed_lane_workflow_harness.mjs"
-WORKFLOW = Path(".claude/workflows/collab-reviewed-lane.js")
+WORKFLOW = ROOT / "home/.claude/workflows/collab-reviewed-lane.js"
 VALID_INPUT = {
     "lane": "/tmp/collab-lane",
     "startingHead": "0123456789abcdef",
@@ -27,14 +20,6 @@ VALID_INPUT = {
 
 
 class CollabReviewedLaneWorkflowTests(unittest.TestCase):
-    def installed_workflow(self, temporary: str) -> Path:
-        source, home = support.seed_source(Path(temporary))
-        setup = support.run_setup(source, home)
-        self.assertEqual(setup.returncode, 0, setup.stderr)
-        installed = home / WORKFLOW
-        self.assertTrue(installed.is_symlink())
-        return installed
-
     def run_workflow(
         self,
         workflow: Path,
@@ -63,9 +48,7 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         *,
         scenario: str = "happy",
     ) -> dict[str, Any]:
-        with tempfile.TemporaryDirectory() as temporary:
-            workflow = self.installed_workflow(temporary)
-            return self.run_workflow(workflow, args, scenario=scenario)
+        return self.run_workflow(WORKFLOW, args, scenario=scenario)
 
     def assert_dispatch_shape(
         self,

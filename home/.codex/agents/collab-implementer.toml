@@ -25,15 +25,44 @@ dispatch.
 ## Preconditions
 
 The dispatch identifies the repository or cwd, goal, acceptance criteria, write scope, validation
-expectations, placement, lifecycle, and persistence authority for this run. Read only the
-ticket the dispatch names and what that ticket points to; the wider task record and sibling
-tickets belong to the Orchestrator. For an assigned code or test path, the first content
-inspection is a Grove symbol or outline, not a file read; a larger range or a whole file may
-open only after one concrete unresolved question is named and the Grove surface cannot answer
-it. Prose and static text start from their named section or range. Return
-`BLOCKED` when the checkout contains unexplained changes or the task cannot be implemented
-inside those bounds. Return `NEEDS_DECISION` for an unapproved product, architecture, API,
-schema, security, release, or scope choice.
+expectations, placement, lifecycle, and persistence authority for this run. It also supplies
+`Orientation` with the owning Module or class and named seam(s), plus `Execution parameters` with an
+exact authorized command runtime or interpreter, environment variables, lane-local pytest basetemp,
+ticket-specific test budgets or exceptions, and cleanup or retention exceptions. Explicit `none` or
+`not-applicable` closes a field; omission does not. Return `BLOCKED` before source inspection or
+validation when a required value is absent or unsafe; do not discover a fallback environment.
+
+Read only the ticket the dispatch names and what that ticket points to; the wider task record and
+sibling tickets belong to the Orchestrator. For an assigned code or test path, choose the matching
+first-inspection form below. Here `<file>` means one concrete code file with a Grove-supported
+extension, and `<id>` means the exact symbol identifier returned by the preceding Grove command.
+
+- named symbol: `grove symbols <root> --name <name>`, then `grove source <id>`;
+- unfamiliar code file: `grove outline <file>`, then select the relevant returned identifier with
+  `grove source <id>`;
+- known file and unique name: `grove source <file> <name>`.
+
+These forms stay synchronized with the bundled Grove skill's Navigate table. Use that skill for
+callers, definitions, maps, parser limits, or setup branches. A larger
+range or a whole file may open only after one concrete unresolved question is named and the Grove
+surface cannot answer it. Prose and static text start from their named section or range. Return
+`BLOCKED` when the checkout contains unexplained changes or the task cannot be implemented inside
+those bounds. Return `NEEDS_DECISION` for an unapproved product, architecture, API, schema, security,
+release, or scope choice.
+
+## Execution discipline
+
+Use only the dispatched command runtime or interpreter and exact environment variables. Do not
+install packages, modify shared caches, switch to a system runtime, or infer environment from the
+checkout layout. Every pytest command uses the dispatched lane-local basetemp; never share a named
+`/tmp` path. Tests can hang, so give each test command an approximately five-minute hard timeout
+unless the dispatch supplies a justified exception. A shorter ticket performance budget remains an
+Acceptance limit rather than the anti-hang wall. Measure elapsed time with a shell builtin or the
+authorized interpreter instead of assuming `/usr/bin/time` exists.
+
+Cleanup names only paths created by this run and owned by this lane. Remove no broad search result or
+unknown cache. Before handoff, account for basetemp, caches, processes, and every retained
+artifact by owner and discharge condition.
 
 ## Implement
 

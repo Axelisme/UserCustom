@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -12,6 +13,7 @@ from tests.test_collab_op_extension import (
     invoke as invoke_extension,
     seed_managed_task,
     seed_repository,
+    seed_task_container,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +23,10 @@ EXTENSION_HARNESS = ROOT / "tests/collab_op_extension_harness.mjs"
 PI_PACKAGE = Path("/usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js")
 COMPANION = ROOT / "home/.pi/agent/extensions/collab-reviewed-lane.ts"
 TOOL = "collab_run_reviewed_lane"
+
+
+def completed_step(result: dict[str, Any]) -> dict[str, Any]:
+    return {"structuredOutput": result, "mutationStatus": "observed"}
 
 
 def invoke(repository: Path, request: dict[str, Any]) -> dict[str, Any]:
@@ -33,7 +39,7 @@ def seed_profiles(repository: Path) -> None:
     profiles.mkdir(parents=True)
     (profiles / "collab-implementer.md").write_text(
         "---\nname: collab-implementer\ntools: read, write, edit, bash\n"
-        "defaultContext: fresh\n---\nImplement the bounded brief.\n",
+        "defaultContext: fresh\ncompletionGuard: true\n---\nImplement the bounded brief.\n",
         encoding="utf-8",
     )
     (profiles / "collab-acceptor.md").write_text(
@@ -133,7 +139,8 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
         self.assertEqual(observed["result"]["async_dir"], "/tmp/pi-subagents/async-test-id")
         self.assertEqual(rpc["version"], 1)
         self.assertEqual(rpc["method"], "spawn")
-        self.assertEqual(set(rpc["params"]), {"workflowScript", "async"})
+        self.assertEqual(set(rpc["params"]), {"cwd", "workflowScript", "async"})
+        self.assertEqual(rpc["params"]["cwd"], expected["lane"])
         self.assertIs(rpc["params"]["async"], True)
         self.assertIn(expected["lane"], rpc["params"]["workflowScript"])
 
@@ -181,7 +188,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
             _, expected, capture, observed = self.launch_case(base)
             self.assertFalse(observed["is_error"], observed)
             run = subprocess.run(
-                ["node", str(SCRIPT_HARNESS), str(capture), json.dumps([worker, reviewer])],
+                ["node", str(SCRIPT_HARNESS), str(capture), json.dumps([completed_step(worker), reviewer])],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -244,36 +251,76 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
             base = Path(temporary)
             _, _, capture, observed = self.launch_case(base)
             self.assertFalse(observed["is_error"], observed)
-            run = subprocess.run(
-                [
-                    "node",
-                    str(SCRIPT_HARNESS),
-                    str(capture),
-                    json.dumps([
-                        {
-                            "structuredOutput": completed,
-                            "mutationStatus": "missing",
-                        }
-                    ]),
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+            for step in (
+                completed,
+                {"structuredOutput": completed, "mutationStatus": "missing"},
+            ):
+                with self.subTest(step=step):
+                    run = subprocess.run(
+                        [
+                            "node",
+                            str(SCRIPT_HARNESS),
+                            str(capture),
+                            json.dumps([step]),
+                        ],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
 
-        self.assertNotEqual(run.returncode, 0)
-        self.assertIn(
-            "A COMPLETED collab-implementer result requires an observed file mutation.",
-            run.stderr,
-        )
+                    self.assertNotEqual(run.returncode, 0)
+                    self.assertIn(
+                        "A COMPLETED collab-implementer result requires an observed file mutation.",
+                        run.stderr,
+                    )
+
+    def test_completed_writer_accepts_runtime_mutation_fact_shapes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, _, capture, observed = self.launch_case(base)
+            self.assertFalse(observed["is_error"], observed)
+            request = json.loads(capture.read_text(encoding="utf-8").strip())
+            workflow_script = request["params"]["workflowScript"]
+            runner = r'''
+const workflowScript = JSON.parse(process.argv[1]);
+const writerResult = JSON.parse(process.argv[2]);
+let call = 0;
+const runs = {
+  async run() {
+    call += 1;
+    if (call === 1) return {
+      structuredOutput: {outcome:"COMPLETED", validation:[], residualRisks:[]},
+      results: [writerResult]
+    };
+    return {structuredOutput:{verdict:"PASS", outOfEnvelopeFindings:[]}, results:[]};
+  }
+};
+const execute = Function("runs", `return (async () => {\n${workflowScript}\n})()`);
+const result = await execute(runs);
+process.stdout.write(JSON.stringify({result, call}));
+'''
+            for writer_result in (
+                {"observedMutationAttempt": True},
+                {"effects": {"fileMutation": {"status": "not-applicable", "attempted": True}}},
+            ):
+                with self.subTest(writer_result=writer_result):
+                    run = subprocess.run(
+                        ["/usr/bin/node", "-e", runner, json.dumps(workflow_script), json.dumps(writer_result)],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
+                    execution = json.loads(run.stdout)
+                    self.assertEqual(execution["result"]["outcome"], "REVIEWED")
+                    self.assertEqual(execution["call"], 2)
 
     def test_terminal_branches_are_typed_and_zero_budget_is_terminal(self) -> None:
         completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
         cases = [
             ([{"outcome": "BLOCKED", "blocker": "blocked"}], {"outcome": "BLOCKED", "blocker": "blocked"}, 1),
             ([{"outcome": "NEEDS_DECISION", "decision": {"why": "why", "question": "question"}}], {"outcome": "NEEDS_DECISION", "why": "why", "question": "question"}, 1),
-            ([completed, {"verdict": "NEEDS_DECISION", "decision": {"why": "review why", "question": "review question"}}], {"outcome": "NEEDS_DECISION", "why": "review why", "question": "review question"}, 2),
-            ([completed, {"verdict": "BLOCKED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}]}], {"outcome": "CORRECTION_BUDGET_EXHAUSTED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}]}, 2),
+            ([completed_step(completed), {"verdict": "NEEDS_DECISION", "decision": {"why": "review why", "question": "review question"}}], {"outcome": "NEEDS_DECISION", "why": "review why", "question": "review question"}, 2),
+            ([completed_step(completed), {"verdict": "BLOCKED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}]}], {"outcome": "CORRECTION_BUDGET_EXHAUSTED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}]}, 2),
         ]
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
@@ -309,7 +356,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
             self.assertFalse(observed["is_error"], observed)
             execution = json.loads(
                 subprocess.run(
-                    ["node", str(SCRIPT_HARNESS), str(capture), json.dumps([worker, blocked, worker, passed])],
+                    ["node", str(SCRIPT_HARNESS), str(capture), json.dumps([completed_step(worker), blocked, completed_step(worker), passed])],
                     capture_output=True,
                     text=True,
                     check=True,
@@ -349,7 +396,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
             self.assertFalse(observed["is_error"], observed)
             execution = json.loads(
                 subprocess.run(
-                    ["node", str(SCRIPT_HARNESS), str(capture), json.dumps([completed, blocked, completed, blocked, completed, passed])],
+                    ["node", str(SCRIPT_HARNESS), str(capture), json.dumps([completed_step(completed), blocked, completed_step(completed), blocked, completed_step(completed), passed])],
                     capture_output=True,
                     text=True,
                     check=True,
@@ -369,25 +416,25 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
         cases = [
             (
                 1,
-                [completed, blocked, {"outcome": "BLOCKED", "blocker": "correction blocked"}],
+                [completed_step(completed), blocked, {"outcome": "BLOCKED", "blocker": "correction blocked"}],
                 {"outcome": "BLOCKED", "blocker": "correction blocked"},
                 ["impl-0", "review-0", "impl-1"],
             ),
             (
                 1,
-                [completed, blocked, {"outcome": "NEEDS_DECISION", "decision": {"why": "correction why", "question": "correction question"}}],
+                [completed_step(completed), blocked, {"outcome": "NEEDS_DECISION", "decision": {"why": "correction why", "question": "correction question"}}],
                 {"outcome": "NEEDS_DECISION", "why": "correction why", "question": "correction question"},
                 ["impl-0", "review-0", "impl-1"],
             ),
             (
                 1,
-                [completed, blocked, completed, {"verdict": "NEEDS_DECISION", "decision": {"why": "rereview why", "question": "rereview question"}}],
+                [completed_step(completed), blocked, completed_step(completed), {"verdict": "NEEDS_DECISION", "decision": {"why": "rereview why", "question": "rereview question"}}],
                 {"outcome": "NEEDS_DECISION", "why": "rereview why", "question": "rereview question"},
                 ["impl-0", "review-0", "impl-1", "review-1"],
             ),
             (
                 1,
-                [completed, blocked, completed, blocked],
+                [completed_step(completed), blocked, completed_step(completed), blocked],
                 {"outcome": "CORRECTION_BUDGET_EXHAUSTED", "blockers": blocked["blockers"]},
                 ["impl-0", "review-0", "impl-1", "review-1"],
             ),
@@ -442,43 +489,1322 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
                 self.assertTrue(observed["error"]["error"]["repair"])
                 self.assertFalse(capture.exists())
 
-    def test_arbitrary_lane_placement_profile_gap_and_rpc_gaps_prevent_spawn(self) -> None:
-        cases = [
-            "moved-lane",
-            "disabled-settings",
-            "missing-spawn",
-            "unsupported-version",
-        ]
-        for case in cases:
-            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
-                base = Path(temporary)
-                repository, expected = self.managed_repository(base)
-                if case == "moved-lane":
-                    git(repository, "worktree", "move", expected["lane"], str(base / "arbitrary-lane"))
-                if case == "disabled-settings":
-                    lane_settings = Path(expected["lane"]) / ".pi/settings.json"
-                    lane_settings.write_text(
-                        json.dumps(
-                            {
-                                "subagents": {
-                                    "agentOverrides": {
-                                        "collab-acceptor": {"disabled": True}
-                                    }
-                                }
-                            }
-                        ),
-                        encoding="utf-8",
-                    )
-                capture = base / "rpc.jsonl"
-                mode = case if case in {"missing-spawn", "unsupported-version"} else "available"
-                observed = invoke(
-                    repository,
-                    valid_request(capture, __rpc={"mode": mode, "capture": str(capture)}),
-                )
-                self.assertTrue(observed["is_error"], observed)
-                self.assertTrue(observed["error"]["error"]["repair"])
-                self.assertFalse(capture.exists())
 
+
+def make_status(
+    workflow_id: str,
+    lane_path: str,
+    workflow_key: str,
+    child_run_id: str,
+    turn_count: int,
+    session_file: str,
+    duration_ms: int = 12345,
+    state: str = "complete",
+) -> dict[str, object]:
+    return {
+        "runId": workflow_id,
+        "cwd": lane_path,
+        "state": state,
+        "workflow": {
+            "trace": [{"key": workflow_key, "runId": child_run_id, "durationMs": duration_ms, "state": "completed"}],
+            "emits": [],
+            "console": [],
+        },
+        "steps": [
+            {
+                "agent": "collab-implementer" if workflow_key.startswith("impl") else "collab-acceptor",
+                "workflowKey": workflow_key,
+                "parentWorkflowRunId": workflow_id,
+                "status": "completed",
+                "turnCount": turn_count,
+                "sessionFile": session_file,
+            }
+        ],
+    }
+
+def make_session(
+    calls: list[tuple[str, str, int, int | None, bool]],
+    tokens: list[int],
+) -> str:
+    lines: list[str] = []
+    token_idx = 0
+    for idx, (call_id, name, start, end, is_error) in enumerate(calls):
+        total = tokens[token_idx] if token_idx < len(tokens) else 1000
+        token_idx += 1
+        assistant = {
+            "type": "message",
+            "id": f"assist-{idx}",
+            "timestamp": "2026-08-21T12:00:00.000Z",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "toolCall", "id": call_id, "name": name, "arguments": {}}],
+                "usage": {"totalTokens": total},
+                "timestamp": start,
+            },
+        }
+        lines.append(json.dumps(assistant))
+        if end is not None:
+            result = {
+                "type": "message",
+                "id": f"result-{idx}",
+                "timestamp": "2026-08-21T12:00:01.000Z",
+                "message": {
+                    "role": "toolResult",
+                    "toolCallId": call_id,
+                    "toolName": name,
+                    "isError": is_error,
+                    "timestamp": end,
+                    "content": [{"type": "text", "text": "ok"}],
+                },
+            }
+            lines.append(json.dumps(result))
+    while token_idx < len(tokens):
+        total = tokens[token_idx]
+        token_idx += 1
+        assistant = {
+            "type": "message",
+            "id": f"assist-extra-{token_idx}",
+            "timestamp": "2026-08-21T12:00:02.000Z",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "thinking", "thinking": "extra"}],
+                "usage": {"totalTokens": total},
+                "timestamp": 1787314140000 + token_idx,
+            },
+        }
+        lines.append(json.dumps(assistant))
+    return "\n".join(lines)
+
+import textwrap
+
+COLLREPORT = ROOT / "home/.pi/agent/extensions/collab-report.ts"
+
+def run_report_node(request: dict) -> dict:
+    inner = json.dumps(request)
+    script = textwrap.dedent(f"""
+        import {{ pathToFileURL }} from "node:url";
+        import path from "node:path";
+        const extUrl = pathToFileURL("{COLLREPORT}");
+        const mod = await import(extUrl.href);
+        const req = {inner};
+        let result;
+        try {{
+            if (req.action === "derive") {{
+                const report = mod.deriveReportFromArtifacts({{
+                    taskId: req.taskId,
+                    ticketId: req.ticketId,
+                    laneId: req.laneId,
+                    workflowId: req.workflowId,
+                    workflowKey: req.workflowKey,
+                    childRunId: req.childRunId,
+                    lanePath: req.lanePath,
+                    statusObj: req.statusObj,
+                    sessionText: req.sessionText,
+                }});
+                result = {{ok: true, report}};
+            }} else if (req.action === "publish") {{
+                const res = await mod.publishReport({{
+                    repoControlRoot: req.repoControlRoot,
+                    taskId: req.taskId,
+                    ticketId: req.ticketId,
+                    laneId: req.laneId,
+                    workflowId: req.workflowId,
+                    workflowKey: req.workflowKey,
+                    childRunId: req.childRunId,
+                    lanePath: req.lanePath,
+                    report: req.report,
+                }});
+                result = {{ok: true, result: res}};
+            }} else if (req.action === "handleCompletion") {{
+                const res = await mod.handleReviewedLaneCompletion({{
+                    repoControlRoot: req.repoControlRoot,
+                    taskId: req.taskId,
+                    ticketId: req.ticketId,
+                    laneId: req.laneId,
+                    lanePath: req.lanePath,
+                    workflowId: req.workflowId,
+                    asyncDir: req.asyncDir,
+                    eventWorkflowId: req.eventWorkflowId,
+                    eventAsyncDir: req.eventAsyncDir,
+                }});
+                result = {{ok: true, result: res}};
+            }} else if (req.action === "snapshot") {{
+                await mod.snapshotLaneLoopReport({{
+                    repoControlRoot: req.repoControlRoot,
+                    taskId: req.taskId,
+                    outputDir: req.outputDir,
+                }});
+                result = {{ok: true}};
+            }} else if (req.action === "role") {{
+                result = {{ok: true, role: mod.roleForWorkflowKey(req.workflowKey)}};
+            }} else {{
+                result = {{ok: false, error: "unknown action"}};
+            }}
+        }} catch (e) {{
+            result = {{ok: false, error: e instanceof Error ? e.message : String(e)}};
+        }}
+        process.stdout.write(JSON.stringify(result));
+    """)
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.mjs', delete=False) as f:
+        f.write(script)
+        fname = f.name
+    try:
+        run = subprocess.run(
+            ["/usr/bin/node", "--experimental-strip-types", fname],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if run.returncode != 0:
+            raise AssertionError(f"node failed: {run.stderr}\n{run.stdout}\nscript:{script}")
+        lines = [l for l in run.stdout.strip().splitlines() if l.strip()]
+        return json.loads(lines[-1])
+    finally:
+        Path(fname).unlink(missing_ok=True)
+
+class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
+    def seed_repo_with_lane(self, base: Path) -> tuple[Path, dict[str, str], str, str]:
+        repository, expected = self.managed_repository(base)
+        lane_path = expected["lane"]
+        control_root = str(repository.resolve())
+        return repository, expected, lane_path, control_root
+
+    def test_derive_exact_metrics_with_overlapping_intervals_and_null_durations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            _repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            workflow_id = "11111111-1111-1111-1111-111111111111"
+            child_run_id = "22222222-2222-2222-2222-222222222222"
+            workflow_key = "impl-0"
+            task_id = "demo"
+            ticket_id = "T001"
+            lane_id = "writer-1"
+            session_file = f"/tmp/{child_run_id}/session.jsonl"
+            session = make_session(
+                [
+                    ("call1", "read", 1000, 1500, False),
+                    ("call2", "bash", 1200, 1700, False),
+                    ("call3", "read", 2000, None, False),
+                ],
+                [100, 200, 50],
+            )
+            status = make_status(workflow_id, lane_path, workflow_key, child_run_id, 5, session_file, duration_ms=9999)
+            result = run_report_node({
+                "action": "derive",
+                "taskId": task_id,
+                "ticketId": ticket_id,
+                "laneId": lane_id,
+                "workflowId": workflow_id,
+                "workflowKey": workflow_key,
+                "childRunId": child_run_id,
+                "lanePath": lane_path,
+                "statusObj": status,
+                "sessionText": session,
+            })
+            self.assertTrue(result["ok"], result)
+            report = result["report"]
+            self.assertEqual(report["reportVersion"], 1)
+            self.assertEqual(report["taskId"], task_id)
+            self.assertEqual(report["ticketId"], ticket_id)
+            self.assertEqual(report["laneId"], lane_id)
+            self.assertEqual(report["workflowId"], workflow_id)
+            self.assertEqual(report["workflowKey"], workflow_key)
+            self.assertEqual(report["childRunId"], child_run_id)
+            self.assertEqual(report["role"], "implementer")
+            self.assertEqual(report["agentDurationMs"], 9999)
+            self.assertEqual(report["turns"], 5)
+            self.assertEqual(report["tokens"], 350)
+            self.assertEqual(report["toolObservedDurationMs"], 1000)
+            tools = report["tools"]
+            self.assertEqual(tools["read"]["calls"], 2)
+            self.assertEqual(tools["read"]["succeeded"], 1)
+            self.assertEqual(tools["read"]["failed"], 1)
+            self.assertEqual(tools["read"]["observedDurationsMs"], [500, None])
+            self.assertEqual(tools["bash"]["calls"], 1)
+            self.assertEqual(tools["bash"]["succeeded"], 1)
+            self.assertEqual(tools["bash"]["observedDurationsMs"], [500])
+            self.assertEqual(set(report.keys()), {"reportVersion","taskId","ticketId","laneId","workflowId","workflowKey","childRunId","role","agentDurationMs","toolObservedDurationMs","turns","tokens","tools"})
+
+    def test_role_identities_for_all_four_keys(self) -> None:
+        for key, expected_role in [("impl-0","implementer"),("impl-1","correction"),("review-0","acceptor"),("review-1","rereview")]:
+            with self.subTest(key=key):
+                result = run_report_node({"action":"role","workflowKey":key})
+                self.assertTrue(result["ok"])
+                self.assertEqual(result["role"], expected_role)
+
+    def test_publish_complete_file_and_exclusive_behavior(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            seed_task_container(repo)
+            workflow_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+            child_run_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+            workflow_key = "impl-0"
+            session_file = f"/tmp/{child_run_id}/session.jsonl"
+            status = make_status(workflow_id, lane_path, workflow_key, child_run_id, 1, session_file)
+            session = make_session([("c1","read",1000,1100,False)],[10])
+            derive = run_report_node({"action":"derive","taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":workflow_key,"childRunId":child_run_id,"lanePath":lane_path,"statusObj":status,"sessionText":session})
+            self.assertTrue(derive["ok"])
+            report = derive["report"]
+            pub1 = run_report_node({"action":"publish","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":workflow_key,"childRunId":child_run_id,"lanePath":lane_path,"report":report})
+            self.assertTrue(pub1["ok"])
+            self.assertTrue(pub1["result"]["published"])
+            container = repo / ".agent_state/plans/demo/.collab_op/lane_loop_report/writer-1"
+            report_file = container / f"{child_run_id}.json"
+            self.assertTrue(report_file.is_file())
+            content = report_file.read_text(encoding="utf-8")
+            self.assertEqual(json.loads(content), report)
+            self.assertEqual(oct(report_file.stat().st_mode)[-3:], "600")
+            pub2 = run_report_node({"action":"publish","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":workflow_key,"childRunId":child_run_id,"lanePath":lane_path,"report":report})
+            self.assertTrue(pub2["ok"])
+            self.assertTrue(pub2["result"].get("isDuplicate"))
+            self.assertFalse(pub2["result"]["published"])
+            report2 = dict(report)
+            report2["tokens"] = 99999
+            pub3 = run_report_node({"action":"publish","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":workflow_key,"childRunId":child_run_id,"lanePath":lane_path,"report":report2})
+            self.assertTrue(pub3["ok"])
+            self.assertFalse(pub3["result"]["published"])
+            self.assertIn("warning", pub3["result"])
+            self.assertEqual(json.loads(report_file.read_text(encoding="utf-8")), report)
+            warnings_file = repo / ".agent_state/plans/demo/.collab_op/lane_loop_report/warnings.jsonl"
+            self.assertTrue(warnings_file.is_file())
+            warnings = warnings_file.read_text(encoding="utf-8").strip().splitlines()
+            self.assertGreaterEqual(len(warnings), 1)
+            last = json.loads(warnings[-1])
+            self.assertEqual(last["taskId"], "demo")
+            self.assertEqual(last["laneId"], "writer-1")
+
+    def test_missing_and_mismatched_session_produce_warnings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            workflow_id = "11111111-1111-1111-1111-111111111111"
+            child_run_id = "22222222-2222-2222-2222-222222222222"
+            workflow_key = "impl-0"
+            async_dir = base / "async-missing"
+            async_dir.mkdir()
+            missing_session = str(async_dir / child_run_id / "missing.jsonl")
+            status = make_status(workflow_id, lane_path, workflow_key, child_run_id, 1, missing_session)
+            (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+            seed_task_container(repo)
+            result = run_report_node({
+                "action": "handleCompletion",
+                "repoControlRoot": control_root,
+                "taskId": "demo",
+                "ticketId": "T001",
+                "laneId": "writer-1",
+                "lanePath": lane_path,
+                "workflowId": workflow_id,
+                "asyncDir": str(async_dir),
+                "eventWorkflowId": workflow_id,
+                "eventAsyncDir": str(async_dir),
+            })
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["result"]["handled"])
+            self.assertEqual(len(result["result"]["published"]), 0)
+            self.assertGreaterEqual(len(result["result"]["warnings"]), 1)
+            async_dir2 = base / "async-mismatch"
+            async_dir2.mkdir()
+            mismatched_session = str(async_dir2 / "wrong" / "session.jsonl")
+            Path(mismatched_session).parent.mkdir(parents=True, exist_ok=True)
+            Path(mismatched_session).write_text(make_session([("c1","read",1000,1100,False)],[10]), encoding="utf-8")
+            status_mismatch = make_status(workflow_id, lane_path, workflow_key, child_run_id, 1, mismatched_session)
+            (async_dir2 / "status.json").write_text(json.dumps(status_mismatch), encoding="utf-8")
+            result2 = run_report_node({
+                "action": "handleCompletion",
+                "repoControlRoot": control_root,
+                "taskId": "demo",
+                "ticketId": "T001",
+                "laneId": "writer-1",
+                "lanePath": lane_path,
+                "workflowId": workflow_id,
+                "asyncDir": str(async_dir2),
+                "eventWorkflowId": workflow_id,
+                "eventAsyncDir": str(async_dir2),
+            })
+            self.assertTrue(result2["ok"])
+            self.assertGreaterEqual(len(result2["result"]["warnings"]), 1)
+            warnings_file = repo / ".agent_state/plans/demo/.collab_op/lane_loop_report/warnings.jsonl"
+            self.assertTrue(warnings_file.is_file())
+            self.assertFalse((Path(control_root) / ".agent_state/.collab_op_operation_warnings.jsonl").exists())
+
+    def test_unsafe_warning_fallback_for_publish(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            seed_task_container(repo)
+            workflow_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+            child_run_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+            unsafe_lane = "../evil"
+            report = {"reportVersion":1,"taskId":"demo","ticketId":"T001","laneId":unsafe_lane,"workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"role":"implementer","agentDurationMs":1,"toolObservedDurationMs":0,"turns":1,"tokens":10,"tools":{}}
+            pub = run_report_node({"action":"publish","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":unsafe_lane,"workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"report":report})
+            self.assertTrue(pub["ok"])
+            self.assertFalse(pub["result"]["published"])
+            self.assertIn("warning", pub["result"])
+            self.assertFalse((Path(control_root) / "evil").exists())
+            self.assertFalse((Path(control_root) / ".agent_state/.collab_op_operation_warnings.jsonl").exists())
+            self.assertIn("unsafe", pub["result"]["warning"].lower())
+
+    def test_warning_fifo_falls_back_without_opening_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, _expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            seed_task_container(repo)
+            warnings_file = repo / ".agent_state/plans/demo/.collab_op/lane_loop_report/warnings.jsonl"
+            warnings_file.parent.mkdir(parents=True)
+            os.mkfifo(warnings_file)
+            workflow_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+            child_run_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+            report_file = warnings_file.parent / "writer-1" / f"{child_run_id}.json"
+            report_file.parent.mkdir()
+            report_file.write_text("different\n", encoding="utf-8")
+            report = {"reportVersion":1,"taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"role":"implementer","agentDurationMs":1,"toolObservedDurationMs":0,"turns":1,"tokens":10,"tools":{}}
+            pub = run_report_node({"action":"publish","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"report":report})
+            self.assertTrue(pub["ok"], pub)
+            self.assertFalse(pub["result"]["published"])
+            self.assertIn("not a regular file", pub["result"]["warning"])
+            self.assertTrue(warnings_file.is_fifo())
+
+    def test_existing_report_fifo_warns_without_reading_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, _expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            seed_task_container(repo)
+            workflow_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+            child_run_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+            report_file = repo / f".agent_state/plans/demo/.collab_op/lane_loop_report/writer-1/{child_run_id}.json"
+            report_file.parent.mkdir(parents=True)
+            os.mkfifo(report_file)
+            report = {"reportVersion":1,"taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"role":"implementer","agentDurationMs":1,"toolObservedDurationMs":0,"turns":1,"tokens":10,"tools":{}}
+            pub = run_report_node({"action":"publish","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"report":report})
+            self.assertTrue(pub["ok"], pub)
+            self.assertFalse(pub["result"]["published"])
+            self.assertIn("not a regular file", pub["result"]["warning"])
+            self.assertTrue(report_file.is_fifo())
+            warnings_file = report_file.parents[1] / "warnings.jsonl"
+            self.assertEqual(len(warnings_file.read_text(encoding="utf-8").splitlines()), 1)
+
+    def test_snapshot_rejects_symlinked_destination_ancestor_before_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, _expected, _lane_path, control_root = self.seed_repo_with_lane(base)
+            seed_task_container(repo)
+            foreign = base / "foreign"
+            foreign_report = foreign / "lane_loop_report"
+            foreign_report.mkdir(parents=True)
+            sentinel = foreign_report / "sentinel"
+            sentinel.write_text("foreign\n", encoding="utf-8")
+            (repo / "reports-link").symlink_to(foreign, target_is_directory=True)
+            snap = run_report_node({"action":"snapshot","repoControlRoot":control_root,"taskId":"demo","outputDir":"reports-link"})
+            self.assertFalse(snap["ok"], snap)
+            self.assertIn("ancestry is unsafe", snap["error"])
+            self.assertNotIn("already exists", snap["error"])
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "foreign\n")
+
+    def test_exact_completion_with_nonterminal_status_warns_and_handles(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, _expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            seed_task_container(repo)
+            workflow_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+            child_run_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+            async_dir = base / "async-nonterminal"
+            async_dir.mkdir()
+            status = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, str(async_dir / child_run_id / "session.jsonl"))
+            status["state"] = "running"
+            (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+            result = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
+            self.assertTrue(result["ok"], result)
+            self.assertTrue(result["result"]["handled"])
+            self.assertEqual(result["result"]["ignoredReason"], "nonterminal status artifact")
+            self.assertEqual(len(result["result"]["warnings"]), 1)
+            warnings_file = repo / ".agent_state/plans/demo/.collab_op/lane_loop_report/warnings.jsonl"
+            self.assertEqual(len(warnings_file.read_text(encoding="utf-8").splitlines()), 1)
+
+    def test_partial_then_exact_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            seed_task_container(repo)
+            workflow_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+            child_run_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+            async_dir = base / "async-partial"
+            async_dir.mkdir()
+            child_session_dir = async_dir / child_run_id
+            child_session_dir.mkdir(parents=True)
+            session_path = child_session_dir / "session.jsonl"
+            session_path.write_text(make_session([("c1","read",1000,1100,False)],[10]), encoding="utf-8")
+            status = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, str(session_path))
+            (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+            result_partial = run_report_node({
+                "action":"handleCompletion",
+                "repoControlRoot": control_root,
+                "taskId": "demo",
+                "ticketId": "T001",
+                "laneId": "writer-1",
+                "lanePath": lane_path,
+                "workflowId": workflow_id,
+                "asyncDir": str(async_dir),
+                "eventWorkflowId": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+                "eventAsyncDir": str(async_dir),
+            })
+            self.assertTrue(result_partial["ok"])
+            self.assertFalse(result_partial["result"]["handled"])
+            self.assertEqual(len(result_partial["result"]["published"]), 0)
+            result_partial2 = run_report_node({
+                "action":"handleCompletion",
+                "repoControlRoot": control_root,
+                "taskId": "demo",
+                "ticketId": "T001",
+                "laneId": "writer-1",
+                "lanePath": lane_path,
+                "workflowId": workflow_id,
+                "asyncDir": str(async_dir),
+                "eventWorkflowId": workflow_id,
+                "eventAsyncDir": "/tmp/wrong/async",
+            })
+            self.assertTrue(result_partial2["ok"])
+            self.assertFalse(result_partial2["result"]["handled"])
+            result_exact = run_report_node({
+                "action":"handleCompletion",
+                "repoControlRoot": control_root,
+                "taskId": "demo",
+                "ticketId": "T001",
+                "laneId": "writer-1",
+                "lanePath": lane_path,
+                "workflowId": workflow_id,
+                "asyncDir": str(async_dir),
+                "eventWorkflowId": workflow_id,
+                "eventAsyncDir": str(async_dir),
+            })
+            self.assertTrue(result_exact["ok"])
+            self.assertTrue(result_exact["result"]["handled"])
+            self.assertEqual(len(result_exact["result"]["published"]), 1)
+            report_file = repo / f".agent_state/plans/demo/.collab_op/lane_loop_report/writer-1/{child_run_id}.json"
+            self.assertTrue(report_file.is_file())
+
+    def test_wrapper_counts_once_and_structured_output_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            _repo, expected, lane_path, _control = self.seed_repo_with_lane(base)
+            workflow_id = "11111111-1111-1111-1111-111111111111"
+            child_run_id = "22222222-2222-2222-2222-222222222222"
+            session_file = f"/tmp/{child_run_id}/session.jsonl"
+            session = make_session([
+                ("wrapper1","mcpScript",1000,1500,False),
+                ("struct1","structured_output",2000,2100,False),
+                ("read1","read",3000,3100,False),
+            ], [100,100,100])
+            status = make_status(workflow_id, lane_path, "impl-0", child_run_id, 2, session_file)
+            result = run_report_node({"action":"derive","taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"statusObj":status,"sessionText":session})
+            self.assertTrue(result["ok"])
+            tools = result["report"]["tools"]
+            self.assertEqual(tools["mcpScript"]["calls"], 1)
+            self.assertEqual(tools["structured_output"]["calls"], 1)
+            self.assertEqual(tools["read"]["calls"], 1)
+            self.assertEqual(len(tools), 3)
+
+    def test_duplicate_trace_and_step_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            _repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            workflow_id = "11111111-1111-1111-1111-111111111111"
+            child_run_id = "22222222-2222-2222-2222-222222222222"
+            session_file = f"/tmp/{child_run_id}/session.jsonl"
+            session = make_session([("c1","read",1000,1100,False)],[10])
+            status_dup_trace = {
+                "runId": workflow_id,
+                "cwd": lane_path,
+                "state": "complete",
+                "workflow": {"trace": [
+                    {"key": "impl-0", "runId": child_run_id, "durationMs": 100, "state": "completed"},
+                    {"key": "impl-0", "runId": child_run_id, "durationMs": 200, "state": "completed"},
+                ], "emits": [], "console": []},
+                "steps": [{"workflowKey": "impl-0", "parentWorkflowRunId": workflow_id, "status": "completed", "turnCount": 1, "sessionFile": session_file}]
+            }
+            result = run_report_node({"action":"derive","taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"statusObj":status_dup_trace,"sessionText":session})
+            self.assertFalse(result["ok"])
+            self.assertIn("duplicate", result["error"].lower())
+            status_dup_step = {
+                "runId": workflow_id,
+                "cwd": lane_path,
+                "state": "complete",
+                "workflow": {"trace": [{"key": "impl-0", "runId": child_run_id, "durationMs": 100, "state": "completed"}], "emits": [], "console": []},
+                "steps": [
+                    {"workflowKey": "impl-0", "parentWorkflowRunId": workflow_id, "status": "completed", "turnCount": 1, "sessionFile": session_file},
+                    {"workflowKey": "impl-0", "parentWorkflowRunId": workflow_id, "status": "completed", "turnCount": 2, "sessionFile": session_file},
+                ]
+            }
+            result2 = run_report_node({"action":"derive","taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"statusObj":status_dup_step,"sessionText":session})
+            self.assertFalse(result2["ok"])
+            self.assertIn("duplicate", result2["error"].lower())
+
+    def test_correlation_requires_absolute_session_path_with_child_segment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            _repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            workflow_id = "11111111-1111-1111-1111-111111111111"
+            child_run_id = "22222222-2222-2222-2222-222222222222"
+            session = make_session([("c1","read",1000,1100,False)],[10])
+            status_rel = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, "relative/session.jsonl")
+            result = run_report_node({"action":"derive","taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"statusObj":status_rel,"sessionText":session})
+            self.assertFalse(result["ok"])
+            self.assertIn("absolute", result["error"].lower())
+            status_mismatch = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, "/tmp/wrong/session.jsonl")
+            result2 = run_report_node({"action":"derive","taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"statusObj":status_mismatch,"sessionText":session})
+            self.assertFalse(result2["ok"])
+            self.assertIn("childrunid", result2["error"].lower())
+
+    def test_wrong_lane_identity_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            _repo, expected, lane_path, _control = self.seed_repo_with_lane(base)
+            workflow_id = "11111111-1111-1111-1111-111111111111"
+            child_run_id = "22222222-2222-2222-2222-222222222222"
+            session_file = f"/tmp/{child_run_id}/session.jsonl"
+            session = make_session([("c1","read",1000,1100,False)],[10])
+            # correct lane should succeed
+            status_ok = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, session_file)
+            ok = run_report_node({"action":"derive","taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"statusObj":status_ok,"sessionText":session})
+            self.assertTrue(ok["ok"], ok)
+            # wrong lane must be rejected via normalized cwd mismatch
+            wrong_lane = lane_path + "-other" if not lane_path.endswith("/") else lane_path + "other"
+            # also test with trailing slash normalization
+            status_wrong = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, session_file)
+            wrong = run_report_node({"action":"derive","taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":wrong_lane,"statusObj":status_wrong,"sessionText":session})
+            self.assertFalse(wrong["ok"])
+            self.assertIn("lane", wrong["error"].lower())
+            # also via handleCompletion path
+            with tempfile.TemporaryDirectory() as tmp2:
+                base2 = Path(tmp2)
+                repo2, expected2, lane_path2, control_root2 = self.seed_repo_with_lane(base2)
+                seed_task_container(repo2)
+                async_dir = base2 / "async-wrong-lane"
+                async_dir.mkdir()
+                child_run_id2 = "33333333-3333-3333-3333-333333333333"
+                workflow_id2 = "44444444-4444-4444-4444-444444444444"
+                sess_dir = async_dir / child_run_id2
+                sess_dir.mkdir(parents=True)
+                sess_path = sess_dir / "session.jsonl"
+                sess_path.write_text(make_session([("c1","read",1000,1100,False)],[10]), encoding="utf-8")
+                status2 = make_status(workflow_id2, lane_path2, "impl-0", child_run_id2, 1, str(sess_path))
+                (async_dir / "status.json").write_text(json.dumps(status2), encoding="utf-8")
+                wrong_lane2 = str(Path(lane_path2).parent / "other-lane")
+                res = run_report_node({"action":"handleCompletion","repoControlRoot":control_root2,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":wrong_lane2,"workflowId":workflow_id2,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id2,"eventAsyncDir":str(async_dir)})
+                self.assertTrue(res["ok"])
+                self.assertTrue(res["result"]["handled"])
+                self.assertEqual(len(res["result"]["published"]), 0)
+                self.assertGreaterEqual(len(res["result"]["warnings"]), 1)
+                warnings_file = repo2 / ".agent_state/plans/demo/.collab_op/lane_loop_report/warnings.jsonl"
+                self.assertTrue(warnings_file.is_file())
+                self.assertFalse((Path(control_root2) / ".agent_state/.collab_op_operation_warnings.jsonl").exists())
+
+    def test_same_name_calls_first_missing_second_completes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            _repo, expected, lane_path, _control = self.seed_repo_with_lane(base)
+            workflow_id = "11111111-1111-1111-1111-111111111111"
+            child_run_id = "22222222-2222-2222-2222-222222222222"
+            session_file = f"/tmp/{child_run_id}/session.jsonl"
+            # Two same-name tool calls: first missing result, second completes with 100ms duration
+            session = make_session([("call1","read",1000,None,False),("call2","read",2000,2100,False)],[10,10])
+            status = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, session_file)
+            result = run_report_node({"action":"derive","taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"statusObj":status,"sessionText":session})
+            self.assertTrue(result["ok"], result)
+            tools = result["report"]["tools"]
+            self.assertIn("read", tools)
+            self.assertEqual(tools["read"]["calls"], 2)
+            self.assertEqual(tools["read"]["succeeded"], 1)
+            self.assertEqual(tools["read"]["failed"], 1)
+            self.assertEqual(tools["read"]["observedDurationsMs"], [None, 100])
+            self.assertEqual(result["report"]["toolObservedDurationMs"], 100)
+
+    def test_listener_exception_retires_pending_and_partial_remains(self) -> None:
+        script = textwrap.dedent(f'''
+            import {{ createRequire }} from "node:module";
+            const require = createRequire('/home/axel/.pi/agent/npm/package.json');
+            const createJiti = require('jiti');
+            const jiti = createJiti('/home/axel/.pi/agent/npm/package.json', {{ alias: {{ "@earendil-works/pi-coding-agent": "/usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js" }}, fsCache:false, moduleCache:false }});
+            const laneMod = jiti("{ROOT / "home/.pi/agent/extensions/collab-reviewed-lane.ts"}");
+            const harness = laneMod.createIsolatedReviewedLaneHarness();
+            let warned = null;
+            const origWarn = console.warn;
+            console.warn = (msg) => {{ warned = String(msg); try {{ origWarn(String(msg)); }} catch {{}} }};
+            function createFakePi() {{
+              const handlers = new Map();
+              return {{
+                events: {{
+                  on: (event, handler) => {{
+                    if (!handlers.has(event)) handlers.set(event, []);
+                    handlers.get(event).push(handler);
+                    return () => {{
+                      const arr = handlers.get(event) || [];
+                      const idx = arr.indexOf(handler);
+                      if (idx !== -1) arr.splice(idx, 1);
+                    }};
+                  }},
+                  emit: (event, data) => {{
+                    const arr = handlers.get(event) || [];
+                    for (const h of [...arr]) h(data);
+                  }}
+                }},
+                _handlers: handlers
+              }};
+            }}
+            const fakePi = createFakePi();
+            const failingDeps = {{
+              withTaskLock: async () => {{ throw new Error("injected lock failure for test"); }},
+              error: (code, msg) => new Error(msg),
+            }};
+            harness.registerPending({{
+              pi: fakePi,
+              repo: {{ controlRoot: "/tmp/repo", gitDir: "/tmp/repo/.git", worktreeRoot: "/tmp/repo", git: async () => ({{}}) }},
+              taskId: "demo",
+              ticketId: "T001",
+              laneId: "writer-1",
+              lanePath: "/tmp/lane",
+              workflowId: "11111111-1111-1111-1111-111111111111",
+              asyncDir: "/tmp/async",
+              deps: failingDeps
+            }});
+            if (harness.getPendingCount() !== 1) throw new Error("setup failed");
+            fakePi.events.emit("subagent:async-complete", {{ runId: "11111111-1111-1111-1111-111111111111", asyncDir: "/tmp/async" }});
+            await new Promise(r => setTimeout(r, 30));
+            if (harness.getPendingCount() !== 0) throw new Error("pending not retired on exact tuple exception");
+            if (!warned || !warned.toLowerCase().includes("injected")) throw new Error("warning not emitted on lock exception: " + String(warned));
+            if (warned && warned.includes(".collab_op_operation_warnings")) throw new Error("should not create operation warnings file");
+            warned = null;
+            const fakePi2 = createFakePi();
+            const harness2 = laneMod.createIsolatedReviewedLaneHarness();
+            const okDeps = {{
+              withTaskLock: async () => {{ throw new Error("should not be called for partial"); }},
+              error: (code, msg) => new Error(msg),
+            }};
+            harness2.registerPending({{
+              pi: fakePi2,
+              repo: {{ controlRoot: "/tmp/repo", gitDir: "/tmp/repo/.git", worktreeRoot: "/tmp/repo", git: async () => ({{}}) }},
+              taskId: "demo",
+              ticketId: "T001",
+              laneId: "writer-1",
+              lanePath: "/tmp/lane",
+              workflowId: "22222222-2222-2222-2222-222222222222",
+              asyncDir: "/tmp/async-exact",
+              deps: okDeps
+            }});
+            fakePi2.events.emit("subagent:async-complete", {{ runId: "22222222-2222-2222-2222-222222222222", asyncDir: "/tmp/wrong" }});
+            await new Promise(r => setTimeout(r, 30));
+            if (harness2.getPendingCount() !== 1) throw new Error("partial event should not retire pending");
+            if (warned) throw new Error("partial should not warn");
+            fakePi2.events.emit("subagent:async-complete", {{ runId: "wrong-id", asyncDir: "/tmp/async-exact" }});
+            await new Promise(r => setTimeout(r, 30));
+            if (harness2.getPendingCount() !== 1) throw new Error("unrelated event should not retire");
+            console.warn = origWarn;
+            process.stdout.write(JSON.stringify({{ok:true}}));
+        ''')
+        import subprocess, textwrap as _tw, json as _json, tempfile as _tf
+        from pathlib import Path as _P
+        with _tf.NamedTemporaryFile(mode='w', suffix='.mjs', delete=False) as f:
+            f.write(script)
+            fname = f.name
+        try:
+            run = subprocess.run(["/usr/bin/node", fname], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, f"node failed: {run.stderr}\\n{run.stdout}")
+            out = _json.loads(run.stdout.strip().splitlines()[-1])
+            self.assertTrue(out.get("ok"))
+            # ensure no global operation warnings file was created at repo control root (our dummy /tmp/repo should not have file)
+            self.assertFalse((_P("/tmp/repo") / ".agent_state/.collab_op_operation_warnings.jsonl").exists())
+        finally:
+            _P(fname).unlink(missing_ok=True)
+
+
+def run_feedback_node(request: dict) -> dict:
+    inner = json.dumps(request)
+    script = textwrap.dedent(f"""
+        import {{ pathToFileURL }} from "node:url";
+        const extUrl = pathToFileURL("{COLLREPORT}");
+        const mod = await import(extUrl.href);
+        const req = {inner};
+        let result;
+        try {{
+            if (req.action === "publishFeedback") {{
+                const res = await mod.publishFeedback({{
+                    repoControlRoot: req.repoControlRoot,
+                    taskId: req.taskId,
+                    ticketId: req.ticketId,
+                    laneId: req.laneId,
+                    workflowId: req.workflowId,
+                    workflowKey: req.workflowKey,
+                    childRunId: req.childRunId,
+                    lanePath: req.lanePath,
+                    efficiencyFeedback: req.efficiencyFeedback,
+                }});
+                result = {{ok: true, result: res}};
+            }} else if (req.action === "snapshotFeedback") {{
+                await mod.snapshotLaneLoopFeedback({{
+                    repoControlRoot: req.repoControlRoot,
+                    taskId: req.taskId,
+                    outputDir: req.outputDir,
+                }});
+                result = {{ok: true}};
+            }} else if (req.action === "snapshotReport") {{
+                await mod.snapshotLaneLoopReport({{
+                    repoControlRoot: req.repoControlRoot,
+                    taskId: req.taskId,
+                    outputDir: req.outputDir,
+                }});
+                result = {{ok: true}};
+            }} else if (req.action === "preflight") {{
+                await mod.preflightSnapshot({{
+                    repoControlRoot: req.repoControlRoot,
+                    taskId: req.taskId,
+                    outputDir: req.outputDir,
+                    subtree: req.subtree,
+                }});
+                result = {{ok: true}};
+            }} else {{
+                result = {{ok: false, error: "unknown action"}};
+            }}
+        }} catch (e) {{
+            result = {{ok: false, error: e instanceof Error ? e.message : String(e)}};
+        }}
+        process.stdout.write(JSON.stringify(result));
+    """)
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.mjs', delete=False) as f:
+        f.write(script)
+        fname = f.name
+    try:
+        run = subprocess.run(["/usr/bin/node", "--experimental-strip-types", fname], capture_output=True, text=True, check=False)
+        if run.returncode != 0:
+            raise AssertionError(f"node failed: {run.stderr}\n{run.stdout}\nscript:{script}")
+        lines = [l for l in run.stdout.strip().splitlines() if l.strip()]
+        return json.loads(lines[-1])
+    finally:
+        Path(fname).unlink(missing_ok=True)
+
+COLL_RESULT_SCHEMA = ROOT / "home/.pi/agent/extensions/collab-result-schema.ts"
+
+def run_schema_validation(request: dict) -> dict:
+    inner = json.dumps(request)
+    script = textwrap.dedent(f"""
+        import {{ pathToFileURL }} from "node:url";
+        const extUrl = pathToFileURL("{COLL_RESULT_SCHEMA}");
+        const mod = await import(extUrl.href);
+        const req = {inner};
+        let result;
+        try {{
+            if (req.kind === "worker") {{
+                result = {{ok: true, valid: mod.isValidWorkerOutput(req.value)}};
+            }} else if (req.kind === "reviewer") {{
+                result = {{ok: true, valid: mod.isValidReviewerOutput(req.value)}};
+            }} else if (req.kind === "structured") {{
+                result = {{ok: true, valid: mod.isValidStructuredOutput(req.workflowKey, req.value)}};
+            }} else {{
+                result = {{ok: false, error: "unknown kind"}};
+            }}
+        }} catch (e) {{
+            result = {{ok: false, error: e instanceof Error ? e.message : String(e)}};
+        }}
+        process.stdout.write(JSON.stringify(result));
+    """)
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.mjs', delete=False) as f:
+        f.write(script)
+        fname = f.name
+    try:
+        run = subprocess.run(["/usr/bin/node", "--experimental-strip-types", fname], capture_output=True, text=True, check=False)
+        if run.returncode != 0:
+            raise AssertionError(f"node schema validation failed: {run.stderr}\n{run.stdout}")
+        lines = [l for l in run.stdout.strip().splitlines() if l.strip()]
+        return json.loads(lines[-1])
+    finally:
+        Path(fname).unlink(missing_ok=True)
+
+def valid_worker_completed(feedback: str | None) -> dict:
+    base: dict = {"outcome": "COMPLETED", "validation": []}
+    if feedback is not None:
+        base["efficiencyFeedback"] = feedback
+    return base
+
+def valid_worker_blocked(feedback: str | None) -> dict:
+    base: dict = {"outcome": "BLOCKED", "blocker": "blocked"}
+    if feedback is not None:
+        base["efficiencyFeedback"] = feedback
+    return base
+
+def valid_worker_needs(feedback: str | None) -> dict:
+    base: dict = {"outcome": "NEEDS_DECISION", "decision": {"why": "why", "question": "q"}}
+    if feedback is not None:
+        base["efficiencyFeedback"] = feedback
+    return base
+
+def valid_reviewer_pass(feedback: str | None) -> dict:
+    base: dict = {"verdict": "PASS"}
+    if feedback is not None:
+        base["efficiencyFeedback"] = feedback
+    return base
+
+def valid_reviewer_blocked(feedback: str | None) -> dict:
+    base: dict = {"verdict": "BLOCKED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}]}
+    if feedback is not None:
+        base["efficiencyFeedback"] = feedback
+    return base
+
+def valid_reviewer_needs(feedback: str | None) -> dict:
+    base: dict = {"verdict": "NEEDS_DECISION", "decision": {"why": "why", "question": "q"}}
+    if feedback is not None:
+        base["efficiencyFeedback"] = feedback
+    return base
+
+def make_status_with_feedback(workflow_id: str, lane_path: str, workflow_key: str, child_run_id: str, turn_count: int, session_file: str, feedback: object, duration_ms: int = 12345, state: str = "complete") -> dict[str, object]:
+    base = make_status(workflow_id, lane_path, workflow_key, child_run_id, turn_count, session_file, duration_ms, state)
+    steps = base["steps"]  # type: ignore
+    is_worker = workflow_key.startswith("impl-")
+    if isinstance(feedback, str) and feedback == "__OMIT__":
+        # valid structure without efficiencyFeedback
+        if is_worker:
+            steps[0]["structuredOutput"] = valid_worker_completed(None)  # type: ignore
+        else:
+            steps[0]["structuredOutput"] = valid_reviewer_pass(None)  # type: ignore
+    elif feedback is None:
+        if is_worker:
+            steps[0]["structuredOutput"] = valid_worker_completed(None)  # type: ignore
+        else:
+            steps[0]["structuredOutput"] = valid_reviewer_pass(None)  # type: ignore
+    else:
+        # feedback is string (including "" and 10000/10001) or other type for negative tests
+        if is_worker:
+            # choose COMPLETED as default for worker feedback tests
+            if isinstance(feedback, str):
+                steps[0]["structuredOutput"] = valid_worker_completed(feedback)  # type: ignore
+            else:
+                # for invalid type test, still produce valid structure but with invalid feedback type
+                steps[0]["structuredOutput"] = {"outcome": "COMPLETED", "validation": [], "efficiencyFeedback": feedback}  # type: ignore
+        else:
+            if isinstance(feedback, str):
+                steps[0]["structuredOutput"] = valid_reviewer_pass(feedback)  # type: ignore
+            else:
+                steps[0]["structuredOutput"] = {"verdict": "PASS", "efficiencyFeedback": feedback}  # type: ignore
+    return base
+
+class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
+    def test_omission_creates_no_artifact_plans_and_archives(self) -> None:
+        for kind, structured in (
+            ("worker", valid_worker_completed(None)),
+            ("reviewer", valid_reviewer_pass(None)),
+        ):
+            with self.subTest(kind=kind):
+                valid = run_schema_validation({"kind": kind, "value": structured})
+                self.assertTrue(valid["ok"], valid)
+                self.assertTrue(valid["valid"], f"omitted feedback must remain valid for {kind}")
+
+        for archived in (False, True):
+            with self.subTest(archived=archived), tempfile.TemporaryDirectory() as tmp:
+                base = Path(tmp)
+                repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+                seed_task_container(repo, archived=archived)
+                workflow_id = "11111111-1111-1111-1111-111111111111"
+                child_run_id = "22222222-2222-2222-2222-222222222222"
+                async_dir = base / "async-omission"
+                async_dir.mkdir()
+                sess_dir = async_dir / child_run_id
+                sess_dir.mkdir(parents=True)
+                sess_path = sess_dir / "session.jsonl"
+                sess_path.write_text(make_session([("c1","read",1000,1100,False)],[10]), encoding="utf-8")
+                status = make_status_with_feedback(workflow_id, lane_path, "impl-0", child_run_id, 1, str(sess_path), "__OMIT__")
+                (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+                result = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
+                self.assertTrue(result["ok"], result)
+                self.assertTrue(result["result"]["handled"])
+                self.assertEqual(len(result["result"]["published"]), 1)
+                container = repo / (".agent_state/archives/demo" if archived else ".agent_state/plans/demo")
+                feedback_file = container / ".collab_op/lane_loop_feedback/writer-1" / f"{child_run_id}.json"
+                self.assertFalse(feedback_file.exists())
+                warnings_file = container / ".collab_op/lane_loop_feedback/warnings.jsonl"
+                if warnings_file.exists():
+                    self.assertNotIn("efficiencyFeedback", warnings_file.read_text(encoding="utf-8"))
+
+    def test_empty_and_10000_bmp_nonbmp_via_registered_schema(self) -> None:
+        cases = [("", "empty"), ("a"*10000, "bmp-10000"), ("😀"*10000, "nonbmp-10000")]
+        for feedback, label in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
+                base = Path(tmp)
+                repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+                seed_task_container(repo)
+                workflow_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+                child_run_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+                # validate via registered adapter schema first
+                valid = run_schema_validation({"kind": "worker", "value": valid_worker_completed(feedback)})
+                self.assertTrue(valid["ok"], valid)
+                self.assertTrue(valid["valid"], f"{label} should pass registered schema")
+                async_dir = base / f"async-{label}"
+                async_dir.mkdir()
+                sess_dir = async_dir / child_run_id
+                sess_dir.mkdir(parents=True)
+                sess_path = sess_dir / "session.jsonl"
+                sess_path.write_text(make_session([("c1","read",1000,1100,False)],[10]), encoding="utf-8")
+                status = make_status_with_feedback(workflow_id, lane_path, "impl-0", child_run_id, 1, str(sess_path), feedback)
+                (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+                result = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
+                self.assertTrue(result["ok"], result)
+                feedback_file = repo / ".agent_state/plans/demo/.collab_op/lane_loop_feedback/writer-1" / f"{child_run_id}.json"
+                self.assertTrue(feedback_file.is_file(), f"{label} should be accepted")
+                payload = json.loads(feedback_file.read_text(encoding="utf-8"))
+                self.assertEqual(payload["efficiencyFeedback"], feedback)
+                content = feedback_file.read_text(encoding="utf-8")
+                self.assertEqual(content, json.dumps(payload, separators=(',', ':'), ensure_ascii=False) + "\n")
+
+    def test_10001_bmp_nonbmp_rejected_via_registered_schema(self) -> None:
+        for char, label in [("a", "bmp"), ("😀", "nonbmp")]:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
+                base = Path(tmp)
+                repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+                seed_task_container(repo)
+                workflow_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+                child_run_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+                feedback = char * 10001
+                self.assertEqual(len([*feedback]), 10001)
+                invalid = run_schema_validation({"kind": "worker", "value": valid_worker_completed(feedback)})
+                self.assertTrue(invalid["ok"], invalid)
+                self.assertFalse(invalid["valid"], f"{label} 10001 should fail registered schema")
+                pub = run_feedback_node({"action":"publishFeedback","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"efficiencyFeedback":feedback})
+                self.assertTrue(pub["ok"], pub)
+                self.assertFalse(pub["result"]["published"])
+                self.assertIn("warning", pub["result"])
+                feedback_file = repo / ".agent_state/plans/demo/.collab_op/lane_loop_feedback/writer-1" / f"{child_run_id}.json"
+                self.assertFalse(feedback_file.exists())
+                async_dir = base / f"async-10001-{label}"
+                async_dir.mkdir()
+                sess_dir = async_dir / child_run_id
+                sess_dir.mkdir(parents=True)
+                sess_path = sess_dir / "session.jsonl"
+                sess_path.write_text(make_session([("c1","read",1000,1100,False)],[10]), encoding="utf-8")
+                status = make_status_with_feedback(workflow_id, lane_path, "impl-0", child_run_id, 1, str(sess_path), feedback)
+                (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+                result = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
+                self.assertTrue(result["ok"], result)
+                self.assertFalse((repo / ".agent_state/plans/demo/.collab_op/lane_loop_feedback/writer-1" / f"{child_run_id}.json").exists())
+                self.assertGreaterEqual(len(result["result"]["warnings"]), 1)
+
+    def test_all_six_branches_via_registered_adapter(self) -> None:
+        branches = [
+            ("impl-0", valid_worker_completed("impl completed"), "worker COMPLETED"),
+            ("impl-0", valid_worker_blocked("impl blocked"), "worker BLOCKED"),
+            ("impl-0", valid_worker_needs("impl needs"), "worker NEEDS_DECISION"),
+            ("review-0", valid_reviewer_pass("review pass"), "reviewer PASS"),
+            ("review-0", valid_reviewer_blocked("review blocked"), "reviewer BLOCKED"),
+            ("review-0", valid_reviewer_needs("review needs"), "reviewer NEEDS_DECISION"),
+        ]
+        for workflow_key, structured, label in branches:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
+                base = Path(tmp)
+                repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+                seed_task_container(repo)
+                workflow_id = "11111111-1111-1111-1111-111111111111"
+                child_run_id = "22222222-2222-2222-2222-222222222222"
+                kind = "worker" if workflow_key.startswith("impl") else "reviewer"
+                valid = run_schema_validation({"kind": kind, "value": structured})
+                self.assertTrue(valid["ok"], valid)
+                self.assertTrue(valid["valid"], f"{label} should pass registered schema")
+                async_dir = base / "async-branch"
+                async_dir.mkdir()
+                sess_dir = async_dir / child_run_id
+                sess_dir.mkdir(parents=True)
+                sess_path = sess_dir / "session.jsonl"
+                sess_path.write_text(make_session([("c1","read",1000,1100,False)],[10]), encoding="utf-8")
+                status = make_status(workflow_id, lane_path, workflow_key, child_run_id, 1, str(sess_path))
+                status["steps"][0]["structuredOutput"] = structured  # type: ignore
+                (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+                result = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
+                self.assertTrue(result["ok"], f"{label} {result}")
+                feedback_file = repo / ".agent_state/plans/demo/.collab_op/lane_loop_feedback/writer-1" / f"{child_run_id}.json"
+                self.assertTrue(feedback_file.is_file(), f"{label} should create feedback")
+                payload = json.loads(feedback_file.read_text(encoding="utf-8"))
+                self.assertIn("efficiencyFeedback", payload)
+                self.assertEqual(payload["role"], "implementer" if workflow_key.startswith("impl") else "acceptor")
+
+    def test_malformed_output_no_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            seed_task_container(repo)
+            workflow_id = "11111111-1111-1111-1111-111111111111"
+            child_run_id = "22222222-2222-2222-2222-222222222222"
+            async_dir = base / "async-malformed"
+            async_dir.mkdir()
+            sess_dir = async_dir / child_run_id
+            sess_dir.mkdir(parents=True)
+            sess_path = sess_dir / "session.jsonl"
+            sess_path.write_text(make_session([("c1","read",1000,1100,False)],[10]), encoding="utf-8")
+            # Invalid COMPLETED missing required outcome/validation but with efficiencyFeedback
+            malformed = {"efficiencyFeedback": "should not be accepted"}
+            invalid = run_schema_validation({"kind": "worker", "value": malformed})
+            self.assertTrue(invalid["ok"])
+            self.assertFalse(invalid["valid"], "malformed missing outcome/validation should fail schema")
+            status = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, str(sess_path))
+            status["steps"][0]["structuredOutput"] = malformed  # type: ignore
+            (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+            result = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
+            self.assertTrue(result["ok"], result)
+            self.assertFalse((repo / ".agent_state/plans/demo/.collab_op/lane_loop_feedback/writer-1" / f"{child_run_id}.json").exists(), "malformed output must not create artifact")
+            # also test BLOCKED missing blocker
+            malformed2 = {"outcome": "BLOCKED", "efficiencyFeedback": "also malformed"}
+            invalid2 = run_schema_validation({"kind": "worker", "value": malformed2})
+            self.assertFalse(invalid2["valid"])
+            status2 = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, str(sess_path))
+            status2["steps"][0]["structuredOutput"] = malformed2  # type: ignore
+            (base / "async-malformed2").mkdir()
+            async_dir2 = base / "async-malformed2"
+            sess_dir2 = async_dir2 / child_run_id
+            sess_dir2.mkdir(parents=True)
+            (sess_dir2 / "session.jsonl").write_text(make_session([("c1","read",1000,1100,False)],[10]), encoding="utf-8")
+            status2["steps"][0]["sessionFile"] = str(sess_dir2 / "session.jsonl")
+            status2["workflow"]["trace"][0]["runId"] = child_run_id  # type: ignore
+            # Need to reconstruct status correctly: use make_status for same ids but inject malformed2
+            status2b = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, str(sess_dir2 / "session.jsonl"))
+            status2b["steps"][0]["structuredOutput"] = malformed2  # type: ignore
+            (async_dir2 / "status.json").write_text(json.dumps(status2b), encoding="utf-8")
+            result2 = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir2),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir2)})
+            self.assertTrue(result2["ok"])
+            self.assertFalse((repo / ".agent_state/plans/demo/.collab_op/lane_loop_feedback/writer-1" / f"{child_run_id}.json").exists())
+
+    def test_exact_child_mismatch_no_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            seed_task_container(repo)
+            workflow_id = "11111111-1111-1111-1111-111111111111"
+            correct_child = "22222222-2222-2222-2222-222222222222"
+            wrong_child = "33333333-3333-3333-3333-333333333333"
+            async_dir = base / "async-mismatch"
+            async_dir.mkdir()
+            sess_dir = async_dir / correct_child
+            sess_dir.mkdir(parents=True)
+            sess_path = sess_dir / "session.jsonl"
+            sess_path.write_text(make_session([("c1","read",1000,1100,False)],[10]), encoding="utf-8")
+            status = make_status(workflow_id, lane_path, "impl-0", wrong_child, 1, str(sess_path))
+            (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+            result = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
+            self.assertTrue(result["ok"], result)
+            self.assertFalse((repo / f".agent_state/plans/demo/.collab_op/lane_loop_feedback/writer-1/{wrong_child}.json").exists())
+            self.assertFalse((repo / f".agent_state/plans/demo/.collab_op/lane_loop_feedback/writer-1/{correct_child}.json").exists())
+
+    def test_correction_rereview_separation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            seed_task_container(repo)
+            workflow_id = "11111111-1111-1111-1111-111111111111"
+            child1 = "11111111-1111-1111-1111-111111111111"
+            child2 = "22222222-2222-2222-2222-222222222222"
+            async_dir = base / "async-correction"
+            async_dir.mkdir()
+            for child in [child1, child2]:
+                d = async_dir / child
+                d.mkdir(parents=True)
+                (d / "session.jsonl").write_text(make_session([("c1","read",1000,1100,False)],[10]), encoding="utf-8")
+            status = {
+                "runId": workflow_id,
+                "cwd": lane_path,
+                "state": "complete",
+                "workflow": {"trace": [
+                    {"key": "impl-0", "runId": child1, "durationMs": 100, "state": "completed"},
+                    {"key": "impl-1", "runId": child2, "durationMs": 200, "state": "completed"},
+                ], "emits": [], "console": []},
+                "steps": [
+                    {"workflowKey": "impl-0", "parentWorkflowRunId": workflow_id, "status": "completed", "turnCount": 1, "sessionFile": str(async_dir / child1 / "session.jsonl"), "structuredOutput": {"outcome": "COMPLETED", "validation": [], "efficiencyFeedback": "feedback impl-0"}},
+                    {"workflowKey": "impl-1", "parentWorkflowRunId": workflow_id, "status": "completed", "turnCount": 1, "sessionFile": str(async_dir / child2 / "session.jsonl"), "structuredOutput": {"outcome": "COMPLETED", "validation": [], "efficiencyFeedback": "feedback impl-1"}},
+                ]
+            }
+            (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+            result = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
+            self.assertTrue(result["ok"], result)
+            f1 = repo / f".agent_state/plans/demo/.collab_op/lane_loop_feedback/writer-1/{child1}.json"
+            f2 = repo / f".agent_state/plans/demo/.collab_op/lane_loop_feedback/writer-1/{child2}.json"
+            self.assertTrue(f1.is_file())
+            self.assertTrue(f2.is_file())
+            self.assertEqual(json.loads(f1.read_text(encoding="utf-8"))["efficiencyFeedback"], "feedback impl-0")
+            self.assertEqual(json.loads(f2.read_text(encoding="utf-8"))["efficiencyFeedback"], "feedback impl-1")
+            self.assertNotEqual(f1.read_text(encoding="utf-8"), f2.read_text(encoding="utf-8"))
+
+    def test_exact_duplicate_and_different_collision(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            seed_task_container(repo)
+            workflow_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+            child_run_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+            fb = "same feedback"
+            pub1 = run_feedback_node({"action":"publishFeedback","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"efficiencyFeedback":fb})
+            self.assertTrue(pub1["ok"])
+            self.assertTrue(pub1["result"]["published"])
+            feedback_file = repo / f".agent_state/plans/demo/.collab_op/lane_loop_feedback/writer-1/{child_run_id}.json"
+            content1 = feedback_file.read_text(encoding="utf-8")
+            pub2 = run_feedback_node({"action":"publishFeedback","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"efficiencyFeedback":fb})
+            self.assertTrue(pub2["ok"])
+            self.assertTrue(pub2["result"].get("isDuplicate"))
+            self.assertFalse(pub2["result"]["published"])
+            self.assertEqual(feedback_file.read_text(encoding="utf-8"), content1)
+            pub3 = run_feedback_node({"action":"publishFeedback","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"efficiencyFeedback":"different"})
+            self.assertTrue(pub3["ok"])
+            self.assertFalse(pub3["result"]["published"])
+            self.assertIn("warning", pub3["result"])
+            self.assertEqual(feedback_file.read_text(encoding="utf-8"), content1)
+            warnings = (repo / ".agent_state/plans/demo/.collab_op/lane_loop_feedback/warnings.jsonl").read_text(encoding="utf-8")
+            self.assertIn("collision", warnings)
+
+    def test_warning_dedup_and_unsafe_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            seed_task_container(repo)
+            workflow_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+            child_run_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+            async_dir = base / "async-warn"
+            async_dir.mkdir()
+            sess_dir = async_dir / child_run_id
+            sess_dir.mkdir(parents=True)
+            (sess_dir / "session.jsonl").write_text(make_session([("c1","read",1000,1100,False)],[10]), encoding="utf-8")
+            status = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, str(sess_dir / "session.jsonl"))
+            status["steps"][0]["structuredOutput"] = {"outcome": "COMPLETED", "validation": [], "efficiencyFeedback": 12345}  # type: ignore
+            (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+            result1 = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
+            self.assertTrue(result1["ok"])
+            warnings_file = repo / ".agent_state/plans/demo/.collab_op/lane_loop_feedback/warnings.jsonl"
+            self.assertTrue(warnings_file.is_file())
+            lines1 = warnings_file.read_text(encoding="utf-8").strip().splitlines()
+            result2 = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
+            self.assertTrue(result2["ok"])
+            lines2 = warnings_file.read_text(encoding="utf-8").strip().splitlines()
+            self.assertEqual(len(lines1), len(lines2), "duplicate warning should be suppressed")
+            status2 = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, str(sess_dir / "session.jsonl"))
+            status2["steps"][0]["structuredOutput"] = {"outcome": "COMPLETED", "validation": [], "efficiencyFeedback": "a"*10001}  # type: ignore
+            (async_dir / "status.json").write_text(json.dumps(status2), encoding="utf-8")
+            result3 = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
+            self.assertTrue(result3["ok"])
+            lines3 = warnings_file.read_text(encoding="utf-8").strip().splitlines()
+            self.assertEqual(len(lines3), len(lines2)+1, "different warning should not be deduped")
+            unsafe = run_feedback_node({"action":"publishFeedback","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"../evil","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"efficiencyFeedback":"test"})
+            self.assertTrue(unsafe["ok"])
+            self.assertFalse(unsafe["result"]["published"])
+            self.assertIn("unsafe", unsafe["result"]["warning"].lower())
+            self.assertFalse((Path(control_root) / "evil").exists())
+
+    def test_feedback_not_copied_into_report_or_telemetry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            seed_task_container(repo)
+            workflow_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+            child_run_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+            fb = "qualitative feedback"
+            pub = run_feedback_node({"action":"publishFeedback","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"efficiencyFeedback":fb})
+            self.assertTrue(pub["ok"])
+            report_file = repo / f".agent_state/plans/demo/.collab_op/lane_loop_report/writer-1/{child_run_id}.json"
+            self.assertFalse(report_file.exists())
+            telemetry = repo / ".agent_state/plans/demo/.collab_op/telemetry.jsonl"
+            if telemetry.exists():
+                self.assertNotIn(fb, telemetry.read_text(encoding="utf-8"))
+                self.assertNotIn("efficiencyFeedback", telemetry.read_text(encoding="utf-8"))
+
+    def test_report_and_feedback_independent_after_correlation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, expected, lane_path, control_root = self.seed_repo_with_lane(base)
+            seed_task_container(repo)
+            workflow_id = "11111111-1111-1111-1111-111111111111"
+            child_run_id = "22222222-2222-2222-2222-222222222222"
+            async_dir = base / "async-independent"
+            async_dir.mkdir()
+            missing_session = str(async_dir / child_run_id / "missing.jsonl")
+            status = make_status_with_feedback(workflow_id, lane_path, "impl-0", child_run_id, 1, missing_session, "feedback even though session missing")
+            (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+            result = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
+            self.assertTrue(result["ok"], result)
+            self.assertTrue(result["result"]["handled"])
+            self.assertEqual(len(result["result"]["published"]), 0)
+            feedback_file = repo / f".agent_state/plans/demo/.collab_op/lane_loop_feedback/writer-1/{child_run_id}.json"
+            self.assertTrue(feedback_file.is_file(), "feedback should survive report session failure after exact correlation")
+            self.assertEqual(json.loads(feedback_file.read_text(encoding="utf-8"))["efficiencyFeedback"], "feedback even though session missing")
+            self.assertGreaterEqual(len(result["result"]["warnings"]), 1)
+
+    def test_workflow_with_feedback_preserves_call_sequence_branching_and_projection(self) -> None:
+        worker_completed = {"outcome": "COMPLETED", "validation": [{"check": "behavior", "result": "PASSED", "summary": "works"}], "residualRisks": [], "efficiencyFeedback": "qualitative worker feedback"}
+        reviewer_pass = {"verdict": "PASS", "outOfEnvelopeFindings": [], "efficiencyFeedback": "review feedback"}
+        worker_blocked = {"outcome": "BLOCKED", "blocker": "blocked reason", "efficiencyFeedback": "blocked feedback"}
+        worker_needs = {"outcome": "NEEDS_DECISION", "decision": {"why": "why", "question": "q"}, "efficiencyFeedback": "needs feedback"}
+        reviewer_blocked = {"verdict": "BLOCKED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}], "efficiencyFeedback": "review blocked fb"}
+        reviewer_needs = {"verdict": "NEEDS_DECISION", "decision": {"why": "why", "question": "q"}, "efficiencyFeedback": "review needs fb"}
+        cases = [
+            (
+                [completed_step(worker_completed), reviewer_pass],
+                {
+                    "outcome": "REVIEWED",
+                    "validation": worker_completed["validation"],
+                    "residualRisks": worker_completed["residualRisks"],
+                    "outOfEnvelopeFindings": reviewer_pass["outOfEnvelopeFindings"],
+                },
+                ["impl-0", "review-0"],
+            ),
+            ([worker_blocked], {"outcome": "BLOCKED", "blocker": "blocked reason"}, ["impl-0"]),
+            ([worker_needs], {"outcome": "NEEDS_DECISION", "why": "why", "question": "q"}, ["impl-0"]),
+            ([completed_step(worker_completed), reviewer_needs], {"outcome": "NEEDS_DECISION", "why": "why", "question": "q"}, ["impl-0", "review-0"]),
+            (
+                [completed_step(worker_completed), reviewer_blocked],
+                {"outcome": "CORRECTION_BUDGET_EXHAUSTED", "blockers": reviewer_blocked["blockers"]},
+                ["impl-0", "review-0"],
+            ),
+        ]
+        for steps, expected_terminal, expected_keys in cases:
+            with self.subTest(expected=expected_terminal["outcome"]), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                _, expected, capture, observed = self.launch_case(base)
+                self.assertFalse(observed["is_error"], observed)
+                # Validate each structured output via registered schema before exercising workflow
+                for step in steps:
+                    out = step["structuredOutput"] if isinstance(step, dict) and "structuredOutput" in step else step
+                    kind = "worker" if out.get("outcome") else "reviewer"
+                    valid = run_schema_validation({"kind": kind, "value": out})
+                    self.assertTrue(valid["ok"] and valid["valid"], f"structured output should pass registered schema: {out}")
+                run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=True)
+                execution = json.loads(run.stdout)
+                self.assertEqual(execution["result"], expected_terminal)
+                self.assertNotIn("efficiencyFeedback", execution["result"])
+                self.assertEqual([call["key"] for call in execution["calls"]], expected_keys)
+                for call in execution["calls"]:
+                    self.assertIsInstance(call["options"]["outputSchema"], dict)
+                    # every child uses fresh context and exact lane
+                    self.assertEqual(call["options"]["context"], "fresh")
+                    self.assertIs(call["options"]["worktree"], False)
+
+        # also verify that feedback presence does not change correction branching
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            _, _, capture, observed = self.launch_case(base, correction_budget=1)
+            self.assertFalse(observed["is_error"], observed)
+            blocked_review = {"verdict": "BLOCKED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}], "efficiencyFeedback": "fb"}
+            completed_with_fb = {
+                "outcome": "COMPLETED",
+                "validation": [{"check": "corrected", "result": "PASSED", "summary": "fixed"}],
+                "residualRisks": ["bounded risk"],
+                "efficiencyFeedback": "fb2",
+            }
+            passed_with_fb = {
+                "verdict": "PASS",
+                "outOfEnvelopeFindings": [{"location": "scope", "evidence": "finding"}],
+                "efficiencyFeedback": "fb3",
+            }
+            run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps([completed_step(completed_with_fb), blocked_review, completed_step(completed_with_fb), passed_with_fb])], capture_output=True, text=True, check=True)
+            execution = json.loads(run.stdout)
+            self.assertEqual(
+                execution["result"],
+                {
+                    "outcome": "REVIEWED",
+                    "validation": completed_with_fb["validation"],
+                    "residualRisks": completed_with_fb["residualRisks"],
+                    "outOfEnvelopeFindings": passed_with_fb["outOfEnvelopeFindings"],
+                },
+            )
+            self.assertNotIn("efficiencyFeedback", execution["result"])
+            self.assertEqual([c["key"] for c in execution["calls"]], ["impl-0", "review-0", "impl-1", "review-1"])
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,7 +21,7 @@ const runs = {
     }
     const mutationStatus = wrapped && typeof step.mutationStatus === "string"
       ? step.mutationStatus
-      : structuredOutput?.outcome === "COMPLETED" ? "observed" : "not-applicable";
+      : "not-applicable";
     return {
       structuredOutput,
       output: "ignored free-form output",

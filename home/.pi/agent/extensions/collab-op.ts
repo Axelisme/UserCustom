@@ -7,6 +7,7 @@ import {
   registeredReviewedLaneParameters,
   runReviewedLane,
 } from "./collab-reviewed-lane.ts";
+import { preflightSnapshot, snapshotLaneLoopFeedback, snapshotLaneLoopReport } from "./collab-report.ts";
 const TOOL_VERSION = 1;
 const IDENTIFIER = /^[a-z0-9][a-z0-9._-]*$/;
 type GitResult = { code: number; stdout: string; stderr: string };
@@ -357,7 +358,7 @@ async function releaseTaskLock(lockPath: string, token: string): Promise<void> {
   }
 }
 
-async function withTaskLock<T>(
+export async function withTaskLock<T>(
   repo: Repository,
   taskId: string,
   body: () => Promise<T>,
@@ -3509,6 +3510,38 @@ async function collabReport(
     const warnings = Array.isArray(state.warnings)
       ? state.warnings.filter((value): value is string => typeof value === "string")
       : [];
+    // Preflight both distinct snapshot subtrees (destinations and unsafe sources) before creating either, so refusal on one does not leave a newly written sibling snapshot. Reuses the shared safe primitives.
+    for (const subtree of ["lane_loop_report", "lane_loop_feedback"] as const) {
+      try {
+        await preflightSnapshot({ repoControlRoot: repo.controlRoot, taskId, outputDir, subtree });
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        const isCollision = message.includes("already exists") || message.includes("destination already exists") || message.includes("destination ancestry is unsafe") || message.includes("source contains") || message.includes("source is not a directory") || message.includes("source ancestry is unsafe");
+        if (isCollision) {
+          throw new CollabOpError("report_collision", message, `Choose another output directory that does not contain a ${subtree} subtree.`);
+        }
+        throw cause;
+      }
+    }
+    // Fresh snapshot rule: copy lane_loop_report and lane_loop_feedback trees while holding task lock; destinations must not exist. Preflight already validated.
+    try {
+      await snapshotLaneLoopReport({ repoControlRoot: repo.controlRoot, taskId, outputDir });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      if (message.includes("already exists") || message.includes("destination already exists") || message.includes("destination ancestry is unsafe")) {
+        throw new CollabOpError("report_collision", message, "Choose another output directory that does not contain a lane_loop_report subtree.");
+      }
+      throw cause;
+    }
+    try {
+      await snapshotLaneLoopFeedback({ repoControlRoot: repo.controlRoot, taskId, outputDir });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      if (message.includes("already exists") || message.includes("destination already exists") || message.includes("destination ancestry is unsafe")) {
+        throw new CollabOpError("report_collision", message, "Choose another output directory that does not contain a lane_loop_feedback subtree.");
+      }
+      throw cause;
+    }
     return {
       snapshot: reportSnapshot,
       facts: {
@@ -4054,6 +4087,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     requireManagedIntegration,
     laneInventory,
     laneIsComplete,
+    withTaskLock,
     error: (
       code: string,
       message: string,

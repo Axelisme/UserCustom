@@ -98,9 +98,7 @@ control flow. The parsed child result is `structuredOutput`; free-form output ne
 flow. Implementer launches use Pi's v1 effects projection so a schema-valid `BLOCKED` or
 `NEEDS_DECISION` result can stop without mutation; the composition separately requires an observed
 file mutation before routing any `COMPLETED` result to review. This effects check changes no typed
-result field. When the temporary efficiency probe is enabled, its stdout record and implementer sidecar are
-operation evidence retained by the child/lane artifacts and add no property to either schema below.
-They never drive workflow branching. Use one structured result per child and do not combine it with
+result field. Use one structured result per child and do not combine it with
 Pi's generic acceptance report:
 both default Collab profiles set `acceptance: { level: none, ... }` with a reason, and a launch needing
 another acceptance policy selects it explicitly.
@@ -113,7 +111,10 @@ even when the worker runs them and receive no semantic check name or summary; ea
 summary describes only the behavior/Interface outcome observed, never the operational command or
 checkout, tree, lane, branch, commit, diff, staged, clean, ancestry, runtime, or lifecycle state it
 ran against; `BLOCKED` carries
-`blocker`; `NEEDS_DECISION` carries `decision: { why, question }`:
+`blocker`; `NEEDS_DECISION` carries `decision: { why, question }`; every branch may also carry optional
+`efficiencyFeedback` (plain string, `maxLength: 10000`, no `minLength`; empty string is valid) as
+qualitative feedback for a requested efficiency investigation — not a substitute for runtime counts or
+timing:
 
 ```json
 {
@@ -136,7 +137,8 @@ ran against; `BLOCKED` carries
             }
           }
         },
-        "residualRisks": { "type": "array", "items": { "type": "string" } }
+        "residualRisks": { "type": "array", "items": { "type": "string" } },
+        "efficiencyFeedback": { "type": "string", "maxLength": 10000, "description": "Optional qualitative efficiency feedback for a requested investigation. Plain text, at most 10000 characters, no minimum; an explicitly present empty string is valid. Not a substitute for runtime mechanical counts or timing." }
       },
       "additionalProperties": false,
       "required": ["outcome", "validation"]
@@ -145,7 +147,8 @@ ran against; `BLOCKED` carries
       "type": "object",
       "properties": {
         "outcome": { "const": "BLOCKED" },
-        "blocker": { "type": "string" }
+        "blocker": { "type": "string" },
+        "efficiencyFeedback": { "type": "string", "maxLength": 10000, "description": "Optional qualitative efficiency feedback for a requested investigation. Plain text, at most 10000 characters, no minimum; an explicitly present empty string is valid. Not a substitute for runtime mechanical counts or timing." }
       },
       "additionalProperties": false,
       "required": ["outcome", "blocker"]
@@ -162,7 +165,8 @@ ran against; `BLOCKED` carries
             "why": { "type": "string" },
             "question": { "type": "string" }
           }
-        }
+        },
+        "efficiencyFeedback": { "type": "string", "maxLength": 10000, "description": "Optional qualitative efficiency feedback for a requested investigation. Plain text, at most 10000 characters, no minimum; an explicitly present empty string is valid. Not a substitute for runtime mechanical counts or timing." }
       },
       "additionalProperties": false,
       "required": ["outcome", "decision"]
@@ -173,7 +177,10 @@ ran against; `BLOCKED` carries
 
 Reviewer (`collab-acceptor`) — `PASS` needs no filler; `BLOCKED` carries `blockers`, each with its
 `location`, `reason`, and bounded `fix`; `NEEDS_DECISION` carries `decision: { why, question }`; any
-verdict may add optional `outOfEnvelopeFindings`:
+verdict may add optional `outOfEnvelopeFindings`; every verdict branch may also carry optional
+`efficiencyFeedback` (plain string, `maxLength: 10000`, no `minLength`; empty string is valid) as
+qualitative feedback for a requested efficiency investigation — not a substitute for runtime counts or
+timing:
 
 ```json
 {
@@ -194,7 +201,8 @@ verdict may add optional `outOfEnvelopeFindings`:
               "evidence": { "type": "string" }
             }
           }
-        }
+        },
+        "efficiencyFeedback": { "type": "string", "maxLength": 10000, "description": "Optional qualitative efficiency feedback for a requested investigation. Plain text, at most 10000 characters, no minimum; an explicitly present empty string is valid. Not a substitute for runtime mechanical counts or timing." }
       },
       "additionalProperties": false,
       "required": ["verdict"]
@@ -227,7 +235,8 @@ verdict may add optional `outOfEnvelopeFindings`:
               "evidence": { "type": "string" }
             }
           }
-        }
+        },
+        "efficiencyFeedback": { "type": "string", "maxLength": 10000, "description": "Optional qualitative efficiency feedback for a requested investigation. Plain text, at most 10000 characters, no minimum; an explicitly present empty string is valid. Not a substitute for runtime mechanical counts or timing." }
       },
       "additionalProperties": false,
       "required": ["verdict", "blockers"]
@@ -256,7 +265,8 @@ verdict may add optional `outOfEnvelopeFindings`:
               "evidence": { "type": "string" }
             }
           }
-        }
+        },
+        "efficiencyFeedback": { "type": "string", "maxLength": 10000, "description": "Optional qualitative efficiency feedback for a requested investigation. Plain text, at most 10000 characters, no minimum; an explicitly present empty string is valid. Not a substitute for runtime mechanical counts or timing." }
       },
       "additionalProperties": false,
       "required": ["verdict", "decision"]
@@ -264,6 +274,19 @@ verdict may add optional `outOfEnvelopeFindings`:
   ]
 }
 ```
+
+`efficiencyFeedback` is an optional plain string on every worker outcome (`COMPLETED`, `BLOCKED`,
+`NEEDS_DECISION`) and every reviewer verdict (`PASS`, `BLOCKED`, `NEEDS_DECISION`): `maxLength: 10000`,
+no `minLength`, no nested format/taxonomy/score, and an explicitly present empty string is valid and
+produces an artifact. Omit the field to produce no artifact. The Orchestrator requests it in
+ordinary worker/reviewer dispatch content whenever efficiency diagnosis is useful — not as a runtime
+parameter and not restricted to an explicit user reminder. A request never makes it mandatory; omission
+or empty is never a runtime or acceptance failure and never drives workflow branching, mutation
+enforcement, review verdict, correction budget, or composed terminal projection. It is not copied into
+`.collab_op/lane_loop_report` or lifecycle `telemetry.jsonl` and does not reintroduce a lane sidecar or
+stdout probe. Acceptor child `PASS` is the child’s own acceptance verdict; the composed workflow
+terminal `REVIEWED` projects the latest writer’s validation plus optional reviewer findings and is
+not the same as child `PASS`.
 
 ## Post-launch
 

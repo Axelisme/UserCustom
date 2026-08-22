@@ -9,6 +9,11 @@ import type {
   TaskLayout,
   WorktreeRecord,
 } from "./collab-op.ts";
+import { handleReviewedLaneCompletion } from "./collab-report.ts";
+import {
+  reviewedLaneWorkerSchema,
+  reviewedLaneReviewerSchema,
+} from "./collab-result-schema.ts";
 
 const DEV_FLOW_TICKET_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const REVIEWED_LANE_IDENTIFIER = /^[a-z0-9][a-z0-9._-]*$/;
@@ -67,118 +72,7 @@ export const registeredReviewedLaneParameters = {
   ],
 } as const;
 
-const reviewedLaneDecisionSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["why", "question"],
-  properties: {
-    why: { type: "string" },
-    question: { type: "string" },
-  },
-} as const;
-
-export const reviewedLaneWorkerSchema = {
-  type: "object",
-  oneOf: [
-    {
-      type: "object",
-      properties: {
-        outcome: { const: "COMPLETED" },
-        validation: {
-          type: "array",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            required: ["check", "result", "summary"],
-            properties: {
-              check: { type: "string" },
-              result: { enum: ["PASSED", "FAILED"] },
-              summary: { type: "string" },
-            },
-          },
-        },
-        residualRisks: { type: "array", items: { type: "string" } },
-      },
-      additionalProperties: false,
-      required: ["outcome", "validation"],
-    },
-    {
-      type: "object",
-      properties: {
-        outcome: { const: "BLOCKED" },
-        blocker: { type: "string" },
-      },
-      additionalProperties: false,
-      required: ["outcome", "blocker"],
-    },
-    {
-      type: "object",
-      properties: {
-        outcome: { const: "NEEDS_DECISION" },
-        decision: reviewedLaneDecisionSchema,
-      },
-      additionalProperties: false,
-      required: ["outcome", "decision"],
-    },
-  ],
-} as const;
-
-const reviewedLaneFindingSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["location", "evidence"],
-  properties: {
-    location: { type: "string" },
-    evidence: { type: "string" },
-  },
-} as const;
-
-export const reviewedLaneReviewerSchema = {
-  type: "object",
-  oneOf: [
-    {
-      type: "object",
-      properties: {
-        verdict: { const: "PASS" },
-        outOfEnvelopeFindings: { type: "array", items: reviewedLaneFindingSchema },
-      },
-      additionalProperties: false,
-      required: ["verdict"],
-    },
-    {
-      type: "object",
-      properties: {
-        verdict: { const: "BLOCKED" },
-        blockers: {
-          type: "array",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            required: ["location", "reason", "fix"],
-            properties: {
-              location: { type: "string" },
-              reason: { type: "string" },
-              fix: { type: "string" },
-            },
-          },
-        },
-        outOfEnvelopeFindings: { type: "array", items: reviewedLaneFindingSchema },
-      },
-      additionalProperties: false,
-      required: ["verdict", "blockers"],
-    },
-    {
-      type: "object",
-      properties: {
-        verdict: { const: "NEEDS_DECISION" },
-        decision: reviewedLaneDecisionSchema,
-        outOfEnvelopeFindings: { type: "array", items: reviewedLaneFindingSchema },
-      },
-      additionalProperties: false,
-      required: ["verdict", "decision"],
-    },
-  ],
-} as const;
+export { reviewedLaneWorkerSchema, reviewedLaneReviewerSchema };
 
 type ReviewedLaneErrorFactory = (
   code: string,
@@ -215,6 +109,7 @@ export type ReviewedLaneDependencies = {
     records?: readonly WorktreeRecord[],
   ) => Promise<LaneInventory>;
   laneIsComplete: (inventory: LaneInventory) => boolean;
+  withTaskLock: <T>(repo: Repository, taskId: string, body: () => Promise<T>) => Promise<T>;
   error: ReviewedLaneErrorFactory;
 };
 
@@ -372,6 +267,8 @@ const runChild = (key, agent, task, outputSchema) => runs.run(key, {
 });
 const completedWriterHasMutation = (child) => child.results?.some(
   (result) => result.effects?.fileMutation?.status === "observed"
+    || result.effects?.fileMutation?.attempted === true
+    || result.observedMutationAttempt === true
 ) === true;
 const requireCompletedWriterMutation = (child) => {
   if (child.structuredOutput.outcome === "COMPLETED" && !completedWriterHasMutation(child)) {
@@ -548,6 +445,7 @@ export async function runReviewedLane(
   }
 
   const spawned = await callSubagentRpc(pi, "spawn", {
+    cwd: lane,
     workflowScript: reviewedLaneWorkflowScript({
       lane,
       workerBrief: workerTask,
@@ -572,9 +470,6 @@ export async function runReviewedLane(
     ?? requiredReceiptString(details.asyncId);
   const asyncId = requiredReceiptString(details.asyncId);
   const asyncDir = requiredReceiptString(details.asyncDir);
-  // pi-subagents owns both identifiers. Details.runId is authoritative; asyncId
-  // is the package-compatible fallback because its async receipt uses that same
-  // runtime identity when runId is omitted. Never mint a local workflow id.
   if (!runId || !asyncId || !asyncDir) {
     throw dependencies.error(
       "rpc_spawn_failed",
@@ -582,10 +477,105 @@ export async function runReviewedLane(
       "Use a pi-subagents RPC implementation that returns runId (or correlated asyncId) and asyncDir for spawn.",
     );
   }
+  registerPendingReviewedLane({
+    pi,
+    repo,
+    taskId,
+    ticketId,
+    laneId,
+    lanePath: lane,
+    workflowId: runId,
+    asyncDir,
+    deps: dependencies,
+  });
   return { workflow_id: runId, async_id: asyncId, async_dir: asyncDir };
 }
 
-// This companion is both imported by collab-op.ts and discovered by Pi's
-// top-level extension loader. The factory intentionally registers nothing;
-// collab-op.ts owns the public tool registrations.
+type PendingReviewedLane = {
+  pi: ExtensionAPI;
+  repo: Repository;
+  taskId: string;
+  ticketId: string;
+  laneId: string;
+  lanePath: string;
+  workflowId: string;
+  asyncDir: string;
+  deps: ReviewedLaneDependencies;
+};
+
+const pendingReviewedLanes = new Map<string, PendingReviewedLane>();
+let reviewedLaneListenerInstalled = false;
+
+function registerPendingReviewedLane(pending: PendingReviewedLane): void {
+  pendingReviewedLanes.set(pending.workflowId, pending);
+  if (reviewedLaneListenerInstalled) return;
+  reviewedLaneListenerInstalled = true;
+  pending.pi.events.on("subagent:async-complete", (raw: unknown) => {
+    void handleAsyncCompleteEvent(raw);
+  });
+}
+
+async function processPendingEvent(map: Map<string, PendingReviewedLane>, raw: unknown): Promise<void> {
+  const data = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const eventWorkflowId = typeof data["runId"] === "string" ? (data["runId"] as string) : typeof data["id"] === "string" ? (data["id"] as string) : undefined;
+  const eventAsyncDir = typeof data["asyncDir"] === "string" ? (data["asyncDir"] as string) : undefined;
+  if (!eventWorkflowId || !eventAsyncDir) return;
+  const pending = map.get(eventWorkflowId);
+  if (!pending) return;
+  if (pending.asyncDir !== eventAsyncDir) return;
+  try {
+    const result = await pending.deps.withTaskLock(pending.repo, pending.taskId, () =>
+      handleReviewedLaneCompletion({
+        repoControlRoot: pending.repo.controlRoot,
+        taskId: pending.taskId,
+        ticketId: pending.ticketId,
+        laneId: pending.laneId,
+        lanePath: pending.lanePath,
+        workflowId: pending.workflowId,
+        asyncDir: pending.asyncDir,
+        eventWorkflowId,
+        eventAsyncDir,
+      }),
+    );
+    if (result.handled) map.delete(eventWorkflowId);
+  } catch (e) {
+    try { console.warn(`[collab-reviewed-lane] ${boundedMessage(e).slice(0, 500)}`); } catch {}
+    map.delete(eventWorkflowId);
+  }
+}
+
+export async function handleAsyncCompleteEvent(raw: unknown): Promise<void> {
+  await processPendingEvent(pendingReviewedLanes, raw);
+}
+
+export function createIsolatedReviewedLaneHarness() {
+  const isolatedPending = new Map<string, PendingReviewedLane>();
+  const installed = new Set<ExtensionAPI>();
+  function ensureListener(pi: ExtensionAPI) {
+    if (installed.has(pi)) return;
+    installed.add(pi);
+    pi.events.on("subagent:async-complete", (raw: unknown) => {
+      void processPendingEvent(isolatedPending, raw);
+    });
+  }
+  return {
+    registerPending(pending: PendingReviewedLane) {
+      isolatedPending.set(pending.workflowId, pending);
+      ensureListener(pending.pi);
+    },
+    handleAsyncCompleteEvent(raw: unknown) {
+      return processPendingEvent(isolatedPending, raw);
+    },
+    getPendingCount() {
+      return isolatedPending.size;
+    },
+    clearPending() {
+      isolatedPending.clear();
+    },
+    emitViaPi(pi: ExtensionAPI, event: unknown) {
+      pi.events.emit("subagent:async-complete", event);
+    },
+  };
+}
+
 export default function collabReviewedLaneCompanion(): void {}

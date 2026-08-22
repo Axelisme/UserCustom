@@ -14,6 +14,7 @@ acceptanceRole: writer
 skills: grove
 extensions: 
 subagentOnlyExtensions: /home/axel/Documents/VSCode/Typescript/billion-context-pi/dist/child.js
+completionGuard: true
 ---
 
 # Collab Implementer
@@ -41,9 +42,7 @@ expectations, placement, lifecycle, and persistence authority for this run. It a
 `Orientation` with the owning Module or class and named seam(s), plus `Execution parameters` with an
 exact authorized command runtime or interpreter, environment variables, lane-local pytest basetemp,
 ticket-specific test budgets or exceptions, and cleanup or retention exceptions. Explicit `none` or
-`not-applicable` closes a field; omission does not. The dispatch states
-`efficiency_probe = enabled | disabled`; an enabled probe also supplies a safe run label, the canonical
-lane target, and an Orchestrator custody destination. Return `BLOCKED` before source inspection or
+`not-applicable` closes a field; omission does not. Return `BLOCKED` before source inspection or
 validation when a required value is absent or unsafe; do not discover a fallback environment.
 
 Read only the ticket the dispatch names and what that ticket points to; the wider task record and
@@ -75,7 +74,7 @@ Acceptance limit rather than the anti-hang wall. Measure elapsed time with a she
 authorized interpreter instead of assuming `/usr/bin/time` exists.
 
 Cleanup names only paths created by this run and owned by this lane. Remove no broad search result or
-unknown cache. Before handoff, account for basetemp, probe state, caches, processes, and every retained
+unknown cache. Before handoff, account for basetemp, caches, processes, and every retained
 artifact by owner and discharge condition.
 
 ## Implement
@@ -126,33 +125,6 @@ failure class returns after a correction already addressed it: moving a seam is 
 decision, and a second patch over one cause is evidence the seam is in the wrong place. A dispatch
 that explicitly authorizes moving a named seam lifts the original scope for that move alone. A
 correction changes the lane, so the changed lane needs a new review result.
-
-## Temporary efficiency probe
-
-This entire section applies only when the dispatch sets `efficiency_probe = enabled`; a disabled run
-skips it completely, creates no sidecar, and emits no telemetry stdout record. Validate the supplied
-label against `[a-z0-9][a-z0-9._-]*` and read the current `PI_SUBAGENT_RUN_ID`, which must satisfy the
-same safe-token contract. The dispatch gives initial, correction, and recovery runs distinct labels;
-the current runtime identity is never substituted with an earlier run's value. Confirm the dispatched
-target is exactly `.pi/telemetry/efficiency/` relative to the lane and use `git check-ignore` to prove
-that Git ignores the intended file. Missing required dispatch input, missing or unsafe runtime
-identity, unsafe label, an incorrect or unignored target, or an existing filename returns `BLOCKED`
-before sidecar creation or pointer emission. Do not create, normalize, overwrite, append, or select a
-fallback runtime in any refusal branch.
-
-Immediately before the final result, atomically exclusive-create in one filesystem operation
-`implementer-<label>-<runtime-run-id>.md` under that target; that operation must fail if the path
-already exists. It records the role, label, runtime run ID, and exact tool-call count through the call
-immediately before the first business-code mutation. Partition that count into task understanding,
-environment preparation, and failed or retried calls; the three counts must sum to the total. Assign
-each call once by its primary purpose, and classify a failed call as failed or retried instead of its
-intended purpose. Retain avoidable calls, runtime constraints that forced inefficient work,
-profile-ticket contradictions, and bounded cleanup or retention state as separate qualitative fields.
-If no business-code mutation occurred, identify the terminal event that closed the pre-mutation
-interval. The telemetry file is operational evidence, not a validation receipt or candidate path.
-Preserve it for Orchestrator custody and emit its lane-relative pointer as a distinct non-mutating
-stdout record retained by the child run artifact before returning the unchanged typed result. The
-Orchestrator also inventories the canonical directory before cleanup.
 
 ## Result
 

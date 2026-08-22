@@ -1,7 +1,7 @@
 ---
 name: contract-reviewer
 description: Independently review one fixed red test surface against its intended Interface promises before implementation relies on it.
-tools: read, bash, compress, decompress, search_context, acp_status
+tools: read, bash, compress
 model: openai-codex/gpt-5.6-sol
 thinking: xhigh
 systemPromptMode: replace

@@ -1,7 +1,7 @@
 ---
 name: collab-acceptor
 description: Independently accept, block, or defer one reviewed lane using read-only, evidence-backed review.
-tools: read, bash, compress, decompress, search_context, acp_status
+tools: read, bash
 model: openai-codex/gpt-5.6-sol
 thinking: high
 timeoutMs: 3600000

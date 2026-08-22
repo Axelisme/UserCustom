@@ -1,9 +1,9 @@
 ---
 name: mechanical-implementer
 description: Apply an explicit repetitive or mechanical change within a closed write scope and fast-fail on semantic drift.
-tools: read, write, edit, bash, compress, decompress, search_context, acp_status
+tools: read, write, edit, bash
 model: openai-codex/gpt-5.6-luna
-thinking: medium
+thinking: high
 systemPromptMode: replace
 inheritProjectContext: false
 inheritSkills: false

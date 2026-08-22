@@ -1,9 +1,9 @@
 ---
 name: repo-investigator
 description: Build a read-only, source-grounded map of local code, call sites, tests, and constraints without making contract decisions.
-tools: read, bash, compress, decompress, search_context, acp_status
+tools: read, bash
 model: openai-codex/gpt-5.6-luna
-thinking: medium
+thinking: high
 systemPromptMode: replace
 inheritProjectContext: false
 inheritSkills: false

@@ -1,9 +1,9 @@
 ---
 name: web-researcher
 description: Research official documentation and primary external sources with citations; no design or implementation.
-tools: read, bash, web_search, source_check, fetch_content, get_search_content, compress, decompress, search_context, acp_status
+tools: read, bash, web_search, source_check, fetch_content, get_search_content
 model: openai-codex/gpt-5.6-luna
-thinking: medium
+thinking: high
 systemPromptMode: replace
 inheritProjectContext: false
 inheritSkills: false

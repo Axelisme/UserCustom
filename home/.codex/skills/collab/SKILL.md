@@ -63,6 +63,10 @@ For a writer, include these compact blocks:
    conclusions inline; point to supporting material with the condition for opening it. Before
    dispatch, inspect the selected receiver profile's `Preconditions` and `Result` sections and close
    every required value, path, mutation authority, evidence owner, and stop condition in the brief.
+   The ticket contract also closes **operating assumptions** beside the existing envelope pointer:
+   what a reviewer may assume about concurrency, caller trust, input provenance, and adversary
+   presence. The two terms stay distinct — the envelope says which changes belong to the task,
+   operating assumptions say which world the code runs in — and neither stands in for the other.
    This step is complete when the writer can distinguish in-scope implementation from an Orchestrator
    decision and every receiver field is supplied.
 2. **Choose the execution shape.** The Orchestrator selects direct writing, separate dispatches,

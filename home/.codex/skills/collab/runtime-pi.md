@@ -44,18 +44,12 @@ original review expectations against the changed protected lane. Child run IDs r
 operation evidence and appear in no terminal projection. Every branch and terminal projection reads
 parsed `structuredOutput`, never free-form output text.
 
-Supply the tool only these bounded fields:
-
-```json
-{
-  "task_id": "task identifier",
-  "ticket_id": "Dev-flow ticket identifier",
-  "lane_id": "existing managed lane",
-  "worker_brief": "bounded implementation brief",
-  "review_brief": "bounded read-only acceptance brief",
-  "correction_budget": 1
-}
-```
+Supply the tool only these bounded fields: `task_id` (the task identifier), `ticket_id` (the
+Dev-flow ticket identifier), `lane_id` (the existing managed lane), `worker_brief` (the bounded
+implementation brief), `review_brief` (the bounded read-only acceptance brief), and
+`correction_budget` (the finite correction budget). The tool declares each field's own bound and
+description in its input schema, which Pi surfaces to the calling Orchestrator; this list names the
+fields, not their bounds.
 
 `worker_brief` names the ticket — the ticket owns Outcome and Acceptance — and carries only the
 operational deltas a brief needs: placement, mutation authority, validation expectations, stop
@@ -114,166 +108,22 @@ ran against; `BLOCKED` carries
 `blocker`; `NEEDS_DECISION` carries `decision: { why, question }`; every branch may also carry optional
 `efficiencyFeedback` (plain string, `maxLength: 10000`, no `minLength`; empty string is valid) as
 qualitative feedback for a requested efficiency investigation — not a substitute for runtime counts or
-timing:
-
-```json
-{
-  "type": "object",
-  "oneOf": [
-    {
-      "type": "object",
-      "properties": {
-        "outcome": { "const": "COMPLETED" },
-        "validation": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["check", "result", "summary"],
-            "properties": {
-              "check": { "type": "string" },
-              "result": { "enum": ["PASSED", "FAILED"] },
-              "summary": { "type": "string" }
-            }
-          }
-        },
-        "residualRisks": { "type": "array", "items": { "type": "string" } },
-        "efficiencyFeedback": { "type": "string", "maxLength": 10000, "description": "Optional qualitative efficiency feedback for a requested investigation. Plain text, at most 10000 characters, no minimum; an explicitly present empty string is valid. Not a substitute for runtime mechanical counts or timing." }
-      },
-      "additionalProperties": false,
-      "required": ["outcome", "validation"]
-    },
-    {
-      "type": "object",
-      "properties": {
-        "outcome": { "const": "BLOCKED" },
-        "blocker": { "type": "string" },
-        "efficiencyFeedback": { "type": "string", "maxLength": 10000, "description": "Optional qualitative efficiency feedback for a requested investigation. Plain text, at most 10000 characters, no minimum; an explicitly present empty string is valid. Not a substitute for runtime mechanical counts or timing." }
-      },
-      "additionalProperties": false,
-      "required": ["outcome", "blocker"]
-    },
-    {
-      "type": "object",
-      "properties": {
-        "outcome": { "const": "NEEDS_DECISION" },
-        "decision": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["why", "question"],
-          "properties": {
-            "why": { "type": "string" },
-            "question": { "type": "string" }
-          }
-        },
-        "efficiencyFeedback": { "type": "string", "maxLength": 10000, "description": "Optional qualitative efficiency feedback for a requested investigation. Plain text, at most 10000 characters, no minimum; an explicitly present empty string is valid. Not a substitute for runtime mechanical counts or timing." }
-      },
-      "additionalProperties": false,
-      "required": ["outcome", "decision"]
-    }
-  ]
-}
-```
+timing. `outcome` discriminates the three branches (`COMPLETED`, `BLOCKED`, `NEEDS_DECISION`); each
+branch is closed to exactly its own fields plus the shared `outcome` and optional
+`efficiencyFeedback`. The child's own `outputSchema` is authoritative for the exact shape; this
+paragraph names the fields, not their JSON Schema encoding.
 
 Reviewer (`collab-acceptor`) — `PASS` needs no filler; `BLOCKED` carries `blockers`, each with its
-`location`, `reason`, and bounded `fix`; `NEEDS_DECISION` carries `decision: { why, question }`; any
-verdict may add optional `outOfEnvelopeFindings`; every verdict branch may also carry optional
-`efficiencyFeedback` (plain string, `maxLength: 10000`, no `minLength`; empty string is valid) as
-qualitative feedback for a requested efficiency investigation — not a substitute for runtime counts or
-timing:
-
-```json
-{
-  "type": "object",
-  "oneOf": [
-    {
-      "type": "object",
-      "properties": {
-        "verdict": { "const": "PASS" },
-        "outOfEnvelopeFindings": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["location", "evidence"],
-            "properties": {
-              "location": { "type": "string" },
-              "evidence": { "type": "string" }
-            }
-          }
-        },
-        "efficiencyFeedback": { "type": "string", "maxLength": 10000, "description": "Optional qualitative efficiency feedback for a requested investigation. Plain text, at most 10000 characters, no minimum; an explicitly present empty string is valid. Not a substitute for runtime mechanical counts or timing." }
-      },
-      "additionalProperties": false,
-      "required": ["verdict"]
-    },
-    {
-      "type": "object",
-      "properties": {
-        "verdict": { "const": "BLOCKED" },
-        "blockers": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["location", "reason", "fix"],
-            "properties": {
-              "location": { "type": "string" },
-              "reason": { "type": "string" },
-              "fix": { "type": "string" }
-            }
-          }
-        },
-        "outOfEnvelopeFindings": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["location", "evidence"],
-            "properties": {
-              "location": { "type": "string" },
-              "evidence": { "type": "string" }
-            }
-          }
-        },
-        "efficiencyFeedback": { "type": "string", "maxLength": 10000, "description": "Optional qualitative efficiency feedback for a requested investigation. Plain text, at most 10000 characters, no minimum; an explicitly present empty string is valid. Not a substitute for runtime mechanical counts or timing." }
-      },
-      "additionalProperties": false,
-      "required": ["verdict", "blockers"]
-    },
-    {
-      "type": "object",
-      "properties": {
-        "verdict": { "const": "NEEDS_DECISION" },
-        "decision": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["why", "question"],
-          "properties": {
-            "why": { "type": "string" },
-            "question": { "type": "string" }
-          }
-        },
-        "outOfEnvelopeFindings": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["location", "evidence"],
-            "properties": {
-              "location": { "type": "string" },
-              "evidence": { "type": "string" }
-            }
-          }
-        },
-        "efficiencyFeedback": { "type": "string", "maxLength": 10000, "description": "Optional qualitative efficiency feedback for a requested investigation. Plain text, at most 10000 characters, no minimum; an explicitly present empty string is valid. Not a substitute for runtime mechanical counts or timing." }
-      },
-      "additionalProperties": false,
-      "required": ["verdict", "decision"]
-    }
-  ]
-}
-```
+`where`, `why`, bounded `howToFix`, and a required `trigger` — the concrete input or call sequence
+that produces the defect, and the existing entry point it reaches from; `NEEDS_DECISION` carries
+`decision: { why, question }`; any verdict may add optional `outOfEnvelopeFindings`, each with
+`location` and `evidence`; every verdict branch may also carry optional `efficiencyFeedback` (plain
+string, `maxLength: 10000`, no `minLength`; empty string is valid) as qualitative feedback for a
+requested efficiency investigation — not a substitute for runtime counts or timing. `verdict`
+discriminates the three branches (`PASS`, `BLOCKED`, `NEEDS_DECISION`); each branch is closed to
+exactly its own fields plus the shared `verdict`, optional `outOfEnvelopeFindings`, and optional
+`efficiencyFeedback`. The child's own `outputSchema` is authoritative for the exact shape; this
+paragraph names the fields, not their JSON Schema encoding.
 
 `efficiencyFeedback` is an optional plain string on every worker outcome (`COMPLETED`, `BLOCKED`,
 `NEEDS_DECISION`) and every reviewer verdict (`PASS`, `BLOCKED`, `NEEDS_DECISION`): `maxLength: 10000`,

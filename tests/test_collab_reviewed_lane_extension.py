@@ -1318,6 +1318,64 @@ def run_schema_validation(request: dict) -> dict:
     finally:
         Path(fname).unlink(missing_ok=True)
 
+def run_blocker_schema_agreement(cases: list[dict]) -> dict:
+    """For each candidate blocker object, independently evaluate it against the
+    declared JSON Schema shape (a generic, from-scratch reader of `required` /
+    `properties` / `additionalProperties`, not a copy of the hand-written
+    validator's field list) and against `isValidReviewerOutput`, wrapped in a
+    minimal well-formed BLOCKED reviewer envelope. Returns both verdicts per
+    case so a Python assertion can compare them instead of the claim resting
+    on reading both by eye."""
+    inner = json.dumps(cases)
+    script = textwrap.dedent(f"""
+        import {{ pathToFileURL }} from "node:url";
+        const mod = await import(pathToFileURL("{COLL_RESULT_SCHEMA}").href);
+        const cases = {inner};
+
+        const blockedBranch = mod.reviewedLaneReviewerSchema.oneOf.find(
+          (branch) => branch.properties && branch.properties.verdict && branch.properties.verdict.const === "BLOCKED"
+        );
+        const blockerItemSchema = blockedBranch.properties.blockers.items;
+
+        function schemaSaysValid(schema, value) {{
+          if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+          const keys = Object.keys(value);
+          if (schema.additionalProperties === false) {{
+            for (const k of keys) {{
+              if (!(k in schema.properties)) return false;
+            }}
+          }}
+          for (const req of schema.required || []) {{
+            if (!(req in value)) return false;
+          }}
+          for (const [k, v] of Object.entries(value)) {{
+            const propSchema = schema.properties[k];
+            if (!propSchema) continue;
+            if (propSchema.type === "string" && typeof v !== "string") return false;
+          }}
+          return true;
+        }}
+
+        const results = cases.map((blocker) => {{
+          const schemaVerdict = schemaSaysValid(blockerItemSchema, blocker);
+          const wrapped = {{ verdict: "BLOCKED", blockers: [blocker] }};
+          const validatorVerdict = mod.isValidReviewerOutput(wrapped);
+          return {{ blocker, schemaVerdict, validatorVerdict }};
+        }});
+        process.stdout.write(JSON.stringify({{ok: true, results}}));
+    """)
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.mjs', delete=False) as f:
+        f.write(script)
+        fname = f.name
+    try:
+        run = subprocess.run(["/usr/bin/node", "--experimental-strip-types", fname], capture_output=True, text=True, check=False)
+        if run.returncode != 0:
+            raise AssertionError(f"node blocker schema agreement check failed: {run.stderr}\n{run.stdout}")
+        lines = [l for l in run.stdout.strip().splitlines() if l.strip()]
+        return json.loads(lines[-1])
+    finally:
+        Path(fname).unlink(missing_ok=True)
+
 def valid_worker_completed(feedback: str | None) -> dict:
     base: dict = {"outcome": "COMPLETED", "validation": []}
     if feedback is not None:
@@ -1343,7 +1401,7 @@ def valid_reviewer_pass(feedback: str | None) -> dict:
     return base
 
 def valid_reviewer_blocked(feedback: str | None) -> dict:
-    base: dict = {"verdict": "BLOCKED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}]}
+    base: dict = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}]}
     if feedback is not None:
         base["efficiencyFeedback"] = feedback
     return base
@@ -1483,6 +1541,33 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
                 self.assertTrue(result["ok"], result)
                 self.assertFalse((repo / ".agent_state/plans/demo/.collab_op/lane_loop_feedback/writer-1" / f"{child_run_id}.json").exists())
                 self.assertGreaterEqual(len(result["result"]["warnings"]), 1)
+
+    def test_blocker_schema_and_validator_agree_on_every_case(self) -> None:
+        well_formed = {"where": "w", "why": "y", "howToFix": "h", "trigger": "t"}
+        cases = [
+            well_formed,
+            {k: v for k, v in well_formed.items() if k != "where"},
+            {k: v for k, v in well_formed.items() if k != "why"},
+            {k: v for k, v in well_formed.items() if k != "howToFix"},
+            {k: v for k, v in well_formed.items() if k != "trigger"},
+            {**well_formed, "extra": "not allowed"},
+            {**well_formed, "trigger": 5},
+            {"location": "x", "reason": "y", "fix": "z"},
+        ]
+        outcome = run_blocker_schema_agreement(cases)
+        self.assertTrue(outcome["ok"], outcome)
+        for result in outcome["results"]:
+            self.assertEqual(
+                result["schemaVerdict"],
+                result["validatorVerdict"],
+                f"schema and isValidReviewerOutput disagree on {result['blocker']}",
+            )
+        # Sanity: the well-formed case is accepted by both, and the
+        # missing-trigger case is rejected by both, so this is not a vacuous pass.
+        self.assertTrue(outcome["results"][0]["schemaVerdict"])
+        self.assertTrue(outcome["results"][0]["validatorVerdict"])
+        self.assertFalse(outcome["results"][4]["schemaVerdict"])
+        self.assertFalse(outcome["results"][4]["validatorVerdict"])
 
     def test_all_six_branches_via_registered_adapter(self) -> None:
         branches = [
@@ -1731,7 +1816,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
         reviewer_pass = {"verdict": "PASS", "outOfEnvelopeFindings": [], "efficiencyFeedback": "review feedback"}
         worker_blocked = {"outcome": "BLOCKED", "blocker": "blocked reason", "efficiencyFeedback": "blocked feedback"}
         worker_needs = {"outcome": "NEEDS_DECISION", "decision": {"why": "why", "question": "q"}, "efficiencyFeedback": "needs feedback"}
-        reviewer_blocked = {"verdict": "BLOCKED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}], "efficiencyFeedback": "review blocked fb"}
+        reviewer_blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "efficiencyFeedback": "review blocked fb"}
         reviewer_needs = {"verdict": "NEEDS_DECISION", "decision": {"why": "why", "question": "q"}, "efficiencyFeedback": "review needs fb"}
         cases = [
             (

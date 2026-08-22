@@ -91,11 +91,15 @@ const REVIEW_BLOCKERS_SCHEMA = {
   items: {
     type: 'object',
     additionalProperties: false,
-    required: ['where', 'why', 'howToFix'],
+    required: ['where', 'why', 'howToFix', 'trigger'],
     properties: {
       where: { ...TEXT_SCHEMA },
       why: { ...TEXT_SCHEMA },
       howToFix: { ...TEXT_SCHEMA },
+      trigger: {
+        ...TEXT_SCHEMA,
+        description: 'The concrete input or call sequence that produces the defect, and the existing entry point it reaches from.',
+      },
     },
   },
 }
@@ -158,6 +162,22 @@ function usableText(value, maximum = MAX_TEXT) {
 
 function absolutePathText(value) {
   return usableText(value) && value.startsWith('/')
+}
+
+// operatorNotes carries a multi-section execution record, so it alone permits the newline (code 10)
+// and carriage-return (code 13) characters a pasted multi-line note actually contains — enough to
+// represent Unix and Windows line endings — while every other control character, including tab,
+// still fails it. Every other bounded text field keeps the strict single-line `usableText` check.
+function usableMultilineText(value, maximum = MAX_TEXT) {
+  return (
+    typeof value === 'string' &&
+    value.length <= maximum &&
+    value.trim().length > 0 &&
+    !Array.from(value).some((character) => {
+      const code = character.charCodeAt(0)
+      return (code < 32 && code !== 10 && code !== 13) || code === 127
+    })
+  )
 }
 
 function keysExcept(keys, allowed) {
@@ -263,10 +283,11 @@ function validReviewBlockers(value) {
     value.length <= MAX_BLOCKERS &&
     value.every(
       (blocker) =>
-        hasExactKeys(blocker, ['where', 'why', 'howToFix']) &&
+        hasExactKeys(blocker, ['where', 'why', 'howToFix', 'trigger']) &&
         boundedText(blocker.where) &&
         boundedText(blocker.why) &&
-        boundedText(blocker.howToFix),
+        boundedText(blocker.howToFix) &&
+        boundedText(blocker.trigger),
     )
   )
 }
@@ -554,7 +575,7 @@ if (!usableText(supplied.startingHead)) invalidKeys.push('startingHead')
 if (supplied.envelope !== null && !absolutePathText(supplied.envelope)) {
   invalidKeys.push('envelope')
 }
-if (supplied.operatorNotes !== null && !usableText(supplied.operatorNotes)) {
+if (supplied.operatorNotes !== null && !usableMultilineText(supplied.operatorNotes)) {
   invalidKeys.push('operatorNotes')
 }
 if (

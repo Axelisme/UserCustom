@@ -105,11 +105,15 @@ export const reviewedLaneReviewerSchema = {
           items: {
             type: "object",
             additionalProperties: false,
-            required: ["location", "reason", "fix"],
+            required: ["where", "why", "howToFix", "trigger"],
             properties: {
-              location: { type: "string" },
-              reason: { type: "string" },
-              fix: { type: "string" },
+              where: { type: "string" },
+              why: { type: "string" },
+              howToFix: { type: "string" },
+              trigger: {
+                type: "string",
+                description: "The concrete input or call sequence that produces the defect, and the existing entry point it reaches from.",
+              },
             },
           },
         },
@@ -182,9 +186,9 @@ function isValidValidationItem(value: unknown): boolean {
 function isValidBlockerItem(value: unknown): boolean {
   if (!isPlainObject(value)) return false;
   const keys = Object.keys(value);
-  if (keys.length !== 3) return false;
-  if (!keys.includes("location") || !keys.includes("reason") || !keys.includes("fix")) return false;
-  return isString(value["location"]) && isString(value["reason"]) && isString(value["fix"]);
+  if (keys.length !== 4) return false;
+  if (!keys.includes("where") || !keys.includes("why") || !keys.includes("howToFix") || !keys.includes("trigger")) return false;
+  return isString(value["where"]) && isString(value["why"]) && isString(value["howToFix"]) && isString(value["trigger"]);
 }
 
 export function isValidWorkerOutput(value: unknown): boolean {

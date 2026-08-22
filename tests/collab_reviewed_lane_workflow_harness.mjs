@@ -69,6 +69,7 @@ function blockedReviewer(where = 'reviewed behavior') {
         where,
         why: 'The protected lane does not satisfy one supplied expectation.',
         howToFix: 'Correct the bounded behavior before another review.',
+        trigger: 'A reviewer inspects the delegated scope and finds the gap directly reachable.',
       },
     ],
     outOfEnvelopeFindings: [],
@@ -100,6 +101,23 @@ function namedScenario(name) {
       return { steps: [decisionWorker()] }
     case 'reviewer-blocked':
       return { steps: [completedWorker(), blockedReviewer()] }
+    case 'reviewer-blocked-missing-trigger':
+      return {
+        steps: [
+          completedWorker(),
+          {
+            verdict: 'BLOCKED',
+            blockers: [
+              {
+                where: 'reviewed behavior',
+                why: 'The protected lane does not satisfy one supplied expectation.',
+                howToFix: 'Correct the bounded behavior before another review.',
+              },
+            ],
+            outOfEnvelopeFindings: [],
+          },
+        ],
+      }
     case 'reviewer-needs-decision':
       return { steps: [completedWorker(), decisionReviewer()] }
     case 'reviewer-needs-decision-no-suggestion':

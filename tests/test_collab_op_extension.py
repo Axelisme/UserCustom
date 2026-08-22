@@ -3853,7 +3853,7 @@ class CollabOpT07FeedbackTests(unittest.TestCase):
             ("impl-0", {"outcome": "BLOCKED", "blocker": "b", "efficiencyFeedback": "fb_impl_blocked"}),
             ("impl-0", {"outcome": "NEEDS_DECISION", "decision": {"why": "w", "question": "q"}, "efficiencyFeedback": "fb_impl_needs"}),
             ("review-0", {"verdict": "PASS", "efficiencyFeedback": "fb_review_pass"}),
-            ("review-0", {"verdict": "BLOCKED", "blockers": [{"location":"x","reason":"y","fix":"z"}], "efficiencyFeedback": "fb_review_blocked"}),
+            ("review-0", {"verdict": "BLOCKED", "blockers": [{"where":"x","why":"y","howToFix":"z","trigger":"t"}], "efficiencyFeedback": "fb_review_blocked"}),
             ("review-0", {"verdict": "NEEDS_DECISION", "decision": {"why":"w","question":"q"}, "efficiencyFeedback": "fb_review_needs"}),
         ]
         for workflow_key, structured in branches:

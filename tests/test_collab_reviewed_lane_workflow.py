@@ -447,6 +447,19 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(result["reviewResult"]["verdict"], "BLOCKED")
 
+    def test_reviewer_blocker_missing_trigger_is_rejected(self) -> None:
+        output = self.run_installed(scenario="reviewer-blocked-missing-trigger")
+
+        result = self.assert_terminal(
+            output,
+            execution="RUNTIME_GAP",
+            outcome=None,
+            stopped_at="REVIEW",
+            stop_reason="CAPABILITY_UNAVAILABLE",
+            calls=2,
+        )
+        self.assertEqual(result["error"], {"code": "INVALID_CHILD_RESULT"})
+
     def test_null_worker_result_is_runtime_gap_without_reviewer(self) -> None:
         output = self.run_installed(scenario="null-worker")
 
@@ -657,6 +670,48 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(result["reviewResult"]["verdict"], "PASS")
 
+    def test_blocker_field_newline_is_still_rejected(self) -> None:
+        # operatorNotes alone gained newline support; a blocker field keeps the strict
+        # single-line usableText check.
+        scenario = json.dumps(
+            {
+                "steps": [
+                    {
+                        "outcome": "COMPLETED",
+                        "validation": [
+                            {"check": "c", "result": "PASSED", "summary": "s"}
+                        ],
+                        "residualRisks": [],
+                    },
+                    {
+                        "verdict": "BLOCKED",
+                        "blockers": [
+                            {
+                                "where": "line one\nline two",
+                                "why": "A newline in a blocker field is out of shape.",
+                                "howToFix": "Keep the field on one line.",
+                                "trigger": "A reviewer submits a multi-line where.",
+                            }
+                        ],
+                        "outOfEnvelopeFindings": [],
+                    },
+                ]
+            }
+        )
+        output = self.run_installed(scenario=scenario)
+
+        result = self.assert_terminal(
+            output,
+            execution="RUNTIME_GAP",
+            outcome=None,
+            stopped_at="REVIEW",
+            stop_reason="CAPABILITY_UNAVAILABLE",
+            calls=2,
+        )
+        self.assertEqual(result["error"], {"code": "INVALID_CHILD_RESULT"})
+        self.assertEqual(result["workerResult"]["outcome"], "COMPLETED")
+        self.assertIsNone(result["reviewResult"])
+
     def test_invalid_inputs_dispatch_no_child_and_preserve_six_value_interface(self) -> None:
         cases = (
             (
@@ -675,8 +730,31 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
             ({**VALID_INPUT, "ticket": "ticket.md"}, "UNUSABLE_INPUT", {"ticket"}),
             ({**VALID_INPUT, "envelope": "envelope.md"}, "UNUSABLE_INPUT", {"envelope"}),
             ({**VALID_INPUT, "startingHead": "   "}, "UNUSABLE_INPUT", {"startingHead"}),
+            (
+                {**VALID_INPUT, "lane": "/tmp/collab-lane\n/extra"},
+                "UNUSABLE_INPUT",
+                {"lane"},
+            ),
+            (
+                {**VALID_INPUT, "ticket": "/tmp/ticket.md\n"},
+                "UNUSABLE_INPUT",
+                {"ticket"},
+            ),
+            (
+                {**VALID_INPUT, "startingHead": "0123456789abcdef\n"},
+                "UNUSABLE_INPUT",
+                {"startingHead"},
+            ),
             ({**VALID_INPUT, "operatorNotes": ""}, "UNUSABLE_INPUT", {"operatorNotes"}),
             ({**VALID_INPUT, "operatorNotes": 42}, "UNUSABLE_INPUT", {"operatorNotes"}),
+            ({**VALID_INPUT, "operatorNotes": "   \n  "}, "UNUSABLE_INPUT", {"operatorNotes"}),
+            (
+                # A tab is a control character other than the newline/carriage-return pair
+                # operatorNotes permits, so it still fails the field.
+                {**VALID_INPUT, "operatorNotes": "line one\tindented"},
+                "UNUSABLE_INPUT",
+                {"operatorNotes"},
+            ),
             (
                 {**VALID_INPUT, "operatorNotes": "x" * 4097},
                 "UNUSABLE_INPUT",
@@ -720,6 +798,29 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
             self.assertIn(authority_phrase, prompt)
             self.assertIn("no scope", prompt)
             self.assertIn("NEEDS_DECISION", prompt)
+
+    def test_operator_notes_with_newlines_reach_prompts_intact(self) -> None:
+        notes = (
+            "Orientation: the collab-reviewed-lane workflow's input validators.\n\n"
+            "Execution parameters: node, no environment variables.\n"
+            "Placement and safety notes:\r\n"
+            "- do not widen scope beyond the ticket.\n"
+            "- report plainly if the suite regresses."
+        )
+        args = {**VALID_INPUT, "correctionBudget": 0, "operatorNotes": notes}
+        output = self.run_installed(args, scenario="happy")
+
+        result = self.assert_terminal(
+            output,
+            execution="COMPLETED",
+            outcome="REVIEWED",
+            stopped_at="REVIEW",
+            stop_reason="REVIEW_PASS",
+            calls=2,
+        )
+        self.assertEqual(result["reviewResult"]["verdict"], "PASS")
+        for prompt, _options in output["invocations"]:
+            self.assertIn(notes, prompt)
 
     def test_operator_notes_absent_from_all_prompts_when_null(self) -> None:
         args = {**VALID_INPUT, "correctionBudget": 1, "operatorNotes": None}
@@ -788,7 +889,7 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         blocker_properties = reviewer_schema["properties"]["blockers"]
         self.assertEqual(
             set(blocker_properties["items"]["properties"]),
-            {"where", "why", "howToFix"},
+            {"where", "why", "howToFix", "trigger"},
         )
 
         correction_output = self.run_installed(

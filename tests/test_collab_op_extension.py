@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+from collections.abc import Callable
 import json
 import os
 from pathlib import Path
@@ -56,7 +57,9 @@ def git(repository: Path, *arguments: str) -> str:
         capture_output=True,
         check=True,
     )
-    return result.stdout.strip()
+    # Remove only trailing line terminators so leading porcelain status
+    # columns and other meaningful output content survive normalization.
+    return result.stdout.rstrip("\r\n")
 
 
 def invoke(
@@ -416,6 +419,18 @@ if [ "$1" = "worktree" ] && [ "$2" = "remove" ]; then
 fi
 exec "$real_git" "$@"
 """
+
+class CollabOpExtensionGitHelperRegressionTests(unittest.TestCase):
+    def test_unstaged_tracked_deletion_keeps_leading_worktree_column(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / "tracked.txt").unlink()
+
+            self.assertEqual(
+                git(repository, "status", "--porcelain=v1"),
+                " D tracked.txt",
+            )
+
 
 class CollabOpExtensionIntegrationCreateRegressionTests(unittest.TestCase):
     def test_create_builds_managed_resources_and_records_active_telemetry(self) -> None:
@@ -2739,6 +2754,127 @@ class CollabOpExtensionIntegrationReconcileContractRegressionTests(unittest.Test
             self.assertFalse((repository / ".agent_state/plans/demo").exists())
 
 
+# Pairwise landing-transition coverage grid. Each row is one transition-shape
+# family; the columns are the contract representatives that the individually
+# named tests below keep visible. A missing cell is a coverage gap by direct
+# inspection rather than something an opaque matrix run has to reveal:
+#
+#   family            clean-success representative                 local-overlap refusal representative
+#   ----------------  -------------------------------------------  ------------------------------------------------------------
+#   rename            accepted_rename_leaves_only_destination      refuses_rename_over_untracked_destination
+#   directory->file   clean_directory_to_file_transition_lands     refuses_directory_to_file_transition_over_untracked_dirt
+#   file->directory   clean_file_to_directory_transition_lands     refuses_file_to_directory_transition_over_untracked_dirt
+#   added path        (any clean landing)                          refuses_ordinary_untracked_collision
+#
+# The established index-dirt representative (refuses_intent_to_add_entry) and
+# failure-phase representative (commit_failure_restores_persistence) stay in
+# their own named tests; they are not transition families.
+
+
+class LandingTransition:
+    """Fixture builder for one pairwise landing-transition arrangement.
+
+    Seeds the repository, the managed task, and one accepted
+    integration-side transition commit, applies optional local overlap in
+    the operator checkout, captures the pre-landing observation set once,
+    and shares the success/refusal assertion bundles so each transition
+    family keeps its own named, diagnosable tests without repeating the
+    fixture mechanics.
+    """
+
+    def __init__(
+        self,
+        temporary: Path,
+        *,
+        base_files: dict[str, str],
+        transition: Callable[[Path], None] | None = None,
+        local_overlap: Callable[[Path], None] | None = None,
+    ) -> None:
+        repository, _ = seed_repository(Path(temporary))
+        if base_files:
+            for name in sorted(base_files):
+                target = repository / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(base_files[name], encoding="utf-8")
+            git(repository, "add", *sorted(base_files))
+            git(repository, "commit", "-m", "transition base")
+        self.repository = repository
+        self.expected = seed_managed_task(repository)
+        seed_task_container(repository)
+        if transition is not None:
+            integration = Path(self.expected["integration"])
+            transition(integration)
+            git(integration, "commit", "-m", "accepted transition")
+            self.expected["integration_head"] = git(integration, "rev-parse", "HEAD")
+        if local_overlap is not None:
+            local_overlap(repository)
+        self.before_refs = managed_ref_snapshot(repository)
+        self.before_head = git(repository, "rev-parse", "HEAD")
+        self.before_status = git(repository, "status", "--porcelain=v1", "--ignored=matching")
+        self.before_integration = git(repository, "rev-parse", "wave/demo/integration")
+
+    @property
+    def base(self) -> str:
+        return self.expected["base"]
+
+    @property
+    def integration_head(self) -> str:
+        return self.expected["integration_head"]
+
+    def land(self) -> dict[str, object]:
+        return invoke(
+            self.repository, {"tool": "collab_integration_land", "task_id": "demo"}
+        )
+
+
+def assert_transition_landed(
+    test: unittest.TestCase,
+    scenario: LandingTransition,
+    observed: dict[str, object],
+) -> None:
+    """Shared clean-success contract for one accepted transition shape."""
+    repository = scenario.repository
+    landed_tree = git(repository, "rev-parse", f"{scenario.integration_head}^{{tree}}")
+    test.assertFalse(observed["is_error"])
+    test.assertEqual(
+        git(repository, "rev-parse", "refs/orchestrate/demo/landed"),
+        scenario.integration_head,
+    )
+    test.assertEqual(git(repository, "rev-parse", "HEAD^{tree}"), landed_tree)
+    # The index holds exactly the accepted tree with no residue behind it.
+    test.assertEqual(git(repository, "write-tree"), landed_tree)
+    test.assertEqual(git(repository, "status", "--porcelain=v1", "--untracked-files=all"), "")
+    test.assertEqual(
+        git(repository, "rev-parse", "wave/demo/integration"), scenario.before_integration
+    )
+
+
+def assert_transition_refused(
+    test: unittest.TestCase,
+    scenario: LandingTransition,
+    observed: dict[str, object],
+    *,
+    code: str,
+    collision_paths: list[str] | None = None,
+) -> None:
+    """Shared refusal-before-mutation contract for one overlap arrangement."""
+    repository = scenario.repository
+    error = observed["error"]["error"]
+    test.assertTrue(observed["is_error"])
+    test.assertEqual(error["code"], code)
+    if collision_paths is not None:
+        test.assertEqual(error["details"]["paths"], collision_paths)
+    test.assertEqual(managed_ref_snapshot(repository), scenario.before_refs)
+    test.assertEqual(git(repository, "rev-parse", "HEAD"), scenario.before_head)
+    test.assertEqual(
+        git(repository, "status", "--porcelain=v1", "--ignored=matching"), scenario.before_status
+    )
+    test.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), scenario.base)
+    test.assertEqual(
+        git(repository, "rev-parse", "wave/demo/integration"), scenario.integration_head
+    )
+
+
 class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase):
     def test_land_default_commit_preserves_dirt_and_records_landed_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -2801,7 +2937,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             self.assertIn("preserved unstaged tracked changes", observed["result"]["warnings"])
             self.assertLessEqual(len(observed["result"]["warnings"]), 3)
             self.assertEqual((repository / "tracked.txt").read_text(encoding="utf-8"), "a\nB\nc\nd\nE\nf\n")
-            self.assertEqual(git(repository, "status", "--porcelain=v1", "--untracked-files=no"), "M tracked.txt")
+            self.assertEqual(git(repository, "status", "--porcelain=v1", "--untracked-files=no"), " M tracked.txt")
             self.assertEqual(git(repository, "diff", "--cached", "--quiet"), "")
             self.assertEqual(
                 git(repository, "rev-parse", "HEAD^{tree}"),
@@ -2910,46 +3046,41 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
 
     def test_land_refuses_intent_to_add_entry_and_preserves_it(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            repository, _ = seed_repository(Path(temporary))
-            expected = seed_managed_task(repository)
-            seed_task_container(repository)
-            (repository / "valuable.txt").write_text("operator\n", encoding="utf-8")
-            git(repository, "add", "--intent-to-add", "valuable.txt")
-            before_refs = managed_ref_snapshot(repository)
-            before_head = git(repository, "rev-parse", "HEAD")
-            before_status = git(repository, "status", "--porcelain=v1", "--ignored=matching")
 
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            def overlap(repository: Path) -> None:
+                (repository / "valuable.txt").write_text("operator\n", encoding="utf-8")
+                git(repository, "add", "--intent-to-add", "valuable.txt")
 
-            self.assertTrue(observed["is_error"])
-            self.assertEqual(observed["error"]["error"]["code"], "dirty_index")
-            self.assertEqual(managed_ref_snapshot(repository), before_refs)
-            self.assertEqual(git(repository, "rev-parse", "HEAD"), before_head)
-            self.assertEqual(git(repository, "status", "--porcelain=v1", "--ignored=matching"), before_status)
-            self.assertEqual((repository / "valuable.txt").read_text(encoding="utf-8"), "operator\n")
+            scenario = LandingTransition(temporary, base_files={}, local_overlap=overlap)
+
+            observed = scenario.land()
+
+            assert_transition_refused(self, scenario, observed, code="dirty_index")
+            self.assertEqual((scenario.repository / "valuable.txt").read_text(encoding="utf-8"), "operator\n")
             self.assertIn(
                 # The intent-to-add entry keeps the empty blob and must survive.
                 "100644 e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 0\tvaluable.txt",
-                git(repository, "ls-files", "--stage"),
+                git(scenario.repository, "ls-files", "--stage"),
             )
-            self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), expected["integration_head"])
 
     def test_land_refuses_ordinary_untracked_collision(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            repository, _ = seed_repository(Path(temporary))
-            expected = seed_managed_task(repository)
-            integration = Path(expected["integration"])
-            (integration / "new.txt").write_text("accepted\n", encoding="utf-8")
-            git(integration, "add", "new.txt")
-            git(integration, "commit", "-m", "add accepted path")
-            (repository / "new.txt").write_text("operator\n", encoding="utf-8")
 
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            def add_path(integration: Path) -> None:
+                (integration / "new.txt").write_text("accepted\n", encoding="utf-8")
+                git(integration, "add", "new.txt")
 
-            self.assertTrue(observed["is_error"])
-            self.assertEqual(observed["error"]["error"]["code"], "path_collision")
-            self.assertEqual((repository / "new.txt").read_text(encoding="utf-8"), "operator\n")
-            self.assertEqual(git(repository, "rev-parse", "main"), expected["base"])
+            def overlap(repository: Path) -> None:
+                (repository / "new.txt").write_text("operator\n", encoding="utf-8")
+
+            scenario = LandingTransition(
+                temporary, base_files={}, transition=add_path, local_overlap=overlap
+            )
+
+            observed = scenario.land()
+
+            assert_transition_refused(self, scenario, observed, code="path_collision")
+            self.assertEqual((scenario.repository / "new.txt").read_text(encoding="utf-8"), "operator\n")
 
     def test_land_preserves_directory_replacement_of_unchanged_path(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -2983,8 +3114,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             self.assertEqual((repository / "stable.txt").read_text(encoding="utf-8"), "stable local\n")
             self.assertEqual(
                 git(repository, "status", "--porcelain=v1", "--untracked-files=all"),
-                # The helper strips the leading status column of the first line.
-                "D shape.txt\n M stable.txt\n?? shape.txt/local.txt",
+                " D shape.txt\n M stable.txt\n?? shape.txt/local.txt",
             )
             self.assertEqual(git(repository, "diff", "--cached", "--quiet"), "")
             self.assertEqual(
@@ -3003,161 +3133,175 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
 
     def test_land_accepted_rename_leaves_only_destination_and_clean_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            repository, _ = seed_repository(Path(temporary))
-            (repository / "old.txt").write_text("base\n", encoding="utf-8")
-            (repository / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
-            git(repository, "add", "old.txt", ".gitignore")
-            git(repository, "commit", "-m", "rename base")
-            expected = seed_managed_task(repository)
-            seed_task_container(repository)
-            integration = Path(expected["integration"])
-            git(integration, "mv", "old.txt", "new.txt")
-            git(integration, "commit", "-m", "accepted rename")
-            expected["integration_head"] = git(integration, "rev-parse", "HEAD")
-            before_integration = git(repository, "rev-parse", "wave/demo/integration")
 
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            def rename(integration: Path) -> None:
+                git(integration, "mv", "old.txt", "new.txt")
 
-            self.assertFalse(observed["is_error"])
+            scenario = LandingTransition(
+                temporary,
+                base_files={"old.txt": "base\n", ".gitignore": ".agent_state/\n"},
+                transition=rename,
+            )
+
+            observed = scenario.land()
+
             # The rename source must leave the worktree with the accepted
             # transition; a destination-only transition path list would
             # strand it as untracked residue behind a success report.
-            self.assertEqual(git(repository, "status", "--porcelain=v1", "--untracked-files=all"), "")
-            self.assertFalse((repository / "old.txt").exists())
-            self.assertEqual((repository / "new.txt").read_text(encoding="utf-8"), "base\n")
-            self.assertEqual(
-                git(repository, "write-tree"),
-                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+            assert_transition_landed(self, scenario, observed)
+            self.assertFalse((scenario.repository / "old.txt").exists())
+            self.assertEqual((scenario.repository / "new.txt").read_text(encoding="utf-8"), "base\n")
+
+    def test_land_refuses_rename_over_untracked_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+
+            def rename(integration: Path) -> None:
+                git(integration, "mv", "old.txt", "new.txt")
+
+            def overlap(repository: Path) -> None:
+                (repository / "new.txt").write_text("operator\n", encoding="utf-8")
+
+            scenario = LandingTransition(
+                temporary,
+                base_files={"old.txt": "base\n", ".gitignore": ".agent_state/\n"},
+                transition=rename,
+                local_overlap=overlap,
             )
-            self.assertEqual(
-                git(repository, "rev-parse", "HEAD^{tree}"),
-                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+
+            observed = scenario.land()
+
+            assert_transition_refused(
+                self, scenario, observed, code="path_collision", collision_paths=["new.txt"]
             )
-            self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected["integration_head"])
-            self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), before_integration)
+            # The refusal counterpart of the accepted rename: both sides of
+            # the move must survive untouched for the operator to resolve.
+            self.assertTrue((scenario.repository / "old.txt").exists())
+            self.assertEqual((scenario.repository / "new.txt").read_text(encoding="utf-8"), "operator\n")
 
     def test_land_refuses_directory_to_file_transition_over_untracked_dirt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            repository, _ = seed_repository(Path(temporary))
-            (repository / "pair").mkdir()
-            (repository / "pair/gen.txt").write_text("gen\n", encoding="utf-8")
-            (repository / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
-            git(repository, "add", "pair/gen.txt", ".gitignore")
-            git(repository, "commit", "-m", "pair base")
-            expected = seed_managed_task(repository)
-            seed_task_container(repository)
-            integration = Path(expected["integration"])
-            git(integration, "rm", "pair/gen.txt")
-            (integration / "pair").write_text("collapsed\n", encoding="utf-8")
-            git(integration, "add", "pair")
-            git(integration, "commit", "-m", "collapse pair")
-            expected["integration_head"] = git(integration, "rev-parse", "HEAD")
-            (repository / "pair/local.txt").write_text("operator\n", encoding="utf-8")
-            before_refs = managed_ref_snapshot(repository)
-            before_head = git(repository, "rev-parse", "HEAD")
-            before_status = git(repository, "status", "--porcelain=v1", "--ignored=matching")
-            before_files = {
-                name: path.read_text(encoding="utf-8")
-                for name, path in {
-                    "gen": repository / "pair/gen.txt",
-                    "local": repository / "pair/local.txt",
-                }.items()
-            }
 
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            def collapse(integration: Path) -> None:
+                git(integration, "rm", "pair/gen.txt")
+                (integration / "pair").write_text("collapsed\n", encoding="utf-8")
+                git(integration, "add", "pair")
 
-            self.assertTrue(observed["is_error"])
-            self.assertEqual(observed["error"]["error"]["code"], "path_collision")
-            self.assertEqual(observed["error"]["error"]["details"]["paths"], ["pair/local.txt"])
-            self.assertEqual(managed_ref_snapshot(repository), before_refs)
-            self.assertEqual(git(repository, "rev-parse", "HEAD"), before_head)
-            self.assertEqual(
-                git(repository, "status", "--porcelain=v1", "--ignored=matching"),
-                before_status,
+            def overlap(repository: Path) -> None:
+                (repository / "pair/local.txt").write_text("operator\n", encoding="utf-8")
+
+            scenario = LandingTransition(
+                temporary,
+                base_files={"pair/gen.txt": "gen\n", ".gitignore": ".agent_state/\n"},
+                transition=collapse,
+                local_overlap=overlap,
             )
-            self.assertEqual((repository / "pair/gen.txt").read_text(encoding="utf-8"), before_files["gen"])
-            self.assertEqual((repository / "pair/local.txt").read_text(encoding="utf-8"), before_files["local"])
-            self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected["base"])
+            before_gen = (scenario.repository / "pair/gen.txt").read_text(encoding="utf-8")
+
+            observed = scenario.land()
+
+            assert_transition_refused(
+                self,
+                scenario,
+                observed,
+                code="path_collision",
+                collision_paths=["pair/local.txt"],
+            )
+            self.assertEqual(
+                (scenario.repository / "pair/gen.txt").read_text(encoding="utf-8"), before_gen
+            )
+            self.assertEqual(
+                (scenario.repository / "pair/local.txt").read_text(encoding="utf-8"), "operator\n"
+            )
 
     def test_land_clean_directory_to_file_transition_lands(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            repository, _ = seed_repository(Path(temporary))
-            (repository / "pair").mkdir()
-            (repository / "pair/gen.txt").write_text("gen\n", encoding="utf-8")
-            (repository / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
-            git(repository, "add", "pair/gen.txt", ".gitignore")
-            git(repository, "commit", "-m", "pair base")
-            expected = seed_managed_task(repository)
-            seed_task_container(repository)
-            integration = Path(expected["integration"])
-            git(integration, "rm", "pair/gen.txt")
-            (integration / "pair").write_text("collapsed\n", encoding="utf-8")
-            git(integration, "add", "pair")
-            git(integration, "commit", "-m", "collapse pair")
-            expected["integration_head"] = git(integration, "rev-parse", "HEAD")
-            before_integration = git(repository, "rev-parse", "wave/demo/integration")
 
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            def collapse(integration: Path) -> None:
+                git(integration, "rm", "pair/gen.txt")
+                (integration / "pair").write_text("collapsed\n", encoding="utf-8")
+                git(integration, "add", "pair")
 
-            self.assertFalse(observed["is_error"])
+            scenario = LandingTransition(
+                temporary,
+                base_files={"pair/gen.txt": "gen\n", ".gitignore": ".agent_state/\n"},
+                transition=collapse,
+            )
+
+            observed = scenario.land()
+
             # The clean D/F transition must land: ordinary Git merge accepts
             # it, so the restore set may not ask Git to match a path under a
             # source entry the transition collapsed.
-            self.assertFalse((repository / "pair/gen.txt").exists())
-            self.assertTrue((repository / "pair").is_file())
-            self.assertEqual((repository / "pair").read_text(encoding="utf-8"), "collapsed\n")
-            self.assertEqual(git(repository, "status", "--porcelain=v1", "--untracked-files=all"), "")
-            self.assertEqual(
-                git(repository, "write-tree"),
-                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
-            )
-            self.assertEqual(
-                git(repository, "rev-parse", "HEAD^{tree}"),
-                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
-            )
-            self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected["integration_head"])
-            self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), before_integration)
+            assert_transition_landed(self, scenario, observed)
+            self.assertFalse((scenario.repository / "pair/gen.txt").exists())
+            self.assertTrue((scenario.repository / "pair").is_file())
+            self.assertEqual((scenario.repository / "pair").read_text(encoding="utf-8"), "collapsed\n")
 
     def test_land_clean_file_to_directory_transition_lands(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            repository, _ = seed_repository(Path(temporary))
-            (repository / "pair").write_text("expanded\n", encoding="utf-8")
-            (repository / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
-            git(repository, "add", "pair", ".gitignore")
-            git(repository, "commit", "-m", "pair file base")
-            expected = seed_managed_task(repository)
-            seed_task_container(repository)
-            integration = Path(expected["integration"])
-            git(integration, "rm", "pair")
-            (integration / "pair").mkdir()
-            (integration / "pair/gen.txt").write_text("generated\n", encoding="utf-8")
-            git(integration, "add", "pair/gen.txt")
-            git(integration, "commit", "-m", "expand pair")
-            expected["integration_head"] = git(integration, "rev-parse", "HEAD")
-            before_integration = git(repository, "rev-parse", "wave/demo/integration")
 
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            def expand(integration: Path) -> None:
+                git(integration, "rm", "pair")
+                (integration / "pair").mkdir()
+                (integration / "pair/gen.txt").write_text("generated\n", encoding="utf-8")
+                git(integration, "add", "pair/gen.txt")
 
-            self.assertFalse(observed["is_error"])
+            scenario = LandingTransition(
+                temporary,
+                base_files={"pair": "expanded\n", ".gitignore": ".agent_state/\n"},
+                transition=expand,
+            )
+
+            observed = scenario.land()
+
             # The reverse flip is the same seam sibling: the collapsed file
             # must leave room for the accepted directory in one landing.
-            self.assertFalse((repository / "pair").is_file())
-            self.assertTrue((repository / "pair/gen.txt").is_file())
+            assert_transition_landed(self, scenario, observed)
+            self.assertFalse((scenario.repository / "pair").is_file())
+            self.assertTrue((scenario.repository / "pair/gen.txt").is_file())
             self.assertEqual(
-                (repository / "pair/gen.txt").read_text(encoding="utf-8"),
+                (scenario.repository / "pair/gen.txt").read_text(encoding="utf-8"),
                 "generated\n",
             )
-            self.assertEqual(git(repository, "status", "--porcelain=v1", "--untracked-files=all"), "")
-            self.assertEqual(
-                git(repository, "write-tree"),
-                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+
+    def test_land_refuses_file_to_directory_transition_over_untracked_dirt(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+
+            def expand(integration: Path) -> None:
+                git(integration, "rm", "pair")
+                (integration / "pair").mkdir()
+                (integration / "pair/gen.txt").write_text("generated\n", encoding="utf-8")
+                git(integration, "add", "pair/gen.txt")
+
+            def overlap(repository: Path) -> None:
+                # The operator already replaced the tracked file with a
+                # directory holding an untracked file exactly where the
+                # accepted expansion lands.
+                (repository / "pair").unlink()
+                (repository / "pair").mkdir()
+                (repository / "pair/gen.txt").write_text("operator\n", encoding="utf-8")
+
+            scenario = LandingTransition(
+                temporary,
+                base_files={"pair": "expanded\n", ".gitignore": ".agent_state/\n"},
+                transition=expand,
+                local_overlap=overlap,
             )
-            self.assertEqual(
-                git(repository, "rev-parse", "HEAD^{tree}"),
-                git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
+
+            observed = scenario.land()
+
+            assert_transition_refused(
+                self,
+                scenario,
+                observed,
+                code="path_collision",
+                collision_paths=["pair/gen.txt"],
             )
-            self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected["integration_head"])
-            self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), before_integration)
+            self.assertTrue((scenario.repository / "pair/gen.txt").is_file())
+            self.assertEqual(
+                (scenario.repository / "pair/gen.txt").read_text(encoding="utf-8"),
+                "operator\n",
+            )
 
     def test_land_commit_failure_restores_persistence_and_authority(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -3747,7 +3891,7 @@ class CollabOpExtensionLaneDropContractRegressionTests(unittest.TestCase):
             self.assertFalse(observed["is_error"])
             self.assertTrue(observed["result"]["warnings"])
             self.assertFalse(Path(repository / ".agent_state/worktrees/demo/lanes/writer-1").exists())
-            self.assertEqual(git(repository, "branch", "--list", "wave/demo/writer-1"), "wave/demo/writer-1")
+            self.assertEqual(git(repository, "branch", "--list", "wave/demo/writer-1"), "  wave/demo/writer-1")
 
     def test_drop_unlinks_canonical_symlink_without_touching_aliased_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -3865,7 +4009,7 @@ class CollabOpExtensionIntegrationRemoveContractRegressionTests(unittest.TestCas
             self.assertFalse(observed["is_error"])
             self.assertTrue(observed["result"]["warnings"])
             self.assertFalse(Path(repository / ".agent_state/worktrees/demo/lanes/writer-1").exists())
-            self.assertEqual(git(repository, "branch", "--list", "wave/demo/writer-1"), "wave/demo/writer-1")
+            self.assertEqual(git(repository, "branch", "--list", "wave/demo/writer-1"), "  wave/demo/writer-1")
             self.assertFalse(Path(repository / ".agent_state/worktrees/demo/integration").exists())
             self.assertEqual(git(repository, "branch", "--list", "wave/demo/integration"), "")
 

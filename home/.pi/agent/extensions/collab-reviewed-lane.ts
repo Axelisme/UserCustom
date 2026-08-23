@@ -257,6 +257,7 @@ export function reviewedLaneWorkflowScript(input: {
   workerBrief: string;
   reviewBrief: string;
   correctionBudget: number;
+  retainedCorrection: boolean;
   /** Runtime-owned immutable comparison baseline for every reviewer round. */
   integrationTip: string;
 }): string {
@@ -269,7 +270,9 @@ const integrationTip = ${JSON.stringify(input.integrationTip)};
 const reviewerBaseline = "Immutable comparison baseline — runtime-owned integration tip " + integrationTip + ". Review the complete candidate lane diff with this read-only canonical command: git diff --find-renames " + integrationTip + "...HEAD --";
 const workerSchema = ${workerSchema};
 const reviewerSchema = ${reviewerSchema};
-const runChild = (key, agent, task, outputSchema) => runs.run(key, {
+const retainedCorrection = ${input.retainedCorrection};
+const efficiencyFeedbackRequest = "Return optional native efficiencyFeedback describing retained-context or fresh-fallback friction observed in this correction.";
+const runFreshChild = (key, agent, task, outputSchema) => runs.run(key, {
   agent,
   cwd: lane,
   worktree: false,
@@ -278,16 +281,25 @@ const runChild = (key, agent, task, outputSchema) => runs.run(key, {
   outputSchema,
   ...(agent === "collab-implementer" ? { agentContract: { version: 1 } } : {})
 });
-const completedWriterHasMutation = (child) => child.results?.some(
-  (result) => result.effects?.fileMutation?.status === "observed"
-    || result.effects?.fileMutation?.attempted === true
-    || result.observedMutationAttempt === true
-) === true;
-const requireCompletedWriterMutation = (child) => {
-  if (child.structuredOutput.outcome === "COMPLETED" && !completedWriterHasMutation(child)) {
-    throw new Error("A COMPLETED collab-implementer result requires an observed file mutation.");
-  }
-};
+const successfulRunId = (child) => typeof child.runId === "string" && child.runId.length > 0
+  ? child.runId
+  : undefined;
+const retainedCorrectionTask = (blockers) =>
+  "Continue the original bounded correction contract with these latest typed blockers only: "
+    + JSON.stringify(blockers) + "\\n\\n" + efficiencyFeedbackRequest;
+const freshCorrectionTask = (blockers) => [
+  "Fresh compatible correction writer selected before launch.",
+  "Original ticket contract and exact execution parameters:",
+  ${JSON.stringify(input.workerBrief)},
+  "Latest typed blockers:",
+  JSON.stringify(blockers),
+  "Current lane placement:",
+  lane
+].join("\\n\\n");
+const runCorrection = (key, resumeTarget, blockers) =>
+  retainedCorrection && resumeTarget !== undefined
+    ? runs.run(key, { resume: resumeTarget, task: retainedCorrectionTask(blockers) })
+    : runFreshChild(key, "collab-implementer", freshCorrectionTask(blockers), workerSchema);
 const projectNeedsDecision = (child) => ({
   outcome: "NEEDS_DECISION",
   why: child.structuredOutput.decision.why,
@@ -296,22 +308,21 @@ const projectNeedsDecision = (child) => ({
 const projectWorkerStop = (child) => child.structuredOutput.outcome === "BLOCKED"
   ? { outcome: "BLOCKED", blocker: child.structuredOutput.blocker }
   : projectNeedsDecision(child);
-let writer = await runChild("impl-0", "collab-implementer", ${JSON.stringify(input.workerBrief)}, workerSchema);
+let writer = await runFreshChild("impl-0", "collab-implementer", ${JSON.stringify(input.workerBrief)}, workerSchema);
 if (writer.structuredOutput.outcome !== "COMPLETED") return projectWorkerStop(writer);
-requireCompletedWriterMutation(writer);
-let reviewer = await runChild("review-0", "collab-acceptor", ${JSON.stringify(input.reviewBrief)} + "\\n\\n" + reviewerBaseline, reviewerSchema);
+let resumeTarget = successfulRunId(writer);
+let reviewer = await runFreshChild("review-0", "collab-acceptor", ${JSON.stringify(input.reviewBrief)} + "\\n\\n" + reviewerBaseline, reviewerSchema);
 if (reviewer.structuredOutput.verdict === "NEEDS_DECISION") return projectNeedsDecision(reviewer);
 let round = 1;
 while (reviewer.structuredOutput.verdict === "BLOCKED" && round <= budget) {
-  writer = await runChild(
+  writer = await runCorrection(
     "impl-" + round,
-    "collab-implementer",
-    "Round " + round + " correction within the original bounded worker contract: " + ${JSON.stringify(input.workerBrief)} + " — current typed blockers: " + JSON.stringify(reviewer.structuredOutput.blockers),
-    workerSchema
+    resumeTarget,
+    reviewer.structuredOutput.blockers
   );
   if (writer.structuredOutput.outcome !== "COMPLETED") return projectWorkerStop(writer);
-  requireCompletedWriterMutation(writer);
-  reviewer = await runChild(
+  resumeTarget = successfulRunId(writer);
+  reviewer = await runFreshChild(
     "review-" + round,
     "collab-acceptor",
     ${JSON.stringify(input.reviewBrief)} + " — rereview the complete current lane diff against the same immutable baseline.\\n\\n" + reviewerBaseline,
@@ -475,6 +486,12 @@ export async function runReviewedLane(
       "Enable a pi-subagents version that advertises RPC v1 spawn and asyncSpawn, then retry.",
     );
   }
+  const foregroundStructuredResume = requireRpcObject(
+    capabilities.foregroundStructuredResume,
+  );
+  const retainedCorrection =
+    foregroundStructuredResume.version === 1
+    && foregroundStructuredResume.recoveryDescriptorVersion === 1;
 
   const spawned = await callSubagentRpc(pi, "spawn", {
     cwd: lane,
@@ -483,6 +500,7 @@ export async function runReviewedLane(
       workerBrief: workerTask,
       reviewBrief: reviewerTask,
       correctionBudget,
+      retainedCorrection,
       integrationTip: integration.tip,
     }),
     async: true,

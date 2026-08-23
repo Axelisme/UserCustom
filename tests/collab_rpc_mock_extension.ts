@@ -8,6 +8,7 @@ type Config = {
   capture?: string;
   runId?: string;
   omitRunId?: boolean;
+  foregroundStructuredResume?: unknown;
 };
 
 export default function collabRpcMock(pi: any): void {
@@ -41,7 +42,16 @@ export default function collabRpcMock(pi: any): void {
         version: 1,
         requestId: raw.requestId,
         success: true,
-        data: { version: 1, methods, capabilities: { asyncSpawn: methods.includes("spawn") } },
+        data: {
+          version: 1,
+          methods,
+          capabilities: {
+            asyncSpawn: methods.includes("spawn"),
+            ...(config.foregroundStructuredResume === undefined
+              ? {}
+              : { foregroundStructuredResume: config.foregroundStructuredResume }),
+          },
+        },
       });
       return;
     }

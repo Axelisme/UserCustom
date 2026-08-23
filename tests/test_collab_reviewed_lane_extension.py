@@ -30,8 +30,11 @@ COLLAB_EXTENSION = ROOT / "home/.pi/agent/extensions/collab-op.ts"
 TOOL = "collab_run_reviewed_lane"
 
 
-def completed_step(result: dict[str, Any]) -> dict[str, Any]:
-    return {"structuredOutput": result, "mutationStatus": "observed"}
+def completed_step(result: dict[str, Any], run_id: str | None = None) -> dict[str, Any]:
+    step = {"structuredOutput": result}
+    if run_id is not None:
+        step["runId"] = run_id
+    return step
 
 
 def invoke(repository: Path, request: dict[str, Any]) -> dict[str, Any]:
@@ -157,6 +160,13 @@ def valid_request(capture: Path, **overrides: Any) -> dict[str, Any]:
 
 
 class CollabReviewedLaneExtensionTests(unittest.TestCase):
+    def assert_fresh_reviewer_options(self, options: dict[str, Any], expected_lane: str) -> None:
+        self.assertEqual(options["agent"], "collab-acceptor")
+        self.assertEqual(options["cwd"], expected_lane)
+        self.assertIs(options["worktree"], False)
+        self.assertEqual(options["context"], "fresh")
+        self.assertNotIn("resume", options)
+
     def test_companion_is_loadable_as_top_level_extension(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             run = subprocess.run(
@@ -567,74 +577,58 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
         self.assertEqual(len(execution["calls"]), 1)
         self.assertEqual(execution["calls"][0]["options"]["agentContract"], {"version": 1})
 
-    def test_completed_writer_still_requires_observed_mutation(self) -> None:
-        completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
+    def test_initial_no_effect_completion_always_launches_a_fresh_reviewer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
-            _, _, capture, observed = self.launch_case(base)
-            self.assertFalse(observed["is_error"], observed)
-            for step in (
-                completed,
-                {"structuredOutput": completed, "mutationStatus": "missing"},
-            ):
-                with self.subTest(step=step):
-                    run = subprocess.run(
-                        [
-                            "node",
-                            str(SCRIPT_HARNESS),
-                            str(capture),
-                            json.dumps([step]),
-                        ],
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                    )
-
-                    self.assertNotEqual(run.returncode, 0)
-                    self.assertIn(
-                        "A COMPLETED collab-implementer result requires an observed file mutation.",
-                        run.stderr,
-                    )
-
-    def test_completed_writer_accepts_runtime_mutation_fact_shapes(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            base = Path(temporary)
-            _, _, capture, observed = self.launch_case(base)
+            _, expected, capture, observed = self.launch_case(base)
             self.assertFalse(observed["is_error"], observed)
             request = json.loads(capture.read_text(encoding="utf-8").strip())
             workflow_script = request["params"]["workflowScript"]
             runner = r'''
 const workflowScript = JSON.parse(process.argv[1]);
-const writerResult = JSON.parse(process.argv[2]);
-let call = 0;
+const writerEnvelope = JSON.parse(process.argv[2]);
+const calls = [];
 const runs = {
-  async run() {
-    call += 1;
-    if (call === 1) return {
+  async run(key, options) {
+    calls.push({key, options});
+    if (calls.length === 1) return {
       structuredOutput: {outcome:"COMPLETED", validation:[], residualRisks:[]},
-      results: [writerResult]
+      ...writerEnvelope
     };
     return {structuredOutput:{verdict:"PASS", outOfEnvelopeFindings:[]}, results:[]};
   }
 };
 const execute = Function("runs", `return (async () => {\n${workflowScript}\n})()`);
 const result = await execute(runs);
-process.stdout.write(JSON.stringify({result, call}));
+process.stdout.write(JSON.stringify({result, calls}));
 '''
-            for writer_result in (
-                {"observedMutationAttempt": True},
-                {"effects": {"fileMutation": {"status": "not-applicable", "attempted": True}}},
-            ):
-                with self.subTest(writer_result=writer_result):
-                    run = subprocess.run(
-                        ["/usr/bin/node", "-e", runner, json.dumps(workflow_script), json.dumps(writer_result)],
-                        capture_output=True,
-                        text=True,
-                        check=True,
+            effect_shapes = {
+                "absent": {},
+                "empty": {"results": []},
+                "missing": {"results": [{}]},
+                "empty-effects": {"results": [{"effects": {}}]},
+                "not-applicable": {
+                    "results": [{"effects": {"fileMutation": {"status": "not-applicable"}}}]
+                },
+                "observed-diagnostic": {
+                    "results": [{"effects": {"fileMutation": {"status": "observed"}}}]
+                },
+            }
+            for shape, writer_envelope in effect_shapes.items():
+                with self.subTest(shape=shape):
+                    execution = json.loads(
+                        subprocess.run(
+                            ["node", "-e", runner, json.dumps(workflow_script), json.dumps(writer_envelope)],
+                            capture_output=True,
+                            text=True,
+                            check=True,
+                        ).stdout
                     )
-                    execution = json.loads(run.stdout)
                     self.assertEqual(execution["result"]["outcome"], "REVIEWED")
-                    self.assertEqual(execution["call"], 2)
+                    self.assertEqual([call["key"] for call in execution["calls"]], ["impl-0", "review-0"])
+                    self.assertEqual(execution["calls"][0]["options"]["agentContract"], {"version": 1})
+                    reviewer = execution["calls"][1]["options"]
+                    self.assert_fresh_reviewer_options(reviewer, expected["lane"])
 
     def test_terminal_branches_are_typed_and_zero_budget_is_terminal(self) -> None:
         completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
@@ -708,25 +702,354 @@ process.stdout.write(JSON.stringify({result, call}));
         self.assertEqual(rereview["options"]["context"], "fresh")
         self.assertIsInstance(rereview["options"]["outputSchema"], dict)
 
-    def test_multiple_budget_rounds_consume_one_slot_per_blocked_review(self) -> None:
-        completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
-        blocked = {"verdict": "BLOCKED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}]}
+    def test_no_effect_retained_corrections_replace_latest_writer_and_keep_every_review_fresh(self) -> None:
+        completed = {
+            "outcome": "COMPLETED",
+            "validation": [{"check": "nonce", "result": "PASSED", "summary": "retained"}],
+            "residualRisks": [],
+        }
+        blocked = {
+            "verdict": "BLOCKED",
+            "blockers": [
+                {
+                    "where": "lane.ts",
+                    "why": "first blocker",
+                    "howToFix": "correct it",
+                    "trigger": "review one",
+                }
+            ],
+        }
+        blocked_again = {
+            "verdict": "BLOCKED",
+            "blockers": [
+                {
+                    "where": "lane.ts",
+                    "why": "second blocker",
+                    "howToFix": "correct it again",
+                    "trigger": "rereview one",
+                }
+            ],
+        }
         passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            capture = base / "supported-rpc.jsonl"
+            _, expected, _, observed = self.launch_case(
+                base,
+                capture_name=capture.name,
+                correction_budget=2,
+                __rpc={
+                    "mode": "available",
+                    "capture": str(capture),
+                    "foregroundStructuredResume": {
+                        "version": 1,
+                        "recoveryDescriptorVersion": 1,
+                    },
+                },
+            )
+            self.assertFalse(observed["is_error"], observed)
+            run = subprocess.run(
+                [
+                    "node",
+                    str(SCRIPT_HARNESS),
+                    str(capture),
+                    json.dumps(
+                        [
+                            completed_step(completed, "writer-initial"),
+                            blocked,
+                            completed_step(completed, "writer-correction-1"),
+                            blocked_again,
+                            completed_step(completed, "writer-correction-2"),
+                            passed,
+                        ]
+                    ),
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            execution = json.loads(run.stdout)
+
+        self.assertEqual(execution["result"]["outcome"], "REVIEWED")
+        self.assertEqual(
+            [call["key"] for call in execution["calls"]],
+            ["impl-0", "review-0", "impl-1", "review-1", "impl-2", "review-2"],
+        )
+        self.assertEqual(execution["calls"][2]["options"]["resume"], "writer-initial")
+        self.assertEqual(execution["calls"][4]["options"]["resume"], "writer-correction-1")
+        for index in (2, 4):
+            self.assertEqual(set(execution["calls"][index]["options"]), {"resume", "task"})
+            self.assertIn("latest typed blockers", execution["calls"][index]["options"]["task"])
+            self.assertIn("efficiencyFeedback", execution["calls"][index]["options"]["task"])
+        for index in (0, 1, 3, 5):
+            options = execution["calls"][index]["options"]
+            self.assertEqual(options["cwd"], expected["lane"])
+            self.assertIs(options["worktree"], False)
+            self.assertEqual(options["context"], "fresh")
+        self.assertEqual(
+            [execution["calls"][index]["options"]["agent"] for index in (1, 3, 5)],
+            ["collab-acceptor"] * 3,
+        )
+
+    def test_every_nonexact_capability_preselects_one_no_effect_bounded_fresh_fallback(self) -> None:
+        missing = object()
+        signals: list[object] = [
+            missing,
+            False,
+            True,
+            None,
+            "version-one",
+            [],
+            {},
+            {"version": 1},
+            {"version": 1, "recoveryDescriptorVersion": False},
+            {"version": 2, "recoveryDescriptorVersion": 1},
+            {"version": 1, "recoveryDescriptorVersion": 2},
+        ]
+        completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
+        blocked = {
+            "verdict": "BLOCKED",
+            "blockers": [
+                {
+                    "where": "current.ts",
+                    "why": "typed blocker marker",
+                    "howToFix": "apply the bounded correction",
+                    "trigger": "fresh fallback probe",
+                }
+            ],
+        }
+        passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        original_contract = (
+            "Original ticket contract marker.\n\n"
+            "Exact execution parameters: installed node; environment variables none; "
+            "five-minute timeout.\n\n"
+            "Return optional native efficiencyFeedback for observed correction friction."
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for index, signal in enumerate(signals):
+                with self.subTest(signal=signal):
+                    base = root / str(index)
+                    base.mkdir()
+                    capture = base / "fallback-rpc.jsonl"
+                    rpc: dict[str, object] = {"mode": "available", "capture": str(capture)}
+                    if signal is not missing:
+                        rpc["foregroundStructuredResume"] = signal
+                    _, expected, _, observed = self.launch_case(
+                        base,
+                        capture_name=capture.name,
+                        worker_brief=original_contract,
+                        review_brief="Fresh review marker; forbidden from writer fallback payload.",
+                        correction_budget=1,
+                        __rpc=rpc,
+                    )
+                    self.assertFalse(observed["is_error"], observed)
+                    execution = json.loads(
+                        subprocess.run(
+                            [
+                                "node",
+                                str(SCRIPT_HARNESS),
+                                str(capture),
+                                json.dumps(
+                                    [
+                                        completed_step(completed, "writer-initial"),
+                                        blocked,
+                                        completed_step(completed, "writer-fallback"),
+                                        passed,
+                                    ]
+                                ),
+                            ],
+                            capture_output=True,
+                            text=True,
+                            check=True,
+                        ).stdout
+                    )
+                    self.assertEqual(
+                        [call["key"] for call in execution["calls"]],
+                        ["impl-0", "review-0", "impl-1", "review-1"],
+                    )
+                    fallback = execution["calls"][2]["options"]
+                    self.assertEqual(
+                        set(fallback),
+                        {"agent", "cwd", "worktree", "context", "task", "outputSchema", "agentContract"},
+                    )
+                    self.assertEqual(fallback["agent"], "collab-implementer")
+                    self.assertEqual(fallback["cwd"], expected["lane"])
+                    self.assertIs(fallback["worktree"], False)
+                    self.assertEqual(fallback["context"], "fresh")
+                    self.assertNotIn("resume", fallback)
+                    initial_worker_contract = execution["calls"][0]["options"]["task"]
+                    self.assertIn(original_contract, initial_worker_contract)
+                    self.assertEqual(
+                        fallback["task"],
+                        "\n\n".join(
+                            [
+                                "Fresh compatible correction writer selected before launch.",
+                                "Original ticket contract and exact execution parameters:",
+                                initial_worker_contract,
+                                "Latest typed blockers:",
+                                json.dumps(blocked["blockers"], separators=(",", ":")),
+                                "Current lane placement:",
+                                expected["lane"],
+                            ]
+                        ),
+                    )
+                    self.assertEqual(fallback["task"].count("efficiencyFeedback"), 1)
+                    self.assertNotIn("Fresh review marker", fallback["task"])
+                    self.assertNotIn("INDEX", fallback["task"])
+                    self.assertNotIn("sibling", fallback["task"])
+                    self.assertNotIn("task history", fallback["task"])
+                    rereviewer = execution["calls"][3]["options"]
+                    self.assert_fresh_reviewer_options(rereviewer, expected["lane"])
+
+    def test_harness_rejects_fresh_reviewer_run_as_writer_resume_target(self) -> None:
+        completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
+        passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        workflow_script = """
+const writer = await runs.run("impl-0", { agent: "collab-implementer" });
+const reviewer = await runs.run("review-0", { agent: "collab-acceptor" });
+await runs.run("impl-1", { resume: reviewer.runId, task: "must reject reviewer target" });
+return { writerRunId: writer.runId };
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            capture = Path(temporary) / "reviewer-resume-target.jsonl"
+            capture.write_text(
+                json.dumps({"params": {"workflowScript": workflow_script}}) + "\n",
+                encoding="utf-8",
+            )
+            run = subprocess.run(
+                [
+                    "node",
+                    str(SCRIPT_HARNESS),
+                    str(capture),
+                    json.dumps(
+                        [
+                            completed_step(completed, "writer-run"),
+                            completed_step(passed, "reviewer-run"),
+                            completed_step(completed, "must-not-resume"),
+                        ]
+                    ),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            execution = json.loads(run.stdout)
+
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn(
+            "resume target was not a successful earlier writer: reviewer-run",
+            run.stderr,
+        )
+        self.assertEqual(
+            [call["key"] for call in execution["calls"]],
+            ["impl-0", "review-0", "impl-1"],
+        )
+
+    def test_resume_rejection_never_reacts_by_launching_a_fresh_writer(self) -> None:
+        completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
+        blocked = {
+            "verdict": "BLOCKED",
+            "blockers": [
+                {"where": "x", "why": "y", "howToFix": "z", "trigger": "review"}
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            capture = base / "resume-rejection-rpc.jsonl"
+            _, _, _, observed = self.launch_case(
+                base,
+                capture_name=capture.name,
+                correction_budget=1,
+                __rpc={
+                    "mode": "available",
+                    "capture": str(capture),
+                    "foregroundStructuredResume": {
+                        "version": 1,
+                        "recoveryDescriptorVersion": 1,
+                    },
+                },
+            )
+            self.assertFalse(observed["is_error"], observed)
+            run = subprocess.run(
+                [
+                    "node",
+                    str(SCRIPT_HARNESS),
+                    str(capture),
+                    json.dumps(
+                        [
+                            completed_step(completed, "writer-initial"),
+                            blocked,
+                            {
+                                "structuredOutput": completed,
+                                "mutationStatus": "observed",
+                                "throwMessage": "resume rejected before child launch",
+                            },
+                            completed_step(completed, "must-not-launch"),
+                        ]
+                    ),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            execution = json.loads(run.stdout)
+
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("resume rejected before child launch", run.stderr)
+        self.assertEqual(
+            [call["key"] for call in execution["calls"]],
+            ["impl-0", "review-0", "impl-1"],
+        )
+        self.assertEqual(execution["calls"][2]["options"]["resume"], "writer-initial")
+        self.assertEqual(set(execution["calls"][2]["options"]), {"resume", "task"})
+
+    def test_unchanged_candidate_consumes_exact_budget_without_an_extra_writer(self) -> None:
+        completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
+        blocked = {
+            "verdict": "BLOCKED",
+            "blockers": [
+                {
+                    "where": "x",
+                    "why": "the unchanged candidate remains unacceptable",
+                    "howToFix": "make the required correction",
+                    "trigger": "review the unchanged candidate",
+                }
+            ],
+        }
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             _, _, capture, observed = self.launch_case(base, correction_budget=2)
             self.assertFalse(observed["is_error"], observed)
+            steps = [
+                completed_step(completed),
+                blocked,
+                completed_step(completed),
+                blocked,
+                completed_step(completed),
+                blocked,
+            ]
             execution = json.loads(
                 subprocess.run(
-                    ["node", str(SCRIPT_HARNESS), str(capture), json.dumps([completed_step(completed), blocked, completed_step(completed), blocked, completed_step(completed), passed])],
+                    ["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)],
                     capture_output=True,
                     text=True,
                     check=True,
                 ).stdout
             )
 
-        self.assertEqual(execution["result"]["outcome"], "REVIEWED")
-        self.assertEqual([call["key"] for call in execution["calls"]], ["impl-0", "review-0", "impl-1", "review-1", "impl-2", "review-2"])
+        self.assertEqual(execution["result"], {
+            "outcome": "CORRECTION_BUDGET_EXHAUSTED",
+            "blockers": blocked["blockers"],
+        })
+        self.assertEqual(
+            [call["key"] for call in execution["calls"]],
+            ["impl-0", "review-0", "impl-1", "review-1", "impl-2", "review-2"],
+        )
+        self.assertEqual(
+            [call["key"] for call in execution["calls"] if call["key"].startswith("impl-")],
+            ["impl-0", "impl-1", "impl-2"],
+        )
 
     def test_every_correction_terminal_branch_stops_at_the_current_round(self) -> None:
         completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}

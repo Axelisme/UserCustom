@@ -59,11 +59,35 @@ none. This contract is satisfied only when every workflow- and child-level `mode
 field is absent or directly authorized by that instruction.
 
 A Collab lane is already one writable checkout with one live writer. The reviewed-lane tool keeps
-the delegated worker and reviewer on that exact lane, with fresh role-specific structured results;
-corrections carry the original bounded contract plus current typed blockers, and rereviews carry the
-original review expectations against the changed protected lane. Child run IDs remain runtime
-operation evidence and appear in no terminal projection. Every branch and terminal projection reads
-parsed `structuredOutput`, never free-form output text.
+the delegated worker and reviewer on that exact lane, with role-specific structured results;
+corrections follow the retained-correction contract below, and rereviews carry the original review
+expectations against the changed protected lane. Child run IDs remain runtime operation evidence and
+appear in no terminal projection. Every branch and terminal projection reads parsed
+`structuredOutput`, never free-form output text.
+
+### Retained correction
+
+The initial implementer and every reviewer or rereviewer are fresh children. Before spawning the
+workflow, the reviewed-lane tool consumes only RPC v1
+`ping.capabilities.foregroundStructuredResume`; retained correction is enabled only when that value
+is an object with `version: 1` and `recoveryDescriptorVersion: 1`. Missing, false, malformed,
+unsupported, or future-version values preselect the fresh correction path without package or version
+inference.
+
+When retained correction is enabled and the latest successful writer supplied a non-empty run ID, a
+blocking review resumes that exact writer on the protected lane with only the latest typed blockers.
+The public capability guarantees recovery of the original profile/model/tools/cwd, structured output
+schema, agent and acceptance contracts, and capability ceiling. Each successful correction replaces
+the target with its returned run ID. A resume rejection terminates the workflow; it is never followed
+by a fresh writer in the same correction round.
+
+The preselected fresh fallback starts exactly one compatible implementer on the current lane. Its
+payload contains only the original ticket contract and exact execution parameters, the latest typed
+blockers, and current lane placement; it contains no INDEX, sibling-ticket narrative, or reconstructed
+task history. Correction selection does not change budget accounting: each blocked-review transition
+consumes one slot, and exhausted-budget behavior is unchanged. Retained correction prompts request
+optional native `efficiencyFeedback` about retained-context friction; a fresh fallback receives that
+request only when it is already present in the original bounded worker brief.
 
 Supply the tool only these bounded fields: `task_id` (the task identifier), `ticket_id` (the
 Dev-flow ticket identifier), `lane_id` (the existing managed lane), `worker_brief` (the bounded
@@ -96,8 +120,9 @@ The tool returns only an asynchronous launch receipt — `workflow_id`, `async_i
 The receipt is not Acceptance: the ordinary asynchronous workflow result must wake the session
 through the Post-launch guidance, and the Orchestrator judges the typed result while the lane remains
 available. Child run IDs remain runtime operation evidence; Git, the lane runtime, and the
-Orchestrator own later coordination. Any correction, rereview, or collection-time reconciliation
-review uses a fresh compatible child under the tool's bounded contract.
+Orchestrator own later coordination. Rereviews and collection-time reconciliation reviews use fresh
+compatible children under the tool's bounded contract; correction writers use the retained-correction
+selector above.
 
 The launch fails closed before spawn when the exact managed lane, either configured profile, or the
 pi-subagents Extension RPC v1 `spawn`/`asyncSpawn` capability is missing or incompatible. There is
@@ -110,11 +135,11 @@ The reviewed-lane tool owns concrete JSON Schema objects for its worker and revi
 Collab and the profiles express the same semantics without repeating the schema. Each child finishes
 through Pi's structured-output protocol instead of free-form Markdown, so formatting cannot change
 control flow. The parsed child result is `structuredOutput`; free-form output never drives control
-flow. Implementer launches use Pi's v1 effects projection so a schema-valid `BLOCKED` or
-`NEEDS_DECISION` result can stop without mutation; the composition separately requires an observed
-file mutation before routing any `COMPLETED` result to review. This effects check changes no typed
-result field. Use one structured result per child and do not combine it with
-Pi's generic acceptance report:
+flow. Implementer launches retain Pi's v1 effects projection as optional runtime diagnostics, but
+Collab never branches on mutation effects. Every schema-valid `COMPLETED` result proceeds to a fresh
+reviewer even when effects are absent, empty, missing, or `not-applicable`; a schema-valid `BLOCKED`
+or `NEEDS_DECISION` result can still stop without mutation. This changes no typed result field. Use
+one structured result per child and do not combine it with Pi's generic acceptance report:
 both default Collab profiles set `acceptance: { level: none, ... }` with a reason, and a launch needing
 another acceptance policy selects it explicitly.
 

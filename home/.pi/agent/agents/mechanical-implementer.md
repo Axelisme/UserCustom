@@ -10,8 +10,6 @@ inheritSkills: false
 defaultContext: fresh
 acceptanceRole: writer
 skills: grove
-extensions: 
-subagentOnlyExtensions: /home/axel/Documents/VSCode/Typescript/billion-context-pi/dist/child.js
 ---
 
 # Mechanical Implementer

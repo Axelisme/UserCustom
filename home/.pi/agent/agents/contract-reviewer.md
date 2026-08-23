@@ -1,7 +1,7 @@
 ---
 name: contract-reviewer
 description: Independently review one fixed red test surface against its intended Interface promises before implementation relies on it.
-tools: read, bash, compress
+tools: read, bash
 model: openai-codex/gpt-5.6-sol
 thinking: xhigh
 systemPromptMode: replace
@@ -11,7 +11,6 @@ defaultContext: fresh
 acceptanceRole: read-only
 skills: grove
 extensions: 
-subagentOnlyExtensions: /home/axel/Documents/VSCode/Typescript/billion-context-pi/dist/child.js
 completionGuard: false
 ---
 

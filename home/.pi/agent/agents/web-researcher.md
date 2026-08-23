@@ -10,7 +10,6 @@ inheritSkills: false
 defaultContext: fresh
 acceptanceRole: read-only
 extensions: ~/.pi/agent/npm/node_modules/pi-web-access/index.ts
-subagentOnlyExtensions: /home/axel/Documents/VSCode/Typescript/billion-context-pi/dist/child.js
 completionGuard: false
 ---
 

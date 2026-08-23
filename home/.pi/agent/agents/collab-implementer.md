@@ -2,8 +2,8 @@
 name: collab-implementer
 description: Implement one bounded change as the sole writer, validate it, and return a semantic handoff without owning orchestration or lifecycle.
 tools: read, write, edit, bash
-model: stealth/ox-alpha
-thinking: high
+model: openai-codex/gpt-5.6-sol
+thinking: xhigh
 timeoutMs: 3600000
 systemPromptMode: replace
 inheritProjectContext: true
@@ -13,7 +13,6 @@ acceptance: {"level":"none","reason":"The structured result carries the validati
 acceptanceRole: writer
 skills: grove
 extensions: 
-subagentOnlyExtensions: /home/axel/Documents/VSCode/Typescript/billion-context-pi/dist/child.js
 completionGuard: true
 ---
 

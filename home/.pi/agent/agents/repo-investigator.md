@@ -10,8 +10,6 @@ inheritSkills: false
 defaultContext: fresh
 acceptanceRole: read-only
 skills: grove
-extensions: 
-subagentOnlyExtensions: /home/axel/Documents/VSCode/Typescript/billion-context-pi/dist/child.js
 completionGuard: false
 ---
 

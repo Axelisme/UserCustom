@@ -3,7 +3,7 @@ name: collab-acceptor
 description: Independently accept, block, or defer one reviewed lane using read-only, evidence-backed review.
 tools: read, bash
 model: openai-codex/gpt-5.6-sol
-thinking: high
+thinking: xhigh
 timeoutMs: 3600000
 systemPromptMode: replace
 inheritProjectContext: true
@@ -12,8 +12,6 @@ defaultContext: fresh
 acceptance: {"level":"none","reason":"The structured verdict is the run's only result protocol; Pi's generic acceptance report would duplicate it"}
 acceptanceRole: read-only
 skills: grove
-extensions: 
-subagentOnlyExtensions: /home/axel/Documents/VSCode/Typescript/billion-context-pi/dist/child.js
 completionGuard: false
 ---
 

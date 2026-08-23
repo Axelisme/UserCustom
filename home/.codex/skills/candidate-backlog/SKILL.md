@@ -43,15 +43,16 @@ description: Capture evidence-backed discoveries that are valuable but outside t
 
 ```text
 <repo-python> <skill-dir>/scripts/backlog.py add --kind <kind> --area <area> --source-task <task-id> --title <title> --observation <text> --evidence <text> --impact <text> --desired-outcome <text>
-<repo-python> <skill-dir>/scripts/backlog.py list [--status inbox|planned|resolved|closed] [--kind <kind>] [--area <area>] [--full]
+<repo-python> <skill-dir>/scripts/backlog.py list [--status inbox|planned|resolved|closed] [--kind <kind>] [--area <area>] [--detail overview|index|summary|full]
 <repo-python> <skill-dir>/scripts/backlog.py bind <id> --task-id <task-id>
 <repo-python> <skill-dir>/scripts/backlog.py append-evidence <id> --evidence <text>
 <repo-python> <skill-dir>/scripts/backlog.py close <id> --resolution implemented --task-id <task-id> --commit <sha> --validation <text>
 <repo-python> <skill-dir>/scripts/backlog.py close <id> --resolution duplicate --duplicate-of <canonical-id>
 ```
 
-CLI 使用 UTC timestamp、UTF-8 與 atomic replace；輸出恆為單行 JSON envelope（成功與錯誤皆印到
-stdout，`ok`/`operation`/`backlog_version` 固定欄位）。不要繞過 transition 或直接覆寫 metadata。
+CLI 使用 UTC timestamp、UTF-8 與 atomic replace；version 2 輸出恆為單行 JSON envelope（成功與錯誤
+皆印到 stdout，`ok`/`operation`/`backlog_version: 2` 為固定欄位）。不要繞過 transition 或直接覆寫
+metadata。
 
 `append-evidence` 只接受 `inbox` 或 `planned` 的項目（resolved/closed 拒絕且不變更任何狀態）。
 它把一段 UTC 標時的證據段落**附加**到既有 evidence 尾端，不改寫、不刪減原有文字；`source_task`、
@@ -60,19 +61,20 @@ status、kind、binding（`planned_task`）、observation、impact、desired out
 段落的文字完全相同（不做大小寫或 Unicode 正規化），CLI 拒絕重複附加。此命令不是通用的 metadata
 編輯介面；需要 provenance 就寫進證據文字本身。
 
-`list` 預設只回 `id`／`title`／`kind`／`area`／`status`／`priority_hint`，並標記 `detail: summary`。
-四個散文欄位（`observation`／`evidence`／`impact`／`desired_outcome`）才是一筆 item 的全部重量，
-而定位與查重都用不到它們——一次 24 筆的 inbox 全文是 33 KB，摘要是 6 KB。要全文用 `--full`，
-或先用 `--area`／`--kind` 收斂再取；單筆內容也可直接讀 `.agent_state/backlog/<status>/<id>.md`。
+`list` 預設為不含 ID 或 title 的 `--detail overview`；要比較主題用 `index`，要取得可操作 ID 用
+`summary`。只有查核散文證據時才取 `--detail full`；已知 ID 時也可直接讀
+`.agent_state/backlog/<status>/<id>.md`。所有 filter 都先收斂完整資料集，再套用 detail 投影。
 
 ## 消費時刻（防 inbox rot）
 
-backlog 只有被讀才有價值。三個固定消費點：
+backlog 只有被讀才有價值。固定消費流程：
 
-- **規劃時**：task／slice 規劃碰到某個 area 前，先 `list --area <area> --status inbox`——
-  與本次改動同路的順風單以極低成本併入 slice；不順路的不撿，不得藉此擴 scope。
-- **用戶問「接下來做什麼」時**：`list --status inbox` 整理成按 area／kind 分組的候選清單供用戶
-  裁決；agent 不自行排程。
+- **Orientation**：先用 `list --status inbox --detail overview` 取得有界概況。
+- **用戶問「接下來做什麼」時**：先用 `list --status inbox --detail index` 比較分組，再只對相關 area
+  取 `list --status inbox --area <area> --detail summary`；候選交給用戶裁決，agent 不自行排程。
+- **規劃 area 或操作 item 時**：用 `list --status inbox --area <area> --detail summary` 取得 ID；同路的
+  順風單可併入 slice，不順路的不撿，不得藉此擴 scope。
+- **需要散文證據時**：才用 `--detail full`，或直接讀已知 ID 的單筆 Markdown。
 - **task 收尾時**（雙向）：進水——檢查 findings、review report 與 workaround，跨 scope 且可重現
   的進 inbox；出水——同 area 的既有 inbox item 若已被本次改動解決或變得無效，即時 `close`
   （`implemented` 或 `obsolete`），不留腐爛項。

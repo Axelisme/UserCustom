@@ -15,7 +15,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 
-BACKLOG_VERSION = 1
+BACKLOG_VERSION = 2
 
 STATUSES = ("inbox", "planned", "resolved", "closed")
 KINDS = (
@@ -320,10 +320,11 @@ def command_add(args: argparse.Namespace, base: Path) -> dict[str, Any]:
         meta["suggested_direction"] = args.suggested_direction.strip()
     path = base / "inbox" / f"{item_id}.md"
     write_new_item(path, render(meta))
-    return meta
+    return {field: meta[field] for field in ("id", "status", "updated_at")}
 
 
 SUMMARY_FIELDS = ("id", "title", "kind", "area", "status", "priority_hint")
+FACET_FIELDS = ("status", "area", "kind", "priority_hint")
 
 
 def command_list(args: argparse.Namespace, base: Path) -> dict[str, Any]:
@@ -334,18 +335,49 @@ def command_list(args: argparse.Namespace, base: Path) -> dict[str, Any]:
         items = [item for item in items if item["kind"] == args.kind]
     if args.area:
         items = [item for item in items if args.area in item["area"]]
-    if args.full:
-        return {"items": items}
-    # An inbox is read to orient, and the four prose fields are the whole weight
-    # of an item. Summarising by default keeps a routine listing from spending a
-    # session's opening context on evidence nobody asked for yet.
-    return {
-        "items": [
+
+    if args.detail == "overview":
+        facets: dict[str, dict[str, int]] = {}
+        for field in FACET_FIELDS:
+            counts: dict[str, int] = {}
+            for item in items:
+                values = item[field] if field == "area" else (item[field],)
+                for value in values:
+                    counts[value] = counts.get(value, 0) + 1
+            facets[field] = {value: counts[value] for value in sorted(counts)}
+        return {"detail": "overview", "count": len(items), "facets": facets}
+
+    if args.detail == "index":
+        grouped: dict[tuple[str, str, str, str], list[str]] = {}
+        for item in items:
+            for area in item["area"]:
+                key = (
+                    item["status"],
+                    area,
+                    item["kind"],
+                    item["priority_hint"],
+                )
+                grouped.setdefault(key, []).append(item["title"])
+        groups = []
+        for key in sorted(grouped):
+            status, area, kind, priority_hint = key
+            groups.append(
+                {
+                    "status": status,
+                    "area": area,
+                    "kind": kind,
+                    "priority_hint": priority_hint,
+                    "titles": sorted(grouped[key]),
+                }
+            )
+        return {"detail": "index", "count": len(items), "groups": groups}
+
+    if args.detail == "summary":
+        items = [
             {field: item[field] for field in SUMMARY_FIELDS if field in item}
             for item in items
-        ],
-        "detail": "summary",
-    }
+        ]
+    return {"detail": args.detail, "items": items}
 
 
 def command_bind(args: argparse.Namespace, base: Path) -> dict[str, Any]:
@@ -356,7 +388,10 @@ def command_bind(args: argparse.Namespace, base: Path) -> dict[str, Any]:
     meta["planned_task"] = task_id
     meta["planned_at"] = now()
     move_item(base, path, meta, "planned")
-    return meta
+    return {
+        field: meta[field]
+        for field in ("id", "status", "updated_at", "planned_task")
+    }
 
 
 def latest_appended_evidence(meta: dict[str, Any]) -> str | None:
@@ -398,7 +433,7 @@ def command_append_evidence(args: argparse.Namespace, base: Path) -> dict[str, A
     meta["evidence"] = f"{meta['evidence']}\n\n[{timestamp}] {text}"
     meta["updated_at"] = timestamp
     atomic_write(path, render(meta))
-    return meta
+    return {field: meta[field] for field in ("id", "status", "updated_at")}
 
 
 def command_close(args: argparse.Namespace, base: Path) -> dict[str, Any]:
@@ -445,7 +480,10 @@ def command_close(args: argparse.Namespace, base: Path) -> dict[str, Any]:
     meta["resolution_note"] = args.note or args.resolution
     meta["closed_at"] = now()
     move_item(base, path, meta, destination)
-    return meta
+    return {
+        field: meta[field]
+        for field in ("id", "status", "updated_at", "resolution")
+    }
 
 
 def parser() -> argparse.ArgumentParser:
@@ -470,7 +508,11 @@ def parser() -> argparse.ArgumentParser:
     listing.add_argument("--status", choices=STATUSES)
     listing.add_argument("--kind", choices=KINDS)
     listing.add_argument("--area")
-    listing.add_argument("--full", action="store_true")
+    listing.add_argument(
+        "--detail",
+        choices=("overview", "index", "summary", "full"),
+        default="overview",
+    )
     bind = sub.add_parser("bind")
     bind.add_argument("item_id")
     bind.add_argument("--task-id", required=True)

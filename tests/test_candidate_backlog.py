@@ -23,14 +23,6 @@ GIT_ENV = {
 }
 
 
-def backlog_version() -> int:
-    match = re.search(
-        r"^BACKLOG_VERSION = (\d+)$", SCRIPT.read_text(encoding="utf-8"), re.MULTILINE
-    )
-    assert match is not None
-    return int(match.group(1))
-
-
 def init_repo(root: Path) -> None:
     git = ("git", "-C", str(root))
     subprocess.run([*git, "init", "-q"], check=True, env=GIT_ENV)
@@ -88,6 +80,39 @@ def add_args(root: Path, title: str) -> list[str]:
     return ["--root", str(root), "add", "--title", title, *ADD_FIELDS]
 
 
+def custom_add_args(
+    root: Path,
+    title: str,
+    *,
+    kind: str,
+    areas: tuple[str, ...],
+    priority_hint: str,
+) -> list[str]:
+    area_args = [value for area in areas for value in ("--area", area)]
+    return [
+        "--root",
+        str(root),
+        "add",
+        "--title",
+        title,
+        "--kind",
+        kind,
+        *area_args,
+        "--source-task",
+        "standalone",
+        "--observation",
+        "obs",
+        "--evidence",
+        "evid",
+        "--impact",
+        "impact",
+        "--desired-outcome",
+        "outcome",
+        "--priority-hint",
+        priority_hint,
+    ]
+
+
 class CandidateBacklogTests(unittest.TestCase):
     def assert_ok(
         self, done: subprocess.CompletedProcess[str], operation: str
@@ -96,7 +121,7 @@ class CandidateBacklogTests(unittest.TestCase):
         body = payload(done)
         self.assertEqual(body["ok"], True)
         self.assertEqual(body["operation"], operation)
-        self.assertEqual(body["backlog_version"], backlog_version())
+        self.assertEqual(body["backlog_version"], 2)
         self.assertNotIn("error", body)
         return body
 
@@ -107,61 +132,218 @@ class CandidateBacklogTests(unittest.TestCase):
         body = payload(done)
         self.assertEqual(body["ok"], False)
         self.assertEqual(body["operation"], operation)
-        self.assertEqual(body["backlog_version"], backlog_version())
+        self.assertEqual(body["backlog_version"], 2)
         error = body["error"]
         self.assertIsInstance(error, dict)
         assert isinstance(error, dict)
         self.assertEqual(error["code"], code)
         return body
 
-    # --- envelope shape per command --------------------------------------
+    # --- version 2 projection and receipt shapes -------------------------
 
-    def test_add_envelope_shape(self) -> None:
+    def test_add_returns_only_the_compact_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             init_repo(root)
             body = self.assert_ok(
                 run_backlog(root, *add_args(root, "Add shape item")), "add"
             )
+            self.assertEqual(
+                set(body),
+                {"ok", "operation", "backlog_version", "id", "status", "updated_at"},
+            )
             self.assertEqual(body["status"], "inbox")
             self.assertTrue(str(body["id"]).startswith("BL-"))
-
-    def test_list_envelope_shape_uses_items_array(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            init_repo(root)
-            self.assert_ok(run_backlog(root, *add_args(root, "List shape item")), "add")
-            body = self.assert_ok(
-                run_backlog(root, "--root", str(root), "list"), "list"
+            stored = self.read_meta(
+                self.item_path(root, str(body["id"]), "inbox")
             )
-            self.assertEqual(len(items_of(body)), 1)
+            self.assertEqual(stored["title"], "Add shape item")
+            self.assertEqual(stored["updated_at"], body["updated_at"])
 
-    def test_list_summarises_by_default_and_full_restores_every_field(self) -> None:
+    def test_all_list_details_filter_before_projection_and_order_deterministically(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             init_repo(root)
-            self.assert_ok(run_backlog(root, *add_args(root, "Detail mode item")), "add")
+            fixtures = (
+                ("Zulu defect", "defect", ("zeta", "alpha"), "high"),
+                ("Alpha defect", "defect", ("zeta", "alpha"), "high"),
+                ("Beta idea", "product-idea", ("alpha",), "low"),
+                ("Planned hidden", "defect", ("alpha", "beta"), "medium"),
+            )
+            added: list[dict[str, object]] = []
+            for title, kind, areas, priority_hint in fixtures:
+                added.append(
+                    self.assert_ok(
+                        run_backlog(
+                            root,
+                            *custom_add_args(
+                                root,
+                                title,
+                                kind=kind,
+                                areas=areas,
+                                priority_hint=priority_hint,
+                            ),
+                        ),
+                        "add",
+                    )
+                )
+            self.assert_ok(
+                run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "bind",
+                    str(added[-1]["id"]),
+                    "--task-id",
+                    "T001",
+                ),
+                "bind",
+            )
 
-            summary = self.assert_ok(
-                run_backlog(root, "--root", str(root), "list"), "list"
+            def listing(detail: str) -> subprocess.CompletedProcess[str]:
+                return run_backlog(
+                    root,
+                    "--root",
+                    str(root),
+                    "list",
+                    "--status",
+                    "inbox",
+                    "--area",
+                    "alpha",
+                    "--detail",
+                    detail,
+                )
+
+            overview = self.assert_ok(listing("overview"), "list")
+            self.assertEqual(
+                overview,
+                {
+                    "ok": True,
+                    "operation": "list",
+                    "backlog_version": 2,
+                    "detail": "overview",
+                    "count": 3,
+                    "facets": {
+                        "status": {"inbox": 3},
+                        "area": {"alpha": 3, "zeta": 2},
+                        "kind": {"defect": 2, "product-idea": 1},
+                        "priority_hint": {"high": 2, "low": 1},
+                    },
+                },
+            )
+
+            index = self.assert_ok(listing("index"), "list")
+            self.assertEqual(
+                index,
+                {
+                    "ok": True,
+                    "operation": "list",
+                    "backlog_version": 2,
+                    "detail": "index",
+                    "count": 3,
+                    "groups": [
+                        {
+                            "status": "inbox",
+                            "area": "alpha",
+                            "kind": "defect",
+                            "priority_hint": "high",
+                            "titles": ["Alpha defect", "Zulu defect"],
+                        },
+                        {
+                            "status": "inbox",
+                            "area": "alpha",
+                            "kind": "product-idea",
+                            "priority_hint": "low",
+                            "titles": ["Beta idea"],
+                        },
+                        {
+                            "status": "inbox",
+                            "area": "zeta",
+                            "kind": "defect",
+                            "priority_hint": "high",
+                            "titles": ["Alpha defect", "Zulu defect"],
+                        },
+                    ],
+                },
+            )
+            self.assertEqual(payload(listing("index")), index)
+
+            summary = self.assert_ok(listing("summary"), "list")
+            self.assertEqual(
+                set(summary),
+                {"ok", "operation", "backlog_version", "detail", "items"},
             )
             self.assertEqual(summary["detail"], "summary")
-            [item] = items_of(summary)
+            summary_items = items_of(summary)
             self.assertEqual(
-                set(item),
-                {"id", "title", "kind", "area", "status", "priority_hint"},
+                [item["id"] for item in summary_items],
+                sorted(item["id"] for item in summary_items),
+            )
+            for item in summary_items:
+                self.assertEqual(
+                    set(item),
+                    {"id", "title", "kind", "area", "status", "priority_hint"},
+                )
+            self.assertEqual(payload(listing("summary")), summary)
+
+            full = self.assert_ok(listing("full"), "list")
+            self.assertEqual(
+                set(full),
+                {"ok", "operation", "backlog_version", "detail", "items"},
+            )
+            self.assertEqual(full["detail"], "full")
+            self.assertEqual(
+                [item["id"] for item in items_of(full)],
+                [item["id"] for item in summary_items],
+            )
+            for item in items_of(full):
+                self.assertEqual(
+                    set(item),
+                    {
+                        "id",
+                        "created_at",
+                        "updated_at",
+                        "status",
+                        "kind",
+                        "area",
+                        "priority_hint",
+                        "source_task",
+                        "title",
+                        "observation",
+                        "evidence",
+                        "impact",
+                        "desired_outcome",
+                    },
+                )
+
+    def test_default_overview_is_bounded_and_index_is_half_summary_size(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            for number in range(41):
+                self.assert_ok(
+                    run_backlog(root, *add_args(root, f"Representative item {number:02d}")),
+                    "add",
+                )
+            command = ("--root", str(root), "list")
+            overview_done = run_backlog(root, *command)
+            overview = self.assert_ok(overview_done, "list")
+            self.assertEqual(overview["detail"], "overview")
+            self.assertEqual(overview["count"], 41)
+            self.assertLess(len(overview_done.stdout.encode("utf-8")), 2048)
+
+            index_done = run_backlog(root, *command, "--detail", "index")
+            summary_done = run_backlog(root, *command, "--detail", "summary")
+            self.assert_ok(index_done, "list")
+            self.assert_ok(summary_done, "list")
+            self.assertLessEqual(
+                len(index_done.stdout.encode("utf-8")) * 2,
+                len(summary_done.stdout.encode("utf-8")),
             )
 
-            full = self.assert_ok(
-                run_backlog(root, "--root", str(root), "list", "--full"), "list"
-            )
-            self.assertNotIn("detail", full)
-            [detailed] = items_of(full)
-            for field in ("observation", "evidence", "impact", "desired_outcome"):
-                self.assertIn(field, detailed)
-            self.assertEqual(detailed["id"], item["id"])
-
-    def test_bind_and_close_envelope_shape(self) -> None:
+    def test_bind_and_close_return_only_transition_receipts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             init_repo(root)
@@ -175,8 +357,24 @@ class CandidateBacklogTests(unittest.TestCase):
                 ),
                 "bind",
             )
+            self.assertEqual(
+                set(bound),
+                {
+                    "ok",
+                    "operation",
+                    "backlog_version",
+                    "id",
+                    "status",
+                    "updated_at",
+                    "planned_task",
+                },
+            )
             self.assertEqual(bound["status"], "planned")
             self.assertEqual(bound["planned_task"], "T001")
+            planned = self.read_meta(self.item_path(root, item_id, "planned"))
+            self.assertEqual(planned["planned_task"], "T001")
+            self.assertEqual(planned["updated_at"], bound["updated_at"])
+
             closed = self.assert_ok(
                 run_backlog(
                     root,
@@ -195,7 +393,32 @@ class CandidateBacklogTests(unittest.TestCase):
                 ),
                 "close",
             )
+            self.assertEqual(
+                set(closed),
+                {
+                    "ok",
+                    "operation",
+                    "backlog_version",
+                    "id",
+                    "status",
+                    "updated_at",
+                    "resolution",
+                },
+            )
             self.assertEqual(closed["status"], "resolved")
+            self.assertEqual(closed["resolution"], "implemented")
+            resolved = self.read_meta(self.item_path(root, item_id, "resolved"))
+            self.assertEqual(resolved["resolution"], "implemented")
+            self.assertEqual(resolved["updated_at"], closed["updated_at"])
+
+    def test_standalone_full_flag_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            init_repo(root)
+            done = run_backlog(root, "--root", str(root), "list", "--full")
+            self.assertEqual(done.returncode, 2)
+            self.assertEqual(done.stdout, "")
+            self.assertIn("unrecognized arguments: --full", done.stderr)
 
     # --- exit codes -------------------------------------------------------
 
@@ -418,7 +641,9 @@ class CandidateBacklogTests(unittest.TestCase):
             )
             self.assertFalse((linked / ".agent_state").exists())
 
-            listed = self.assert_ok(run_backlog(linked, "list"), "list")
+            listed = self.assert_ok(
+                run_backlog(linked, "list", "--detail", "summary"), "list"
+            )
             ids = [item["id"] for item in items_of(listed)]
             self.assertIn(item_id, ids)
 
@@ -465,8 +690,13 @@ class CandidateBacklogTests(unittest.TestCase):
                 ),
                 "append-evidence",
             )
+            self.assertEqual(
+                set(body),
+                {"ok", "operation", "backlog_version", "id", "status", "updated_at"},
+            )
             self.assertEqual(body["status"], "inbox")
             meta = self.read_meta(self.item_path(root, item_id, "inbox"))
+            self.assertEqual(meta["updated_at"], body["updated_at"])
             evidence = str(meta["evidence"])
             self.assertRegex(
                 evidence,
@@ -909,13 +1139,19 @@ class CandidateBacklogTests(unittest.TestCase):
                 ),
                 "append-evidence",
             )
-            summary = self.assert_ok(run_backlog(root, "--root", str(root), "list"), "list")
+            summary = self.assert_ok(
+                run_backlog(
+                    root, "--root", str(root), "list", "--detail", "summary"
+                ),
+                "list",
+            )
             [item] = items_of(summary)
             self.assertEqual(
                 set(item), {"id", "title", "kind", "area", "status", "priority_hint"}
             )
             full = self.assert_ok(
-                run_backlog(root, "--root", str(root), "list", "--full"), "list"
+                run_backlog(root, "--root", str(root), "list", "--detail", "full"),
+                "list",
             )
             [detailed] = items_of(full)
             evidence = detailed["evidence"]

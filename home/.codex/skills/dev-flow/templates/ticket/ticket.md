@@ -21,6 +21,14 @@ state: pending
 <!-- State the bounded goal and expected usable result. The Orchestrator owns this contract. -->
 {{OUTCOME}}
 
+## Seam contract
+<!-- Contract rules: ~/.codex/skills/dev-flow/references/ticket-seam-contract.md. The reference owns
+     mode fields, S# coverage, graduation, decision stops, and ADR authority. The Orchestrator owns
+     this section. Keep this pointer in the published ticket. -->
+<!-- Before publication or dispatch, replace this instruction and the placeholder below with exactly
+     one complete `None`, `Existing`, or `Change` mode from the reference. -->
+**Mode:** {{SEAM_MODE}}
+
 ## Acceptance
 <!-- The Orchestrator owns this whole checklist and may revise it. Start every claim unchecked: unchecked
      means unproven, not necessarily that an executable test is red. Name an Orchestrator, user, manual,

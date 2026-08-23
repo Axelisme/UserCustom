@@ -92,8 +92,19 @@ For a writer, include these compact blocks:
    directly actionable as written. Treat any other absence as unwritten rather than as license to
    proceed: if your runtime works through specialized tooling the core does not name (an extension,
    a dedicated API) and no `runtime-<name>.md` documents it, stop and ask before guessing its
-   mechanics. This step is complete when the writer has one bounded brief and one safe writable
-   checkout.
+   mechanics.
+
+   A managed lane is dispatch-ready only after its repository-declared worktree bootstrap succeeds.
+   Roles consume the resulting environment through the exact dispatched execution parameters without
+   syncing or provisioning it. An observed bootstrap failure or absent ordinary-path environment is
+   `BLOCKED` before reviewed dispatch, never a reason to discover a fallback. Retain the lane-owned
+   runtime through review and correction until the lane retires through collection or drop. Follow the
+   positive path first; return a concrete environment-selection failure to the Orchestrator before
+   strengthening controls. Pi maps this sequence to its existing operations in
+   [Managed lane environment](runtime-pi.md#managed-lane-environment).
+
+   This step is complete when the writer has one bounded brief and one safe writable checkout, with
+   the repository-declared bootstrap applied when the repository requires one.
 3. **Implement and review.** Execute the chosen shape; for delegated closed work, prefer runtime
    composition of worker, reviewer, and bounded correction under a finite Orchestrator-supplied
    correction budget. The runtime pointer under boundary 2 carries the registered composition path

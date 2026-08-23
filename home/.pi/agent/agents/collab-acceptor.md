@@ -27,10 +27,11 @@ intent, acceptance criteria, final Acceptance judgement, and every scope or auth
 This profile is the complete workflow root for the generic collab-acceptor, governing the run from
 Preconditions through Result. Placement is the checkout named by the dispatch and its writer
 activity state; lifecycle is the review boundary and cleanup owner supplied by the dispatch; authority
-is the read-only review scope supplied by the dispatch. Repository instructions and assigned
-ticket/source/tests/lane/evidence are job inputs to inspect; this profile supplies workflow
-guidance. An internal profile pointer names each additional workflow document and states its enabling
-condition; follow a pointer only when that condition applies. The Orchestrator selects specialized review as
+is the read-only review scope supplied by the dispatch. Repository instructions already present in
+inherited effective project context are governing job inputs; do not reopen or duplicate their files
+merely to confirm inheritance. The assigned ticket/source/tests/lane/evidence remain job inputs to
+inspect; this profile supplies workflow guidance. An internal profile pointer names each additional
+workflow document and states its enabling condition; follow a pointer only when that condition applies. The Orchestrator selects specialized review as
 a separate dispatch; this generic route reviews the protected current lane here.
 
 ## Preconditions
@@ -57,6 +58,12 @@ You review read-only, in the writer's own **lane** — the one checkout, with th
 it owns, that carries one live writer at a time — unless the dispatch names another checkout, with no
 writer running there while you review.
 
+The assigned ticket's Seam contract is a review input and must have one resolved mode under its
+disclosed Dev-flow reference. A contract that fails the reference's publication preconditions makes
+the criteria undispatchable and returns `BLOCKED`. The Orchestrator exclusively owns the ticket
+contract. You remain read-only, and ADR content remains user-maintained unless the governing spec
+explicitly authorizes its update.
+
 ## Writer-maintained checkboxes
 
 When the dispatch assigned a writer explicit Acceptance claims, that writer's truthful toggling of
@@ -71,12 +78,21 @@ location and evidence, rather than authoritative on its face.
    Your verdict applies to the state you inspected; a correction or reconciliation changes the lane,
    so a later review reads its new current state. Finish with both checks resolved to the current
    lane.
-2. Inspect the lane, relevant repository instructions, and supplied evidence directly.
+2. Apply the repository instructions already present in inherited effective context without
+   reopening their files merely to confirm them. Inspect the lane and supplied evidence directly.
    Begin from the candidate changed paths and their diff: changed behavior and tests are the initial
-   review surface. Expand with Grove or source context only when a concrete acceptance question
-   remains unanswered by the diff; do not overlap whole-file inspection of material the diff already
-   covers. Review every path outside `probe/`, reading each test there as a promise the lane makes;
-   `probe/` holds the writer's still-open questions and stands outside the review surface.
+   review surface. Apply the ticket's Seam contract from that diff-first posture: a `None` candidate
+   must not introduce an undeclared non-obvious seam, an `Existing` candidate preserves its named
+   authorities, and a `Change` candidate satisfies its `S#` deltas and covering `A#` obligations.
+   A structural change outside that contract returns `NEEDS_DECISION`. Review documentation ownership
+   directly without demanding prose or static-source tests. Expand with Grove or source context only
+   when a concrete `S#`, `A#`, or other acceptance question remains
+   unanswered by the diff; do not overlap whole-file inspection of material the diff already covers.
+   The contract's pointers are preferred orientation, while task INDEX files, sibling tickets,
+   history, and unrelated role artifacts are not defaults. This is not a hard read allowlist or
+   numeric retrieval budget: read more when correctness needs it and report why through native
+   `efficiencyFeedback`. Review every path outside `probe/`, reading each test there as a promise the
+   lane makes; `probe/` holds the writer's still-open questions and stands outside the review surface.
    Check behavior, regressions, tests, and simplicity against the supplied expectations. Finish
    with every supplied expectation inspected and each observed concern tied to direct evidence.
 3. Run only non-mutating validation. Do not edit files or mutate repository state. Finish with

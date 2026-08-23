@@ -124,6 +124,16 @@ type SubagentRpcReply = {
   error?: unknown;
 };
 
+type SubagentLaunchContractResult =
+  | {
+    ok: true;
+    contract?: {
+      inheritProjectContext?: unknown;
+      roots?: { cwd?: unknown };
+    };
+  }
+  | { ok: false; message?: unknown };
+
 type ResolveSubagentLaunchContract = (input: {
   agent: string;
   cwd: string;
@@ -132,7 +142,7 @@ type ResolveSubagentLaunchContract = (input: {
   outputSchema: Record<string, unknown>;
   agentContract?: { version: 1 };
   availableModels?: readonly unknown[];
-}) => Promise<{ ok: true } | { ok: false; message: string }>;
+}) => Promise<SubagentLaunchContractResult>;
 
 type ReviewedLaneRoleSpec = {
   agent: "collab-implementer" | "collab-acceptor";
@@ -399,34 +409,53 @@ export async function runReviewedLane(
     },
   ];
   const preflightResults = await Promise.all(
-    roleSpecs.map(async (spec) => ({
-      spec,
-      result: await preflight({
-        agent: spec.agent,
-        cwd: lane,
-        task: spec.task,
-        context: "fresh",
-        outputSchema: spec.outputSchema,
-        ...(spec.agentContract ? { agentContract: spec.agentContract } : {}),
-        ...(availableModels ? { availableModels } : {}),
-      }),
-    })),
+    roleSpecs.map(async (spec) => {
+      try {
+        return {
+          spec,
+          result: await preflight({
+            agent: spec.agent,
+            cwd: lane,
+            task: spec.task,
+            context: "fresh",
+            outputSchema: spec.outputSchema,
+            ...(spec.agentContract ? { agentContract: spec.agentContract } : {}),
+            ...(availableModels ? { availableModels } : {}),
+          }),
+        };
+      } catch (cause) {
+        throw dependencies.error(
+          "profile_unavailable",
+          `${spec.agent} profile preflight could not resolve its launch contract: ${boundedMessage(cause)}`,
+          `Correct the ${spec.agent} profile so pi-subagents public preflight can resolve it, then retry.`,
+        );
+      }
+    }),
   );
-  const assertPreflight = (
-    agent: string,
-    result: Awaited<ReturnType<typeof preflight>>,
-  ): void => {
+  const expectedLaneCwd = path.resolve(lane);
+  for (const { spec, result } of preflightResults) {
     if (result.ok !== true) {
       const message = "message" in result ? result.message : "unknown preflight error";
       throw dependencies.error(
         "profile_unavailable",
-        `${agent} profile is unavailable: ${boundedMessage(message)}`,
-        `Enable an executable ${agent} profile and its required capabilities, then retry.`,
+        `${spec.agent} profile is unavailable: ${boundedMessage(message)}`,
+        `Enable an executable ${spec.agent} profile and its required capabilities, then retry.`,
       );
     }
-  };
-  for (const { spec, result } of preflightResults) {
-    assertPreflight(spec.agent, result);
+    if (result.contract?.inheritProjectContext !== true) {
+      throw dependencies.error(
+        "project_context_unavailable",
+        `${spec.agent} profile does not deterministically inherit project context for the managed lane`,
+        `Set inheritProjectContext: true on the resolved ${spec.agent} profile, then retry.`,
+      );
+    }
+    if (result.contract.roots?.cwd !== expectedLaneCwd) {
+      throw dependencies.error(
+        "project_context_unavailable",
+        `${spec.agent} profile preflight did not bind project context to the exact managed lane cwd`,
+        `Resolve the ${spec.agent} profile against the canonical managed lane cwd, then retry.`,
+      );
+    }
   }
 
   const ping = await callSubagentRpc(pi, "ping", {}, dependencies.error, signal);

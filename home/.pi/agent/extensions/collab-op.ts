@@ -2870,7 +2870,7 @@ async function laneAbandon(
     isActualDirectory(inventory.laneMetadata)
   ) {
     try {
-      dirty = !(await isFullyClean(repo, inventory.lanePath, signal));
+      dirty = await isDirty(repo, inventory.lanePath, signal);
       conflicted = await hasMergeOrConflictState(repo, inventory.lanePath, signal);
     } catch {
       incomplete = true;

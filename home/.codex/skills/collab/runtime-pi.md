@@ -8,6 +8,8 @@ placement details; Collab's core guidance remains runtime-neutral.
 Read only the section named for the step you are taking; every section after Composed delegation and
 Typed results states its own enabling condition.
 
+- **Managed lane environment** — after canonical lane creation succeeds and the repository declares
+  a worktree bootstrap: establish its dispatch precondition and lane-lifetime ownership.
 - **Composed delegation** — the canonical branch: invoke `collab_run_reviewed_lane` for one
   shared lane, including bounded corrections.
 - **Typed results** — the typed terminal outcomes returned by the reviewed-lane workflow.
@@ -17,6 +19,25 @@ Typed results states its own enabling condition.
 - **Placement** — only when the canonical lane placement does not fit the chosen shape.
 - **Collection** — only after the Orchestrator judges the reviewed lane and chooses collection.
 - **Operations** — only when selecting which `collab_*` tool carries out a Collab step.
+
+## Managed lane environment
+
+Read this section after `collab_lane_create` succeeds when the repository declares a worktree
+bootstrap. Apply that repository-owned contract to the exact managed lane before invoking
+`collab_run_reviewed_lane`. Successful bootstrap and presence of the ordinary-path environment are
+preconditions for reviewed dispatch; if either is observed to fail, report `BLOCKED`, do not invoke
+the reviewed-lane tool, and do not discover or create a fallback environment.
+
+After the precondition succeeds, roles consume the provisioned environment through their exact
+dispatched execution parameters without syncing or provisioning it. The reviewed-lane tool retains
+its existing composition responsibility and gains no provisioning behavior or runtime-specific
+parameter. Keep the runtime as lane-owned state through implementation, correction, review, and
+owner-decision waits. Existing `collab_lane_collect` or `collab_lane_drop` retirement removes it with
+the lane; no separate runtime cleanup operation is introduced.
+
+Follow this canonical positive path without speculative guards or negative probes. If a concrete
+workflow observation exposes environment mis-selection, return it to the Orchestrator for a separate
+control-strength decision before adding enforcement.
 
 ## Composed delegation
 
@@ -206,7 +227,8 @@ const reconciledReview = await runs.run("review-reconcile-1", {
 
 Read this section only when selecting which `collab_*` tool carries out a Collab step. Each tool is
 independently registered; its own description and parameter schema are authoritative for what it
-accepts and returns. This section states only which Collab step selects which tool.
+accepts and returns. This section states which Collab step selects each tool and owns the lane-drop
+warning contract.
 
 - Establishes the task-local integration branch collection needs before any lane can be collected
   into it — `collab_integration_create`.
@@ -222,7 +244,11 @@ accepts and returns. This section states only which Collab step selects which to
 - Collect: moves an Orchestrator-accepted lane into the integration branch and retires the lane —
   `collab_lane_collect`.
 - Retire the lane: removes a lane's managed branch and worktree without collecting it, for a lane
-  whose work is not going into integration — `collab_lane_drop`.
+  whose work is not going into integration — `collab_lane_drop`. It emits a custody warning when
+  removal discards tracked or staged changes, active merge/conflict state, or non-ignored untracked
+  paths. Ignored files alone do not trigger that warning, while unclassifiable Git state remains
+  warning-worthy. This classification changes reporting only: best-effort removal and custody of
+  unrecognized resources remain unchanged.
 - Keeps the integration branch able to receive collection by merging current persistence back into
   it through a lane, when persistence has moved ahead of integration — `collab_integration_reconcile`.
 - Land: moves the exact current integration result into a persistence branch, preserving the

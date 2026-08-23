@@ -1502,6 +1502,18 @@ exec \"$real_git\" \"$@\"
 """
 
 
+FAIL_STATUS = """#!/bin/sh
+real_git=\"__REAL_GIT__\"
+for arg in \"$@\"; do
+  if [ \"$arg\" = \"status\" ]; then
+    printf '%s\\n' 'simulated status classification failure' >&2
+    exit 1
+  fi
+done
+exec \"$real_git\" \"$@\"
+"""
+
+
 class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
     def test_final_inventory_exposes_only_independent_tools(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -3868,6 +3880,122 @@ class CollabOpExtensionLaneDropContractRegressionTests(unittest.TestCase):
             self.assertEqual(event["dirty"], False)
             self.assertEqual(event["uncollected"], False)
             self.assertEqual(expected["integration_head"], integration_sha)
+
+    def test_drop_ignored_only_state_does_not_warn(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            lane = Path(expected["lane"])
+            exclude = Path(git(lane, "rev-parse", "--git-path", "info/exclude"))
+            exclude.write_text(".venv/\n.pytest-tmp/\n", encoding="utf-8")
+            (lane / ".venv").mkdir()
+            (lane / ".venv/runtime.txt").write_text("runtime\n", encoding="utf-8")
+            (lane / ".pytest-tmp").mkdir()
+            (lane / ".pytest-tmp/state").write_text("state\n", encoding="utf-8")
+
+            observed = invoke(
+                repository,
+                {"tool": "collab_lane_drop", "task_id": "demo", "lane_id": "writer-1"},
+            )
+
+            self.assertFalse(observed["is_error"])
+            self.assertNotIn("warnings", observed["result"])
+            self.assertFalse(lane.exists())
+            self.assertEqual(git(repository, "branch", "--list", "wave/demo/writer-1"), "")
+            self.assertEqual(last_telemetry_event(repository)["dirty"], False)
+
+    def test_drop_tracked_staged_and_nonignored_untracked_state_warn(self) -> None:
+        for state in ("tracked", "staged", "untracked"):
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as temporary:
+                repository, _ = seed_repository(Path(temporary))
+                expected = seed_managed_task(repository)
+                seed_task_container(repository)
+                lane = Path(expected["lane"])
+                if state == "tracked":
+                    (lane / "tracked.txt").write_text("modified\n", encoding="utf-8")
+                else:
+                    candidate = lane / f"{state}.txt"
+                    candidate.write_text(f"{state}\n", encoding="utf-8")
+                    if state == "staged":
+                        git(lane, "add", candidate.name)
+
+                observed = invoke(
+                    repository,
+                    {"tool": "collab_lane_drop", "task_id": "demo", "lane_id": "writer-1"},
+                )
+
+                self.assertFalse(observed["is_error"])
+                self.assertTrue(
+                    any(
+                        "dirty or conflicted" in warning
+                        for warning in observed["result"]["warnings"]
+                    )
+                )
+                self.assertFalse(lane.exists())
+                self.assertEqual(last_telemetry_event(repository)["dirty"], True)
+
+    def test_drop_conflict_state_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            lane = Path(expected["lane"])
+            integration = Path(expected["integration"])
+            (lane / "tracked.txt").write_text("lane conflict\n", encoding="utf-8")
+            git(lane, "add", "tracked.txt")
+            git(lane, "commit", "-m", "lane conflict")
+            (integration / "tracked.txt").write_text("integration conflict\n", encoding="utf-8")
+            git(integration, "add", "tracked.txt")
+            git(integration, "commit", "-m", "integration conflict")
+            reconciled = invoke(
+                repository,
+                {"tool": "collab_lane_reconcile", "task_id": "demo", "lane_id": "writer-1"},
+            )
+            self.assertEqual(reconciled["result"]["state"], "conflicted")
+
+            observed = invoke(
+                repository,
+                {"tool": "collab_lane_drop", "task_id": "demo", "lane_id": "writer-1"},
+            )
+
+            self.assertFalse(observed["is_error"])
+            self.assertTrue(
+                any(
+                    "dirty or conflicted" in warning
+                    for warning in observed["result"]["warnings"]
+                )
+            )
+            self.assertFalse(lane.exists())
+            event = last_telemetry_event(repository)
+            self.assertEqual(event["dirty"], True)
+            self.assertEqual(event["conflicted"], True)
+
+    def test_drop_unclassifiable_status_warns_as_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            repository, _ = seed_repository(base)
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            wrapper = write_git_wrapper(base, FAIL_STATUS)
+            original_path = os.environ["PATH"]
+            os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
+            close_harness_for(repository)
+            try:
+                observed = invoke(
+                    repository,
+                    {"tool": "collab_lane_drop", "task_id": "demo", "lane_id": "writer-1"},
+                )
+            finally:
+                os.environ["PATH"] = original_path
+                close_harness_for(repository)
+
+            self.assertFalse(observed["is_error"])
+            self.assertTrue(
+                any("incomplete" in warning for warning in observed["result"]["warnings"])
+            )
+            self.assertFalse(Path(expected["lane"]).exists())
+            self.assertEqual(last_telemetry_event(repository)["incomplete"], True)
 
     def test_drop_reports_branch_cleanup_residual_after_path_removal(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

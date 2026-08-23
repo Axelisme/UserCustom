@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -19,9 +21,12 @@ from tests.test_collab_op_extension import (
 ROOT = Path(__file__).resolve().parents[1]
 RPC_MOCK = ROOT / "tests/collab_rpc_mock_extension.ts"
 SCRIPT_HARNESS = ROOT / "tests/collab_workflow_script_harness.mjs"
+ROLE_CONTEXT_HARNESS = ROOT / "tests/collab_role_context_harness.mjs"
 EXTENSION_HARNESS = ROOT / "tests/collab_op_extension_harness.mjs"
 PI_PACKAGE = Path("/usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js")
+AGENT_PACKAGE = Path.home() / ".pi/agent/npm/package.json"
 COMPANION = ROOT / "home/.pi/agent/extensions/collab-reviewed-lane.ts"
+COLLAB_EXTENSION = ROOT / "home/.pi/agent/extensions/collab-op.ts"
 TOOL = "collab_run_reviewed_lane"
 
 
@@ -38,17 +43,102 @@ def seed_profiles(repository: Path) -> None:
     profiles = repository / ".pi/agents"
     profiles.mkdir(parents=True)
     (profiles / "collab-implementer.md").write_text(
-        "---\nname: collab-implementer\ntools: read, write, edit, bash\n"
-        "defaultContext: fresh\ncompletionGuard: true\n---\nImplement the bounded brief.\n",
+        "---\nname: collab-implementer\ndescription: Disposable bounded implementer.\n"
+        "tools: read, write, edit, bash\ndefaultContext: fresh\n"
+        "inheritProjectContext: true\ncompletionGuard: true\n"
+        "---\nImplement the bounded brief.\n",
         encoding="utf-8",
     )
     (profiles / "collab-acceptor.md").write_text(
-        "---\nname: collab-acceptor\ntools: read, bash\n"
-        "defaultContext: fresh\n---\nReview the bounded brief.\n",
+        "---\nname: collab-acceptor\ndescription: Disposable bounded acceptor.\n"
+        "tools: read, bash\ndefaultContext: fresh\n"
+        "inheritProjectContext: true\n---\nReview the bounded brief.\n",
         encoding="utf-8",
     )
     git(repository, "add", ".pi/agents")
     git(repository, "commit", "-m", "test profiles")
+
+
+def seed_disposable_agent_home(
+    base: Path,
+    inheritance: dict[str, bool | str | None] | None = None,
+) -> tuple[Path, Path]:
+    inheritance = inheritance or {}
+    home = base / "disposable-home"
+    agent_dir = home / ".pi/agent"
+    profiles = agent_dir / "agents"
+    profiles.mkdir(parents=True)
+    (agent_dir / "npm").symlink_to(AGENT_PACKAGE.parent, target_is_directory=True)
+
+    def inheritance_line(role: str) -> str:
+        value = inheritance.get(role, True)
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            return f"inheritProjectContext: {str(value).lower()}\n"
+        return f"inheritProjectContext: {value}\n"
+
+    (profiles / "collab-implementer.md").write_text(
+        "---\nname: collab-implementer\ndescription: Disposable bounded implementer.\n"
+        "tools: read, write, edit, bash\ndefaultContext: fresh\n"
+        + inheritance_line("collab-implementer")
+        + "completionGuard: true\n---\nImplement the bounded brief.\n",
+        encoding="utf-8",
+    )
+    (profiles / "collab-acceptor.md").write_text(
+        "---\nname: collab-acceptor\ndescription: Disposable bounded acceptor.\n"
+        "tools: read, bash\ndefaultContext: fresh\n"
+        + inheritance_line("collab-acceptor")
+        + "---\nReview the bounded brief.\n",
+        encoding="utf-8",
+    )
+    return home, agent_dir
+
+
+def invoke_with_disposable_home(
+    repository: Path,
+    request: dict[str, Any],
+    home: Path,
+) -> dict[str, Any]:
+    environment = dict(os.environ)
+    environment["HOME"] = str(home)
+    run = subprocess.run(
+        [
+            "node",
+            str(EXTENSION_HARNESS),
+            str(PI_PACKAGE),
+            str(COLLAB_EXTENSION),
+            str(repository),
+            str(RPC_MOCK),
+        ],
+        input=json.dumps(request) + "\n",
+        capture_output=True,
+        text=True,
+        check=False,
+        env=environment,
+    )
+    if run.returncode != 0:
+        raise AssertionError(f"isolated extension harness failed: {run.stderr}")
+    return json.loads(run.stdout)
+
+
+def seed_role_context_fixture(repository: Path, marker: str) -> None:
+    (repository / "AGENTS.md").write_text(
+        f"# Disposable lane instructions\n\nEffective project marker: {marker}\n",
+        encoding="utf-8",
+    )
+    runtime = repository / ".runtime"
+    runtime.mkdir()
+    (runtime / "observe.py").write_text(
+        "import json, os\n"
+        "print(json.dumps({'cwd': os.getcwd(), 'role_token': os.environ['ROLE_TOKEN']}))\n",
+        encoding="utf-8",
+    )
+    bin_dir = runtime / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "python3").symlink_to(sys.executable)
+    git(repository, "add", "AGENTS.md", ".runtime")
+    git(repository, "commit", "-m", "test lane context and runtime")
 
 
 def valid_request(capture: Path, **overrides: Any) -> dict[str, Any]:
@@ -105,6 +195,112 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
         capture = base / capture_name
         observed = invoke(repository, valid_request(capture, **overrides))
         return repository, expected, capture, observed
+
+    def test_profile_inheritance_failures_never_request_rpc_spawn(self) -> None:
+        cases: tuple[tuple[str, bool | str | None], ...] = (
+            ("collab-implementer", None),
+            ("collab-implementer", False),
+            ("collab-implementer", "not-a-boolean"),
+            ("collab-acceptor", None),
+            ("collab-acceptor", False),
+            ("collab-acceptor", "not-a-boolean"),
+        )
+        for role, declaration in cases:
+            with self.subTest(role=role, declaration=declaration), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                repository, _ = seed_repository(base)
+                seed_managed_task(repository)
+                home, _ = seed_disposable_agent_home(base, {role: declaration})
+                capture = base / "rpc.jsonl"
+                observed = invoke_with_disposable_home(
+                    repository,
+                    valid_request(capture),
+                    home,
+                )
+
+                self.assertTrue(observed["is_error"], observed)
+                self.assertIn(
+                    observed["error"]["error"]["code"],
+                    {"profile_unavailable", "project_context_unavailable"},
+                )
+                self.assertIn(role, observed["error"]["error"]["message"])
+                self.assertTrue(observed["error"]["error"]["repair"])
+                self.assertFalse(capture.exists(), "profile rejection must happen before RPC spawn")
+
+    def test_fresh_roles_observe_lane_context_and_consume_exact_execution_parameters(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            marker = f"lane-root-{uuid.uuid4().hex}"
+            repository, _ = seed_repository(base)
+            seed_role_context_fixture(repository, marker)
+            expected = seed_managed_task(repository)
+            home, disposable_agent_dir = seed_disposable_agent_home(base)
+            lane = Path(expected["lane"])
+            runtime = lane / ".runtime/bin/python3"
+            observer = lane / ".runtime/observe.py"
+
+            def execution(role: str) -> dict[str, Any]:
+                return {
+                    "runtime": str(runtime),
+                    "args": [str(observer)],
+                    "environment": {"ROLE_TOKEN": role},
+                }
+
+            worker_execution = execution("collab-implementer")
+            reviewer_execution = execution("collab-acceptor")
+            capture = base / "rpc.jsonl"
+            observed = invoke_with_disposable_home(
+                repository,
+                valid_request(
+                    capture,
+                    worker_brief=(
+                        "Implement the bounded fixture.\n"
+                        f"Execution parameters JSON: {json.dumps(worker_execution, separators=(',', ':'))}"
+                    ),
+                    review_brief=(
+                        "Review the bounded fixture read-only.\n"
+                        f"Execution parameters JSON: {json.dumps(reviewer_execution, separators=(',', ':'))}"
+                    ),
+                ),
+                home,
+            )
+            self.assertFalse(observed["is_error"], observed)
+
+            isolated_agent_dir = base / "isolated-agent"
+            isolated_agent_dir.mkdir()
+            role_environment = dict(os.environ)
+            role_environment["HOME"] = str(home)
+            role_run = subprocess.run(
+                [
+                    "node",
+                    str(ROLE_CONTEXT_HARNESS),
+                    str(capture),
+                    str(PI_PACKAGE),
+                    str(disposable_agent_dir / "npm/package.json"),
+                    str(isolated_agent_dir),
+                    marker,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=role_environment,
+            )
+            self.assertEqual(role_run.returncode, 0, role_run.stderr)
+            result = json.loads(role_run.stdout)
+
+        self.assertEqual(result["result"]["outcome"], "REVIEWED")
+        self.assertEqual(
+            [item["agent"] for item in result["observations"]],
+            ["collab-implementer", "collab-acceptor"],
+        )
+        for item in result["observations"]:
+            self.assertEqual(item["context"], "fresh")
+            self.assertEqual(item["cwd"], expected["lane"])
+            self.assertIs(item["markerObserved"], True)
+            self.assertEqual(item["execution"]["runtime"], str(runtime))
+            self.assertEqual(item["execution"]["environment"], {"ROLE_TOKEN": item["agent"]})
+            self.assertEqual(item["commandObservation"]["cwd"], expected["lane"])
+            self.assertEqual(item["commandObservation"]["role_token"], item["agent"])
 
     def test_shipped_registration_exposes_narrow_public_schema(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

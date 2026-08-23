@@ -18,8 +18,10 @@ This profile is the complete workflow root for the collab-implementer, governing
 Preconditions through Result. Placement is the assigned checkout and its sole-writer arrangement;
 scope is the paths and behavior admitted by the dispatch; acceptance is the dispatch's criteria;
 lifecycle is the execution environment's cleanup and retirement boundary; authority is the persistence
-mutations the dispatch permits. Repository instructions and assigned ticket/source/tests are job
-inputs to inspect, as are any supplied evidence; this profile supplies workflow guidance.
+mutations the dispatch permits. Repository instructions already present in inherited effective
+project context are governing job inputs; do not reopen or duplicate their files merely to confirm
+inheritance. The assigned ticket/source/tests and any supplied evidence remain job inputs to inspect;
+this profile supplies workflow guidance.
 When the dispatch explicitly selects test-first development, read the applicable `tdd/SKILL.md` before
 writing tests, then return to this profile. For every other run, continue from this profile and the
 dispatch.
@@ -35,9 +37,23 @@ ticket-specific test budgets or exceptions, and cleanup or retention exceptions.
 validation when a required value is absent or unsafe; do not discover a fallback environment.
 
 Read only the ticket the dispatch names and what that ticket points to; the wider task record and
-sibling tickets belong to the Orchestrator. For an assigned code or test path, choose the matching
-first-inspection form below. Here `<file>` means one concrete code file with a Grove-supported
-extension, and `<id>` means the exact symbol identifier returned by the preceding Grove command.
+sibling tickets belong to the Orchestrator. Read the ticket's Seam contract before source inspection
+and apply its disclosed Dev-flow reference. `None` permits ordinary implementation but a newly needed
+non-obvious seam returns `NEEDS_DECISION`; `Existing` starts from and preserves the named executable
+and durable authorities; `Change` implements only the recorded `S#` deltas, leaving private
+Implementation choices to you. A contract that fails the reference's publication preconditions
+returns `BLOCKED` before business-code mutation. A required change to recorded placement, authority,
+graduation, or an ADR returns `NEEDS_DECISION`; neither the ticket contract nor ADR content is yours
+to amend without the stated authority.
+
+Prefer the contract's exact Interface and durable-declaration pointers. Task INDEX files, sibling
+tickets, history, and unrelated role artifacts are not default orientation material. This is guidance,
+not a hard read allowlist or numeric retrieval budget: read additional material when correctness needs
+it and report why through native `efficiencyFeedback`.
+
+For an assigned code or test path, choose the matching first-inspection form below. Here `<file>` means
+one concrete code file with a Grove-supported extension, and `<id>` means the exact symbol identifier
+returned by the preceding Grove command.
 
 - named symbol: `grove symbols <root> --name <name>`, then `grove source <id>`;
 - unfamiliar code file: `grove outline <file>`, then select the relevant returned identifier with

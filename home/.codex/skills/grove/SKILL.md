@@ -10,7 +10,7 @@ description: >
 
 Use **Grove for structure** and `rg` / `read` / the shell for **text**. Grove
 parses definitions and relationships; text tools find literals, data, paths, and
-non-code.
+non-code. Please use grove CLI once at a time, it will take huge CPU/ram usage if search range is large.
 
 ## Navigate
 

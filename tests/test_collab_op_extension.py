@@ -790,14 +790,14 @@ class CollabOpExtensionIntegrationAdoptRegressionTests(unittest.TestCase):
                 "refs/heads/wave/demo/integration",
             )
 
-    def test_canonical_adoption_refuses_dirty_or_partial_arrangements(self) -> None:
-        for case in ("dirty", "extra_ref", "detached"):
+    def test_canonical_adoption_refuses_tracked_dirt_or_partial_arrangements(self) -> None:
+        for case in ("tracked", "extra_ref", "detached"):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
                 base = Path(temporary)
                 repository, base_sha = seed_repository(base)
                 integration = seed_canonical(repository, base_sha)
-                if case == "dirty":
-                    (integration / "dirty.txt").write_text("preserve\n", encoding="utf-8")
+                if case == "tracked":
+                    (integration / "tracked.txt").write_text("preserve tracked change\n", encoding="utf-8")
                 elif case == "extra_ref":
                     git(repository, "update-ref", "refs/orchestrate/demo/extra", base_sha)
                 else:
@@ -817,12 +817,43 @@ class CollabOpExtensionIntegrationAdoptRegressionTests(unittest.TestCase):
                 self.assertTrue(observed["is_error"])
                 self.assertEqual(observed["error"]["error"]["code"], "task_resource_collision")
                 self.assertTrue(observed["error"]["error"]["repair"])
-                if case == "dirty":
-                    self.assertEqual((integration / "dirty.txt").read_text(encoding="utf-8"), "preserve\n")
+                if case == "tracked":
+                    self.assertEqual(
+                        (integration / "tracked.txt").read_text(encoding="utf-8"),
+                        "preserve tracked change\n",
+                    )
                 elif case == "extra_ref":
                     self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/extra"), base_sha)
                 else:
                     self.assertEqual(git(integration, "rev-parse", "HEAD"), base_sha)
+
+    def test_canonical_adoption_accepts_untracked_and_ignored_paths(self) -> None:
+        for state in ("untracked", "ignored"):
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as temporary:
+                repository, _ = seed_repository(Path(temporary))
+                (repository / ".gitignore").write_text("ignored.tmp\n", encoding="utf-8")
+                git(repository, "add", ".gitignore")
+                git(repository, "commit", "-m", "ignore runtime state")
+                base_sha = git(repository, "rev-parse", "HEAD")
+                integration = seed_canonical(repository, base_sha)
+                seed_task_container(repository)
+                candidate = integration / ("ordinary.tmp" if state == "untracked" else "ignored.tmp")
+                candidate.write_text(f"{state} runtime\n", encoding="utf-8")
+
+                observed = invoke(
+                    repository,
+                    {
+                        "tool": "collab_integration_adopt",
+                        "task_id": "demo",
+                        "source_branch": "wave/demo/integration",
+                        "persist": "main",
+                        "base_sha": base_sha,
+                    },
+                )
+
+                self.assertFalse(observed["is_error"])
+                self.assertTrue(candidate.is_file())
+                self.assertNotIn("warnings", observed["result"])
 
 
 class CollabOpExtensionLaneCreateRegressionTests(unittest.TestCase):
@@ -1122,14 +1153,14 @@ class CollabOpExtensionLaneReconcileRegressionTests(unittest.TestCase):
             self.assertEqual(git(lane, "status", "--porcelain=v1"), "")
             self.assertEqual(lock_path.read_text(encoding="utf-8"), "foreign lock\n")
 
-    def test_lane_reconcile_refuses_lane_dirt_and_identity_mismatches(self) -> None:
-        for case in ("dirty", "identity"):
+    def test_lane_reconcile_refuses_tracked_dirt_and_identity_mismatches(self) -> None:
+        for case in ("tracked", "identity"):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
                 repository, _ = seed_repository(Path(temporary))
                 expected = seed_managed_task(repository)
                 lane = Path(expected["lane"])
-                if case == "dirty":
-                    (lane / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+                if case == "tracked":
+                    (lane / "tracked.txt").write_text("tracked change\n", encoding="utf-8")
                 else:
                     git(lane, "checkout", "--detach")
                 observed = invoke(
@@ -1139,9 +1170,34 @@ class CollabOpExtensionLaneReconcileRegressionTests(unittest.TestCase):
                 self.assertTrue(observed["is_error"])
                 self.assertEqual(
                     observed["error"]["error"]["code"],
-                    "dirty_worktree" if case == "dirty" else "worktree_identity_mismatch",
+                    "dirty_worktree" if case == "tracked" else "worktree_identity_mismatch",
                 )
                 self.assertTrue(observed["error"]["error"]["repair"])
+
+    def test_lane_reconcile_accepts_untracked_and_ignored_paths(self) -> None:
+        for state in ("untracked", "ignored"):
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as temporary:
+                repository, _ = seed_repository(Path(temporary))
+                (repository / ".gitignore").write_text("ignored.tmp\n", encoding="utf-8")
+                git(repository, "add", ".gitignore")
+                git(repository, "commit", "-m", "ignore runtime state")
+                expected = seed_managed_task(repository)
+                seed_task_container(repository)
+                lane = Path(expected["lane"])
+                candidate = lane / ("ordinary.tmp" if state == "untracked" else "ignored.tmp")
+                candidate.write_text(f"{state} runtime\n", encoding="utf-8")
+
+                observed = invoke(
+                    repository,
+                    {"tool": "collab_lane_reconcile", "task_id": "demo", "lane_id": "writer-1"},
+                )
+
+                self.assertFalse(observed["is_error"])
+                self.assertEqual(observed["result"]["state"], "noop")
+                self.assertTrue(candidate.is_file())
+                self.assertFalse(
+                    any("dirty" in warning or "preserv" in warning for warning in observed["result"]["warnings"])
+                )
 
     def test_lane_reconcile_without_task_container_warns_without_creating_one(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1661,6 +1717,28 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 0,
             )
 
+    def test_integration_remove_force_retires_untracked_and_ignored_paths_without_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text("ignored.tmp\n", encoding="utf-8")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore runtime state")
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            for worktree in (Path(expected["integration"]), Path(expected["lane"])):
+                (worktree / "ordinary.tmp").write_text("ordinary runtime\n", encoding="utf-8")
+                (worktree / "ignored.tmp").write_text("ignored runtime\n", encoding="utf-8")
+
+            observed = invoke(
+                repository,
+                {"tool": "collab_integration_remove", "task_id": "demo"},
+            )
+
+            self.assertFalse(observed["is_error"])
+            self.assertNotIn("warnings", observed["result"])
+            self.assertFalse(Path(expected["integration"]).exists())
+            self.assertFalse(Path(expected["lane"]).exists())
+
     def test_integration_remove_reports_residuals_and_continues_after_git_cleanup_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
@@ -1798,7 +1876,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             self.assertFalse(landed["is_error"])
             self.assertEqual(landed["result"]["ok"], True)
             self.assertEqual(landed["result"]["tool_version"], 1)
-            self.assertIn("warnings", landed["result"])
+            self.assertNotIn("warnings", landed["result"])
 
             removed = invoke(
                 repository,
@@ -2499,18 +2577,60 @@ class CollabOpExtensionStatusTests(unittest.TestCase):
                 any("freshness could not be proven" in warning for warning in observed["result"]["warnings"])
             )
 
-    def test_status_warns_for_dirty_lane_worktree(self) -> None:
+    def test_status_warns_for_tracked_lane_dirt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
             expected = seed_managed_task(repository)
             lane = Path(expected["lane"])
-            (lane / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+            (lane / "tracked.txt").write_text("tracked change\n", encoding="utf-8")
 
             observed = invoke(repository, {"tool": "collab_status", "task_id": "demo"})
 
             self.assertFalse(observed["is_error"])
             self.assertTrue(
                 any("lane writer-1 worktree is dirty" in warning for warning in observed["result"]["warnings"])
+            )
+
+    def test_status_and_report_do_not_warn_for_untracked_or_ignored_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text("ignored.tmp\n", encoding="utf-8")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore runtime state")
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            for worktree in (Path(expected["integration"]), Path(expected["lane"])):
+                (worktree / "ordinary.tmp").write_text("ordinary runtime\n", encoding="utf-8")
+                (worktree / "ignored.tmp").write_text("ignored runtime\n", encoding="utf-8")
+
+            status_observed = invoke(repository, {"tool": "collab_status", "task_id": "demo"})
+            report_observed = invoke(
+                repository,
+                {"tool": "collab_report", "task_id": "demo", "output_dir": "presence-report"},
+            )
+
+            self.assertFalse(status_observed["is_error"])
+            self.assertEqual(status_observed["result"]["warnings"], [])
+            self.assertFalse(report_observed["is_error"])
+            self.assertNotIn("warnings", report_observed["result"])
+            report = json.loads(
+                (repository / "presence-report/collab-report.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(report["warnings"], [])
+
+            (Path(expected["lane"]) / "tracked.txt").write_text(
+                "tracked change\n", encoding="utf-8"
+            )
+            tracked_report_observed = invoke(
+                repository,
+                {"tool": "collab_report", "task_id": "demo", "output_dir": "tracked-report"},
+            )
+            self.assertFalse(tracked_report_observed["is_error"])
+            self.assertTrue(
+                any(
+                    "lane writer-1 worktree is dirty" in warning
+                    for warning in tracked_report_observed["result"]["warnings"]
+                )
             )
 
     def test_refusal_uses_the_structured_pi_error_envelope(self) -> None:
@@ -2527,14 +2647,14 @@ class CollabOpExtensionStatusTests(unittest.TestCase):
 
 
 class CollabOpExtensionIntegrationReconcileContractRegressionTests(unittest.TestCase):
-    def test_reconcile_requires_clean_and_identity_matching_integration(self) -> None:
-        for case in ("dirty", "identity"):
+    def test_reconcile_requires_tracked_cleanliness_and_matching_identity(self) -> None:
+        for case in ("tracked", "identity"):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
                 repository, _ = seed_repository(Path(temporary))
                 expected = seed_managed_task(repository)
                 integration = Path(expected["integration"])
-                if case == "dirty":
-                    (integration / "dirty.txt").write_text("preserve\n", encoding="utf-8")
+                if case == "tracked":
+                    (integration / "tracked.txt").write_text("preserve tracked change\n", encoding="utf-8")
                 else:
                     git(integration, "checkout", "--detach")
 
@@ -2548,10 +2668,92 @@ class CollabOpExtensionIntegrationReconcileContractRegressionTests(unittest.Test
                 )
 
                 self.assertTrue(observed["is_error"])
-                expected_code = "dirty_worktree" if case == "dirty" else "worktree_identity_mismatch"
+                expected_code = "dirty_worktree" if case == "tracked" else "worktree_identity_mismatch"
                 self.assertEqual(observed["error"]["error"]["code"], expected_code)
                 self.assertTrue(observed["error"]["error"]["repair"])
                 self.assertFalse((repository / ".agent_state/worktrees/demo/lanes/repair").exists())
+
+    def test_integration_reconcile_accepts_untracked_and_ignored_paths(self) -> None:
+        for state in ("untracked", "ignored"):
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as temporary:
+                repository, _ = seed_repository(Path(temporary))
+                (repository / ".gitignore").write_text("ignored.tmp\n", encoding="utf-8")
+                git(repository, "add", ".gitignore")
+                git(repository, "commit", "-m", "ignore runtime state")
+                expected = seed_managed_task(repository)
+                seed_task_container(repository)
+                integration = Path(expected["integration"])
+                candidate = integration / ("ordinary.tmp" if state == "untracked" else "ignored.tmp")
+                candidate.write_text(f"{state} runtime\n", encoding="utf-8")
+
+                observed = invoke(
+                    repository,
+                    {
+                        "tool": "collab_integration_reconcile",
+                        "task_id": "demo",
+                        "lane_id": "repair",
+                    },
+                )
+
+                self.assertFalse(observed["is_error"])
+                self.assertEqual(observed["result"]["state"], "noop")
+                self.assertTrue(candidate.is_file())
+                self.assertFalse(
+                    any("dirty" in warning or "preserv" in warning for warning in observed["result"]["warnings"])
+                )
+
+    def test_reconcile_compensation_uses_native_non_force_worktree_removal(self) -> None:
+        for state in ("untracked", "ignored"):
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                repository, _ = seed_repository(base)
+                (repository / ".gitignore").write_text(".cache/\n", encoding="utf-8")
+                git(repository, "add", ".gitignore")
+                git(repository, "commit", "-m", "ignore runtime cache")
+                seed_managed_task(repository)
+                (repository / "persistence.txt").write_text("persistence advance\n", encoding="utf-8")
+                git(repository, "add", "persistence.txt")
+                git(repository, "commit", "-m", "advance persistence")
+                lane = repository / ".agent_state/worktrees/demo/lanes/repair"
+                candidate = lane / ("ordinary.tmp" if state == "untracked" else ".cache/runtime.tmp")
+                wrapper_script = """#!/bin/sh
+real_git="__REAL_GIT__"
+if [ "$1" = "merge" ]; then
+  mkdir -p "__PARENT__"
+  printf 'runtime\\n' > "__CANDIDATE__"
+  exit 73
+fi
+exec "$real_git" "$@"
+""".replace("__PARENT__", str(candidate.parent)).replace("__CANDIDATE__", str(candidate))
+                wrapper = write_git_wrapper(base, wrapper_script)
+                original_path = os.environ["PATH"]
+                os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
+                close_harness_for(repository)
+                try:
+                    observed = invoke(
+                        repository,
+                        {
+                            "tool": "collab_integration_reconcile",
+                            "task_id": "demo",
+                            "lane_id": "repair",
+                        },
+                    )
+                finally:
+                    os.environ["PATH"] = original_path
+                    close_harness_for(repository)
+
+                self.assertTrue(observed["is_error"])
+                self.assertEqual(observed["error"]["error"]["code"], "git_error")
+                compensation = observed["error"]["error"]["details"]["compensation"]
+                if state == "untracked":
+                    self.assertTrue(candidate.is_file())
+                    self.assertTrue(lane.is_dir())
+                    self.assertNotEqual(git(repository, "branch", "--list", "wave/demo/repair"), "")
+                    self.assertFalse(compensation["restored"])
+                else:
+                    self.assertFalse(lane.exists())
+                    self.assertEqual(git(repository, "branch", "--list", "wave/demo/repair"), "")
+                    self.assertTrue(compensation["restored"])
 
     def test_reconcile_requires_one_persistence_checkout_at_direct_branch_tip(self) -> None:
         for case in ("head", "count"):
@@ -2776,6 +2978,7 @@ class CollabOpExtensionIntegrationReconcileContractRegressionTests(unittest.Test
 #   rename            accepted_rename_leaves_only_destination      refuses_rename_over_untracked_destination
 #   directory->file   clean_directory_to_file_transition_lands     refuses_directory_to_file_transition_over_untracked_dirt
 #   file->directory   clean_file_to_directory_transition_lands     refuses_file_to_directory_transition_over_untracked_dirt
+#   deleted leaf      (any clean landing)                          refuses_deleted_tracked_leaf_replaced_by_untracked_descendant
 #   added path        (any clean landing)                          refuses_ordinary_untracked_collision
 #
 # The established index-dirt representative (refuses_intent_to_add_entry) and
@@ -2887,6 +3090,36 @@ def assert_transition_refused(
     )
 
 
+def ignored_landing_collision(temporary: str | Path, shape: str) -> LandingTransition:
+    def transition(integration: Path) -> None:
+        if shape == "exact":
+            (integration / "ignored.tmp").write_text("accepted exact\n", encoding="utf-8")
+            git(integration, "add", "-f", "ignored.tmp")
+        elif shape == "directory_to_file":
+            (integration / "pair").write_text("accepted file\n", encoding="utf-8")
+            git(integration, "add", "-f", "pair")
+        else:
+            (integration / "pair").mkdir()
+            (integration / "pair/accepted.txt").write_text("accepted nested\n", encoding="utf-8")
+            git(integration, "add", "-f", "pair/accepted.txt")
+
+    def overlap(repository: Path) -> None:
+        if shape == "exact":
+            (repository / "ignored.tmp").write_text("ignored local\n", encoding="utf-8")
+        elif shape == "directory_to_file":
+            (repository / "pair").mkdir()
+            (repository / "pair/runtime.tmp").write_text("ignored local\n", encoding="utf-8")
+        else:
+            (repository / "pair").write_text("ignored local\n", encoding="utf-8")
+
+    return LandingTransition(
+        temporary,
+        base_files={".gitignore": ".agent_state/\nignored.tmp\npair\n"},
+        transition=transition,
+        local_overlap=overlap,
+    )
+
+
 class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase):
     def test_land_default_commit_preserves_dirt_and_records_landed_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -2907,10 +3140,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
                 {
                     "ok": True,
                     "tool_version": 1,
-                    "warnings": [
-                        "preserved unstaged tracked changes",
-                        "preserved untracked files",
-                    ],
+                    "warnings": ["preserved unstaged tracked changes"],
                 },
             )
             landing = git(repository, "rev-parse", "main")
@@ -2987,7 +3217,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             self.assertEqual(git(repository, "status", "--porcelain=v1", "--ignored=matching"), before_status)
             self.assertEqual((repository / "tracked.txt").read_text(encoding="utf-8"), before_file)
 
-    def test_land_untracked_only_state_survives_with_bounded_warning(self) -> None:
+    def test_land_untracked_only_state_survives_without_presence_warning(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
             (repository / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
@@ -3000,15 +3230,14 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
 
             self.assertFalse(observed["is_error"])
-            self.assertIn("preserved untracked files", observed["result"]["warnings"])
-            self.assertLessEqual(len(observed["result"]["warnings"]), 3)
+            self.assertNotIn("warnings", observed["result"])
             self.assertEqual((repository / "local.txt").read_text(encoding="utf-8"), "operator\n")
             self.assertEqual(
                 git(repository, "rev-parse", "HEAD^{tree}"),
                 git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"),
             )
 
-    def test_land_ignored_only_state_survives_with_bounded_warning(self) -> None:
+    def test_land_ignored_only_state_survives_without_presence_warning(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
             (repository / ".gitignore").write_text(".agent_state/\nignored.tmp\n", encoding="utf-8")
@@ -3021,8 +3250,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
 
             self.assertFalse(observed["is_error"])
-            self.assertIn("preserved ignored files", observed["result"]["warnings"])
-            self.assertLessEqual(len(observed["result"]["warnings"]), 3)
+            self.assertNotIn("warnings", observed["result"])
             self.assertEqual((repository / "ignored.tmp").read_text(encoding="utf-8"), "operator\n")
             self.assertEqual(
                 git(repository, "rev-parse", "HEAD^{tree}"),
@@ -3094,6 +3322,106 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             assert_transition_refused(self, scenario, observed, code="path_collision")
             self.assertEqual((scenario.repository / "new.txt").read_text(encoding="utf-8"), "operator\n")
 
+    def test_land_overwrites_ignored_exact_and_file_directory_collisions(self) -> None:
+        for shape in ("exact", "directory_to_file", "file_to_directory"):
+            with self.subTest(shape=shape), tempfile.TemporaryDirectory() as temporary:
+                scenario = ignored_landing_collision(temporary, shape)
+
+                observed = scenario.land()
+
+                assert_transition_landed(self, scenario, observed)
+                self.assertNotIn("warnings", observed["result"])
+                if shape == "exact":
+                    self.assertEqual(
+                        (scenario.repository / "ignored.tmp").read_text(encoding="utf-8"),
+                        "accepted exact\n",
+                    )
+                elif shape == "directory_to_file":
+                    self.assertEqual(
+                        (scenario.repository / "pair").read_text(encoding="utf-8"),
+                        "accepted file\n",
+                    )
+                else:
+                    self.assertEqual(
+                        (scenario.repository / "pair/accepted.txt").read_text(encoding="utf-8"),
+                        "accepted nested\n",
+                    )
+
+    def test_land_failure_restores_ignored_exact_and_file_directory_collisions(self) -> None:
+        for shape in ("exact", "directory_to_file", "file_to_directory"):
+            with self.subTest(shape=shape), tempfile.TemporaryDirectory() as temporary:
+                scenario = ignored_landing_collision(temporary, shape)
+                git(scenario.repository, "config", "commit.gpgsign", "true")
+                git(
+                    scenario.repository,
+                    "config",
+                    "user.signingkey",
+                    "collab-absent-signing-key",
+                )
+
+                observed = scenario.land()
+
+                assert_transition_refused(self, scenario, observed, code="git_error")
+                self.assertTrue(observed["error"]["error"]["details"]["rollback"]["restored"])
+                if shape == "exact":
+                    self.assertEqual(
+                        (scenario.repository / "ignored.tmp").read_text(encoding="utf-8"),
+                        "ignored local\n",
+                    )
+                elif shape == "directory_to_file":
+                    self.assertTrue((scenario.repository / "pair").is_dir())
+                    self.assertEqual(
+                        (scenario.repository / "pair/runtime.tmp").read_text(encoding="utf-8"),
+                        "ignored local\n",
+                    )
+                else:
+                    self.assertEqual(
+                        (scenario.repository / "pair").read_text(encoding="utf-8"),
+                        "ignored local\n",
+                    )
+
+    def test_land_handles_ignored_directory_fifo_collision_on_success_and_failure(self) -> None:
+        for outcome in ("success", "failure"):
+            with self.subTest(outcome=outcome), tempfile.TemporaryDirectory() as temporary:
+                def transition(integration: Path) -> None:
+                    (integration / "pair").write_text("accepted file\n", encoding="utf-8")
+                    git(integration, "add", "-f", "pair")
+
+                def overlap(repository: Path) -> None:
+                    (repository / "pair").mkdir()
+                    os.mkfifo(repository / "pair/runtime.pipe")
+
+                scenario = LandingTransition(
+                    temporary,
+                    base_files={".gitignore": ".agent_state/\npair\n"},
+                    transition=transition,
+                    local_overlap=overlap,
+                )
+                if outcome == "failure":
+                    git(scenario.repository, "config", "commit.gpgsign", "true")
+                    git(
+                        scenario.repository,
+                        "config",
+                        "user.signingkey",
+                        "collab-absent-signing-key",
+                    )
+
+                observed = scenario.land()
+
+                if outcome == "success":
+                    assert_transition_landed(self, scenario, observed)
+                    self.assertEqual(
+                        (scenario.repository / "pair").read_text(encoding="utf-8"),
+                        "accepted file\n",
+                    )
+                else:
+                    assert_transition_refused(self, scenario, observed, code="git_error")
+                    self.assertTrue(
+                        observed["error"]["error"]["details"]["rollback"]["restored"]
+                    )
+                    fifo = scenario.repository / "pair/runtime.pipe"
+                    self.assertTrue(stat.S_ISFIFO(fifo.lstat().st_mode))
+
     def test_land_preserves_directory_replacement_of_unchanged_path(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
@@ -3117,7 +3445,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
 
             self.assertFalse(observed["is_error"])
             self.assertIn("preserved unstaged tracked changes", observed["result"]["warnings"])
-            self.assertIn("preserved untracked files", observed["result"]["warnings"])
+            self.assertNotIn("preserved untracked files", observed["result"]["warnings"])
             self.assertTrue((repository / "shape.txt").is_dir())
             self.assertEqual(
                 (repository / "shape.txt/local.txt").read_text(encoding="utf-8"),
@@ -3189,6 +3517,38 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             # the move must survive untouched for the operator to resolve.
             self.assertTrue((scenario.repository / "old.txt").exists())
             self.assertEqual((scenario.repository / "new.txt").read_text(encoding="utf-8"), "operator\n")
+
+    def test_land_refuses_deleted_tracked_leaf_replaced_by_untracked_descendant(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+
+            def delete_pair(integration: Path) -> None:
+                git(integration, "rm", "pair")
+
+            def replace_with_local_directory(repository: Path) -> None:
+                (repository / "pair").unlink()
+                (repository / "pair").mkdir()
+                (repository / "pair/local.tmp").write_text("operator\n", encoding="utf-8")
+
+            scenario = LandingTransition(
+                temporary,
+                base_files={"pair": "base\n", ".gitignore": ".agent_state/\n"},
+                transition=delete_pair,
+                local_overlap=replace_with_local_directory,
+            )
+
+            observed = scenario.land()
+
+            assert_transition_refused(
+                self,
+                scenario,
+                observed,
+                code="path_collision",
+                collision_paths=["pair/local.tmp"],
+            )
+            self.assertEqual(
+                (scenario.repository / "pair/local.tmp").read_text(encoding="utf-8"),
+                "operator\n",
+            )
 
     def test_land_refuses_directory_to_file_transition_over_untracked_dirt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -3312,6 +3672,41 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             self.assertTrue((scenario.repository / "pair/gen.txt").is_file())
             self.assertEqual(
                 (scenario.repository / "pair/gen.txt").read_text(encoding="utf-8"),
+                "operator\n",
+            )
+
+    def test_land_refuses_structurally_changed_tracked_leaf_with_other_untracked_descendant(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+
+            def expand(integration: Path) -> None:
+                git(integration, "rm", "pair")
+                (integration / "pair").mkdir()
+                (integration / "pair/accepted.txt").write_text("accepted\n", encoding="utf-8")
+                git(integration, "add", "pair/accepted.txt")
+
+            def replace_with_local_directory(repository: Path) -> None:
+                (repository / "pair").unlink()
+                (repository / "pair").mkdir()
+                (repository / "pair/local.tmp").write_text("operator\n", encoding="utf-8")
+
+            scenario = LandingTransition(
+                temporary,
+                base_files={"pair": "base\n", ".gitignore": ".agent_state/\n"},
+                transition=expand,
+                local_overlap=replace_with_local_directory,
+            )
+
+            observed = scenario.land()
+
+            assert_transition_refused(
+                self,
+                scenario,
+                observed,
+                code="path_collision",
+                collision_paths=["pair/local.tmp"],
+            )
+            self.assertEqual(
+                (scenario.repository / "pair/local.tmp").read_text(encoding="utf-8"),
                 "operator\n",
             )
 
@@ -3521,29 +3916,58 @@ class CollabOpExtensionLaneCollectContractRegressionTests(unittest.TestCase):
             self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), lane_sha)
             self.assertTrue(lane.exists())
 
-    def test_collect_disposes_colliding_integration_path_and_preserves_unrelated_file(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            repository, _ = seed_repository(Path(temporary))
-            expected = seed_managed_task(repository)
-            lane = Path(expected["lane"])
-            integration = Path(expected["integration"])
-            (lane / "fresh.txt").write_text("lane fresh content\n", encoding="utf-8")
-            git(lane, "add", "fresh.txt")
-            git(lane, "commit", "-m", "lane adds fresh path")
-            lane_sha = git(lane, "rev-parse", "HEAD")
-            (integration / "fresh.txt").write_text("disposable collision\n", encoding="utf-8")
-            (integration / "unrelated.txt").write_text("untracked unrelated\n", encoding="utf-8")
+    def test_ready_collect_reset_overwrites_untracked_and_ignored_obstructions(self) -> None:
+        for state in ("untracked", "ignored"):
+            for shape in ("exact", "directory_to_file", "file_to_directory"):
+                with self.subTest(state=state, shape=shape), tempfile.TemporaryDirectory() as temporary:
+                    repository, _ = seed_repository(Path(temporary))
+                    if state == "ignored":
+                        (repository / ".gitignore").write_text("fresh.txt\npair\nignored-unrelated.tmp\n", encoding="utf-8")
+                        git(repository, "add", ".gitignore")
+                        git(repository, "commit", "-m", "ignore runtime state")
+                    expected = seed_managed_task(repository)
+                    seed_task_container(repository)
+                    lane = Path(expected["lane"])
+                    integration = Path(expected["integration"])
+                    if shape == "exact":
+                        (lane / "fresh.txt").write_text("lane exact content\n", encoding="utf-8")
+                        git(lane, "add", "-f" if state == "ignored" else "--", "fresh.txt")
+                        (integration / "fresh.txt").write_text(f"{state} obstruction\n", encoding="utf-8")
+                    elif shape == "directory_to_file":
+                        (lane / "pair").write_text("lane file content\n", encoding="utf-8")
+                        git(lane, "add", "-f" if state == "ignored" else "--", "pair")
+                        (integration / "pair").mkdir()
+                        (integration / "pair/runtime.tmp").write_text(f"{state} obstruction\n", encoding="utf-8")
+                    else:
+                        (lane / "pair").mkdir()
+                        (lane / "pair/accepted.txt").write_text("lane nested content\n", encoding="utf-8")
+                        git(lane, "add", "-f" if state == "ignored" else "--", "pair/accepted.txt")
+                        (integration / "pair").write_text(f"{state} obstruction\n", encoding="utf-8")
+                    git(lane, "commit", "-m", f"lane {shape} transition")
+                    lane_sha = git(lane, "rev-parse", "HEAD")
+                    unrelated = integration / (
+                        "ignored-unrelated.tmp" if state == "ignored" else "ordinary-unrelated.tmp"
+                    )
+                    unrelated.write_text(f"{state} unrelated\n", encoding="utf-8")
 
-            observed = invoke(
-                repository,
-                {"tool": "collab_lane_collect", "task_id": "demo", "lane_id": "writer-1"},
-            )
+                    observed = invoke(
+                        repository,
+                        {"tool": "collab_lane_collect", "task_id": "demo", "lane_id": "writer-1"},
+                    )
 
-            self.assertFalse(observed["is_error"])
-            self.assertEqual(observed["result"]["state"], "collected")
-            self.assertEqual(git(integration, "rev-parse", "HEAD"), lane_sha)
-            self.assertEqual((integration / "fresh.txt").read_text(encoding="utf-8"), "lane fresh content\n")
-            self.assertEqual((integration / "unrelated.txt").read_text(encoding="utf-8"), "untracked unrelated\n")
+                    self.assertFalse(observed["is_error"])
+                    self.assertEqual(observed["result"]["state"], "collected")
+                    self.assertEqual(git(integration, "rev-parse", "HEAD"), lane_sha)
+                    self.assertEqual(unrelated.read_text(encoding="utf-8"), f"{state} unrelated\n")
+                    if shape == "exact":
+                        self.assertEqual((integration / "fresh.txt").read_text(encoding="utf-8"), "lane exact content\n")
+                    elif shape == "directory_to_file":
+                        self.assertEqual((integration / "pair").read_text(encoding="utf-8"), "lane file content\n")
+                    else:
+                        self.assertEqual(
+                            (integration / "pair/accepted.txt").read_text(encoding="utf-8"),
+                            "lane nested content\n",
+                        )
 
     def test_collect_preserves_tracked_integration_dirt_and_merge_state(self) -> None:
         for case in ("tracked", "merge"):
@@ -3687,40 +4111,70 @@ class CollabOpExtensionLaneCollectContractRegressionTests(unittest.TestCase):
             self.assertFalse((repository / ".agent_state/worktrees/demo/lanes/writer-1").exists())
             self.assertNotIn("comparison_moved", collected["result"])
 
-    def test_collect_disposes_exact_disposable_collisions(self) -> None:
-        cases = ("exact", "trailing", "special", "directory", "file_blocks_directory")
-        for case in cases:
-            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+    def test_stale_collect_surfaces_native_untracked_merge_collisions_without_deletion(self) -> None:
+        for shape in ("exact", "directory_to_file", "file_to_directory"):
+            with self.subTest(shape=shape), tempfile.TemporaryDirectory() as temporary:
                 repository, _ = seed_repository(Path(temporary))
                 expected = seed_managed_task(repository)
                 lane = Path(expected["lane"])
                 integration = Path(expected["integration"])
-                if case == "exact":
-                    names = ["collide.txt"]
-                    (integration / names[0]).write_text("tracked content\n", encoding="utf-8")
-                    (lane / names[0]).write_text("disposable\n", encoding="utf-8")
-                elif case == "trailing":
-                    names = ["collide "]
-                    (integration / names[0]).write_text("tracked content\n", encoding="utf-8")
-                    (lane / names[0]).write_text("disposable\n", encoding="utf-8")
-                elif case == "special":
-                    names = ['quo"te', "ta\tb", "new\nline"]
-                    for name in names:
-                        (integration / name).write_text("tracked special\n", encoding="utf-8")
-                        (lane / name).write_text("disposable special\n", encoding="utf-8")
-                elif case == "directory":
-                    names = ["dirpath"]
-                    (integration / names[0]).write_text("tracked file\n", encoding="utf-8")
-                    (lane / names[0]).mkdir()
-                    (lane / names[0] / "junk.txt").write_text("disposable\n", encoding="utf-8")
+                lane_sha = git(lane, "rev-parse", "HEAD")
+                if shape == "exact":
+                    (integration / "collide.txt").write_text("accepted exact\n", encoding="utf-8")
+                    git(integration, "add", "collide.txt")
+                    blocker = lane / "collide.txt"
+                    blocker.write_text("ordinary blocker\n", encoding="utf-8")
+                elif shape == "directory_to_file":
+                    (integration / "pair").write_text("accepted file\n", encoding="utf-8")
+                    git(integration, "add", "pair")
+                    blocker = lane / "pair/runtime.tmp"
+                    blocker.parent.mkdir()
+                    blocker.write_text("ordinary blocker\n", encoding="utf-8")
                 else:
-                    names = ["sub/a.txt"]
-                    (integration / names[0]).parent.mkdir()
-                    (integration / names[0]).write_text("tracked nested\n", encoding="utf-8")
-                    (lane / "sub").write_text("disposable blocker\n", encoding="utf-8")
-                for name in names:
-                    git(integration, "add", name)
-                git(integration, "commit", "-m", f"integration collision {case}")
+                    (integration / "pair").mkdir()
+                    (integration / "pair/accepted.txt").write_text("accepted nested\n", encoding="utf-8")
+                    git(integration, "add", "pair/accepted.txt")
+                    blocker = lane / "pair"
+                    blocker.write_text("ordinary blocker\n", encoding="utf-8")
+                git(integration, "commit", "-m", f"integration {shape} transition")
+
+                observed = invoke(
+                    repository,
+                    {"tool": "collab_lane_collect", "task_id": "demo", "lane_id": "writer-1"},
+                )
+
+                self.assertTrue(observed["is_error"])
+                self.assertEqual(observed["error"]["error"]["code"], "git_error")
+                self.assertEqual(blocker.read_text(encoding="utf-8"), "ordinary blocker\n")
+                self.assertEqual(git(lane, "rev-parse", "HEAD"), lane_sha)
+                self.assertEqual(git(lane, "status", "--porcelain=v1", "--untracked-files=no"), "")
+
+    def test_stale_collect_merge_overwrites_ignored_exact_and_file_directory_collisions(self) -> None:
+        for shape in ("exact", "directory_to_file", "file_to_directory"):
+            with self.subTest(shape=shape), tempfile.TemporaryDirectory() as temporary:
+                repository, _ = seed_repository(Path(temporary))
+                (repository / ".gitignore").write_text("collide.txt\npair\n", encoding="utf-8")
+                git(repository, "add", ".gitignore")
+                git(repository, "commit", "-m", "ignore runtime state")
+                expected = seed_managed_task(repository)
+                seed_task_container(repository)
+                lane = Path(expected["lane"])
+                integration = Path(expected["integration"])
+                if shape == "exact":
+                    (integration / "collide.txt").write_text("accepted exact\n", encoding="utf-8")
+                    git(integration, "add", "-f", "collide.txt")
+                    (lane / "collide.txt").write_text("ignored blocker\n", encoding="utf-8")
+                elif shape == "directory_to_file":
+                    (integration / "pair").write_text("accepted file\n", encoding="utf-8")
+                    git(integration, "add", "-f", "pair")
+                    (lane / "pair").mkdir()
+                    (lane / "pair/runtime.tmp").write_text("ignored blocker\n", encoding="utf-8")
+                else:
+                    (integration / "pair").mkdir()
+                    (integration / "pair/accepted.txt").write_text("accepted nested\n", encoding="utf-8")
+                    git(integration, "add", "-f", "pair/accepted.txt")
+                    (lane / "pair").write_text("ignored blocker\n", encoding="utf-8")
+                git(integration, "commit", "-m", f"integration {shape} transition")
 
                 observed = invoke(
                     repository,
@@ -3729,12 +4183,18 @@ class CollabOpExtensionLaneCollectContractRegressionTests(unittest.TestCase):
 
                 self.assertFalse(observed["is_error"])
                 self.assertEqual(observed["result"]["state"], "reconciled")
-                for name in names:
+                self.assertFalse(
+                    any("dirty" in warning or "preserv" in warning for warning in observed["result"]["warnings"])
+                )
+                if shape == "exact":
+                    self.assertEqual((lane / "collide.txt").read_text(encoding="utf-8"), "accepted exact\n")
+                elif shape == "directory_to_file":
+                    self.assertEqual((lane / "pair").read_text(encoding="utf-8"), "accepted file\n")
+                else:
                     self.assertEqual(
-                        (lane / name).read_text(encoding="utf-8"),
-                        "tracked nested\n" if case == "file_blocks_directory" else ("tracked special\n" if case == "special" else "tracked content\n" if case in ("exact", "trailing") else "tracked file\n"),
+                        (lane / "pair/accepted.txt").read_text(encoding="utf-8"),
+                        "accepted nested\n",
                     )
-                self.assertEqual(git(lane, "status", "--porcelain=v1", "--untracked-files=no"), "")
 
     def test_collect_disposal_stays_within_selected_worktrees(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -3881,32 +4341,32 @@ class CollabOpExtensionLaneDropContractRegressionTests(unittest.TestCase):
             self.assertEqual(event["uncollected"], False)
             self.assertEqual(expected["integration_head"], integration_sha)
 
-    def test_drop_ignored_only_state_does_not_warn(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            repository, _ = seed_repository(Path(temporary))
-            expected = seed_managed_task(repository)
-            seed_task_container(repository)
-            lane = Path(expected["lane"])
-            exclude = Path(git(lane, "rev-parse", "--git-path", "info/exclude"))
-            exclude.write_text(".venv/\n.pytest-tmp/\n", encoding="utf-8")
-            (lane / ".venv").mkdir()
-            (lane / ".venv/runtime.txt").write_text("runtime\n", encoding="utf-8")
-            (lane / ".pytest-tmp").mkdir()
-            (lane / ".pytest-tmp/state").write_text("state\n", encoding="utf-8")
+    def test_drop_untracked_and_ignored_only_state_does_not_warn(self) -> None:
+        for state in ("untracked", "ignored"):
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as temporary:
+                repository, _ = seed_repository(Path(temporary))
+                (repository / ".gitignore").write_text("ignored.tmp\n", encoding="utf-8")
+                git(repository, "add", ".gitignore")
+                git(repository, "commit", "-m", "ignore runtime state")
+                expected = seed_managed_task(repository)
+                seed_task_container(repository)
+                lane = Path(expected["lane"])
+                candidate = lane / ("ordinary.tmp" if state == "untracked" else "ignored.tmp")
+                candidate.write_text(f"{state} runtime\n", encoding="utf-8")
 
-            observed = invoke(
-                repository,
-                {"tool": "collab_lane_drop", "task_id": "demo", "lane_id": "writer-1"},
-            )
+                observed = invoke(
+                    repository,
+                    {"tool": "collab_lane_drop", "task_id": "demo", "lane_id": "writer-1"},
+                )
 
-            self.assertFalse(observed["is_error"])
-            self.assertNotIn("warnings", observed["result"])
-            self.assertFalse(lane.exists())
-            self.assertEqual(git(repository, "branch", "--list", "wave/demo/writer-1"), "")
-            self.assertEqual(last_telemetry_event(repository)["dirty"], False)
+                self.assertFalse(observed["is_error"])
+                self.assertNotIn("warnings", observed["result"])
+                self.assertFalse(lane.exists())
+                self.assertEqual(git(repository, "branch", "--list", "wave/demo/writer-1"), "")
+                self.assertEqual(last_telemetry_event(repository)["dirty"], False)
 
-    def test_drop_tracked_staged_and_nonignored_untracked_state_warn(self) -> None:
-        for state in ("tracked", "staged", "untracked"):
+    def test_drop_tracked_and_staged_state_warn(self) -> None:
+        for state in ("tracked", "staged"):
             with self.subTest(state=state), tempfile.TemporaryDirectory() as temporary:
                 repository, _ = seed_repository(Path(temporary))
                 expected = seed_managed_task(repository)
@@ -3915,10 +4375,9 @@ class CollabOpExtensionLaneDropContractRegressionTests(unittest.TestCase):
                 if state == "tracked":
                     (lane / "tracked.txt").write_text("modified\n", encoding="utf-8")
                 else:
-                    candidate = lane / f"{state}.txt"
-                    candidate.write_text(f"{state}\n", encoding="utf-8")
-                    if state == "staged":
-                        git(lane, "add", candidate.name)
+                    candidate = lane / "staged.txt"
+                    candidate.write_text("staged\n", encoding="utf-8")
+                    git(lane, "add", candidate.name)
 
                 observed = invoke(
                     repository,

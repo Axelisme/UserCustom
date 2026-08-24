@@ -252,8 +252,22 @@ const reconciledReview = await runs.run("review-reconcile-1", {
 
 Read this section only when selecting which `collab_*` tool carries out a Collab step. Each tool is
 independently registered; its own description and parameter schema are authoritative for what it
-accepts and returns. This section states which Collab step selects each tool and owns the lane-drop
-warning contract.
+accepts and returns. This section states which Collab step selects each tool and owns the dirt,
+file-handling, and managed-worktree removal contracts.
+
+Generic Collab dirt means staged or unstaged tracked changes. Ordinary untracked and ignored paths do
+not by themselves block cleanliness checks or produce dirt, presence, preservation, status, or report
+warnings; active merge/conflict state and unclassifiable Git state retain their explicit protections.
+
+File handling follows the Git operation used or modeled. Merge-backed reconciliation and stale
+collection retain native `git merge` collision behavior. Ready collection uses native
+`git reset --hard`, which preserves non-obstructing untracked or ignored paths and may delete either
+kind when it must write a tracked path. Synthetic landing continues to publish without invoking
+`git merge --squash`, but models its collision behavior: non-colliding untracked and ignored paths are
+preserved without presence warnings, ordinary untracked exact and file/directory overwrite collisions
+are refused, and ignored collisions may be overwritten. Failure compensation removes a newly created
+managed worktree with non-force `git worktree remove`, retaining the resource when Git refuses;
+successful collection, lane drop, and task removal are explicit retirements and use force removal.
 
 - Establishes the task-local integration branch collection needs before any lane can be collected
   into it — `collab_integration_create`.
@@ -266,19 +280,18 @@ warning contract.
 - Optional lane-side synchronization: brings a stale lane up to current integration when the
   Orchestrator explicitly chooses the separate pre-step. Collection normally relies on
   `collab_lane_collect`'s stale-lane handling instead — `collab_lane_reconcile`.
-- Collect: moves an Orchestrator-accepted lane into the integration branch and retires the lane —
-  `collab_lane_collect`.
-- Retire the lane: removes a lane's managed branch and worktree without collecting it, for a lane
-  whose work is not going into integration — `collab_lane_drop`. It emits a custody warning when
-  removal discards tracked or staged changes, active merge/conflict state, or non-ignored untracked
-  paths. Ignored files alone do not trigger that warning, while unclassifiable Git state remains
-  warning-worthy. This classification changes reporting only: best-effort removal and custody of
-  unrecognized resources remain unchanged.
+- Collect: moves an Orchestrator-accepted lane into the integration branch and force-retires the lane
+  after successful collection — `collab_lane_collect`.
+- Retire the lane: force-removes a lane's managed branch and worktree without collecting it, for a
+  lane whose work is not going into integration — `collab_lane_drop`. It emits a custody warning when
+  removal discards tracked or staged changes or active merge/conflict state. Unclassifiable Git state
+  remains warning-worthy. This classification changes reporting only: best-effort removal and custody
+  of unrecognized resources remain unchanged.
 - Keeps the integration branch able to receive collection by merging current persistence back into
   it through a lane, when persistence has moved ahead of integration — `collab_integration_reconcile`.
 - Land: moves the exact current integration result into a persistence branch, preserving the
   integration tree under a new commit identity — `collab_integration_land`.
-- Retire the lane, at task scope: tears down the managed integration and its remaining lanes once
+- Retire the lane, at task scope: force-removes the managed integration and its remaining lanes once
   the task's collab-owned state is no longer needed — `collab_integration_remove`.
 - Read-only inspection of a task's integration and lane state; supports every step above without
   mutating anything — `collab_status`.

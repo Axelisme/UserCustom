@@ -517,49 +517,8 @@ async function pathIsDirectory(pathname: string): Promise<boolean> {
   return (await pathMetadata(pathname))?.isDirectory() ?? false;
 }
 
-async function isDirty(
-  repo: Repository,
-  worktree: string,
-  signal?: AbortSignal,
-): Promise<boolean> {
-  const result = await repo.git(
-    worktree,
-    ["status", "--porcelain=v1", "--untracked-files=all"],
-    signal,
-  );
-  if (result.code !== 0) {
-    throw new CollabOpError(
-      "git_error",
-      `could not inspect worktree state: ${result.stderr.trim() || result.stdout.trim()}`,
-    );
-  }
-  return result.stdout.length > 0;
-}
-
-async function isFullyClean(
-  repo: Repository,
-  worktree: string,
-  signal?: AbortSignal,
-): Promise<boolean> {
-  const result = await repo.git(
-    worktree,
-    ["status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching"],
-    signal,
-  );
-  if (result.code !== 0) {
-    throw new CollabOpError(
-      "git_error",
-      `could not inspect worktree state: ${result.stderr.trim() || result.stdout.trim()}`,
-    );
-  }
-  return result.stdout.length === 0;
-}
-
-// Tracked-only dirt for collection: staged or unstaged changes represented by
-// the index/worktree relationship, including staged additions and tracked
-// deletions. Untracked and ignored paths — runtime files, caches, ignored
-// empty directories — are disposable collection state and are excluded with
-// --untracked-files=no, so they cannot by themselves produce dirty_worktree.
+// Generic Collab dirt is tracked-only: staged and unstaged tracked changes
+// count, while ordinary untracked and ignored paths do not.
 async function hasTrackedDirt(
   repo: Repository,
   worktree: string,
@@ -604,7 +563,7 @@ async function warnManagedWorktree(
     warnings.push(`${label} worktree identity does not match managed refs`);
     return;
   }
-  if (await isDirty(repo, expectedPath, signal)) warnings.push(`${label} worktree is dirty`);
+  if (await hasTrackedDirt(repo, expectedPath, signal)) warnings.push(`${label} worktree is dirty`);
 }
 
 async function taskIds(repo: Repository, signal?: AbortSignal): Promise<string[]> {
@@ -855,17 +814,16 @@ async function compensateAdoption(
           candidate.branch === integrationRef &&
           candidate.HEAD === sourceSha,
       );
-      if (record && (await isFullyClean(repo, task.integrationPath))) {
+      if (record) {
         const removal = await repo.git(repo.worktreeRoot, [
           "worktree",
           "remove",
-          "--force",
           task.integrationPath,
         ]);
         removedWorktree = removal.code === 0;
       }
     } catch {
-      // Never remove a worktree when its identity or cleanliness is uncertain.
+      // Preserve the worktree when its identity is uncertain or Git refuses removal.
     }
   }
 
@@ -1003,15 +961,24 @@ async function integrationCreate(
       repo.worktreeRoot,
       ["update-ref", "-d", task.integrationBaseRef, head],
     );
-    await repo.git(repo.worktreeRoot, ["worktree", "remove", "--force", task.integrationPath]);
-    await repo.git(
+    const removedWorktree = await repo.git(
       repo.worktreeRoot,
-      ["update-ref", "-d", `refs/heads/${task.integrationBranch}`, head],
+      ["worktree", "remove", task.integrationPath],
     );
+    if (removedWorktree.code === 0) {
+      await removeEmptyDirectory(task.integrationPath);
+    }
     try {
-      await rm(task.integrationPath, { recursive: true, force: true });
+      const integrationRef = `refs/heads/${task.integrationBranch}`;
+      const records = await worktreeRecords(repo);
+      if (
+        !records.some((record) => record.branch === integrationRef) &&
+        (await commitAt(repo, integrationRef)) === head
+      ) {
+        await repo.git(repo.worktreeRoot, ["update-ref", "-d", integrationRef, head]);
+      }
     } catch {
-      // The parent may itself be the failing obstruction; preserve it.
+      // Preserve a branch when its identity or registration is uncertain.
     }
     try {
       await rmdir(task.root);
@@ -1138,7 +1105,7 @@ async function integrationAdopt(
         `canonical integration arrangement for task ${taskId} is incomplete or colliding`,
       );
     }
-    if (!(await isFullyClean(repo, task.integrationPath, signal))) {
+    if (await hasTrackedDirt(repo, task.integrationPath, signal)) {
       throw new CollabOpError(
         "task_resource_collision",
         "canonical integration worktree is not clean",
@@ -1554,122 +1521,6 @@ function boundedGitText(value: string): string {
   return text.length > 512 ? `${text.slice(0, 512)}…` : text;
 }
 
-// Git merge failures report disposable worktree paths that block the merge in
-// human-readable form that is lossy for exactly the names that matter: control
-// bytes are printed as `?`, embedded newlines break the one-path-per-line
-// layout, and special names are quoted in some git diagnostics. The blocking
-// paths are therefore derived from NUL-safe git inventories and the tree-level
-// merge result instead; the message text is used only as a boolean gate for
-// the two known failure shapes.
-const UNTRACKED_OVERWRITE_MESSAGE =
-  "The following untracked working tree files would be overwritten by merge:";
-const UNTRACKED_DIRECTORY_MESSAGE =
-  "Updating the following directories would lose untracked files in them:";
-
-function reportsBlockingUntracked(messages: string): boolean {
-  return (
-    messages.includes(UNTRACKED_OVERWRITE_MESSAGE) ||
-    messages.includes(UNTRACKED_DIRECTORY_MESSAGE)
-  );
-}
-
-function splitNulPaths(stdout: string): string[] {
-  const paths = stdout.split("\0");
-  if (paths.at(-1) === "") paths.pop();
-  return paths;
-}
-
-// The disposable lane paths the sync merge would write over or through:
-// non-ignored untracked worktree files only (ignored files never block the
-// merge), matched against the files the tree-level merge result writes.
-// Returns null when the derivation cannot be made safely, which leaves the
-// failed merge to surface as a git error unchanged.
-async function blockingDisposableLanePaths(
-  repo: Repository,
-  worktree: string,
-  laneSha: string,
-  integrationTip: string,
-  signal?: AbortSignal,
-): Promise<string[] | null> {
-  const untrackedResult = await repo.git(
-    worktree,
-    ["ls-files", "--others", "--exclude-standard", "-z"],
-    signal,
-  );
-  if (untrackedResult.code !== 0) return null;
-  const untracked = splitNulPaths(untrackedResult.stdout);
-  if (untracked.length === 0) return [];
-
-  // The tree-level merge result, computed without touching any worktree; even
-  // a conflicted merge reports its result tree on the first output line.
-  const mergeTreeResult = await repo.git(
-    worktree,
-    ["merge-tree", "--write-tree", laneSha, integrationTip],
-    signal,
-  );
-  if (mergeTreeResult.code > 1) return null;
-  const resultTree = mergeTreeResult.stdout.split("\n", 1)[0].trim();
-  const oidLength = (await repositoryObjectFormat(repo, signal)) === "sha256" ? 64 : 40;
-  if (!new RegExp(`^[0-9a-f]{${oidLength}}$`, "u").test(resultTree)) return null;
-
-  // Files the merge writes into the worktree: present in the result tree with
-  // content different from the lane tip.
-  const writtenResult = await repo.git(
-    worktree,
-    ["diff", "--name-only", "-z", "--diff-filter=ACMRT", laneSha, resultTree],
-    signal,
-  );
-  if (writtenResult.code !== 0) return null;
-  const written = splitNulPaths(writtenResult.stdout);
-
-  // Leaf paths of the result tree: a written path that shadows a worktree
-  // directory is a file replacement only when that path is a leaf.
-  const leavesResult = await repo.git(
-    worktree,
-    ["ls-tree", "-r", "--name-only", "-z", resultTree],
-    signal,
-  );
-  if (leavesResult.code !== 0) return null;
-  const leaves = new Set(splitNulPaths(leavesResult.stdout));
-
-  const colliding: string[] = [];
-  for (const name of untracked) {
-    // Written over directly, or lying under a directory the merge replaces
-    // with a file, or standing where the merge must create a directory.
-    const overwritten = written.some(
-      (w) => name === w || (leaves.has(w) && name.startsWith(`${w}/`)),
-    );
-    const blocksDirectory = written.some((w) => w.startsWith(`${name}/`));
-    if (overwritten || blocksDirectory) colliding.push(name);
-  }
-  return colliding;
-}
-
-// Disposal is bounded to the exact managed worktree root: a path that would
-// escape the root after resolution is skipped, never acted on. Only paths
-// actually removed count as disposed; removing without force means a path that
-// is already gone is reported as not disposed rather than as a success.
-async function disposeWorktreePaths(
-  worktree: string,
-  names: readonly string[],
-): Promise<string[]> {
-  const root = path.resolve(worktree);
-  const prefix = `${root}${path.sep}`;
-  const disposed: string[] = [];
-  for (const name of names) {
-    const target = path.resolve(root, name);
-    if (target === root || !target.startsWith(prefix)) continue;
-    try {
-      await rm(target, { recursive: true });
-      disposed.push(name);
-    } catch {
-      // The path stays in place (or was already gone); its presence is then
-      // reflected in the merge failure that follows.
-    }
-  }
-  return disposed;
-}
-
 async function rollbackLaneReconcile(
   repo: Repository,
   task: TaskLayout,
@@ -1701,7 +1552,7 @@ async function rollbackLaneReconcile(
   }
   try {
     const current = await laneInventory(repo, task, laneId);
-    const clean = await isFullyClean(repo, current.lanePath);
+    const clean = !(await hasTrackedDirt(repo, current.lanePath));
     const conflicted = await hasMergeOrConflictState(repo, current.lanePath);
     const exact =
       current.branchTip === laneSha &&
@@ -1726,7 +1577,6 @@ async function syncLaneWithIntegration(
   laneSha: string,
   integrationTip: string,
   signal?: AbortSignal,
-  disposeBlockingDisposable = false,
 ): Promise<{
   state: "merged" | "conflicted";
   lane_sha?: string;
@@ -1740,34 +1590,9 @@ async function syncLaneWithIntegration(
     `Reconcile lane ${laneId} with integration`,
     integrationTip,
   ] as const;
-  const runMerge = (): Promise<GitResult> =>
-    repo.git(task.lanePath(laneId), mergeArgs, signal);
   let mergeResult: GitResult;
   try {
-    mergeResult = await runMerge();
-    if (mergeResult.code !== 0 && disposeBlockingDisposable) {
-      // A disposable lane path colliding with a tracked path the merge must
-      // write blocks the merge; collection may dispose it and retry once. The
-      // colliding paths are derived from NUL-safe git inventories, never by
-      // parsing path names out of the human-readable merge diagnostics.
-      const messages = `${mergeResult.stderr}\n${mergeResult.stdout}`;
-      if (reportsBlockingUntracked(messages)) {
-        const names = await blockingDisposableLanePaths(
-          repo,
-          task.lanePath(laneId),
-          laneSha,
-          integrationTip,
-          signal,
-        );
-        if (
-          names !== null &&
-          names.length > 0 &&
-          (await disposeWorktreePaths(task.lanePath(laneId), names)).length > 0
-        ) {
-          mergeResult = await runMerge();
-        }
-      }
-    }
+    mergeResult = await repo.git(task.lanePath(laneId), mergeArgs, signal);
   } catch (error) {
     const rollback = await rollbackLaneReconcile(repo, task, laneId, laneSha);
     throw new CollabOpError(
@@ -1848,7 +1673,7 @@ async function laneReconcile(
     );
   }
   const laneSha = lane.branchTip as string;
-  if (!(await isFullyClean(repo, lane.lanePath, signal))) {
+  if (await hasTrackedDirt(repo, lane.lanePath, signal)) {
     throw new CollabOpError(
       "dirty_worktree",
       "lane worktree is dirty",
@@ -2229,7 +2054,6 @@ async function laneCollect(
       laneSha,
       integration.tip,
       signal,
-      true,
     );
     if (synced.state === "conflicted") {
       const warnings = [
@@ -2378,13 +2202,11 @@ async function compensateCreatedLane(
     inventory.pathRecords[0].HEAD === tip &&
     inventory.pathDescendantRecords.length === 1 &&
     inventory.pathCustodySafe &&
-    isActualDirectory(inventory.laneMetadata) &&
-    await isFullyClean(repo, inventory.lanePath)
+    isActualDirectory(inventory.laneMetadata)
   ) {
     const removed = await repo.git(mutationCwd(repo), [
       "worktree",
       "remove",
-      "--force",
       inventory.lanePath,
     ]);
     if (removed.code === 0) {
@@ -2627,7 +2449,7 @@ async function integrationReconcile(
   const task = new TaskLayout(repo, taskId);
   const persistBranch = await taskPersistenceBranch(repo, task, signal);
   const integration = await requireManagedIntegration(controlRepository(repo), task, signal);
-  if (!(await isFullyClean(repo, task.integrationPath, signal))) {
+  if (await hasTrackedDirt(repo, task.integrationPath, signal)) {
     throw new CollabOpError(
       "dirty_worktree",
       "integration worktree is dirty",
@@ -2870,7 +2692,7 @@ async function laneAbandon(
     isActualDirectory(inventory.laneMetadata)
   ) {
     try {
-      dirty = await isDirty(repo, inventory.lanePath, signal);
+      dirty = await hasTrackedDirt(repo, inventory.lanePath, signal);
       conflicted = await hasMergeOrConflictState(repo, inventory.lanePath, signal);
     } catch {
       incomplete = true;
@@ -3018,19 +2840,22 @@ function pathOverlaps(left: string, right: string): boolean {
   );
 }
 
-// Refuse untracked or ignored dirt only when the accepted transition itself
-// would overwrite it, matching how ordinary Git merge treats D/F overlaps.
+// Refuse ordinary untracked paths only when the accepted transition itself
+// would overwrite them, matching git merge --squash treatment of D/F overlaps.
 // Writing a file at a changed path clobbers dirt at that path and any
-// directory standing where the file must land; deleting a changed path
-// leaves directories holding untracked content in place, so a deletion
-// collides only on the exact path.
+// directory standing where the file must land. A baseline tracked leaf that
+// was locally replaced by a directory is also a D/F obstruction when the
+// transition changes or deletes that leaf; deleting tracked paths beneath a
+// real baseline directory still leaves unrelated untracked siblings in place.
 function transitionOverwrites(
   dirty: string,
   changed: string,
+  baselinePaths: ReadonlySet<string>,
   writtenPaths: ReadonlySet<string>,
 ): boolean {
   if (!pathOverlaps(dirty, changed)) return false;
   if (dirty === changed) return true;
+  if (dirty.startsWith(`${changed}/`) && baselinePaths.has(changed)) return true;
   return writtenPaths.has(changed);
 }
 
@@ -3124,7 +2949,12 @@ type LandingPreflight = {
   mergedTree: string;
 };
 
-async function copyTrackedPath(
+type LandingWorktreeSnapshot = {
+  root: string;
+  paths: string[];
+};
+
+async function copyLandingPath(
   sourceRoot: string,
   destinationRoot: string,
   pathname: string,
@@ -3144,7 +2974,7 @@ async function copyTrackedPath(
   } else {
     throw new CollabOpError(
       "git_error",
-      `could not safely inspect tracked persistence path: ${pathname}`,
+      `could not safely inspect persistence path: ${pathname}`,
     );
   }
 }
@@ -3218,7 +3048,7 @@ async function landingPreflight(
     }
     worktreeAdded = true;
     for (const pathname of trackedPaths) {
-      await copyTrackedPath(persistencePath, temporary, pathname);
+      await copyLandingPath(persistencePath, temporary, pathname);
     }
     const added = await repo.git(temporary, ["add", "-u", "--"], signal);
     if (added.code !== 0) {
@@ -3308,6 +3138,105 @@ function maximalRestorePaths(paths: readonly string[]): string[] {
   return unique.filter((p) => !unique.some((q) => q !== p && p.startsWith(`${q}/`)));
 }
 
+// Find the exact existing roots that an accepted transition can rewrite. If
+// the transition path is absent because a file or symlink blocks one of its
+// ancestors, that obstruction is the root. Existing directories above an
+// absent path are not collisions and remain outside the snapshot.
+async function landingSnapshotPaths(
+  persistencePath: string,
+  transitionPaths: readonly string[],
+): Promise<string[]> {
+  const roots: string[] = [];
+  for (const pathname of maximalRestorePaths(transitionPaths)) {
+    let candidate = pathname;
+    while (candidate !== ".") {
+      const metadata = await pathMetadata(
+        path.join(persistencePath, ...candidate.split("/")),
+      );
+      if (metadata !== null) {
+        if (candidate === pathname || !metadata.isDirectory()) roots.push(candidate);
+        break;
+      }
+      candidate = path.posix.dirname(candidate);
+    }
+  }
+  return maximalRestorePaths(roots);
+}
+
+// Move filesystem roots aside without asking Git to enumerate ignored paths.
+// Renaming within the persistence filesystem preserves every inode kind Git
+// may overwrite, including FIFOs. The backup remains available until
+// publication succeeds or rollback has restored the original roots.
+async function snapshotLandingWorktree(
+  persistencePath: string,
+  transitionPaths: readonly string[],
+): Promise<LandingWorktreeSnapshot> {
+  const paths = await landingSnapshotPaths(persistencePath, transitionPaths);
+  const root = path.join(persistencePath, `.collab-land-rollback-${randomUUID()}`);
+  await mkdir(root, { mode: 0o700 });
+  const rootMetadata = await pathMetadata(root);
+  const moved: string[] = [];
+  try {
+    for (const pathname of paths) {
+      const source = path.join(persistencePath, ...pathname.split("/"));
+      const sourceMetadata = await pathMetadata(source);
+      if (sourceMetadata === null || sourceMetadata.dev !== rootMetadata?.dev) {
+        throw new Error(`persistence path cannot be moved atomically: ${pathname}`);
+      }
+      const backup = path.join(root, ...pathname.split("/"));
+      await mkdir(path.dirname(backup), { recursive: true });
+      await rename(source, backup);
+      moved.push(pathname);
+    }
+    return { root, paths };
+  } catch (error) {
+    let restorationError: string | null = null;
+    for (const pathname of moved.reverse()) {
+      const backup = path.join(root, ...pathname.split("/"));
+      const destination = path.join(persistencePath, ...pathname.split("/"));
+      try {
+        if ((await pathMetadata(destination)) !== null) {
+          throw new Error(`persistence path reappeared during snapshot: ${pathname}`);
+        }
+        await mkdir(path.dirname(destination), { recursive: true });
+        await rename(backup, destination);
+      } catch (restoreError) {
+        restorationError ??= boundedGitText(
+          restoreError instanceof Error ? restoreError.message : String(restoreError),
+        );
+      }
+    }
+    if (restorationError === null) {
+      await rm(root, { recursive: true, force: true });
+    }
+    throw new CollabOpError(
+      "git_error",
+      `could not snapshot persistence paths for landing rollback: ${boundedGitText(error instanceof Error ? error.message : String(error))}`,
+      undefined,
+      restorationError === null ? undefined : { restoration_error: restorationError },
+    );
+  }
+}
+
+async function restoreLandingSnapshot(
+  persistencePath: string,
+  snapshot: LandingWorktreeSnapshot,
+): Promise<void> {
+  for (const pathname of snapshot.paths) {
+    const backup = path.join(snapshot.root, ...pathname.split("/"));
+    const destination = path.join(persistencePath, ...pathname.split("/"));
+    await rm(destination, { recursive: true, force: true });
+    await mkdir(path.dirname(destination), { recursive: true });
+    await rename(backup, destination);
+  }
+}
+
+async function discardLandingSnapshot(
+  snapshot: LandingWorktreeSnapshot,
+): Promise<void> {
+  await rm(snapshot.root, { recursive: true, force: true });
+}
+
 // Apply the preflight-proven tracked tree over exactly the accepted
 // transition paths, then put the accepted integration tree in the index.
 // Scoping the worktree restore keeps unchanged paths — including local
@@ -3355,6 +3284,7 @@ async function rollbackLanding(
   beforeTree: string,
   oursTree: string,
   transitionPaths: readonly string[],
+  worktreeSnapshot: LandingWorktreeSnapshot,
   landingSha: string | null,
   previousLanded: string | null,
   signal?: AbortSignal,
@@ -3366,6 +3296,7 @@ async function rollbackLanding(
   let branchRestored = false;
   let landedRestored = false;
   let worktreeRestored = false;
+  let snapshotRestored = false;
   try {
     const current = await commitAt(controlRepository(repo), persistBranch.ref, signal);
     if (current === beforeSha) {
@@ -3421,6 +3352,12 @@ async function rollbackLanding(
     evidence.worktree_restore_error = boundedGitText(error instanceof Error ? error.message : String(error));
   }
   try {
+    await restoreLandingSnapshot(persistencePath, worktreeSnapshot);
+    snapshotRestored = true;
+  } catch (error) {
+    evidence.path_snapshot_restore_error = boundedGitText(error instanceof Error ? error.message : String(error));
+  }
+  try {
     evidence.persistence_sha_after = await commitAt(controlRepository(repo), persistBranch.ref, signal);
     evidence.landed_sha_after = await commitAt(controlRepository(repo), task.landedRef, signal);
     evidence.persistence_index_tree = await requireGit(
@@ -3436,6 +3373,7 @@ async function rollbackLanding(
     branchRestored &&
     landedRestored &&
     worktreeRestored &&
+    snapshotRestored &&
     evidence.persistence_sha_after === beforeSha &&
     evidence.landed_sha_after === previousLanded &&
     evidence.persistence_index_tree === beforeTree;
@@ -3508,11 +3446,13 @@ async function integrationLand(
     ["ls-files", "--others", "--exclude-standard", "-z", "--"],
     signal,
   );
-  const ignoredDirt = await nulPathList(
-    repo,
-    persistence.record.worktree!,
-    ["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--"],
-    signal,
+  const baselinePaths = new Set(
+    await nulPathList(
+      repo,
+      controlRepository(repo).worktreeRoot,
+      ["ls-tree", "-r", "--name-only", "-z", persistence.tip],
+      signal,
+    ),
   );
   const integrationPaths = new Set(
     await nulPathList(
@@ -3522,16 +3462,15 @@ async function integrationLand(
       signal,
     ),
   );
-  const untrackedCollisions = [...ordinaryUntracked, ...ignoredDirt].filter(
-    (dirty) =>
-      changedPaths.some((changed) =>
-        transitionOverwrites(dirty, changed, integrationPaths),
-      ),
+  const untrackedCollisions = ordinaryUntracked.filter((dirty) =>
+    changedPaths.some((changed) =>
+      transitionOverwrites(dirty, changed, baselinePaths, integrationPaths),
+    ),
   );
   if (untrackedCollisions.length > 0) {
     throw new CollabOpError(
       "path_collision",
-      "untracked or ignored persistence dirt collides with the integration tree",
+      "untracked persistence path collides with the integration tree",
       "Move or clean the colliding persistence paths before landing.",
       { paths: [...new Set(untrackedCollisions)].slice(0, 32) },
     );
@@ -3544,6 +3483,10 @@ async function integrationLand(
     persistence.tip,
     integrationSha,
     signal,
+  );
+  const worktreeSnapshot = await snapshotLandingWorktree(
+    persistence.record.worktree!,
+    changedPaths,
   );
 
   let landingSha: string | null = null;
@@ -3639,10 +3582,12 @@ async function integrationLand(
       beforeTree,
       preflight.oursTree,
       changedPaths,
+      worktreeSnapshot,
       landingSha,
       previousLanded,
       signal,
     );
+    await discardLandingSnapshot(worktreeSnapshot);
     throw new CollabOpError(
       "git_error",
       error instanceof Error ? error.message : String(error),
@@ -3650,11 +3595,10 @@ async function integrationLand(
       { rollback },
     );
   }
+  await discardLandingSnapshot(worktreeSnapshot);
 
   const warnings: string[] = [];
   if (trackedDirt.length > 0) warnings.push("preserved unstaged tracked changes");
-  if (ordinaryUntracked.length > 0) warnings.push("preserved untracked files");
-  if (ignoredDirt.length > 0) warnings.push("preserved ignored files");
   const telemetryWarning = await recordEvent(task, "integration-land", "success", {
     integration_sha: integrationSha,
     persistence_sha: landingSha,
@@ -4628,7 +4572,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration_remove",
     label: "Remove Collab integration",
-    description: "Best-effort removal of a task's recognizable managed integration resources.",
+    description: "Best-effort force-removal of a task's recognizable managed integration resources.",
     parameters: registeredIntegrationRemoveParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
@@ -4810,7 +4754,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_lane_drop",
     label: "Drop Collab lane",
-    description: "Best-effort removal of a Git-managed lane and its recognizable resources.",
+    description: "Best-effort force-removal of a Git-managed lane and its recognizable resources.",
     parameters: registeredLaneDropParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(

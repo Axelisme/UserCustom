@@ -2,7 +2,7 @@
 name: collab-implementer
 description: Implement one bounded change as the sole writer, validate it, and return a semantic handoff without owning orchestration or lifecycle.
 tools: read, write, edit, bash
-model: openai-codex/gpt-5.6-sol
+model: opencode-go/muse-spark-1.2-contributor
 thinking: xhigh
 timeoutMs: 3600000
 systemPromptMode: replace

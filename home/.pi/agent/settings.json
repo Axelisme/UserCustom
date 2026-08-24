@@ -1,20 +1,20 @@
 {
   "theme": "dark",
-  "defaultProvider": "opencode-go",
-  "defaultModel": "muse-spark-1.2-contributor",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.6-sol",
   "defaultThinkingLevel": "high",
   "packages": [
     "/home/axel/Documents/VSCode/Typescript/pi-goal",
     "/home/axel/Documents/VSCode/Typescript/pi-simple-tasks",
     "/home/axel/Documents/VSCode/Typescript/pi-handoff-context",
     "/home/axel/Documents/VSCode/Typescript/cache-stats",
+    "/home/axel/Documents/VSCode/Typescript/pi-subagents",
     "npm:pi-mcp-adapter",
     "npm:pi-openai-fast-mode",
     {
       "source": "npm:pi-web-access",
       "extensions": []
     },
-    "npm:pi-subagents@0.47.1",
     "npm:pi-claude-code-ui"
   ],
   "lastChangelogVersion": "0.84.2",
@@ -24,6 +24,6 @@
     "openai-codex/gpt-5.6-terra",
     "opencode-go/deepseek-v4-flash",
     "opencode-go/muse-spark-1.2-contributor",
-    "opencode-go/ox-alpha-free"
+    "stealth/ox-alpha"
   ]
 }

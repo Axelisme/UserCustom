@@ -96,6 +96,185 @@ function gitRunner(pi: ExtensionAPI): GitRunner {
 
 const TASK_LOCK_TTL_MS = 24 * 60 * 60 * 1000;
 
+const LANE_CREATE_BOUNDED_WAIT_MS = 10_000;
+const LANE_CREATE_POLL_MS = 25;
+
+/**
+ * Task mutation lock Module
+ *
+ * Fail-fast default: withTaskLock without a bounded-wait policy attempts the filesystem lock immediately and throws task_busy if held.
+ * Lane-create-only bounded-wait: only registered collab_lane_create may pass { policy: "bounded-wait", signal, timeoutMs: 10000 } to wait.
+ * FIFO boundary: one process-local FIFO per canonical repository control root (path.resolve) and taskId; only its head polls the ownership-safe filesystem lock at a short bounded interval; no fairness promise against another OS process.
+ * Cancellation: an AbortSignal abort removes only that waiter, returns request_aborted, and advances the next eligible waiter without cancelling siblings.
+ * Timeout: a fixed ten-second deadline returns the existing task_busy error with bounded wait facts (task_id, waited_ms, timeout_ms) without mutation or leaked queue state.
+ * Ownership-safe release: release uses quarantine-and-verify by inode and token, never unlinking the canonical path, restoring foreign replacements or retaining on conflict.
+ * Placement revalidation: lane placement (laneCreate) retains per-call request/signal/receipt/error and, after acquisition, re-reads requireManagedIntegration and laneInventory under the held lock before any mutation.
+ */
+
+type TaskLockOptions = {
+  policy?: "fail-fast" | "bounded-wait";
+  signal?: AbortSignal;
+  timeoutMs?: number;
+};
+
+type TaskLockWaiter<T> = {
+  id: string;
+  repo: Repository;
+  taskId: string;
+  key: string;
+  body: () => Promise<T>;
+  signal?: AbortSignal;
+  deadline: number;
+  startedAt: number;
+  resolve: (value: T) => void;
+  reject: (reason: unknown) => void;
+};
+
+const taskLockQueues = new Map<string, Array<TaskLockWaiter<unknown>>>();
+
+function taskLockQueueKey(repo: Repository, taskId: string): string {
+  return `${path.resolve(repo.controlRoot)}\0${taskId}`;
+}
+
+async function processTaskLockQueue(key: string): Promise<void> {
+  const queue = taskLockQueues.get(key);
+  if (!queue || queue.length === 0) {
+    taskLockQueues.delete(key);
+    return;
+  }
+  const waiter = queue[0] as TaskLockWaiter<unknown>;
+  const startedAt = waiter.startedAt;
+  const deadline = waiter.deadline;
+  const taskId = waiter.taskId;
+  const advance = () => {
+    const q = taskLockQueues.get(key);
+    if (!q) return;
+    if (q.length === 0) taskLockQueues.delete(key);
+    else setTimeout(() => void processTaskLockQueue(key), 0);
+  };
+  while (true) {
+    const abortBeforeAttempt = waiter.signal?.aborted;
+    if (abortBeforeAttempt) {
+      const q = taskLockQueues.get(key);
+      if (q && q[0] === waiter) {
+        q.shift();
+        const handler = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
+        if (handler && waiter.signal) {
+          try { waiter.signal.removeEventListener("abort", handler); } catch {}
+        }
+        waiter.reject(new CollabOpError("request_aborted", "request was aborted", "Retry the operation after the caller is ready.", { task_id: taskId }));
+        advance();
+      }
+      return;
+    }
+    const now = Date.now();
+    if (now >= deadline) {
+      const q = taskLockQueues.get(key);
+      if (q && q[0] === waiter) {
+        q.shift();
+        const handler = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
+        if (handler && waiter.signal) {
+          try { waiter.signal.removeEventListener("abort", handler); } catch {}
+        }
+        const waitedMs = now - startedAt;
+        waiter.reject(new CollabOpError("task_busy", `another collab operation is in progress for task ${taskId}`, "Wait for the in-flight operation to finish, then retry.", { task_id: taskId, waited_ms: waitedMs, timeout_ms: LANE_CREATE_BOUNDED_WAIT_MS }));
+        advance();
+      }
+      return;
+    }
+    try {
+      const acquired = await acquireTaskLock(waiter.repo, waiter.taskId);
+      const lockedQueue = taskLockQueues.get(key);
+      const stillHead = !!lockedQueue && lockedQueue[0] === waiter;
+      if (!stillHead) {
+        try { await releaseTaskLock(acquired.lockPath, acquired.token); } catch {}
+        return;
+      }
+      if (waiter.signal?.aborted) {
+        try { await releaseTaskLock(acquired.lockPath, acquired.token); } catch {}
+        lockedQueue!.shift();
+        const handler = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
+        if (handler && waiter.signal) {
+          try { waiter.signal.removeEventListener("abort", handler); } catch {}
+        }
+        waiter.reject(new CollabOpError("request_aborted", "request was aborted", "Retry the operation after the caller is ready.", { task_id: taskId }));
+        advance();
+        return;
+      }
+      if (Date.now() >= waiter.deadline) {
+        try { await releaseTaskLock(acquired.lockPath, acquired.token); } catch {}
+        lockedQueue!.shift();
+        const handler = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
+        if (handler && waiter.signal) {
+          try { waiter.signal.removeEventListener("abort", handler); } catch {}
+        }
+        const waitedMs = Date.now() - startedAt;
+        waiter.reject(new CollabOpError("task_busy", `another collab operation is in progress for task ${taskId}`, "Wait for the in-flight operation to finish, then retry.", { task_id: taskId, waited_ms: waitedMs, timeout_ms: LANE_CREATE_BOUNDED_WAIT_MS }));
+        advance();
+        return;
+      }
+      let bodyResult: unknown;
+      let bodyError: unknown;
+      let bodySucceeded = false;
+      try {
+        bodyResult = await waiter.body();
+        bodySucceeded = true;
+      } catch (e) {
+        bodyError = e;
+      }
+      try { await releaseTaskLock(acquired.lockPath, acquired.token); } catch {}
+      const q2 = taskLockQueues.get(key);
+      if (q2 && q2[0] === waiter) q2.shift();
+      else if (q2) {
+        const idx = q2.indexOf(waiter);
+        if (idx !== -1) q2.splice(idx, 1);
+      }
+      const handler2 = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
+      if (handler2 && waiter.signal) {
+        try { waiter.signal.removeEventListener("abort", handler2); } catch {}
+      }
+      if (bodySucceeded) waiter.resolve(bodyResult as unknown);
+      else waiter.reject(bodyError);
+      advance();
+      return;
+    } catch (error) {
+      if (error instanceof CollabOpError && error.code === "task_busy") {
+        const q = taskLockQueues.get(key);
+        if (!q || q[0] !== waiter) return;
+        if (waiter.signal?.aborted) {
+          q.shift();
+          const handler = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
+          if (handler && waiter.signal) {
+            try { waiter.signal.removeEventListener("abort", handler); } catch {}
+          }
+          waiter.reject(new CollabOpError("request_aborted", "request was aborted", "Retry the operation after the caller is ready.", { task_id: taskId }));
+          advance();
+          return;
+        }
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) continue;
+        const sleepMs = Math.min(LANE_CREATE_POLL_MS, remaining);
+        await new Promise<void>(resolve => setTimeout(resolve, sleepMs));
+        continue;
+      } else {
+        const q = taskLockQueues.get(key);
+        if (q && q[0] === waiter) q.shift();
+        else if (q) {
+          const idx = q.indexOf(waiter);
+          if (idx !== -1) q.splice(idx, 1);
+        }
+        const handler = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
+        if (handler && waiter.signal) {
+          try { waiter.signal.removeEventListener("abort", handler); } catch {}
+        }
+        waiter.reject(error);
+        advance();
+        return;
+      }
+    }
+  }
+}
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -362,13 +541,52 @@ export async function withTaskLock<T>(
   repo: Repository,
   taskId: string,
   body: () => Promise<T>,
+  options?: TaskLockOptions,
 ): Promise<T> {
-  const { lockPath, token } = await acquireTaskLock(repo, taskId);
-  try {
-    return await body();
-  } finally {
-    await releaseTaskLock(lockPath, token);
+  const policy = options?.policy;
+  if (policy !== "bounded-wait") {
+    const { lockPath, token } = await acquireTaskLock(repo, taskId);
+    try {
+      return await body();
+    } finally {
+      await releaseTaskLock(lockPath, token);
+    }
   }
+  const signal = options?.signal;
+  const timeoutMs = options?.timeoutMs ?? LANE_CREATE_BOUNDED_WAIT_MS;
+  if (signal?.aborted) {
+    throw new CollabOpError("request_aborted", "request was aborted", "Retry the operation after the caller is ready.", { task_id: taskId });
+  }
+  const key = taskLockQueueKey(repo, taskId);
+  const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
+  return new Promise<T>((resolve, reject) => {
+    const waiter: TaskLockWaiter<T> = { id: randomUUID(), repo, taskId, key, body, signal, deadline, startedAt, resolve, reject };
+    let queue = taskLockQueues.get(key);
+    if (!queue) { queue = []; taskLockQueues.set(key, queue); }
+    queue.push(waiter as unknown as TaskLockWaiter<unknown>);
+    let abortHandler: (() => void) | undefined;
+    if (signal) {
+      abortHandler = () => {
+        const q = taskLockQueues.get(key);
+        if (!q) return;
+        const idx = q.indexOf(waiter as unknown as TaskLockWaiter<unknown>);
+        if (idx === -1) return;
+        q.splice(idx, 1);
+        if (q.length === 0) taskLockQueues.delete(key);
+        try { signal.removeEventListener("abort", abortHandler!); } catch {}
+        (waiter as unknown as { __abortHandler?: unknown }).__abortHandler = undefined;
+        waiter.reject(new CollabOpError("request_aborted", "request was aborted", "Retry the operation after the caller is ready.", { task_id: taskId }));
+        if (idx === 0) {
+          const remaining = taskLockQueues.get(key);
+          if (remaining && remaining.length > 0) setTimeout(() => void processTaskLockQueue(key), 0);
+        }
+      };
+      (waiter as unknown as { __abortHandler?: () => void }).__abortHandler = abortHandler;
+      signal.addEventListener("abort", abortHandler, { once: true });
+    }
+    if (queue.length === 1) void processTaskLockQueue(key);
+  });
 }
 
 async function requireGit(
@@ -3660,6 +3878,344 @@ type RemovalReportSnapshot = {
   landedSha: string | null;
 };
 
+async function computeLaneLoopCoverage(repoControlRoot: string, taskId: string): Promise<{ coverage: Record<string, unknown>; warnings: string[] }> {
+  const warnings: string[] = [];
+  const bounded = (msg: string) => msg.replace(/[\r\n]+/g, " ").slice(0, 300);
+  // Resolve task container
+  const plans = path.join(repoControlRoot, ".agent_state", "plans", taskId);
+  const archives = path.join(repoControlRoot, ".agent_state", "archives", taskId);
+  const safeCheck = async (p: string) => {
+    try {
+      const r = path.resolve(repoControlRoot);
+      const t = path.resolve(p);
+      if (t === r || t.startsWith(r + path.sep)) return r;
+      return path.parse(t).root;
+    } catch { return path.parse(path.resolve(p)).root; }
+  };
+  const isAnc = async (p: string) => {
+    const trusted = await safeCheck(p);
+    const rel = path.relative(trusted, path.resolve(p));
+    if (rel.startsWith("..") || path.isAbsolute(rel)) return false;
+    const parts = rel.split(path.sep).filter(Boolean);
+    let cur = trusted;
+    for (const part of parts) {
+      cur = path.join(cur, part);
+      try {
+        const m = await lstat(cur);
+        if (m.isSymbolicLink()) return false;
+      } catch (e) {
+        const err = e as NodeJS.ErrnoException;
+        if (err.code === "ENOENT" || err.code === "ENOTDIR") continue;
+        throw e;
+      }
+    }
+    return true;
+  };
+  const plansSafe = await isAnc(plans);
+  const archivesSafe = await isAnc(archives);
+  const plansMeta = plansSafe ? await (async () => { try { return await lstat(plans); } catch (e) { const err = e as NodeJS.ErrnoException; if (err.code === "ENOENT" || err.code === "ENOTDIR") return null; throw e; } })() : null;
+  const archivesMeta = archivesSafe ? await (async () => { try { return await lstat(archives); } catch (e) { const err = e as NodeJS.ErrnoException; if (err.code === "ENOENT" || err.code === "ENOTDIR") return null; throw e; } })() : null;
+  const plansIsDir = plansMeta?.isDirectory() === true && !plansMeta.isSymbolicLink();
+  const archivesIsDir = archivesMeta?.isDirectory() === true && !archivesMeta.isSymbolicLink();
+  let container: string | null = null;
+  if (plansIsDir && !archivesIsDir) container = plans;
+  else if (!plansIsDir && archivesIsDir) container = archives;
+  else if (plansIsDir && archivesIsDir) {
+    warnings.push(`ambiguous task container for ${taskId}`);
+    container = null;
+  }
+  if (!container) {
+    return { coverage: { manifest_workflows: 0, known_steps: 0, published_reports: 0, warning_only_steps: 0, unavailable_steps: 0, legacy_reports: 0, workflow_warnings: 0 }, warnings };
+  }
+  const coverageDir = path.join(container, ".collab_op", "lane_loop_report", "coverage");
+  const reportRoot = path.join(container, ".collab_op", "lane_loop_report");
+  let manifestFiles: string[] = [];
+  try {
+    const entries = await readdir(coverageDir, { withFileTypes: true });
+    for (const e of entries) {
+      if (e.isSymbolicLink()) { if (warnings.length < 32) warnings.push(`coverage source contains symlink: ${path.join(coverageDir, e.name)}`); continue; }
+      if (e.isFile() && e.name.endsWith(".json")) manifestFiles.push(e.name);
+      else if (e.isDirectory()) { if (warnings.length < 32) warnings.push(`coverage source contains unexpected directory: ${e.name}`); }
+      else if (!e.isFile()) { if (warnings.length < 32) warnings.push(`coverage source contains unsupported entry: ${e.name}`); }
+    }
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException;
+    if (err.code !== "ENOENT" && err.code !== "ENOTDIR") {
+      if (warnings.length < 32) warnings.push(`cannot read coverage dir: ${bounded(String(e))}`);
+    }
+    manifestFiles = [];
+  }
+  let manifestWorkflows = 0;
+  let knownSteps = 0;
+  let publishedReports = 0;
+  let warningOnlySteps = 0;
+  let unavailableSteps = 0;
+  const manifestSteps = new Map<string, string>();
+  const manifestIds = new Set<string>();
+  const foundReports = new Map<string, number>(); // key -> version
+  // First pass: read manifests and validate
+  for (const file of manifestFiles) {
+    const full = path.join(coverageDir, file);
+    let content: string;
+    try { content = await readFile(full, "utf8"); } catch (e) { if (warnings.length < 32) warnings.push(`cannot read manifest ${file}: ${bounded(String((e as Error).message))}`); continue; }
+    let obj: unknown;
+    try { obj = JSON.parse(content); } catch (e) { if (warnings.length < 32) warnings.push(`malformed manifest ${file}: ${bounded(String((e as Error).message))}`); continue; }
+    // Validation boundary: parsed JSON must be a non-null plain object before any field access (covers root null, arrays, primitives)
+    if (obj === null || typeof obj !== "object" || Array.isArray(obj)) {
+      if (warnings.length < 32) warnings.push(`malformed manifest ${file}: invalid shape`);
+      continue;
+    }
+    const manifestObj = obj as Record<string, unknown>;
+    // Validate shape
+    if (typeof manifestObj["coverageVersion"] !== "number" || typeof manifestObj["workflowId"] !== "string" || typeof manifestObj["knownSteps"] !== "number" || typeof manifestObj["publishedReports"] !== "number" || typeof manifestObj["warningOnlySteps"] !== "number" || typeof manifestObj["unavailableSteps"] !== "number" || !Array.isArray(manifestObj["steps"])) {
+      if (warnings.length < 32) warnings.push(`malformed manifest ${file}: invalid shape`);
+      continue;
+    }
+    const workflowId = manifestObj["workflowId"] as string;
+    const known = manifestObj["knownSteps"] as number;
+    const pub = manifestObj["publishedReports"] as number;
+    const warnOnly = manifestObj["warningOnlySteps"] as number;
+    const unavail = manifestObj["unavailableSteps"] as number;
+    const steps = manifestObj["steps"] as Array<unknown>;
+    // Manifest validation: require current supported coverage version, required taskId matching requested task, filename stem matching workflowId, finite non-negative integer totals
+    const coverageVersion = manifestObj["coverageVersion"] as number;
+    if (!Number.isFinite(coverageVersion) || !Number.isInteger(coverageVersion) || coverageVersion !== 1) {
+      if (warnings.length < 32) warnings.push(bounded(`unsupported coverageVersion ${String(coverageVersion)} in manifest ${file}`).slice(0, 300));
+      continue;
+    }
+    if (typeof manifestObj["taskId"] !== "string" || manifestObj["taskId"] !== taskId) {
+      if (warnings.length < 32) warnings.push(bounded(`missing or mismatched taskId for manifest ${file}: expected ${taskId} got ${String(manifestObj["taskId"])}`).slice(0, 300));
+      continue;
+    }
+    const filenameStem = path.basename(file, ".json");
+    if (filenameStem !== workflowId) {
+      if (warnings.length < 32) warnings.push(bounded(`filename/workflowId mismatch for manifest ${file}: filename ${filenameStem} != workflowId ${workflowId}`).slice(0, 300));
+      continue;
+    }
+    const totals = [known, pub, warnOnly, unavail];
+    let totalsInvalid = false;
+    let totalsReason: string | null = null;
+    for (const total of totals) {
+      if (!Number.isFinite(total)) { totalsInvalid = true; totalsReason = "non-finite"; break; }
+      if (!Number.isInteger(total)) { totalsInvalid = true; totalsReason = "non-integer"; break; }
+      if (total < 0) { totalsInvalid = true; totalsReason = "negative"; break; }
+    }
+    if (totalsInvalid) {
+      if (warnings.length < 32) warnings.push(bounded(`manifest ${file} has non-finite/non-integer/negative totals (${totalsReason}): knownSteps ${String(known)} publishedReports ${String(pub)} warningOnlySteps ${String(warnOnly)} unavailableSteps ${String(unavail)}`).slice(0, 300));
+      continue;
+    }
+    if (manifestIds.has(workflowId)) {
+      if (warnings.length < 32) warnings.push(`duplicate manifest for workflow ${workflowId}`);
+      continue;
+    }
+    // Check duplicate step identities within manifest and classification validity
+    const seenStepKeys = new Set<string>();
+    let malformed = false;
+    for (const step of steps) {
+      // Validation boundary: each step must be a non-null plain object before any field access (covers null and non-object steps)
+      if (step === null || typeof step !== "object" || Array.isArray(step)) {
+        if (warnings.length < 32) warnings.push(`malformed manifest ${file}: invalid step`);
+        malformed = true; break;
+      }
+      const stepObj = step as Record<string, unknown>;
+      if (typeof stepObj["workflowKey"] !== "string" || typeof stepObj["childRunId"] !== "string" || typeof stepObj["classification"] !== "string") {
+        if (warnings.length < 32) warnings.push(`malformed manifest ${file}: invalid step`);
+        malformed = true; break;
+      }
+      const wk = stepObj["workflowKey"] as string;
+      const cr = stepObj["childRunId"] as string;
+      const cl = stepObj["classification"] as string;
+      if (!/^impl-/.test(wk) && !/^review-/.test(wk)) { if (warnings.length < 32) warnings.push(`malformed manifest ${file}: unknown workflowKey ${wk}`); malformed = true; break; }
+      if (!["published", "warning-only", "unavailable"].includes(cl)) { if (warnings.length < 32) warnings.push(`malformed manifest ${file}: invalid classification ${cl}`); malformed = true; break; }
+      const key = `${wk}\0${cr}`;
+      if (seenStepKeys.has(key)) { if (warnings.length < 32) warnings.push(`duplicate step identity ${wk}/${cr} in manifest ${file}`); malformed = true; break; }
+      seenStepKeys.add(key);
+    }
+    if (malformed) continue;
+    // Derive totals from step classifications; emit bounded warning if declared totals contradict, but reconcile from classifications
+    let derivedPublished = 0;
+    let derivedWarningOnly = 0;
+    let derivedUnavailable = 0;
+    for (const s of steps) {
+      const cl = (s as Record<string, unknown>)["classification"] as string;
+      if (cl === "published") derivedPublished++;
+      else if (cl === "warning-only") derivedWarningOnly++;
+      else if (cl === "unavailable") derivedUnavailable++;
+    }
+    const derivedKnown = steps.length;
+    const declaredTotalsContradict = (known !== derivedKnown) || (pub !== derivedPublished) || (warnOnly !== derivedWarningOnly) || (unavail !== derivedUnavailable) || (known !== pub + warnOnly + unavail) || (steps.length !== known);
+    if (declaredTotalsContradict) {
+      if (warnings.length < 32) {
+        const msg = `manifest ${file} declared totals contradict classifications: knownSteps ${known} published ${pub} warningOnly ${warnOnly} unavailable ${unavail} vs derived knownSteps ${derivedKnown} published ${derivedPublished} warningOnly ${derivedWarningOnly} unavailable ${derivedUnavailable}`;
+        warnings.push(msg.slice(0, 300));
+      }
+    }
+    // Use derived totals for reconciliation; do not trust contradictory declared values
+    const effectiveKnown = derivedKnown;
+    const effectivePub = derivedPublished;
+    const effectiveWarnOnly = derivedWarningOnly;
+    const effectiveUnavail = derivedUnavailable;
+    // Check cross-manifest duplicate? Use manifestSteps map
+    let crossDup = false;
+    for (const step of steps) {
+      const stepObj = step as Record<string, unknown>;
+      const key = `${stepObj["workflowKey"]}\0${stepObj["childRunId"]}`;
+      if (manifestSteps.has(key)) { if (warnings.length < 32) warnings.push(`duplicate step identity across manifests ${stepObj["workflowKey"]}/${stepObj["childRunId"]}`); crossDup = true; break; }
+    }
+    if (crossDup) continue;
+    manifestIds.add(workflowId);
+    manifestWorkflows++;
+    knownSteps += effectiveKnown;
+    publishedReports += effectivePub;
+    warningOnlySteps += effectiveWarnOnly;
+    unavailableSteps += effectiveUnavail;
+    for (const step of steps) {
+      const stepObj = step as Record<string, unknown>;
+      const key = `${stepObj["workflowKey"]}\0${stepObj["childRunId"]}`;
+      manifestSteps.set(key, stepObj["classification"] as string);
+    }
+  }
+  // Scan report tree for reports and check manifest/file agreement
+  let legacyReports = 0;
+  const walk = async (dir: string) => {
+    let entries: import("node:fs").Dirent[];
+    try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isSymbolicLink()) { if (warnings.length < 32) warnings.push(`report tree contains symlink: ${full}`); continue; }
+      if (entry.isDirectory()) {
+        if (full === coverageDir) continue;
+        await walk(full);
+      } else if (entry.isFile()) {
+        if (entry.name === "warnings.jsonl") continue;
+        if (!entry.name.endsWith(".json")) continue;
+        let content: string;
+        try { content = await readFile(full, "utf8"); } catch { if (warnings.length < 32) warnings.push(`cannot read report ${full}`); continue; }
+        let obj: unknown;
+        try { obj = JSON.parse(content); } catch { if (warnings.length < 32) warnings.push(bounded(`malformed report ${full}`)); continue; }
+        if (obj === null || typeof obj !== "object" || Array.isArray(obj)) {
+          if (warnings.length < 32) warnings.push(bounded(`malformed report ${full}: invalid shape`));
+          continue;
+        }
+        const objRec = obj as Record<string, unknown>;
+        const ver = objRec["reportVersion"];
+        const workflowKey = typeof objRec["workflowKey"] === "string" ? objRec["workflowKey"] as string : null;
+        const childRunId = typeof objRec["childRunId"] === "string" ? objRec["childRunId"] as string : null;
+        if (workflowKey && childRunId) {
+          const key = `${workflowKey}\0${childRunId}`;
+          if (typeof ver === "number") foundReports.set(key, ver);
+        }
+        if (ver === 1) {
+          if (workflowKey && childRunId) {
+            const key = `${workflowKey}\0${childRunId}`;
+            if (!manifestSteps.has(key)) legacyReports++;
+            else { if (warnings.length < 32) warnings.push(`manifest/file disagreement for ${workflowKey}/${childRunId}: legacy report with manifest`); }
+          } else {
+            legacyReports++;
+          }
+        } else if (ver === 2) {
+          if (workflowKey && childRunId) {
+            const key = `${workflowKey}\0${childRunId}`;
+            const classification = manifestSteps.get(key);
+            if (classification === undefined) {
+              if (warnings.length < 32) warnings.push(`missing manifest for report ${workflowKey}/${childRunId}`);
+            } else if (classification !== "published") {
+              if (warnings.length < 32) warnings.push(`manifest/file disagreement for ${workflowKey}/${childRunId}: manifest says ${classification} but report exists`);
+            }
+          }
+        } else if (ver !== undefined) {
+          if (warnings.length < 32) warnings.push(`unknown report version in ${full}: ${ver}`);
+        } else {
+          // No reportVersion? Treat as malformed
+          if (warnings.length < 32) warnings.push(`report missing version in ${full}`);
+        }
+      } else {
+        if (warnings.length < 32) warnings.push(`report tree contains unsupported entry: ${full}`);
+      }
+    }
+  };
+  const reportRootMeta = await (async () => { try { return await lstat(reportRoot); } catch (e) { const err=e as NodeJS.ErrnoException; if (err.code==="ENOENT"||err.code==="ENOTDIR") return null; throw e; } })();
+  if (reportRootMeta && reportRootMeta.isDirectory() && !reportRootMeta.isSymbolicLink()) {
+    await walk(reportRoot);
+  }
+  // Check for missing files: manifest says published but no report found
+  for (const [key, classification] of manifestSteps.entries()) {
+    if (classification === "published" && !foundReports.has(key)) {
+      const [wk, cr] = key.split("\0");
+      if (warnings.length < 32) warnings.push(`missing report file for ${wk}/${cr}`);
+    }
+    if ((classification === "warning-only" || classification === "unavailable") && foundReports.has(key)) {
+      const [wk, cr] = key.split("\0");
+      const ver = foundReports.get(key);
+      if (ver === 2 && warnings.length < 32) warnings.push(`manifest/file disagreement for ${wk}/${cr}: manifest says ${classification} but report exists`);
+    }
+  }
+  // Workflow warnings: count warnings without manifest (with plain-object validation)
+  let workflowWarnings = 0;
+  try {
+    const warningsPath = path.join(reportRoot, "warnings.jsonl");
+    const content = await readFile(warningsPath, "utf8");
+    const lines = content.split("\n").filter(l => l.trim());
+    if (manifestIds.size === 0) {
+      workflowWarnings = lines.length;
+      for (const line of lines) {
+        let rec: unknown;
+        try { rec = JSON.parse(line); } catch {
+          if (warnings.length < 32) warnings.push(bounded(`malformed warning record: invalid JSON`));
+          continue;
+        }
+        if (rec === null || typeof rec !== "object" || Array.isArray(rec)) {
+          if (warnings.length < 32) warnings.push(bounded(`malformed warning record: invalid shape`));
+        }
+      }
+    } else {
+      let nonManifest = 0;
+      for (const line of lines) {
+        let rec: unknown;
+        try { rec = JSON.parse(line); } catch {
+          nonManifest++;
+          if (warnings.length < 32) warnings.push(bounded(`malformed warning record: invalid JSON`));
+          continue;
+        }
+        if (rec === null || typeof rec !== "object" || Array.isArray(rec)) {
+          nonManifest++;
+          if (warnings.length < 32) warnings.push(bounded(`malformed warning record: invalid shape`));
+          continue;
+        }
+        const recObj = rec as Record<string, unknown>;
+        const wid = recObj["workflowId"];
+        if (typeof wid === "string" && !manifestIds.has(wid)) nonManifest++;
+        else if (typeof wid !== "string") nonManifest++;
+      }
+      workflowWarnings = nonManifest;
+    }
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException;
+    if (err.code !== "ENOENT" && err.code !== "ENOTDIR") {
+      if (warnings.length < 32) warnings.push(`cannot read warnings: ${bounded(String((e as Error).message))}`);
+    }
+    workflowWarnings = 0;
+  }
+  const coverage: Record<string, unknown> = {
+    manifest_workflows: manifestWorkflows,
+    known_steps: knownSteps,
+    published_reports: publishedReports,
+    warning_only_steps: warningOnlySteps,
+    unavailable_steps: unavailableSteps,
+    legacy_reports: legacyReports,
+    workflow_warnings: workflowWarnings,
+  };
+  // Also provide camelCase aliases for convenience
+  (coverage as Record<string, unknown>)["manifestWorkflows"] = manifestWorkflows;
+  (coverage as Record<string, unknown>)["knownSteps"] = knownSteps;
+  (coverage as Record<string, unknown>)["publishedReports"] = publishedReports;
+  (coverage as Record<string, unknown>)["warningOnlySteps"] = warningOnlySteps;
+  (coverage as Record<string, unknown>)["unavailableSteps"] = unavailableSteps;
+  (coverage as Record<string, unknown>)["legacyReports"] = legacyReports;
+  (coverage as Record<string, unknown>)["workflowWarnings"] = workflowWarnings;
+  return { coverage, warnings };
+}
+
 async function captureRemovalReportSnapshot(
   task: TaskLayout,
   signal?: AbortSignal,
@@ -3848,6 +4404,11 @@ async function collabReport(
       }
       throw cause;
     }
+    // Coverage reconciliation: read manifests and reports, reconcile against known steps, identify legacy, warn without fabricating denominator
+    const { coverage, warnings: coverageWarnings } = await computeLaneLoopCoverage(repo.controlRoot, taskId);
+    for (const w of coverageWarnings) {
+      if (warnings.length < 32) warnings.push(w);
+    }
     return {
       snapshot: reportSnapshot,
       facts: {
@@ -3856,6 +4417,7 @@ async function collabReport(
         landed_sha: reportSnapshot.landedSha,
         lanes,
         warnings,
+        lane_loop_coverage: coverage,
       },
       warnings,
     };
@@ -4392,6 +4954,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   };
   // Every task-mutating handler executes under one shared task-scoped exclusive
   // lock so independent tools cannot interleave resource mutations.
+  // The Task mutation lock Module durable declaration above owns fail-fast default, lane-create-only bounded-wait, FIFO, cancellation, timeout, ownership-safe release and placement revalidation.
   function taskLocked(
     handler: (
       request: Record<string, unknown>,
@@ -4407,6 +4970,28 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
       const repo = await discoverRepository(runGit, ctx.cwd, signal);
       const taskId = requireIdentifier(request.task_id, "task id");
       return withTaskLock(repo, taskId, () => handler(request, signal, ctx));
+    };
+  }
+
+  function laneCreateTaskLocked(
+    handler: (
+      request: Record<string, unknown>,
+      signal: AbortSignal | undefined,
+      ctx: ExtensionContext,
+    ) => Promise<Record<string, unknown>>,
+  ): (
+    request: Record<string, unknown>,
+    signal: AbortSignal | undefined,
+    ctx: ExtensionContext,
+  ) => Promise<Record<string, unknown>> {
+    return async (request, signal, ctx) => {
+      const repo = await discoverRepository(runGit, ctx.cwd, signal);
+      const taskId = requireIdentifier(request.task_id, "task id");
+      return withTaskLock(repo, taskId, () => handler(request, signal, ctx), {
+        policy: "bounded-wait",
+        signal,
+        timeoutMs: LANE_CREATE_BOUNDED_WAIT_MS,
+      });
     };
   }
 
@@ -4670,7 +5255,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
             ["task_id", "lane_id"],
             ["task_id", "lane_id", "comment"],
           );
-          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
+          return laneCreateTaskLocked((lockedRequest, lockedSignal, lockedCtx) =>
             laneCreate(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((created) =>
               registeredMutationResult(created),
             ),

@@ -112,8 +112,7 @@ def invoke_with_disposable_home(
             str(PI_PACKAGE),
             str(COLLAB_EXTENSION),
             str(repository),
-            str(RPC_MOCK),
-        ],
+            str(RPC_MOCK)],
         input=json.dumps(request) + "\n",
         capture_output=True,
         text=True,
@@ -153,8 +152,7 @@ def valid_request(capture: Path, **overrides: Any) -> dict[str, Any]:
         "worker_brief": "Implement ticket T001 within the delegated authority.",
         "review_brief": "Review delegated acceptance criterion one read-only.",
         "correction_budget": 0,
-        "__rpc": {"mode": "available", "capture": str(capture)},
-    }
+        "__rpc": {"mode": "available", "capture": str(capture)}}
     request.update(overrides)
     return request
 
@@ -175,8 +173,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
                     str(EXTENSION_HARNESS),
                     str(PI_PACKAGE),
                     str(COMPANION),
-                    temporary,
-                ],
+                    temporary],
                 input='{"tool":"missing"}\n',
                 capture_output=True,
                 text=True,
@@ -253,8 +250,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
                 return {
                     "runtime": str(runtime),
                     "args": [str(observer)],
-                    "environment": {"ROLE_TOKEN": role},
-                }
+                    "environment": {"ROLE_TOKEN": role}}
 
             worker_execution = execution("collab-implementer")
             reviewer_execution = execution("collab-acceptor")
@@ -288,8 +284,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
                     str(PI_PACKAGE),
                     str(disposable_agent_dir / "npm/package.json"),
                     str(isolated_agent_dir),
-                    marker,
-                ],
+                    marker],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -358,8 +353,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
                 __rpc={
                     "mode": "available",
                     "capture": str(base / "rpc.jsonl"),
-                    "runId": "workflow-owned-id",
-                },
+                    "runId": "workflow-owned-id"},
             )
 
         self.assertFalse(observed["is_error"], observed)
@@ -374,8 +368,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
                 __rpc={
                     "mode": "available",
                     "capture": str(base / "rpc.jsonl"),
-                    "omitRunId": True,
-                },
+                    "omitRunId": True},
             )
 
         self.assertFalse(observed["is_error"], observed)
@@ -385,9 +378,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
     def test_spawned_workflow_uses_fresh_exact_lane_typed_children_and_structured_control(self) -> None:
         worker = {
             "outcome": "COMPLETED",
-            "validation": [{"check": "behavior", "result": "PASSED", "summary": "works"}],
-            "residualRisks": ["bounded risk"],
-        }
+            "residualRisks": ["bounded risk"]}
         reviewer = {"verdict": "PASS", "outOfEnvelopeFindings": []}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
@@ -425,9 +416,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
     def test_initial_reviewer_dispatch_receives_runtime_integration_baseline(self) -> None:
         worker = {
             "outcome": "COMPLETED",
-            "validation": [{"check": "behavior", "result": "PASSED", "summary": "works"}],
-            "residualRisks": [],
-        }
+            "residualRisks": []}
         reviewer = {"verdict": "PASS", "outOfEnvelopeFindings": []}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
@@ -459,14 +448,11 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
     def test_every_rereview_keeps_the_same_immutable_baseline(self) -> None:
         worker = {
             "outcome": "COMPLETED",
-            "validation": [],
-            "residualRisks": [],
-        }
+            "residualRisks": []}
         blocked = {
             "verdict": "BLOCKED",
             "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}],
-            "outOfEnvelopeFindings": [],
-        }
+            "outOfEnvelopeFindings": []}
         passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
@@ -484,9 +470,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
                             completed_step(worker),
                             blocked,
                             completed_step(worker),
-                            passed,
-                        ]),
-                    ],
+                            passed])],
                     capture_output=True,
                     text=True,
                     check=True,
@@ -516,9 +500,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
     def test_public_input_admits_no_caller_baseline_and_typed_results_carry_none(self) -> None:
         worker = {
             "outcome": "COMPLETED",
-            "validation": [{"check": "behavior", "result": "PASSED", "summary": "works"}],
-            "residualRisks": [],
-        }
+            "residualRisks": []}
         reviewer = {"verdict": "PASS", "outOfEnvelopeFindings": []}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
@@ -563,10 +545,8 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
                         {
                             "structuredOutput": blocked,
                             "noMutationStop": True,
-                            "mutationStatus": "missing",
-                        }
-                    ]),
-                ],
+                            "mutationStatus": "missing"}
+                    ])],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -592,7 +572,7 @@ const runs = {
   async run(key, options) {
     calls.push({key, options});
     if (calls.length === 1) return {
-      structuredOutput: {outcome:"COMPLETED", validation:[], residualRisks:[]},
+      structuredOutput: {outcome:"COMPLETED", residualRisks:[]},
       ...writerEnvelope
     };
     return {structuredOutput:{verdict:"PASS", outOfEnvelopeFindings:[]}, results:[]};
@@ -612,8 +592,7 @@ process.stdout.write(JSON.stringify({result, calls}));
                 },
                 "observed-diagnostic": {
                     "results": [{"effects": {"fileMutation": {"status": "observed"}}}]
-                },
-            }
+                }}
             for shape, writer_envelope in effect_shapes.items():
                 with self.subTest(shape=shape):
                     execution = json.loads(
@@ -631,13 +610,12 @@ process.stdout.write(JSON.stringify({result, calls}));
                     self.assert_fresh_reviewer_options(reviewer, expected["lane"])
 
     def test_terminal_branches_are_typed_and_zero_budget_is_terminal(self) -> None:
-        completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
+        completed = {"outcome": "COMPLETED", "residualRisks": []}
         cases = [
             ([{"outcome": "BLOCKED", "blocker": "blocked"}], {"outcome": "BLOCKED", "blocker": "blocked"}, 1),
             ([{"outcome": "NEEDS_DECISION", "decision": {"why": "why", "question": "question"}}], {"outcome": "NEEDS_DECISION", "why": "why", "question": "question"}, 1),
             ([completed_step(completed), {"verdict": "NEEDS_DECISION", "decision": {"why": "review why", "question": "review question"}}], {"outcome": "NEEDS_DECISION", "why": "review why", "question": "review question"}, 2),
-            ([completed_step(completed), {"verdict": "BLOCKED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}]}], {"outcome": "CORRECTION_BUDGET_EXHAUSTED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}]}, 2),
-        ]
+            ([completed_step(completed), {"verdict": "BLOCKED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}]}], {"outcome": "CORRECTION_BUDGET_EXHAUSTED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}]}, 2)]
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             _, _, capture, observed = self.launch_case(base)
@@ -657,14 +635,11 @@ process.stdout.write(JSON.stringify({result, calls}));
     def test_budget_one_runs_one_correction_and_rereview_with_current_blockers(self) -> None:
         worker = {
             "outcome": "COMPLETED",
-            "validation": [{"check": "correction", "result": "PASSED", "summary": "corrected"}],
-            "residualRisks": ["latest risk"],
-        }
+            "residualRisks": ["latest risk"]}
         blocked = {
             "verdict": "BLOCKED",
             "blockers": [{"location": "current.ts", "reason": "missing behavior", "fix": "add behavior"}],
-            "outOfEnvelopeFindings": [],
-        }
+            "outOfEnvelopeFindings": []}
         passed = {"verdict": "PASS", "outOfEnvelopeFindings": [{"location": "scope", "evidence": "finding"}]}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
@@ -681,10 +656,9 @@ process.stdout.write(JSON.stringify({result, calls}));
 
         self.assertEqual(execution["result"], {
             "outcome": "REVIEWED",
-            "validation": worker["validation"],
+            
             "residualRisks": worker["residualRisks"],
-            "outOfEnvelopeFindings": passed["outOfEnvelopeFindings"],
-        })
+            "outOfEnvelopeFindings": passed["outOfEnvelopeFindings"]})
         self.assertEqual([call["key"] for call in execution["calls"]], ["impl-0", "review-0", "impl-1", "review-1"])
         self.assertEqual([call["options"]["cwd"] for call in execution["calls"]], [expected["lane"]] * 4)
         self.assertIn('"location":"current.ts"', execution["calls"][2]["options"]["task"])
@@ -705,9 +679,7 @@ process.stdout.write(JSON.stringify({result, calls}));
     def test_no_effect_retained_corrections_replace_latest_writer_and_keep_every_review_fresh(self) -> None:
         completed = {
             "outcome": "COMPLETED",
-            "validation": [{"check": "nonce", "result": "PASSED", "summary": "retained"}],
-            "residualRisks": [],
-        }
+            "residualRisks": []}
         blocked = {
             "verdict": "BLOCKED",
             "blockers": [
@@ -715,10 +687,8 @@ process.stdout.write(JSON.stringify({result, calls}));
                     "where": "lane.ts",
                     "why": "first blocker",
                     "howToFix": "correct it",
-                    "trigger": "review one",
-                }
-            ],
-        }
+                    "trigger": "review one"}
+            ]}
         blocked_again = {
             "verdict": "BLOCKED",
             "blockers": [
@@ -726,10 +696,8 @@ process.stdout.write(JSON.stringify({result, calls}));
                     "where": "lane.ts",
                     "why": "second blocker",
                     "howToFix": "correct it again",
-                    "trigger": "rereview one",
-                }
-            ],
-        }
+                    "trigger": "rereview one"}
+            ]}
         passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
@@ -743,9 +711,7 @@ process.stdout.write(JSON.stringify({result, calls}));
                     "capture": str(capture),
                     "foregroundStructuredResume": {
                         "version": 1,
-                        "recoveryDescriptorVersion": 1,
-                    },
-                },
+                        "recoveryDescriptorVersion": 1}},
             )
             self.assertFalse(observed["is_error"], observed)
             run = subprocess.run(
@@ -760,10 +726,8 @@ process.stdout.write(JSON.stringify({result, calls}));
                             completed_step(completed, "writer-correction-1"),
                             blocked_again,
                             completed_step(completed, "writer-correction-2"),
-                            passed,
-                        ]
-                    ),
-                ],
+                            passed]
+                    )],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -804,9 +768,8 @@ process.stdout.write(JSON.stringify({result, calls}));
             {"version": 1},
             {"version": 1, "recoveryDescriptorVersion": False},
             {"version": 2, "recoveryDescriptorVersion": 1},
-            {"version": 1, "recoveryDescriptorVersion": 2},
-        ]
-        completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
+            {"version": 1, "recoveryDescriptorVersion": 2}]
+        completed = {"outcome": "COMPLETED", "residualRisks": []}
         blocked = {
             "verdict": "BLOCKED",
             "blockers": [
@@ -814,10 +777,8 @@ process.stdout.write(JSON.stringify({result, calls}));
                     "where": "current.ts",
                     "why": "typed blocker marker",
                     "howToFix": "apply the bounded correction",
-                    "trigger": "fresh fallback probe",
-                }
-            ],
-        }
+                    "trigger": "fresh fallback probe"}
+            ]}
         passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
         original_contract = (
             "Original ticket contract marker.\n\n"
@@ -855,10 +816,8 @@ process.stdout.write(JSON.stringify({result, calls}));
                                         completed_step(completed, "writer-initial"),
                                         blocked,
                                         completed_step(completed, "writer-fallback"),
-                                        passed,
-                                    ]
-                                ),
-                            ],
+                                        passed]
+                                )],
                             capture_output=True,
                             text=True,
                             check=True,
@@ -890,8 +849,7 @@ process.stdout.write(JSON.stringify({result, calls}));
                                 "Latest typed blockers:",
                                 json.dumps(blocked["blockers"], separators=(",", ":")),
                                 "Current lane placement:",
-                                expected["lane"],
-                            ]
+                                expected["lane"]]
                         ),
                     )
                     self.assertEqual(fallback["task"].count("efficiencyFeedback"), 1)
@@ -903,7 +861,7 @@ process.stdout.write(JSON.stringify({result, calls}));
                     self.assert_fresh_reviewer_options(rereviewer, expected["lane"])
 
     def test_harness_rejects_fresh_reviewer_run_as_writer_resume_target(self) -> None:
-        completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
+        completed = {"outcome": "COMPLETED", "residualRisks": []}
         passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
         workflow_script = """
 const writer = await runs.run("impl-0", { agent: "collab-implementer" });
@@ -926,10 +884,8 @@ return { writerRunId: writer.runId };
                         [
                             completed_step(completed, "writer-run"),
                             completed_step(passed, "reviewer-run"),
-                            completed_step(completed, "must-not-resume"),
-                        ]
-                    ),
-                ],
+                            completed_step(completed, "must-not-resume")]
+                    )],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -947,13 +903,12 @@ return { writerRunId: writer.runId };
         )
 
     def test_resume_rejection_never_reacts_by_launching_a_fresh_writer(self) -> None:
-        completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
+        completed = {"outcome": "COMPLETED", "residualRisks": []}
         blocked = {
             "verdict": "BLOCKED",
             "blockers": [
                 {"where": "x", "why": "y", "howToFix": "z", "trigger": "review"}
-            ],
-        }
+            ]}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             capture = base / "resume-rejection-rpc.jsonl"
@@ -966,9 +921,7 @@ return { writerRunId: writer.runId };
                     "capture": str(capture),
                     "foregroundStructuredResume": {
                         "version": 1,
-                        "recoveryDescriptorVersion": 1,
-                    },
-                },
+                        "recoveryDescriptorVersion": 1}},
             )
             self.assertFalse(observed["is_error"], observed)
             run = subprocess.run(
@@ -983,12 +936,9 @@ return { writerRunId: writer.runId };
                             {
                                 "structuredOutput": completed,
                                 "mutationStatus": "observed",
-                                "throwMessage": "resume rejected before child launch",
-                            },
-                            completed_step(completed, "must-not-launch"),
-                        ]
-                    ),
-                ],
+                                "throwMessage": "resume rejected before child launch"},
+                            completed_step(completed, "must-not-launch")]
+                    )],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -1005,7 +955,7 @@ return { writerRunId: writer.runId };
         self.assertEqual(set(execution["calls"][2]["options"]), {"resume", "task"})
 
     def test_unchanged_candidate_consumes_exact_budget_without_an_extra_writer(self) -> None:
-        completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
+        completed = {"outcome": "COMPLETED", "residualRisks": []}
         blocked = {
             "verdict": "BLOCKED",
             "blockers": [
@@ -1013,10 +963,8 @@ return { writerRunId: writer.runId };
                     "where": "x",
                     "why": "the unchanged candidate remains unacceptable",
                     "howToFix": "make the required correction",
-                    "trigger": "review the unchanged candidate",
-                }
-            ],
-        }
+                    "trigger": "review the unchanged candidate"}
+            ]}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             _, _, capture, observed = self.launch_case(base, correction_budget=2)
@@ -1027,8 +975,7 @@ return { writerRunId: writer.runId };
                 completed_step(completed),
                 blocked,
                 completed_step(completed),
-                blocked,
-            ]
+                blocked]
             execution = json.loads(
                 subprocess.run(
                     ["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)],
@@ -1040,8 +987,7 @@ return { writerRunId: writer.runId };
 
         self.assertEqual(execution["result"], {
             "outcome": "CORRECTION_BUDGET_EXHAUSTED",
-            "blockers": blocked["blockers"],
-        })
+            "blockers": blocked["blockers"]})
         self.assertEqual(
             [call["key"] for call in execution["calls"]],
             ["impl-0", "review-0", "impl-1", "review-1", "impl-2", "review-2"],
@@ -1052,12 +998,11 @@ return { writerRunId: writer.runId };
         )
 
     def test_every_correction_terminal_branch_stops_at_the_current_round(self) -> None:
-        completed = {"outcome": "COMPLETED", "validation": [], "residualRisks": []}
+        completed = {"outcome": "COMPLETED", "residualRisks": []}
         blocked = {
             "verdict": "BLOCKED",
             "blockers": [{"location": "lane.ts", "reason": "expectation", "fix": "correct it"}],
-            "outOfEnvelopeFindings": [],
-        }
+            "outOfEnvelopeFindings": []}
         cases = [
             (
                 1,
@@ -1082,8 +1027,7 @@ return { writerRunId: writer.runId };
                 [completed_step(completed), blocked, completed_step(completed), blocked],
                 {"outcome": "CORRECTION_BUDGET_EXHAUSTED", "blockers": blocked["blockers"]},
                 ["impl-0", "review-0", "impl-1", "review-1"],
-            ),
-        ]
+            )]
         for budget, steps, expected_result, expected_keys in cases:
             with self.subTest(expected=expected_result["outcome"]), tempfile.TemporaryDirectory() as temporary:
                 base = Path(temporary)
@@ -1120,8 +1064,7 @@ return { writerRunId: writer.runId };
             {"correction_budget": -1},
             {"correction_budget": 1.5},
             {"correction_budget": 9007199254740992},
-            {"correction_budget": "1"},
-        ]
+            {"correction_budget": "1"}]
         for index, override in enumerate(invalid):
             with self.subTest(override=override), tempfile.TemporaryDirectory() as temporary:
                 base = Path(temporary)
@@ -1153,8 +1096,7 @@ def make_status(
         "workflow": {
             "trace": [{"key": workflow_key, "runId": child_run_id, "durationMs": duration_ms, "state": "completed"}],
             "emits": [],
-            "console": [],
-        },
+            "console": []},
         "steps": [
             {
                 "agent": "collab-implementer" if workflow_key.startswith("impl") else "collab-acceptor",
@@ -1162,10 +1104,8 @@ def make_status(
                 "parentWorkflowRunId": workflow_id,
                 "status": "completed",
                 "turnCount": turn_count,
-                "sessionFile": session_file,
-            }
-        ],
-    }
+                "sessionFile": session_file}
+        ]}
 
 def make_session(
     calls: list[tuple[str, str, int, int | None, bool]],
@@ -1184,9 +1124,7 @@ def make_session(
                 "role": "assistant",
                 "content": [{"type": "toolCall", "id": call_id, "name": name, "arguments": {}}],
                 "usage": {"totalTokens": total},
-                "timestamp": start,
-            },
-        }
+                "timestamp": start}}
         lines.append(json.dumps(assistant))
         if end is not None:
             result = {
@@ -1199,9 +1137,7 @@ def make_session(
                     "toolName": name,
                     "isError": is_error,
                     "timestamp": end,
-                    "content": [{"type": "text", "text": "ok"}],
-                },
-            }
+                    "content": [{"type": "text", "text": "ok"}]}}
             lines.append(json.dumps(result))
     while token_idx < len(tokens):
         total = tokens[token_idx]
@@ -1214,9 +1150,7 @@ def make_session(
                 "role": "assistant",
                 "content": [{"type": "thinking", "thinking": "extra"}],
                 "usage": {"totalTokens": total},
-                "timestamp": 1787314140000 + token_idx,
-            },
-        }
+                "timestamp": 1787314140000 + token_idx}}
         lines.append(json.dumps(assistant))
     return "\n".join(lines)
 
@@ -1244,8 +1178,7 @@ def run_report_node(request: dict) -> dict:
                     childRunId: req.childRunId,
                     lanePath: req.lanePath,
                     statusObj: req.statusObj,
-                    sessionText: req.sessionText,
-                }});
+                    sessionText: req.sessionText}});
                 result = {{ok: true, report}};
             }} else if (req.action === "publish") {{
                 const res = await mod.publishReport({{
@@ -1257,8 +1190,7 @@ def run_report_node(request: dict) -> dict:
                     workflowKey: req.workflowKey,
                     childRunId: req.childRunId,
                     lanePath: req.lanePath,
-                    report: req.report,
-                }});
+                    report: req.report}});
                 result = {{ok: true, result: res}};
             }} else if (req.action === "handleCompletion") {{
                 const res = await mod.handleReviewedLaneCompletion({{
@@ -1270,15 +1202,13 @@ def run_report_node(request: dict) -> dict:
                     workflowId: req.workflowId,
                     asyncDir: req.asyncDir,
                     eventWorkflowId: req.eventWorkflowId,
-                    eventAsyncDir: req.eventAsyncDir,
-                }});
+                    eventAsyncDir: req.eventAsyncDir}});
                 result = {{ok: true, result: res}};
             }} else if (req.action === "snapshot") {{
                 await mod.snapshotLaneLoopReport({{
                     repoControlRoot: req.repoControlRoot,
                     taskId: req.taskId,
-                    outputDir: req.outputDir,
-                }});
+                    outputDir: req.outputDir}});
                 result = {{ok: true}};
             }} else if (req.action === "role") {{
                 result = {{ok: true, role: mod.roleForWorkflowKey(req.workflowKey)}};
@@ -1329,8 +1259,7 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
                 [
                     ("call1", "read", 1000, 1500, False),
                     ("call2", "bash", 1200, 1700, False),
-                    ("call3", "read", 2000, None, False),
-                ],
+                    ("call3", "read", 2000, None, False)],
                 [100, 200, 50],
             )
             status = make_status(workflow_id, lane_path, workflow_key, child_run_id, 5, session_file, duration_ms=9999)
@@ -1344,11 +1273,10 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
                 "childRunId": child_run_id,
                 "lanePath": lane_path,
                 "statusObj": status,
-                "sessionText": session,
-            })
+                "sessionText": session})
             self.assertTrue(result["ok"], result)
             report = result["report"]
-            self.assertEqual(report["reportVersion"], 1)
+            self.assertEqual(report["reportVersion"], 2)
             self.assertEqual(report["taskId"], task_id)
             self.assertEqual(report["ticketId"], ticket_id)
             self.assertEqual(report["laneId"], lane_id)
@@ -1356,6 +1284,7 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
             self.assertEqual(report["workflowKey"], workflow_key)
             self.assertEqual(report["childRunId"], child_run_id)
             self.assertEqual(report["role"], "implementer")
+            self.assertEqual(report["terminalState"], "completed")
             self.assertEqual(report["agentDurationMs"], 9999)
             self.assertEqual(report["turns"], 5)
             self.assertEqual(report["tokens"], 350)
@@ -1363,12 +1292,15 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
             tools = report["tools"]
             self.assertEqual(tools["read"]["calls"], 2)
             self.assertEqual(tools["read"]["succeeded"], 1)
-            self.assertEqual(tools["read"]["failed"], 1)
+            self.assertEqual(tools["read"]["failed"], 0)
+            self.assertEqual(tools["read"]["unresolved"], 1)
             self.assertEqual(tools["read"]["observedDurationsMs"], [500, None])
             self.assertEqual(tools["bash"]["calls"], 1)
             self.assertEqual(tools["bash"]["succeeded"], 1)
+            self.assertEqual(tools["bash"]["failed"], 0)
+            self.assertEqual(tools["bash"]["unresolved"], 0)
             self.assertEqual(tools["bash"]["observedDurationsMs"], [500])
-            self.assertEqual(set(report.keys()), {"reportVersion","taskId","ticketId","laneId","workflowId","workflowKey","childRunId","role","agentDurationMs","toolObservedDurationMs","turns","tokens","tools"})
+            self.assertEqual(set(report.keys()), {"reportVersion","taskId","ticketId","laneId","workflowId","workflowKey","childRunId","role","terminalState","agentDurationMs","toolObservedDurationMs","turns","tokens","tools"})
 
     def test_role_identities_for_all_four_keys(self) -> None:
         for key, expected_role in [("impl-0","implementer"),("impl-1","correction"),("review-0","acceptor"),("review-1","rereview")]:
@@ -1442,8 +1374,7 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
                 "workflowId": workflow_id,
                 "asyncDir": str(async_dir),
                 "eventWorkflowId": workflow_id,
-                "eventAsyncDir": str(async_dir),
-            })
+                "eventAsyncDir": str(async_dir)})
             self.assertTrue(result["ok"])
             self.assertTrue(result["result"]["handled"])
             self.assertEqual(len(result["result"]["published"]), 0)
@@ -1465,8 +1396,7 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
                 "workflowId": workflow_id,
                 "asyncDir": str(async_dir2),
                 "eventWorkflowId": workflow_id,
-                "eventAsyncDir": str(async_dir2),
-            })
+                "eventAsyncDir": str(async_dir2)})
             self.assertTrue(result2["ok"])
             self.assertGreaterEqual(len(result2["result"]["warnings"]), 1)
             warnings_file = repo / ".agent_state/plans/demo/.collab_op/lane_loop_report/warnings.jsonl"
@@ -1591,8 +1521,7 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
                 "workflowId": workflow_id,
                 "asyncDir": str(async_dir),
                 "eventWorkflowId": "cccccccc-cccc-cccc-cccc-cccccccccccc",
-                "eventAsyncDir": str(async_dir),
-            })
+                "eventAsyncDir": str(async_dir)})
             self.assertTrue(result_partial["ok"])
             self.assertFalse(result_partial["result"]["handled"])
             self.assertEqual(len(result_partial["result"]["published"]), 0)
@@ -1606,8 +1535,7 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
                 "workflowId": workflow_id,
                 "asyncDir": str(async_dir),
                 "eventWorkflowId": workflow_id,
-                "eventAsyncDir": "/tmp/wrong/async",
-            })
+                "eventAsyncDir": "/tmp/wrong/async"})
             self.assertTrue(result_partial2["ok"])
             self.assertFalse(result_partial2["result"]["handled"])
             result_exact = run_report_node({
@@ -1620,8 +1548,7 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
                 "workflowId": workflow_id,
                 "asyncDir": str(async_dir),
                 "eventWorkflowId": workflow_id,
-                "eventAsyncDir": str(async_dir),
-            })
+                "eventAsyncDir": str(async_dir)})
             self.assertTrue(result_exact["ok"])
             self.assertTrue(result_exact["result"]["handled"])
             self.assertEqual(len(result_exact["result"]["published"]), 1)
@@ -1638,8 +1565,7 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
             session = make_session([
                 ("wrapper1","mcpScript",1000,1500,False),
                 ("struct1","structured_output",2000,2100,False),
-                ("read1","read",3000,3100,False),
-            ], [100,100,100])
+                ("read1","read",3000,3100,False)], [100,100,100])
             status = make_status(workflow_id, lane_path, "impl-0", child_run_id, 2, session_file)
             result = run_report_node({"action":"derive","taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"statusObj":status,"sessionText":session})
             self.assertTrue(result["ok"])
@@ -1663,8 +1589,7 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
                 "state": "complete",
                 "workflow": {"trace": [
                     {"key": "impl-0", "runId": child_run_id, "durationMs": 100, "state": "completed"},
-                    {"key": "impl-0", "runId": child_run_id, "durationMs": 200, "state": "completed"},
-                ], "emits": [], "console": []},
+                    {"key": "impl-0", "runId": child_run_id, "durationMs": 200, "state": "completed"}], "emits": [], "console": []},
                 "steps": [{"workflowKey": "impl-0", "parentWorkflowRunId": workflow_id, "status": "completed", "turnCount": 1, "sessionFile": session_file}]
             }
             result = run_report_node({"action":"derive","taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"statusObj":status_dup_trace,"sessionText":session})
@@ -1677,8 +1602,7 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
                 "workflow": {"trace": [{"key": "impl-0", "runId": child_run_id, "durationMs": 100, "state": "completed"}], "emits": [], "console": []},
                 "steps": [
                     {"workflowKey": "impl-0", "parentWorkflowRunId": workflow_id, "status": "completed", "turnCount": 1, "sessionFile": session_file},
-                    {"workflowKey": "impl-0", "parentWorkflowRunId": workflow_id, "status": "completed", "turnCount": 2, "sessionFile": session_file},
-                ]
+                    {"workflowKey": "impl-0", "parentWorkflowRunId": workflow_id, "status": "completed", "turnCount": 2, "sessionFile": session_file}]
             }
             result2 = run_report_node({"action":"derive","taskId":"demo","ticketId":"T001","laneId":"writer-1","workflowId":workflow_id,"workflowKey":"impl-0","childRunId":child_run_id,"lanePath":lane_path,"statusObj":status_dup_step,"sessionText":session})
             self.assertFalse(result2["ok"])
@@ -1760,7 +1684,8 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
             self.assertIn("read", tools)
             self.assertEqual(tools["read"]["calls"], 2)
             self.assertEqual(tools["read"]["succeeded"], 1)
-            self.assertEqual(tools["read"]["failed"], 1)
+            self.assertEqual(tools["read"]["failed"], 0)
+            self.assertEqual(tools["read"]["unresolved"], 1)
             self.assertEqual(tools["read"]["observedDurationsMs"], [None, 100])
             self.assertEqual(result["report"]["toolObservedDurationMs"], 100)
 
@@ -1799,8 +1724,7 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
             const fakePi = createFakePi();
             const failingDeps = {{
               withTaskLock: async () => {{ throw new Error("injected lock failure for test"); }},
-              error: (code, msg) => new Error(msg),
-            }};
+              error: (code, msg) => new Error(msg)}};
             harness.registerPending({{
               pi: fakePi,
               repo: {{ controlRoot: "/tmp/repo", gitDir: "/tmp/repo/.git", worktreeRoot: "/tmp/repo", git: async () => ({{}}) }},
@@ -1814,7 +1738,7 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
             }});
             if (harness.getPendingCount() !== 1) throw new Error("setup failed");
             fakePi.events.emit("subagent:async-complete", {{ runId: "11111111-1111-1111-1111-111111111111", asyncDir: "/tmp/async" }});
-            await new Promise(r => setTimeout(r, 30));
+            await new Promise(r => setTimeout(r, 1300));
             if (harness.getPendingCount() !== 0) throw new Error("pending not retired on exact tuple exception");
             if (!warned || !warned.toLowerCase().includes("injected")) throw new Error("warning not emitted on lock exception: " + String(warned));
             if (warned && warned.includes(".collab_op_operation_warnings")) throw new Error("should not create operation warnings file");
@@ -1823,8 +1747,7 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
             const harness2 = laneMod.createIsolatedReviewedLaneHarness();
             const okDeps = {{
               withTaskLock: async () => {{ throw new Error("should not be called for partial"); }},
-              error: (code, msg) => new Error(msg),
-            }};
+              error: (code, msg) => new Error(msg)}};
             harness2.registerPending({{
               pi: fakePi2,
               repo: {{ controlRoot: "/tmp/repo", gitDir: "/tmp/repo/.git", worktreeRoot: "/tmp/repo", git: async () => ({{}}) }},
@@ -1881,30 +1804,26 @@ def run_feedback_node(request: dict) -> dict:
                     workflowKey: req.workflowKey,
                     childRunId: req.childRunId,
                     lanePath: req.lanePath,
-                    efficiencyFeedback: req.efficiencyFeedback,
-                }});
+                    efficiencyFeedback: req.efficiencyFeedback}});
                 result = {{ok: true, result: res}};
             }} else if (req.action === "snapshotFeedback") {{
                 await mod.snapshotLaneLoopFeedback({{
                     repoControlRoot: req.repoControlRoot,
                     taskId: req.taskId,
-                    outputDir: req.outputDir,
-                }});
+                    outputDir: req.outputDir}});
                 result = {{ok: true}};
             }} else if (req.action === "snapshotReport") {{
                 await mod.snapshotLaneLoopReport({{
                     repoControlRoot: req.repoControlRoot,
                     taskId: req.taskId,
-                    outputDir: req.outputDir,
-                }});
+                    outputDir: req.outputDir}});
                 result = {{ok: true}};
             }} else if (req.action === "preflight") {{
                 await mod.preflightSnapshot({{
                     repoControlRoot: req.repoControlRoot,
                     taskId: req.taskId,
                     outputDir: req.outputDir,
-                    subtree: req.subtree,
-                }});
+                    subtree: req.subtree}});
                 result = {{ok: true}};
             }} else {{
                 result = {{ok: false, error: "unknown action"}};
@@ -2022,7 +1941,7 @@ def run_blocker_schema_agreement(cases: list[dict]) -> dict:
         Path(fname).unlink(missing_ok=True)
 
 def valid_worker_completed(feedback: str | None) -> dict:
-    base: dict = {"outcome": "COMPLETED", "validation": []}
+    base: dict = {"outcome": "COMPLETED"}
     if feedback is not None:
         base["efficiencyFeedback"] = feedback
     return base
@@ -2080,7 +1999,7 @@ def make_status_with_feedback(workflow_id: str, lane_path: str, workflow_key: st
                 steps[0]["structuredOutput"] = valid_worker_completed(feedback)  # type: ignore
             else:
                 # for invalid type test, still produce valid structure but with invalid feedback type
-                steps[0]["structuredOutput"] = {"outcome": "COMPLETED", "validation": [], "efficiencyFeedback": feedback}  # type: ignore
+                steps[0]["structuredOutput"] = {"outcome": "COMPLETED", "efficiencyFeedback": feedback}  # type: ignore
         else:
             if isinstance(feedback, str):
                 steps[0]["structuredOutput"] = valid_reviewer_pass(feedback)  # type: ignore
@@ -2197,8 +2116,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
             {k: v for k, v in well_formed.items() if k != "trigger"},
             {**well_formed, "extra": "not allowed"},
             {**well_formed, "trigger": 5},
-            {"location": "x", "reason": "y", "fix": "z"},
-        ]
+            {"location": "x", "reason": "y", "fix": "z"}]
         outcome = run_blocker_schema_agreement(cases)
         self.assertTrue(outcome["ok"], outcome)
         for result in outcome["results"]:
@@ -2221,8 +2139,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
             ("impl-0", valid_worker_needs("impl needs"), "worker NEEDS_DECISION"),
             ("review-0", valid_reviewer_pass("review pass"), "reviewer PASS"),
             ("review-0", valid_reviewer_blocked("review blocked"), "reviewer BLOCKED"),
-            ("review-0", valid_reviewer_needs("review needs"), "reviewer NEEDS_DECISION"),
-        ]
+            ("review-0", valid_reviewer_needs("review needs"), "reviewer NEEDS_DECISION")]
         for workflow_key, structured, label in branches:
             with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
                 base = Path(tmp)
@@ -2264,11 +2181,11 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
             sess_dir.mkdir(parents=True)
             sess_path = sess_dir / "session.jsonl"
             sess_path.write_text(make_session([("c1","read",1000,1100,False)],[10]), encoding="utf-8")
-            # Invalid COMPLETED missing required outcome/validation but with efficiencyFeedback
+            # Invalid COMPLETED missing required outcome but with efficiencyFeedback
             malformed = {"efficiencyFeedback": "should not be accepted"}
             invalid = run_schema_validation({"kind": "worker", "value": malformed})
             self.assertTrue(invalid["ok"])
-            self.assertFalse(invalid["valid"], "malformed missing outcome/validation should fail schema")
+            self.assertFalse(invalid["valid"], "malformed missing outcome should fail schema")
             status = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, str(sess_path))
             status["steps"][0]["structuredOutput"] = malformed  # type: ignore
             (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
@@ -2337,12 +2254,10 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
                 "state": "complete",
                 "workflow": {"trace": [
                     {"key": "impl-0", "runId": child1, "durationMs": 100, "state": "completed"},
-                    {"key": "impl-1", "runId": child2, "durationMs": 200, "state": "completed"},
-                ], "emits": [], "console": []},
+                    {"key": "impl-1", "runId": child2, "durationMs": 200, "state": "completed"}], "emits": [], "console": []},
                 "steps": [
-                    {"workflowKey": "impl-0", "parentWorkflowRunId": workflow_id, "status": "completed", "turnCount": 1, "sessionFile": str(async_dir / child1 / "session.jsonl"), "structuredOutput": {"outcome": "COMPLETED", "validation": [], "efficiencyFeedback": "feedback impl-0"}},
-                    {"workflowKey": "impl-1", "parentWorkflowRunId": workflow_id, "status": "completed", "turnCount": 1, "sessionFile": str(async_dir / child2 / "session.jsonl"), "structuredOutput": {"outcome": "COMPLETED", "validation": [], "efficiencyFeedback": "feedback impl-1"}},
-                ]
+                    {"workflowKey": "impl-0", "parentWorkflowRunId": workflow_id, "status": "completed", "turnCount": 1, "sessionFile": str(async_dir / child1 / "session.jsonl"), "structuredOutput": {"outcome": "COMPLETED", "efficiencyFeedback": "feedback impl-0"}},
+                    {"workflowKey": "impl-1", "parentWorkflowRunId": workflow_id, "status": "completed", "turnCount": 1, "sessionFile": str(async_dir / child2 / "session.jsonl"), "structuredOutput": {"outcome": "COMPLETED", "efficiencyFeedback": "feedback impl-1"}}]
             }
             (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
             result = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
@@ -2394,7 +2309,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
             sess_dir.mkdir(parents=True)
             (sess_dir / "session.jsonl").write_text(make_session([("c1","read",1000,1100,False)],[10]), encoding="utf-8")
             status = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, str(sess_dir / "session.jsonl"))
-            status["steps"][0]["structuredOutput"] = {"outcome": "COMPLETED", "validation": [], "efficiencyFeedback": 12345}  # type: ignore
+            status["steps"][0]["structuredOutput"] = {"outcome": "COMPLETED", "efficiencyFeedback": 12345}  # type: ignore
             (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
             result1 = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
             self.assertTrue(result1["ok"])
@@ -2406,7 +2321,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
             lines2 = warnings_file.read_text(encoding="utf-8").strip().splitlines()
             self.assertEqual(len(lines1), len(lines2), "duplicate warning should be suppressed")
             status2 = make_status(workflow_id, lane_path, "impl-0", child_run_id, 1, str(sess_dir / "session.jsonl"))
-            status2["steps"][0]["structuredOutput"] = {"outcome": "COMPLETED", "validation": [], "efficiencyFeedback": "a"*10001}  # type: ignore
+            status2["steps"][0]["structuredOutput"] = {"outcome": "COMPLETED", "efficiencyFeedback": "a"*10001}  # type: ignore
             (async_dir / "status.json").write_text(json.dumps(status2), encoding="utf-8")
             result3 = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
             self.assertTrue(result3["ok"])
@@ -2457,7 +2372,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
             self.assertGreaterEqual(len(result["result"]["warnings"]), 1)
 
     def test_workflow_with_feedback_preserves_call_sequence_branching_and_projection(self) -> None:
-        worker_completed = {"outcome": "COMPLETED", "validation": [{"check": "behavior", "result": "PASSED", "summary": "works"}], "residualRisks": [], "efficiencyFeedback": "qualitative worker feedback"}
+        worker_completed = {"outcome": "COMPLETED", "residualRisks": [], "efficiencyFeedback": "qualitative worker feedback"}
         reviewer_pass = {"verdict": "PASS", "outOfEnvelopeFindings": [], "efficiencyFeedback": "review feedback"}
         worker_blocked = {"outcome": "BLOCKED", "blocker": "blocked reason", "efficiencyFeedback": "blocked feedback"}
         worker_needs = {"outcome": "NEEDS_DECISION", "decision": {"why": "why", "question": "q"}, "efficiencyFeedback": "needs feedback"}
@@ -2468,10 +2383,9 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
                 [completed_step(worker_completed), reviewer_pass],
                 {
                     "outcome": "REVIEWED",
-                    "validation": worker_completed["validation"],
+                    
                     "residualRisks": worker_completed["residualRisks"],
-                    "outOfEnvelopeFindings": reviewer_pass["outOfEnvelopeFindings"],
-                },
+                    "outOfEnvelopeFindings": reviewer_pass["outOfEnvelopeFindings"]},
                 ["impl-0", "review-0"],
             ),
             ([worker_blocked], {"outcome": "BLOCKED", "blocker": "blocked reason"}, ["impl-0"]),
@@ -2481,8 +2395,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
                 [completed_step(worker_completed), reviewer_blocked],
                 {"outcome": "CORRECTION_BUDGET_EXHAUSTED", "blockers": reviewer_blocked["blockers"]},
                 ["impl-0", "review-0"],
-            ),
-        ]
+            )]
         for steps, expected_terminal, expected_keys in cases:
             with self.subTest(expected=expected_terminal["outcome"]), tempfile.TemporaryDirectory() as temporary:
                 base = Path(temporary)
@@ -2513,25 +2426,21 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
             blocked_review = {"verdict": "BLOCKED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}], "efficiencyFeedback": "fb"}
             completed_with_fb = {
                 "outcome": "COMPLETED",
-                "validation": [{"check": "corrected", "result": "PASSED", "summary": "fixed"}],
                 "residualRisks": ["bounded risk"],
-                "efficiencyFeedback": "fb2",
-            }
+                "efficiencyFeedback": "fb2"}
             passed_with_fb = {
                 "verdict": "PASS",
                 "outOfEnvelopeFindings": [{"location": "scope", "evidence": "finding"}],
-                "efficiencyFeedback": "fb3",
-            }
+                "efficiencyFeedback": "fb3"}
             run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps([completed_step(completed_with_fb), blocked_review, completed_step(completed_with_fb), passed_with_fb])], capture_output=True, text=True, check=True)
             execution = json.loads(run.stdout)
             self.assertEqual(
                 execution["result"],
                 {
                     "outcome": "REVIEWED",
-                    "validation": completed_with_fb["validation"],
+                    
                     "residualRisks": completed_with_fb["residualRisks"],
-                    "outOfEnvelopeFindings": passed_with_fb["outOfEnvelopeFindings"],
-                },
+                    "outOfEnvelopeFindings": passed_with_fb["outOfEnvelopeFindings"]},
             )
             self.assertNotIn("efficiencyFeedback", execution["result"])
             self.assertEqual([c["key"] for c in execution["calls"]], ["impl-0", "review-0", "impl-1", "review-1"])

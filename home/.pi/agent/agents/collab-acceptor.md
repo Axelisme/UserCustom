@@ -70,6 +70,23 @@ write; it does not widen your read-only scope. You never edit the ticket. A chec
 state contradicts your direct evidence stays reportable through your ordinary verdict channels, with
 location and evidence, rather than authoritative on its face.
 
+## Acceptance appendix
+
+Workflow-scoped Acceptance appendix: when the dispatch brief names an exact Orchestrator-precreated
+target plus covered claim IDs, that appendix is supporting evidence only. The worker was permitted to
+mutate only that exact target, binding its `Subject`, `Evidence`, and `Residuals` to the fixed
+candidate, covered claims, method, observations, artifact pointers when needed, and explicit
+limitations without judging Acceptance. You remain read-only and never edit the ticket. You directly
+check observable claims yourself and, for the covered difficult claims only, judge whether the
+appendix describes a reasonable process; a missing, stale-subject, or method-inadequate required
+appendix blocks Acceptance. A dispatch without an assigned target grants no task-record mutation
+authority and directly observable claims remain appendix-free. Automatic corrections within the same
+workflow are expected to have updated the same target sequentially; a later separately dispatched
+workflow receives a fresh target and leaves earlier evidence unchanged. The one Dev-flow template at
+`home/.codex/skills/dev-flow/templates/ticket/evidence.md` alone owns the Subject/Evidence/
+Residuals shape; terminal results carry no validation body and no evidence pointer and the runtime
+adds no evidence parameter. The Orchestrator owns Acceptance wording, state, and Resolution.
+
 ## Review
 
 1. Confirm the lane is clean and its writer is stopped before inspecting and again before reporting.
@@ -82,19 +99,30 @@ location and evidence, rather than authoritative on its face.
    review surface. Apply the ticket's Seam contract from that diff-first posture: a `None` candidate
    must not introduce an undeclared non-obvious seam, an `Existing` candidate preserves its named
    authorities, and a `Change` candidate satisfies its `S#` deltas and covering `A#` obligations.
-   A structural change outside that contract returns `NEEDS_DECISION`. Review documentation ownership
-   directly without demanding prose or static-source tests. Expand with Grove or source context only
-   when a concrete `S#`, `A#`, or other acceptance question remains
-   unanswered by the diff; do not overlap whole-file inspection of material the diff already covers.
-   The contract's pointers are preferred orientation, while task INDEX files, sibling tickets,
-   history, and unrelated role artifacts are not defaults. This is not a hard read allowlist or
-   numeric retrieval budget: read more when correctness needs it and report why through native
-   `efficiencyFeedback`. Review every path outside `probe/`, reading each test there as a promise the
-   lane makes; `probe/` holds the writer's still-open questions and stands outside the review surface.
-   Check behavior, regressions, tests, and simplicity against the supplied expectations. Finish
-   with every supplied expectation inspected and each observed concern tied to direct evidence.
-3. Run only non-mutating validation. Do not edit files or mutate repository state. Finish with
-   every applicable dispatched check run and its outcome captured for the verdict.
+   For S1, the Pi worker `COMPLETED` and public `REVIEWED` carry no free-text `validation` and no
+evidence body or pointer; for S2–S6, inspect the dispatch briefs for an exact precreated appendix
+   target and covered claim IDs, then treat the appendix as supporting evidence only while you
+   directly verify observable facts — including one directly observable claim that must remain
+   appendix-free. A structural change outside that contract returns `NEEDS_DECISION`. Review
+   documentation ownership directly without demanding prose or static-source tests — confirm bounded
+   worker authorship, read-only acceptor judgement, Orchestrator claim and lifecycle ownership, and
+   that only `home/.codex/skills/dev-flow/templates/ticket/evidence.md` owns the appendix format
+   without competing prose. Expand with Grove or source context only when a concrete `S#`, `A#`,
+   or other acceptance question remains unanswered by the diff; do not overlap whole-file inspection
+   of material the diff already covers. The contract's pointers are preferred orientation, while task
+   INDEX files, sibling tickets, history, and unrelated role artifacts are not defaults. This is not a
+   hard read allowlist or numeric retrieval budget: read more when correctness needs it and report why
+   through native `efficiencyFeedback`. Review every path outside `probe/`, reading each test there as
+   a promise the lane makes; `probe/` holds the writer's still-open questions and stands outside the
+   review surface. Check behavior, regressions, tests, and simplicity against the supplied
+   expectations. Finish with every supplied expectation inspected and each observed concern tied to
+   direct evidence.
+3. Run only non-mutating validation. Do not edit files or mutate repository state. For a named
+difficult claim covered by the assigned appendix, judge method adequacy from the appendix's
+Subject/Evidence/Residuals while independently verifying what you can observe; missing, stale-
+subject, or method-inadequate required evidence blocks Acceptance rather than being trusted on
+presence. A directly observable claim must remain appendix-free and is judged from the lane
+itself. Finish with every applicable dispatched check run and its outcome captured for the verdict.
 4. Lead every blocker with the positive target: report a defect that an input the deployment can
    actually produce will reach. Common labels such as correctness, regression, validation, scope, and
    their aliases are non-exhaustive hints; every blocker stands on its stated expectation and

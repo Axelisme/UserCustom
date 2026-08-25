@@ -6,9 +6,12 @@ const RPC_REPLY_PREFIX = "subagents:rpc:v1:reply:";
 type Config = {
   mode?: "available" | "unsupported-version" | "missing-spawn" | "spawn-error";
   capture?: string;
+  emissionMarker?: string;
   runId?: string;
   omitRunId?: boolean;
   foregroundStructuredResume?: unknown;
+  delaySpawnMs?: number;
+  delayPingMs?: number;
 };
 
 export default function collabRpcMock(pi: any): void {
@@ -28,6 +31,7 @@ export default function collabRpcMock(pi: any): void {
   pi.events.on(RPC_REQUEST, async (raw: any) => {
     const replyEvent = `${RPC_REPLY_PREFIX}${String(raw?.requestId ?? "")}`;
     if (raw?.method === "ping") {
+      if (config.delayPingMs) await new Promise<void>((r) => setTimeout(r, config.delayPingMs));
       if (config.mode === "unsupported-version") {
         pi.events.emit(replyEvent, {
           version: 2,
@@ -56,6 +60,8 @@ export default function collabRpcMock(pi: any): void {
       return;
     }
     if (raw?.method !== "spawn") return;
+    if (config.emissionMarker) await appendFile(config.emissionMarker, `${JSON.stringify(raw)}\n`, "utf8");
+    if (config.delaySpawnMs) await new Promise<void>((r) => setTimeout(r, config.delaySpawnMs));
     if (config.capture) await appendFile(config.capture, `${JSON.stringify(raw)}\n`, "utf8");
     if (config.mode === "spawn-error") {
       pi.events.emit(replyEvent, {

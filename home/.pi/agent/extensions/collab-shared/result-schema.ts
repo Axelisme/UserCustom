@@ -1,3 +1,16 @@
+/**
+ * Pi reviewed result contract Module
+ *
+ * Ownership: this Module owns worker structured outcomes and the public reviewed terminal projection.
+ * It keeps typed routing, residualRisks and reviewer findings but excludes free-text validation and
+ * evidence bodies. Worker COMPLETED carries outcome and optional residualRisks/efficiencyFeedback
+ * with additionalProperties false rejecting any validation field; BLOCKED and NEEDS_DECISION keep their
+ * typed branches. Public REVIEWED retains residualRisks and outOfEnvelopeFindings but no validation
+ * or evidence pointer. Commands remain with run artifacts and durable observations remain with the
+ * assigned workflow-scoped Acceptance appendix when dispatched; runtime does not add an evidence
+ * parameter or enforce assignment.
+ */
+
 const reviewedLaneDecisionSchema = {
   type: "object",
   additionalProperties: false,
@@ -25,19 +38,6 @@ export const reviewedLaneWorkerSchema = {
       type: "object",
       properties: {
         outcome: { const: "COMPLETED" },
-        validation: {
-          type: "array",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            required: ["check", "result", "summary"],
-            properties: {
-              check: { type: "string" },
-              result: { enum: ["PASSED", "FAILED"] },
-              summary: { type: "string" },
-            },
-          },
-        },
         residualRisks: { type: "array", items: { type: "string" } },
         efficiencyFeedback: {
           type: "string",
@@ -46,7 +46,7 @@ export const reviewedLaneWorkerSchema = {
         },
       },
       additionalProperties: false,
-      required: ["outcome", "validation"],
+      required: ["outcome"],
     },
     {
       type: "object",
@@ -195,13 +195,9 @@ export function isValidWorkerOutput(value: unknown): boolean {
   if (!isPlainObject(value)) return false;
   const outcome = value["outcome"];
   if (outcome === "COMPLETED") {
-    const allowed = new Set(["outcome", "validation", "residualRisks", "efficiencyFeedback"]);
+    const allowed = new Set(["outcome", "residualRisks", "efficiencyFeedback"]);
     for (const k of Object.keys(value)) if (!allowed.has(k)) return false;
-    if (!("outcome" in value) || !("validation" in value)) return false;
-    if (!Array.isArray(value["validation"])) return false;
-    for (const item of value["validation"] as unknown[]) {
-      if (!isValidValidationItem(item)) return false;
-    }
+    if (!("outcome" in value)) return false;
     if ("residualRisks" in value) {
       if (!Array.isArray(value["residualRisks"])) return false;
       for (const r of value["residualRisks"] as unknown[]) if (!isString(r)) return false;

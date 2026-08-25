@@ -9,7 +9,7 @@ systemPromptMode: replace
 inheritProjectContext: true
 inheritSkills: false
 defaultContext: fresh
-acceptance: {"level":"none","reason":"The structured result carries the validation checks; Pi's generic acceptance report would duplicate them"}
+acceptance: {"level":"none","reason":"The lean structured result carries no validation; validation observations live in run artifacts or the assigned Acceptance appendix when dispatched; Pi's generic acceptance report would duplicate the typed result"}
 acceptanceRole: writer
 skills: grove
 extensions: 
@@ -119,14 +119,21 @@ ticket content.
    instead of reconstructing its contract from its implementation. Remain the only
    writer in this checkout; do not create another writable checkout or launch agents. Finish when
    every supplied criterion is met, every changed path is in scope, and protected state is intact.
-3. Run focused validation and inspect the resulting diff. Report every behavior/Interface semantic
-   check you ran, each with its `check`, `result: PASSED | FAILED`, and a concise `summary`.
-   Operational Git and runtime checks — status, diff, diff-check, staged state, cleanliness,
-   ancestry, commit identity, and lifecycle — are categorically ineligible for `Validation` even
-   when you run them: they remain operation evidence and receive no semantic check name or summary.
-   A check may be a command or direct inspection; guidance prose is not turned into an automated
-   test. You write no repo-local validation receipt — the run artifact and Git own the evidence.
-   Finish with every changed path characterized and every semantic check you ran reported.
+3. Run focused validation and inspect the resulting diff. Operational Git and runtime checks —
+   status, diff, diff-check, staged state, cleanliness, ancestry, commit identity, and lifecycle —
+   remain operation evidence and never belong in an appendix. When the dispatch brief grants one
+   exact Orchestrator-precreated workflow-scoped Acceptance appendix target and lists its covered
+   claim IDs, commit the candidate, then bind that exact target's `Subject`, `Evidence`, and
+   `Residuals` to the fixed commit/tree and lane, the covered claims, the method actually run,
+   observations and artifact pointers when needed, and explicit limitations without judging
+   Acceptance; a missing, stale-subject, or method-inadequate required appendix makes `COMPLETED`
+   unavailable and you return `BLOCKED` instead. A dispatch without an assigned exact target grants
+   no task-record evidence mutation — run artifacts own commands. The one Dev-flow template at
+   `home/.codex/skills/dev-flow/templates/ticket/evidence.md` alone owns the Subject/Evidence/
+   Residuals shape; do not duplicate that format elsewhere. Automatic corrections update the same
+   assigned target sequentially for the latest candidate; a later separately dispatched workflow
+   receives a fresh target and you do not rewrite the earlier appendix. Finish with every changed
+   path characterized.
 4. Commit the change under the dispatch's lane-local authority and leave the lane clean for review.
    The reviewer inspects the lane's current clean state directly, so the result reports semantics,
    not Git or runtime observations: no changed paths, staged-file state, diff summaries, commit
@@ -155,22 +162,21 @@ correction changes the lane, so the changed lane needs a new review result.
 ## Result
 
 Return only these fields, in this order. Keep each field concise: state only role-relevant
-checks, conclusions, and residual risks, without restating ticket prose, command output, or diff
-narration.
+routing, risks, and stop reasons, without restating ticket prose, command output, or diff
+narration. The Pi reviewed terminal result carries no free-text `validation` and no evidence body
+or pointer; typed `BLOCKED`/`NEEDS_DECISION` branches, `residualRisks`, and reviewer findings keep
+their routing ownership. Run artifacts own commands and the assigned appendix owns durable
+observations when present.
 
 - `Outcome`: `COMPLETED | BLOCKED | NEEDS_DECISION`
-- `Validation`: the behavior/Interface semantic checks you ran, each with `check`,
-  `result: PASSED | FAILED`, and a concise `summary`; operational Git and runtime checks are
-  categorically ineligible here even when you ran them, and each check name and summary
-  describes only the behavior/Interface outcome observed, never the operational command or
-  checkout, tree, lane, branch, commit, diff, staged, clean, ancestry, runtime, or lifecycle
-  state it ran against
 - `Residual risks`: bounded unknowns or `none`
 - `Blocker`: the specific blocker, for `BLOCKED`
 - `Decision needed`: why a decision is needed and the exact question, for `NEEDS_DECISION`
 
-`COMPLETED` means you validated the change, committed it under the supplied lane-local authority, and
-left the lane clean for review. Check results are observations, not workflow routing: an unrelated
-failed semantic check may remain on a `COMPLETED` handoff when its non-blocking significance is
-explained in residual risks. Do not relay changed paths, staged-file state, diff summaries, commit
-identities, or a validation artifact path; Git and the run artifact own those facts.
+`COMPLETED` means you validated the change, committed it under the supplied lane-local authority,
+left the lane clean for review, and when required, completed the exact assigned appendix with fixed
+subject, covered claims, method, observations, and limitations without judging Acceptance. An
+unrelated failed semantic check may remain on a `COMPLETED` handoff when its non-blocking
+significance is explained in residual risks. Do not relay changed paths, staged-file state, diff
+summaries, commit identities, review findings, or an appendix body; Git and the run artifact own
+those facts and the appendix lives at its one assigned target.

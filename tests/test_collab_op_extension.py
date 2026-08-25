@@ -193,8 +193,7 @@ def seed_managed_task(repository: Path, task_id: str = "demo") -> dict[str, str]
         "base": base,
         "integration_head": integration_head,
         "integration": str(integration.resolve()),
-        "lane": str(lane.resolve()),
-    }
+        "lane": str(lane.resolve())}
 
 
 def seed_donor(
@@ -602,8 +601,7 @@ class CollabOpExtensionIntegrationAdoptRegressionTests(unittest.TestCase):
                     "task_id": "demo",
                     "source_branch": "donor",
                     "persist": "main",
-                    "base_sha": base_sha,
-                },
+                    "base_sha": base_sha},
             )
 
             self.assertFalse(observed["is_error"])
@@ -637,8 +635,7 @@ class CollabOpExtensionIntegrationAdoptRegressionTests(unittest.TestCase):
                         "task_id": "demo",
                         "source_branch": "donor",
                         "persist": "main",
-                        "base_sha": value,
-                    },
+                        "base_sha": value},
                 )
                 self.assertTrue(observed["is_error"])
                 self.assertEqual(observed["error"]["error"]["code"], "invalid_base_sha")
@@ -663,8 +660,7 @@ class CollabOpExtensionIntegrationAdoptRegressionTests(unittest.TestCase):
                     "task_id": "demo",
                     "source_branch": "donor",
                     "persist": "main",
-                    "base_sha": other_sha,
-                },
+                    "base_sha": other_sha},
             )
 
             self.assertTrue(observed["is_error"])
@@ -688,8 +684,7 @@ class CollabOpExtensionIntegrationAdoptRegressionTests(unittest.TestCase):
                     "task_id": "demo",
                     "source_branch": "donor",
                     "persist": "main",
-                    "base_sha": base_sha,
-                },
+                    "base_sha": base_sha},
             )
 
             self.assertTrue(observed["is_error"])
@@ -718,8 +713,7 @@ class CollabOpExtensionIntegrationAdoptRegressionTests(unittest.TestCase):
                     "task_id": "demo",
                     "source_branch": "donor",
                     "persist": "main",
-                    "base_sha": base_sha,
-                },
+                    "base_sha": base_sha},
             )
 
             self.assertTrue(observed["is_error"])
@@ -745,8 +739,7 @@ class CollabOpExtensionIntegrationAdoptRegressionTests(unittest.TestCase):
                     "task_id": "demo",
                     "source_branch": "donor",
                     "persist": "main",
-                    "base_sha": base_sha,
-                },
+                    "base_sha": base_sha},
             )
 
             self.assertFalse(observed["is_error"])
@@ -767,8 +760,7 @@ class CollabOpExtensionIntegrationAdoptRegressionTests(unittest.TestCase):
                     "task_id": "demo",
                     "source_branch": "wave/demo/integration",
                     "persist": "main",
-                    "base_sha": base_sha,
-                },
+                    "base_sha": base_sha},
             )
 
             self.assertFalse(observed["is_error"])
@@ -810,8 +802,7 @@ class CollabOpExtensionIntegrationAdoptRegressionTests(unittest.TestCase):
                         "task_id": "demo",
                         "source_branch": "wave/demo/integration",
                         "persist": "main",
-                        "base_sha": base_sha,
-                    },
+                        "base_sha": base_sha},
                 )
 
                 self.assertTrue(observed["is_error"])
@@ -847,8 +838,7 @@ class CollabOpExtensionIntegrationAdoptRegressionTests(unittest.TestCase):
                         "task_id": "demo",
                         "source_branch": "wave/demo/integration",
                         "persist": "main",
-                        "base_sha": base_sha,
-                    },
+                        "base_sha": base_sha},
                 )
 
                 self.assertFalse(observed["is_error"])
@@ -876,8 +866,7 @@ class CollabOpExtensionLaneCreateRegressionTests(unittest.TestCase):
                     "tool": "collab_lane_create",
                     "task_id": "demo",
                     "lane_id": "writer",
-                    "comment": "  review 🧭  ",
-                },
+                    "comment": "  review 🧭  "},
             )
 
             self.assertFalse(observed["is_error"])
@@ -909,8 +898,7 @@ class CollabOpExtensionLaneCreateRegressionTests(unittest.TestCase):
                 request: dict[str, object] = {
                     "tool": "collab_lane_create",
                     "task_id": "demo",
-                    "lane_id": lane_id,
-                }
+                    "lane_id": lane_id}
                 if comment is not None:
                     request["comment"] = comment
                 observed = invoke(repository, request)
@@ -925,8 +913,7 @@ class CollabOpExtensionLaneCreateRegressionTests(unittest.TestCase):
                     "tool": "collab_lane_create",
                     "task_id": "demo",
                     "lane_id": "unicode",
-                    "comment": "🧭" * 500,
-                },
+                    "comment": "🧭" * 500},
             )
             self.assertFalse(valid["is_error"])
 
@@ -1040,8 +1027,7 @@ class CollabOpExtensionLaneReconcileRegressionTests(unittest.TestCase):
                     "ok": True,
                     "tool_version": 1,
                     "state": "noop",
-                    "warnings": ["lane already includes latest integration"],
-                },
+                    "warnings": ["lane already includes latest integration"]},
             )
             self.assertEqual((integration / "operator-dirt.txt").read_text(encoding="utf-8"), "preserve\n")
             self.assertEqual(git(repository, "rev-parse", "wave/demo/writer-1"), expected["integration_head"])
@@ -1231,8 +1217,7 @@ class CollabOpExtensionTaskLockTests(unittest.TestCase):
                     {
                         "pid": os.getpid(),
                         "started_at": "2026-08-13T00:00:00.000Z",
-                        "task_id": "demo",
-                    }
+                        "task_id": "demo"}
                 ),
                 encoding="utf-8",
             )
@@ -1242,10 +1227,12 @@ class CollabOpExtensionTaskLockTests(unittest.TestCase):
 
             self.assertTrue(observed["is_error"])
             self.assertEqual(observed["error"]["error"]["code"], "task_busy")
-            self.assertEqual(
-                observed["error"]["error"]["details"]["held_by"]["pid"],
-                os.getpid(),
-            )
+            details = observed["error"]["error"]["details"]
+            self.assertEqual(details.get("task_id"), "demo")
+            # SL02: lane_create uses bounded wait (10s) rather than immediate fail-fast
+            self.assertIn("waited_ms", details)
+            self.assertEqual(details.get("timeout_ms"), 10000)
+            self.assertGreaterEqual(details.get("waited_ms", 0), 9000)
             self.assertEqual(managed_ref_snapshot(repository), refs_before)
             self.assertEqual(git(repository, "branch", "--list", "wave/demo/writer"), "")
             self.assertFalse((repository / ".agent_state/worktrees/demo/lanes/writer").exists())
@@ -1267,8 +1254,7 @@ class CollabOpExtensionTaskLockTests(unittest.TestCase):
                     {
                         "pid": dead.pid,
                         "started_at": "2026-08-13T00:00:00.000Z",
-                        "task_id": "demo",
-                    }
+                        "task_id": "demo"}
                 ),
                 encoding="utf-8",
             )
@@ -1323,8 +1309,7 @@ class CollabOpExtensionTaskLockTests(unittest.TestCase):
                         "pid": dead.pid,
                         "started_at": "2026-08-13T00:00:00.000Z",
                         "task_id": "demo",
-                        "token": "stale-token",
-                    }
+                        "token": "stale-token"}
                 ),
                 encoding="utf-8",
             )
@@ -1366,8 +1351,7 @@ class CollabOpExtensionTaskLockTests(unittest.TestCase):
                             "pid": os.getpid(),
                             "started_at": "2026-08-13T00:00:00.000Z",
                             "task_id": "demo",
-                            "token": "foreign-owner-token",
-                        }
+                            "token": "foreign-owner-token"}
                     ),
                     encoding="utf-8",
                 )
@@ -1439,8 +1423,7 @@ class CollabOpExtensionTaskLockTests(unittest.TestCase):
                                 "pid": os.getpid(),
                                 "started_at": "2026-08-13T00:00:00.000Z",
                                 "task_id": "demo",
-                                "token": "foreign-owner-token",
-                            }
+                                "token": "foreign-owner-token"}
                         )
                         + "\n"
                     )
@@ -1591,8 +1574,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                     "collab_lane_reconcile",
                     "collab_report",
                     "collab_run_reviewed_lane",
-                    "collab_status",
-                ],
+                    "collab_status"],
             )
             self.assertEqual(set(observed["schemas"]), set(observed["tools"]))
             self.assertFalse(observed["is_error"])
@@ -1645,8 +1627,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 {
                     "tool": "collab_integration_reconcile",
                     "task_id": "demo",
-                    "lane_id": "persistence",
-                },
+                    "lane_id": "persistence"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -1991,8 +1972,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                     "tool": "collab_report",
                     "task_id": "demo",
                     "output_dir": "reports",
-                    "method": "report",
-                },
+                    "method": "report"},
             )
 
             self.assertTrue(observed["is_error"])
@@ -2029,16 +2009,13 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                     "integration": {
                         "worktree": expected["integration"],
                         "HEAD": expected["integration_head"],
-                        "stale": False,
-                    },
+                        "stale": False},
                     "lanes": {
                         "writer-1": {
                             "worktree": expected["lane"],
-                            "HEAD": expected["integration_head"],
-                        }
+                            "HEAD": expected["integration_head"]}
                     },
-                    "warnings": [],
-                },
+                    "warnings": []},
             )
             self.assertNotIn("recovery_required", observed["result"])
 
@@ -2066,8 +2043,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                     "task_id": "demo",
                     "source_branch": "donor",
                     "persist": "main",
-                    "base_sha": base_sha,
-                },
+                    "base_sha": base_sha},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2096,8 +2072,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                     "source_branch": "donor",
                     "persist": "main",
                     "base_sha": git(repository, "rev-parse", "HEAD"),
-                    "dry_run": True,
-                },
+                    "dry_run": True},
             )
 
             self.assertTrue(observed["is_error"])
@@ -2135,8 +2110,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 {
                     "tool": "collab_integration_create",
                     "task_id": "demo",
-                    "method": "integration_create",
-                },
+                    "method": "integration_create"},
             )
 
             self.assertTrue(observed["is_error"])
@@ -2158,8 +2132,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 {
                     "tool": "collab_lane_collect",
                     "task_id": "demo",
-                    "lane_id": "writer-1",
-                },
+                    "lane_id": "writer-1"},
             )
 
             self.assertTrue(observed["is_error"])
@@ -2190,8 +2163,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 {
                     "tool": "collab_lane_collect",
                     "task_id": "demo",
-                    "lane_id": "writer-1",
-                },
+                    "lane_id": "writer-1"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2216,8 +2188,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 {
                     "tool": "collab_lane_collect",
                     "task_id": "demo",
-                    "lane_id": "writer-1",
-                },
+                    "lane_id": "writer-1"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2269,8 +2240,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                     {
                         "tool": "collab_lane_drop",
                         "task_id": "demo",
-                        "lane_id": "writer-1",
-                    },
+                        "lane_id": "writer-1"},
                 )
             finally:
                 os.environ["PATH"] = original_path
@@ -2301,8 +2271,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 {
                     "tool": "collab_lane_drop",
                     "task_id": "demo",
-                    "lane_id": "writer-1",
-                },
+                    "lane_id": "writer-1"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2327,8 +2296,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 {
                     "tool": "collab_lane_collect",
                     "task_id": "demo",
-                    "lane_id": "writer-1",
-                },
+                    "lane_id": "writer-1"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2348,8 +2316,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 {
                     "tool": "collab_lane_collect",
                     "task_id": "demo",
-                    "lane_id": "writer-1",
-                },
+                    "lane_id": "writer-1"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2372,8 +2339,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 {
                     "tool": "collab_lane_reconcile",
                     "task_id": "demo",
-                    "lane_id": "writer-1",
-                },
+                    "lane_id": "writer-1"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2403,8 +2369,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 {
                     "tool": "collab_lane_reconcile",
                     "task_id": "demo",
-                    "lane_id": "writer-1",
-                },
+                    "lane_id": "writer-1"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2429,8 +2394,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 {
                     "tool": "collab_lane_reconcile",
                     "task_id": "demo",
-                    "lane_id": "writer-1",
-                },
+                    "lane_id": "writer-1"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2454,8 +2418,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                     "tool": "collab_lane_create",
                     "task_id": "demo",
                     "lane_id": "new-lane",
-                    "comment": "  preserve this comment  ",
-                },
+                    "comment": "  preserve this comment  "},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2497,8 +2460,7 @@ class CollabOpExtensionStatusTests(unittest.TestCase):
                     "collab_lane_reconcile",
                     "collab_report",
                     "collab_run_reviewed_lane",
-                    "collab_status",
-                ],
+                    "collab_status"],
             )
             self.assertFalse(observed["is_error"])
             self.assertEqual(
@@ -2522,16 +2484,13 @@ class CollabOpExtensionStatusTests(unittest.TestCase):
                     "integration": {
                         "worktree": expected["integration"],
                         "HEAD": expected["integration_head"],
-                        "stale": False,
-                    },
+                        "stale": False},
                     "lanes": {
                         "writer-1": {
                             "worktree": expected["lane"],
-                            "HEAD": expected["integration_head"],
-                        }
+                            "HEAD": expected["integration_head"]}
                     },
-                    "warnings": [],
-                },
+                    "warnings": []},
             )
             self.assertNotIn("acceptance", observed["result"])
             self.assertNotIn("accepted", observed["result"])
@@ -2663,8 +2622,7 @@ class CollabOpExtensionIntegrationReconcileContractRegressionTests(unittest.Test
                     {
                         "tool": "collab_integration_reconcile",
                         "task_id": "demo",
-                        "lane_id": "repair",
-                    },
+                        "lane_id": "repair"},
                 )
 
                 self.assertTrue(observed["is_error"])
@@ -2691,8 +2649,7 @@ class CollabOpExtensionIntegrationReconcileContractRegressionTests(unittest.Test
                     {
                         "tool": "collab_integration_reconcile",
                         "task_id": "demo",
-                        "lane_id": "repair",
-                    },
+                        "lane_id": "repair"},
                 )
 
                 self.assertFalse(observed["is_error"])
@@ -2735,8 +2692,7 @@ exec "$real_git" "$@"
                         {
                             "tool": "collab_integration_reconcile",
                             "task_id": "demo",
-                            "lane_id": "repair",
-                        },
+                            "lane_id": "repair"},
                     )
                 finally:
                     os.environ["PATH"] = original_path
@@ -2780,8 +2736,7 @@ exec "$real_git" "$@"
                     {
                         "tool": "collab_integration_reconcile",
                         "task_id": "demo",
-                        "lane_id": "repair",
-                    },
+                        "lane_id": "repair"},
                 )
 
                 self.assertTrue(observed["is_error"])
@@ -2800,8 +2755,7 @@ exec "$real_git" "$@"
                 {
                     "tool": "collab_integration_reconcile",
                     "task_id": "demo",
-                    "lane_id": "repair",
-                },
+                    "lane_id": "repair"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2811,8 +2765,7 @@ exec "$real_git" "$@"
                     "ok": True,
                     "tool_version": 1,
                     "state": "noop",
-                    "warnings": ["persistence is already included in integration"],
-                },
+                    "warnings": ["persistence is already included in integration"]},
             )
             self.assertEqual(
                 git(repository, "rev-parse", "wave/demo/integration"),
@@ -2842,8 +2795,7 @@ exec "$real_git" "$@"
                 {
                     "tool": "collab_integration_reconcile",
                     "task_id": "demo",
-                    "lane_id": "repair",
-                },
+                    "lane_id": "repair"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2900,8 +2852,7 @@ exec "$real_git" "$@"
                 {
                     "tool": "collab_integration_reconcile",
                     "task_id": "demo",
-                    "lane_id": "repair",
-                },
+                    "lane_id": "repair"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2936,8 +2887,7 @@ exec "$real_git" "$@"
                 {
                     "tool": "collab_integration_reconcile",
                     "task_id": "demo",
-                    "lane_id": "repair",
-                },
+                    "lane_id": "repair"},
             )
 
             self.assertTrue(observed["is_error"])
@@ -2959,8 +2909,7 @@ exec "$real_git" "$@"
                 {
                     "tool": "collab_integration_reconcile",
                     "task_id": "demo",
-                    "lane_id": "repair",
-                },
+                    "lane_id": "repair"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -3140,8 +3089,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
                 {
                     "ok": True,
                     "tool_version": 1,
-                    "warnings": ["preserved unstaged tracked changes"],
-                },
+                    "warnings": ["preserved unstaged tracked changes"]},
             )
             landing = git(repository, "rev-parse", "main")
             self.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), expected["integration_head"])
@@ -4945,13 +4893,12 @@ class CollabOpT07FeedbackTests(unittest.TestCase):
 
     def test_feedback_all_six_branches_via_handle_completion(self) -> None:
         branches = [
-            ("impl-0", {"outcome": "COMPLETED", "validation": [], "efficiencyFeedback": "fb_impl_completed"}),
+            ("impl-0", {"outcome": "COMPLETED", "efficiencyFeedback": "fb_impl_completed"}),
             ("impl-0", {"outcome": "BLOCKED", "blocker": "b", "efficiencyFeedback": "fb_impl_blocked"}),
             ("impl-0", {"outcome": "NEEDS_DECISION", "decision": {"why": "w", "question": "q"}, "efficiencyFeedback": "fb_impl_needs"}),
             ("review-0", {"verdict": "PASS", "efficiencyFeedback": "fb_review_pass"}),
             ("review-0", {"verdict": "BLOCKED", "blockers": [{"where":"x","why":"y","howToFix":"z","trigger":"t"}], "efficiencyFeedback": "fb_review_blocked"}),
-            ("review-0", {"verdict": "NEEDS_DECISION", "decision": {"why":"w","question":"q"}, "efficiencyFeedback": "fb_review_needs"}),
-        ]
+            ("review-0", {"verdict": "NEEDS_DECISION", "decision": {"why":"w","question":"q"}, "efficiencyFeedback": "fb_review_needs"})]
         for workflow_key, structured in branches:
             with self.subTest(key=workflow_key, fb=structured.get("efficiencyFeedback")):
                 with tempfile.TemporaryDirectory() as tmp:

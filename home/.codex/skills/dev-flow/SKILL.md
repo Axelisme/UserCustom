@@ -68,6 +68,19 @@ The Orchestrator owns all ticket content and exclusively changes lifecycle state
 delegated writer may only toggle the Acceptance claims explicitly assigned to it; a reviewer reads
 and verifies without editing the ticket.
 
+Workflow-scoped Acceptance appendix: for named difficult claims that a read-only acceptor cannot
+adequately reproduce, the Orchestrator copies `templates/ticket/evidence.md` to one fresh exact
+target under the ticket directory before dispatch and places that exact path plus covered claim IDs
+in both role briefs. The template alone owns the `Subject`, `Evidence`, and `Residuals` shape. The
+worker may mutate only that exact target, binding the fixed candidate and covered claims to method,
+observations, artifact pointers when needed, and explicit limitations without judging Acceptance; if
+a required appendix cannot be completed, `COMPLETED` is unavailable. A dispatch without an assigned
+target grants no task-record evidence mutation. Automatic corrections update the same target
+sequentially for the latest candidate; a later separately dispatched workflow receives a fresh target
+and leaves earlier workflow evidence unchanged. The acceptor stays read-only, directly checks
+observable claims, and judges only whether the appendix describes a reasonable process for the
+covered difficult claims.
+
 Use one **single-store**: durable ticket state comes from this record. Session task lists are
 temporary projections and never overwrite durable state merely because their UI differs. A
 competing phase, progress, or acceptance store leaves the next reader choosing authority by accident.

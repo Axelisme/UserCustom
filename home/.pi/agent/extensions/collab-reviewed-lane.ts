@@ -15,6 +15,42 @@ import {
   reviewedLaneReviewerSchema,
 } from "./collab-shared/result-schema.ts";
 
+/**
+ * Reviewed lane lifecycle Module
+ *
+ * Ownership: this Module owns lifecycle admission, process-local active task/lane
+ * registration, correlated terminal completion and registration release.
+ *
+ * Key identity: canonical repository control root (path.resolve), task_id, lane_id.
+ * Equal IDs in different repositories do not block each other.
+ *
+ * Reservation timing: synchronously after managed-lane identity validation
+ * (discoverRepository, requireManagedIntegration, laneInventory + laneIsComplete)
+ * and before the first spawn-related await (profile preflight, RPC ping/spawn).
+ *
+ * Duplicate admission: while launching or active, a same-key launch returns
+ * reviewed_lane_active before child spawn, without a second RPC spawn. Different
+ * lane keys remain independent.
+ *
+ * Release rules: validation failure, cancellation before spawn emission, or an
+ * explicit spawn rejection releases the launching reservation immediately;
+ * cancellation or timeout after spawn emission is ambiguous and retains the
+ * reservation because a child may exist; a correlated receipt moves it to active
+ * until exact workflowId plus asyncDir terminal settlement releases it, and a
+ * later same-key launch then succeeds. Partial or unrelated completion events
+ * retain the active reservation. Release uses finally so telemetry or lock
+ * failure cannot strand the process-local reservation except for the admitted
+ * ambiguous post-emission case where no receipt arrives. If no receipt ever
+ * arrives, process restart is the admitted recovery boundary. Restart recovery
+ * is absent by contract.
+ *
+ * Telemetry relationship: settlement and publication in collab-shared/report.ts
+ * are best-effort side effects; they never delay, replace, or rewrite the public
+ * reviewed-workflow receipt or terminal result.
+ *
+ * Exact correlation: workflowId plus asyncDir.
+ */
+
 const DEV_FLOW_TICKET_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const REVIEWED_LANE_IDENTIFIER = /^[a-z0-9][a-z0-9._-]*$/;
 
@@ -153,6 +189,12 @@ type ReviewedLaneRoleSpec = {
 
 let resolveSubagentLaunchContract: ResolveSubagentLaunchContract | undefined;
 
+let __testSpawnTimeoutMs: number | undefined;
+export function __setTestSpawnTimeoutForTest(ms: number | undefined): void {
+  __testSpawnTimeoutMs = ms;
+  (globalThis as unknown as Record<string, unknown>).__collabTestSpawnTimeoutMs = ms;
+}
+
 function boundedMessage(value: unknown): string {
   const message =
     value instanceof Error ? value.message : typeof value === "string" ? value : "unknown error";
@@ -170,6 +212,7 @@ async function callSubagentRpc(
   const replyEvent = `${SUBAGENT_RPC_REPLY_PREFIX}${requestId}`;
   return new Promise<SubagentRpcReply>((resolve, reject) => {
     let unsubscribe: (() => void) | void;
+    let emitted = false;
     const cleanup = () => {
       if (typeof unsubscribe === "function") unsubscribe();
       clearTimeout(timer);
@@ -179,16 +222,29 @@ async function callSubagentRpc(
       cleanup();
       reject(failure);
     };
-    const aborted = () => fail(error(
-      "request_aborted",
-      "reviewed-lane launch was aborted before RPC completion",
-      "Retry the launch after the caller is ready to keep the request active.",
-    ));
-    const timer = setTimeout(() => fail(error(
-      "rpc_unavailable",
-      `pi-subagents did not answer the ${method} RPC request`,
-      "Enable pi-subagents with Extension RPC v1 support, then retry.",
-    )), method === "ping" ? 2000 : 15000);
+    const aborted = () => {
+      if (method === "spawn" && emitted) return;
+      const err = error(
+        "request_aborted",
+        "reviewed-lane launch was aborted before RPC completion",
+        "Retry the launch after the caller is ready to keep the request active.",
+      );
+      (err as unknown as Record<string, unknown>).__emitted = emitted;
+      (err as unknown as Record<string, unknown>).__method = method;
+      fail(err);
+    };
+    const globalTimeout = (globalThis as unknown as Record<string, unknown>).__collabTestSpawnTimeoutMs as number | undefined;
+    const timeoutMs = method === "ping" ? 2000 : (globalTimeout ?? __testSpawnTimeoutMs ?? 15000);
+    const timer = setTimeout(() => {
+      const err = error(
+        "rpc_unavailable",
+        `pi-subagents did not answer the ${method} RPC request`,
+        "Enable pi-subagents with Extension RPC v1 support, then retry.",
+      );
+      (err as unknown as Record<string, unknown>).__emitted = emitted;
+      (err as unknown as Record<string, unknown>).__method = method;
+      fail(err);
+    }, timeoutMs);
     unsubscribe = pi.events.on(replyEvent, (raw: unknown) => {
       const reply = raw && typeof raw === "object" && !Array.isArray(raw)
         ? raw as SubagentRpcReply
@@ -209,6 +265,7 @@ async function callSubagentRpc(
       params,
       source: { extension: "collab-op" },
     });
+    emitted = true;
   });
 }
 
@@ -252,6 +309,15 @@ function requireCorrectionBudget(value: unknown, error: ReviewedLaneErrorFactory
   return value;
 }
 
+/**
+ * Pi reviewed result projection
+ *
+ * This projection keeps typed routing in REVIEWED/CORRECTION_BUDGET_EXHAUSTED/BLOCKED/NEEDS_DECISION,
+ * preserves residualRisks and reviewer outOfEnvelopeFindings, but carries no free-text validation
+ * and no evidence body or pointer. Commands remain with run artifacts; durable observations for
+ * difficult claims belong to the Orchestrator-precreated workflow-scoped Acceptance appendix at the
+ * exact dispatched target. The runtime adds no evidence parameter and does not validate assignment.
+ */
 export function reviewedLaneWorkflowScript(input: {
   lane: string;
   workerBrief: string;
@@ -336,7 +402,6 @@ if (reviewer.structuredOutput.verdict === "BLOCKED") {
 }
 return {
   outcome: "REVIEWED",
-  validation: writer.structuredOutput.validation,
   residualRisks: writer.structuredOutput.residualRisks,
   outOfEnvelopeFindings: reviewer.structuredOutput.outOfEnvelopeFindings
 };`;
@@ -401,9 +466,34 @@ export async function runReviewedLane(
     );
   }
   const lane = inventory.lanePath;
+  const canonicalKey = canonicalLaneKey(repo.controlRoot, taskId, laneId);
+  if (activeLaneReservations.has(canonicalKey)) {
+    throw dependencies.error(
+      "reviewed_lane_active",
+      `reviewed lane ${taskId}/${laneId} is already active for this repository`,
+      "Wait for the correlated terminal settlement to release the lane before relaunching.",
+      { task_id: taskId, lane_id: laneId, repo_control_root: repo.controlRoot },
+    );
+  }
+  activeLaneReservations.set(canonicalKey, {
+    pi,
+    repo,
+    taskId,
+    ticketId,
+    laneId,
+    lanePath: lane,
+    workflowId: "",
+    asyncDir: "",
+    deps: dependencies,
+    canonicalKey,
+  });
   const workerTask = `Task ${taskId}; ticket ${ticketId}; managed lane ${lane}.\n\n${workerBrief}`;
   const reviewerTask = `Task ${taskId}; ticket ${ticketId}; protected managed lane ${lane}.\n\n${reviewBrief}`;
 
+  let _spawnedWorkflowId: string | undefined;
+  let _spawnedAsyncDir: string | undefined;
+  let _spawnedAsyncId: string | undefined;
+  try {
   const preflight = subagentPreflight(dependencies.error);
   const availableModels = ctx.modelRegistry?.getAvailable?.();
   const roleSpecs: ReviewedLaneRoleSpec[] = [
@@ -528,6 +618,14 @@ export async function runReviewedLane(
       "Use a pi-subagents RPC implementation that returns runId (or correlated asyncId) and asyncDir for spawn.",
     );
   }
+  _spawnedWorkflowId = runId;
+  _spawnedAsyncDir = asyncDir;
+  _spawnedAsyncId = asyncId;
+  const active = activeLaneReservations.get(canonicalKey);
+  if (active) {
+    active.workflowId = runId;
+    active.asyncDir = asyncDir;
+  }
   registerPendingReviewedLane({
     pi,
     repo,
@@ -538,8 +636,19 @@ export async function runReviewedLane(
     workflowId: runId,
     asyncDir,
     deps: dependencies,
+    canonicalKey,
   });
   return { workflow_id: runId, async_id: asyncId, async_dir: asyncDir };
+  } catch (e) {
+    const method = (e as unknown as Record<string, unknown>)?.__method as string | undefined;
+    const emitted = (e as unknown as Record<string, unknown>)?.__emitted as boolean | undefined;
+    const code = (e as unknown as { code?: unknown })?.code as string | undefined;
+    const isAmbiguousPostEmission = method === "spawn" && emitted === true && (code === "rpc_unavailable" || code === "request_aborted");
+    if (!isAmbiguousPostEmission) {
+      activeLaneReservations.delete(canonicalKey);
+    }
+    throw e;
+  }
 }
 
 type PendingReviewedLane = {
@@ -552,10 +661,26 @@ type PendingReviewedLane = {
   workflowId: string;
   asyncDir: string;
   deps: ReviewedLaneDependencies;
+  canonicalKey: string;
 };
 
+function canonicalLaneKey(repoControlRoot: string, taskId: string, laneId: string): string {
+  return `${path.resolve(repoControlRoot)}\0${taskId}\0${laneId}`;
+}
+
+const activeLaneReservations = new Map<string, PendingReviewedLane>();
 const pendingReviewedLanes = new Map<string, PendingReviewedLane>();
 let reviewedLaneListenerInstalled = false;
+
+export function getActiveReservationCount(): number {
+  return activeLaneReservations.size;
+}
+export function clearActiveReservationsForTest(): void {
+  activeLaneReservations.clear();
+}
+export function clearPendingForTest(): void {
+  pendingReviewedLanes.clear();
+}
 
 function registerPendingReviewedLane(pending: PendingReviewedLane): void {
   pendingReviewedLanes.set(pending.workflowId, pending);
@@ -566,7 +691,7 @@ function registerPendingReviewedLane(pending: PendingReviewedLane): void {
   });
 }
 
-async function processPendingEvent(map: Map<string, PendingReviewedLane>, raw: unknown): Promise<void> {
+async function processPendingEvent(map: Map<string, PendingReviewedLane>, raw: unknown, reservationMap?: Map<string, PendingReviewedLane>): Promise<void> {
   const data = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const eventWorkflowId = typeof data["runId"] === "string" ? (data["runId"] as string) : typeof data["id"] === "string" ? (data["id"] as string) : undefined;
   const eventAsyncDir = typeof data["asyncDir"] === "string" ? (data["asyncDir"] as string) : undefined;
@@ -574,24 +699,28 @@ async function processPendingEvent(map: Map<string, PendingReviewedLane>, raw: u
   const pending = map.get(eventWorkflowId);
   if (!pending) return;
   if (pending.asyncDir !== eventAsyncDir) return;
+  const reservations = reservationMap ?? activeLaneReservations;
   try {
-    const result = await pending.deps.withTaskLock(pending.repo, pending.taskId, () =>
-      handleReviewedLaneCompletion({
-        repoControlRoot: pending.repo.controlRoot,
-        taskId: pending.taskId,
-        ticketId: pending.ticketId,
-        laneId: pending.laneId,
-        lanePath: pending.lanePath,
-        workflowId: pending.workflowId,
-        asyncDir: pending.asyncDir,
-        eventWorkflowId,
-        eventAsyncDir,
-      }),
-    );
-    if (result.handled) map.delete(eventWorkflowId);
+    const result = await handleReviewedLaneCompletion({
+      repoControlRoot: pending.repo.controlRoot,
+      taskId: pending.taskId,
+      ticketId: pending.ticketId,
+      laneId: pending.laneId,
+      lanePath: pending.lanePath,
+      workflowId: pending.workflowId,
+      asyncDir: pending.asyncDir,
+      eventWorkflowId,
+      eventAsyncDir,
+      withTaskLock: <T>(body: () => Promise<T>) => pending.deps.withTaskLock(pending.repo, pending.taskId, body),
+    } as any);
+    if (result.handled) {
+      map.delete(eventWorkflowId);
+      reservations.delete(pending.canonicalKey);
+    }
   } catch (e) {
     try { console.warn(`[collab-reviewed-lane] ${boundedMessage(e).slice(0, 500)}`); } catch {}
     map.delete(eventWorkflowId);
+    reservations.delete(pending.canonicalKey);
   }
 }
 
@@ -601,27 +730,35 @@ export async function handleAsyncCompleteEvent(raw: unknown): Promise<void> {
 
 export function createIsolatedReviewedLaneHarness() {
   const isolatedPending = new Map<string, PendingReviewedLane>();
+  const isolatedReservations = new Map<string, PendingReviewedLane>();
   const installed = new Set<ExtensionAPI>();
   function ensureListener(pi: ExtensionAPI) {
     if (installed.has(pi)) return;
     installed.add(pi);
     pi.events.on("subagent:async-complete", (raw: unknown) => {
-      void processPendingEvent(isolatedPending, raw);
+      void processPendingEvent(isolatedPending, raw, isolatedReservations);
     });
   }
   return {
     registerPending(pending: PendingReviewedLane) {
       isolatedPending.set(pending.workflowId, pending);
+      isolatedReservations.set(pending.canonicalKey, pending);
       ensureListener(pending.pi);
     },
     handleAsyncCompleteEvent(raw: unknown) {
-      return processPendingEvent(isolatedPending, raw);
+      return processPendingEvent(isolatedPending, raw, isolatedReservations);
     },
     getPendingCount() {
       return isolatedPending.size;
     },
+    getReservationCount() {
+      return isolatedReservations.size;
+    },
     clearPending() {
       isolatedPending.clear();
+    },
+    clearReservations() {
+      isolatedReservations.clear();
     },
     emitViaPi(pi: ExtensionAPI, event: unknown) {
       pi.events.emit("subagent:async-complete", event);

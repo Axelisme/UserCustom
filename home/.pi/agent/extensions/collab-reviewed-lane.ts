@@ -312,7 +312,7 @@ function requireCorrectionBudget(value: unknown, error: ReviewedLaneErrorFactory
 /**
  * Pi reviewed result projection
  *
- * This projection keeps typed routing in REVIEWED/CORRECTION_BUDGET_EXHAUSTED/BLOCKED/NEEDS_DECISION,
+ * This projection keeps typed routing in REVIEWED/CORRECTION_BUDGET_EXHAUSTED/BLOCKED/NEEDS_DECISION/REVIEWER_RUNTIME_RECOVERY_EXHAUSTED,
  * preserves residualRisks and reviewer outOfEnvelopeFindings, but carries no free-text validation
  * and no evidence body or pointer. Commands remain with run artifacts; durable observations for
  * difficult claims belong to the Orchestrator-precreated workflow-scoped Acceptance appendix at the
@@ -374,10 +374,40 @@ const projectNeedsDecision = (child) => ({
 const projectWorkerStop = (child) => child.structuredOutput.outcome === "BLOCKED"
   ? { outcome: "BLOCKED", blocker: child.structuredOutput.blocker }
   : projectNeedsDecision(child);
+const boundedMessage = (value) => {
+  const m = value instanceof Error ? value.message : typeof value === "string" ? value : "unknown error";
+  return m.replace(/[\\r\\n]+/g, " ").slice(0, 300);
+};
+const isInterruptionError = (err) => err && (err.name === "AbortError" || err.code === "ABORT_ERR" || err.code === "INTERRUPTED");
+const MAX_REVIEWER_RECOVERY_ATTEMPTS = 2;
+const runReviewerWithRecovery = (baseKey, task, phase) => {
+  let lastError = null;
+  const attemptReviewer = (attempt) => {
+    const attemptKey = attempt === 0 ? baseKey : baseKey + "-retry-" + attempt;
+    return runFreshChild(attemptKey, "collab-acceptor", task, reviewerSchema).catch((e) => {
+      if (isInterruptionError(e)) throw e;
+      lastError = e;
+      if (attempt === MAX_REVIEWER_RECOVERY_ATTEMPTS) {
+        const bounded = boundedMessage(lastError);
+        return Promise.reject({ __reviewerRecoveryExhausted: true, phase, error: bounded, attempts: MAX_REVIEWER_RECOVERY_ATTEMPTS + 1 });
+      }
+      return attemptReviewer(attempt + 1);
+    });
+  };
+  return attemptReviewer(0);
+};
 let writer = await runFreshChild("impl-0", "collab-implementer", ${JSON.stringify(input.workerBrief)}, workerSchema);
 if (writer.structuredOutput.outcome !== "COMPLETED") return projectWorkerStop(writer);
 let resumeTarget = successfulRunId(writer);
-let reviewer = await runFreshChild("review-0", "collab-acceptor", ${JSON.stringify(input.reviewBrief)} + "\\n\\n" + reviewerBaseline, reviewerSchema);
+let reviewer;
+try {
+  reviewer = await runReviewerWithRecovery("review-0", ${JSON.stringify(input.reviewBrief)} + "\\n\\n" + reviewerBaseline, "REVIEW");
+} catch (e) {
+  if (e && e.__reviewerRecoveryExhausted) {
+    return { outcome: "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED", phase: e.phase, error: e.error };
+  }
+  throw e;
+}
 if (reviewer.structuredOutput.verdict === "NEEDS_DECISION") return projectNeedsDecision(reviewer);
 let round = 1;
 while (reviewer.structuredOutput.verdict === "BLOCKED" && round <= budget) {
@@ -388,12 +418,14 @@ while (reviewer.structuredOutput.verdict === "BLOCKED" && round <= budget) {
   );
   if (writer.structuredOutput.outcome !== "COMPLETED") return projectWorkerStop(writer);
   resumeTarget = successfulRunId(writer);
-  reviewer = await runFreshChild(
-    "review-" + round,
-    "collab-acceptor",
-    ${JSON.stringify(input.reviewBrief)} + " — rereview the complete current lane diff against the same immutable baseline.\\n\\n" + reviewerBaseline,
-    reviewerSchema
-  );
+  try {
+    reviewer = await runReviewerWithRecovery("review-" + round, ${JSON.stringify(input.reviewBrief)} + " — rereview the complete current lane diff against the same immutable baseline.\\n\\n" + reviewerBaseline, "REREVIEW");
+  } catch (e) {
+    if (e && e.__reviewerRecoveryExhausted) {
+      return { outcome: "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED", phase: e.phase, error: e.error };
+    }
+    throw e;
+  }
   if (reviewer.structuredOutput.verdict === "NEEDS_DECISION") return projectNeedsDecision(reviewer);
   round += 1;
 }

@@ -116,6 +116,29 @@ Terminal outcomes:
 - `CORRECTION_BUDGET_EXHAUSTED` — the reviewer still returns `BLOCKED` after the budget is spent; it
   carries the reviewer's remaining blockers. It is only a terminal seam; it does not start a
   redesign.
+- `REVIEWER_RUNTIME_RECOVERY_EXHAUSTED` — the reviewer child failed with a runtime or provider
+  transport error and the bounded recovery allowance was exhausted. It carries the failed phase
+  (`REVIEW` or `REREVIEW`) and a bounded error summary. It is distinct from `BLOCKED`,
+  `NEEDS_DECISION`, and correction-budget exhaustion and does not masquerade as a semantic outcome.
+
+### Reviewer runtime recovery
+
+The reviewed-lane workflow owns bounded recovery for read-only reviewer transport failures. Each
+review and rereview round allows exactly two fresh replacement attempts after its initial failed
+reviewer child (three attempts total per round). Every replacement runs with fresh context
+(`context: "fresh"`) against the same protected lane, the same ticket expectations and review brief
+as the failed round, and the same runtime-owned immutable integration baseline (`integrationTip`
+and the canonical `git diff --find-renames <tip>...HEAD --` command). Recovery attempts do not
+consume or reset the semantic correction budget — only a `BLOCKED` reviewer verdict followed by a
+writer correction consumes that budget. Only a schema-valid structured verdict (`PASS`, `BLOCKED`,
+`NEEDS_DECISION`) returned by a successful child may drive workflow branching; free-form output
+text and failed-child structured-output capture artifacts remain diagnostic and never drive
+branching. If the bounded allowance is exhausted, the workflow returns the typed
+`REVIEWER_RUNTIME_RECOVERY_EXHAUSTED` outcome with bounded phase and error diagnostics instead of
+throwing or returning an unclassified workflow failure. Writer (implementer/correction) runtime
+failures are never automatically retried or resumed because the lane may contain partial
+mutations; recovery is left to the Orchestrator. Profile-owned model and thinking settings remain
+unchanged and the immutable review subject is never altered by recovery.
 
 The tool returns only an asynchronous launch receipt — `workflow_id`, `async_id`, and `async_dir`.
 The receipt is not Acceptance: the ordinary asynchronous workflow result must wake the session

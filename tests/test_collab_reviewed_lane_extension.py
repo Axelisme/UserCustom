@@ -2445,5 +2445,192 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
             self.assertNotIn("efficiencyFeedback", execution["result"])
             self.assertEqual([c["key"] for c in execution["calls"]], ["impl-0", "review-0", "impl-1", "review-1"])
 
+    def test_initial_reviewer_transport_failure_recovers_with_fresh_retry_and_preserves_subject(self) -> None:
+        # Portable harness test: initial review transport failure is recovered via one
+        # fresh replacement; every attempt uses fresh context, same lane/brief/baseline.
+        worker = {"outcome": "COMPLETED", "residualRisks": []}
+        passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, expected, capture, observed = self.launch_case(base, correction_budget=1)
+            self.assertFalse(observed["is_error"], observed)
+            steps = [completed_step(worker), {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "WebSocket provider_transport_failure"}, passed]
+            run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            execution = json.loads(run.stdout)
+            self.assertEqual(execution["result"]["outcome"], "REVIEWED")
+            self.assertEqual([c["key"] for c in execution["calls"]], ["impl-0", "review-0", "review-0-retry-1"])
+            # every reviewer attempt is fresh, same lane, same integration baseline and brief
+            for key in ("review-0", "review-0-retry-1"):
+                opts = next(c["options"] for c in execution["calls"] if c["key"] == key)
+                self.assertEqual(opts["cwd"], expected["lane"])
+                self.assertEqual(opts["context"], "fresh")
+                self.assertIs(opts["worktree"], False)
+                self.assertEqual(opts["agent"], "collab-acceptor")
+            tasks = [next(c["options"]["task"] for c in execution["calls"] if c["key"] == k) for k in ("review-0", "review-0-retry-1")]
+            self.assertEqual(tasks[0], tasks[1])
+            self.assertIn(expected["integration_head"], tasks[0])
+            self.assertIn(f"git diff --find-renames {expected['integration_head']}...HEAD --", tasks[0])
+            # correction budget is not consumed by reviewer retry - no extra writer launched
+            self.assertEqual([c["key"] for c in execution["calls"] if c["key"].startswith("impl-")], ["impl-0"])
+
+    def test_rereview_transport_failure_recovers_with_fresh_retry_and_preserves_subject(self) -> None:
+        # Portable harness test: rereview transport failure after a correction is recovered;
+        # subject (lane/brief/baseline) unchanged and correction accounting preserved.
+        worker = {"outcome": "COMPLETED", "residualRisks": ["bounded"]}
+        blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "outOfEnvelopeFindings": []}
+        passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, expected, capture, observed = self.launch_case(base, correction_budget=1)
+            self.assertFalse(observed["is_error"], observed)
+            steps = [completed_step(worker), blocked, completed_step(worker), {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "provider_transport_failure"}, passed]
+            run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            execution = json.loads(run.stdout)
+            self.assertEqual(execution["result"]["outcome"], "REVIEWED")
+            self.assertEqual([c["key"] for c in execution["calls"]], ["impl-0", "review-0", "impl-1", "review-1", "review-1-retry-1"])
+            # fresh context for every reviewer attempt, same lane/brief/baseline across retries
+            for key in ("review-1", "review-1-retry-1"):
+                opts = next(c["options"] for c in execution["calls"] if c["key"] == key)
+                self.assertEqual(opts["cwd"], expected["lane"])
+                self.assertEqual(opts["context"], "fresh")
+                self.assertIs(opts["worktree"], False)
+            tasks = [next(c["options"]["task"] for c in execution["calls"] if c["key"] == k) for k in ("review-1", "review-1-retry-1")]
+            self.assertEqual(tasks[0], tasks[1])
+            self.assertIn(expected["integration_head"], tasks[0])
+            self.assertIn(f"git diff --find-renames {expected['integration_head']}...HEAD --", tasks[0])
+            self.assertIn("complete current lane diff", tasks[0])
+            # correction accounting: only one BLOCKED->writer transition consumed budget; retry did not add a writer
+            self.assertEqual([c["key"] for c in execution["calls"] if c["key"].startswith("impl-")], ["impl-0", "impl-1"])
+            # initial review task and rereview retry task share the same immutable baseline tip
+            initial_task = next(c["options"]["task"] for c in execution["calls"] if c["key"] == "review-0")
+            self.assertIn(expected["integration_head"], initial_task)
+
+    def test_reviewer_recovery_exhausts_after_exactly_two_replacements_with_typed_outcome(self) -> None:
+        # Portable harness test: after exactly two failed replacements (three attempts) the
+        # workflow returns REVIEWER_RUNTIME_RECOVERY_EXHAUSTED with bounded phase/diagnostics,
+        # not an unclassified exception. Cover both REVIEW and REREVIEW phases.
+        worker = {"outcome": "COMPLETED", "residualRisks": []}
+        blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "outOfEnvelopeFindings": []}
+        # REVIEW exhaustion
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, expected, capture, observed = self.launch_case(base, correction_budget=1)
+            self.assertFalse(observed["is_error"], observed)
+            steps = [completed_step(worker), {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport fail 1"}, {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport fail 2"}, {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport fail 3"}]
+            run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            execution = json.loads(run.stdout)
+            self.assertEqual(execution["result"]["outcome"], "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED")
+            self.assertEqual(execution["result"]["phase"], "REVIEW")
+            self.assertIsInstance(execution["result"]["error"], str)
+            self.assertGreater(len(execution["result"]["error"]), 0)
+            self.assertLessEqual(len(execution["result"]["error"]), 300)
+            self.assertNotIn("\n", execution["result"]["error"])
+            self.assertNotIn("\r", execution["result"]["error"])
+            self.assertEqual([c["key"] for c in execution["calls"]], ["impl-0", "review-0", "review-0-retry-1", "review-0-retry-2"])
+        # REREVIEW exhaustion
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, expected2, capture2, observed2 = self.launch_case(base, correction_budget=2)
+            self.assertFalse(observed2["is_error"], observed2)
+            steps2 = [completed_step(worker), blocked, completed_step(worker), {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport fail 1"}, {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport fail 2"}, {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport fail 3"}]
+            run2 = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture2), json.dumps(steps2)], capture_output=True, text=True, check=False)
+            self.assertEqual(run2.returncode, 0, run2.stderr)
+            execution2 = json.loads(run2.stdout)
+            self.assertEqual(execution2["result"]["outcome"], "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED")
+            self.assertEqual(execution2["result"]["phase"], "REREVIEW")
+            self.assertIsInstance(execution2["result"]["error"], str)
+            self.assertLessEqual(len(execution2["result"]["error"]), 300)
+            self.assertEqual([c["key"] for c in execution2["calls"]], ["impl-0", "review-0", "impl-1", "review-1", "review-1-retry-1", "review-1-retry-2"])
+            # correction accounting preserved across exhaustion: only one writer correction before REREVIEW exhaustion
+            self.assertEqual([c["key"] for c in execution2["calls"] if c["key"].startswith("impl-")], ["impl-0", "impl-1"])
+
+    def test_reviewer_recovery_preserves_correction_budget_and_semantic_verdict_does_not_retry(self) -> None:
+        # Portable harness test: semantic BLOCKED/PASS/NEEDS_DECISION do not trigger retry;
+        # recovery does not consume or reset correction budget.
+        worker = {"outcome": "COMPLETED", "residualRisks": []}
+        blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "outOfEnvelopeFindings": []}
+        passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        needs = {"verdict": "NEEDS_DECISION", "decision": {"why": "why", "question": "q"}}
+        # semantic BLOCKED drives correction, not retry
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, _, capture, observed = self.launch_case(base, correction_budget=1)
+            self.assertFalse(observed["is_error"], observed)
+            steps = [completed_step(worker), blocked, completed_step(worker), passed]
+            run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            execution = json.loads(run.stdout)
+            self.assertEqual(execution["result"]["outcome"], "REVIEWED")
+            self.assertEqual([c["key"] for c in execution["calls"]], ["impl-0", "review-0", "impl-1", "review-1"])
+            self.assertNotIn("review-0-retry-1", [c["key"] for c in execution["calls"]])
+        # NEEDS_DECISION also does not trigger retry
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, _, capture, observed = self.launch_case(base, correction_budget=1)
+            self.assertFalse(observed["is_error"], observed)
+            steps = [completed_step(worker), needs]
+            run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            execution = json.loads(run.stdout)
+            self.assertEqual(execution["result"]["outcome"], "NEEDS_DECISION")
+            self.assertEqual(len(execution["calls"]), 2)
+            self.assertNotIn("review-0-retry-1", [c["key"] for c in execution["calls"]])
+        # recovery does not consume budget: one BLOCKED + rereview retry still within budget 1
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, _, capture, observed = self.launch_case(base, correction_budget=1)
+            self.assertFalse(observed["is_error"], observed)
+            steps = [completed_step(worker), blocked, completed_step(worker), {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport"}, passed]
+            run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            execution = json.loads(run.stdout)
+            self.assertEqual(execution["result"]["outcome"], "REVIEWED")
+            self.assertEqual([c["key"] for c in execution["calls"] if c["key"].startswith("impl-")], ["impl-0", "impl-1"])
+        # recovery does not reset budget: two BLOCKEDs with retry in between still exhausts with budget 1
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, _, capture, observed = self.launch_case(base, correction_budget=1)
+            self.assertFalse(observed["is_error"], observed)
+            retry_blocked = blocked  # second BLOCKED after retry
+            steps = [completed_step(worker), blocked, completed_step(worker), {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport"}, retry_blocked]
+            run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            execution = json.loads(run.stdout)
+            self.assertEqual(execution["result"]["outcome"], "CORRECTION_BUDGET_EXHAUSTED")
+            self.assertEqual([c["key"] for c in execution["calls"]], ["impl-0", "review-0", "impl-1", "review-1", "review-1-retry-1"])
+            self.assertNotIn("impl-2", [c["key"] for c in execution["calls"]])
+
+    def test_writer_runtime_failure_does_not_retry(self) -> None:
+        worker_pass = {"outcome": "COMPLETED", "residualRisks": []}
+        blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "outOfEnvelopeFindings": []}
+        # initial writer throw - no replacement
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, _, capture, observed = self.launch_case(base, correction_budget=1)
+            self.assertFalse(observed["is_error"], observed)
+            steps = [{"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "lane partially mutated transport failure"}]
+            run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
+            self.assertNotEqual(run.returncode, 0)
+            execution = json.loads(run.stdout)
+            self.assertEqual([c["key"] for c in execution["calls"]], ["impl-0"])
+            self.assertNotIn("impl-0-retry-1", [c["key"] for c in execution["calls"]])
+            self.assertIn("lane partially mutated", run.stderr + execution.get("error", ""))
+        # correction writer throw - no replacement or resume
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            _, _, capture, observed = self.launch_case(base, correction_budget=1)
+            self.assertFalse(observed["is_error"], observed)
+            steps = [completed_step(worker_pass), blocked, {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "correction transport failure"}]
+            run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
+            self.assertNotEqual(run.returncode, 0)
+            execution = json.loads(run.stdout)
+            self.assertEqual([c["key"] for c in execution["calls"]], ["impl-0", "review-0", "impl-1"])
+            self.assertNotIn("impl-1-retry-1", [c["key"] for c in execution["calls"]])
+            self.assertNotIn("review-1", [c["key"] for c in execution["calls"]])
+
+
 if __name__ == "__main__":
     unittest.main()

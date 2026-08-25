@@ -7,6 +7,7 @@ import io
 import json
 import os
 import re
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -41,16 +42,54 @@ def run_plan(root: Path, *arguments: str) -> Outcome:
 
     Running inside `root` rather than passing it keeps `main`'s own working-directory
     resolution under test; only the process boundary is dropped.
+    Historic CWD-as-root tests run outside Git; they are preserved by injecting
+    --repo when the directory is not inside a Git worktree. Discovery and
+    repository_not_found branches are exercised via run_production which does
+    not inject.
     """
+    args = list(arguments)
+    if "--repo" not in args and "--help" not in args and "-h" not in args:
+        if not args or args[0] in ("create", "archive", "list", "locate"):
+            # Check Git worktree membership without side effects
+            try:
+                probe = subprocess.run(
+                    ["/usr/bin/git", "rev-parse", "--show-toplevel"],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                outside_git = probe.returncode != 0
+            except Exception:
+                outside_git = True
+            if outside_git:
+                args = ["--repo", str(root), *args]
     out = io.StringIO()
     err = io.StringIO()
     status = 0
     with contextlib.chdir(root), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
         try:
-            plan.main(list(arguments))
+            plan.main(args)
         except SystemExit as exit_status:  # a refusal, or argparse rejecting the arguments
             status = int(exit_status.code or 0)
     return Outcome(status, out.getvalue(), err.getvalue())
+
+
+def run_production(root: Path, *arguments: str) -> Outcome:
+    """Invoke the shipped plan.py via the authorized interpreter without injection.
+
+    This exercises the production entrypoint exactly as a user would, including
+    Git discovery and repository_not_found refusal, without the historic
+    --repo injection that masks those branches.
+    """
+    proc = subprocess.run(
+        ["/usr/bin/python3", str(SCRIPT), *arguments],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return Outcome(proc.returncode, proc.stdout, proc.stderr)
 
 
 def payload(done: Outcome) -> dict[str, object]:
@@ -783,6 +822,221 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(refusal["error"]["paths"], [".agent_state/archives/SOURCE"])
             self.assertEqual(snapshot(record(root, "source")), source_before)
             self.assertTrue(destination.is_dir())
+
+    def test_explicit_repo_inaccessible_directory_is_invalid_argument_without_control_root(self) -> None:
+        for mode, label in ((0, "mode-000"), (0o400, "mode-0400")):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                candidate = root / "candidate"
+                candidate.mkdir()
+                # Make candidate inaccessible. This must be refused during
+                # root selection as invalid_argument without a claimed control_root,
+                # without reaching task-path inspection.
+                candidate.chmod(mode)
+                try:
+                    # Effective inaccessibility: do not assume mode bits alone
+                    # make the path inaccessible for every caller. POSIX ACLs
+                    # may grant effective R_OK|X_OK, and root bypasses DAC.
+                    # Only assert refusal when the current process is effectively
+                    # denied read+traverse and enumeration.
+                    try:
+                        has_eff = os.access(candidate, os.R_OK | os.X_OK, effective_ids=True)
+                    except TypeError:
+                        has_eff = os.access(candidate, os.R_OK | os.X_OK)
+                    if has_eff:
+                        self.skipTest(f"candidate remains effectively accessible as {label} for caller {os.getuid()}")
+                    # Do not skip solely on scandir success: a mode-0400 directory
+                    # is still effectively inaccessible for read+traverse (needs X)
+                    # even though listing may succeed. Only effective R_OK|X_OK
+                    # determines genuine inaccessibility for --repo selection.
+                    before = snapshot(root)
+                    done = run_plan(root, "--repo", str(candidate), "list")
+                    body = self.assert_refusal(done, "list", "invalid_argument")
+                    self.assertNotIn("control_root", body, "inaccessible explicit root must not claim control_root")
+                    self.assertNotIn("start_path", body)
+                    self.assertEqual(body["error"]["paths"], [str(candidate)])
+                    # No task-path inspection should have occurred: snapshot unchanged
+                    self.assertEqual(snapshot(root), before, "inaccessible root must be refused before task-path inspection")
+                    self.assertEqual(len(done.stdout.splitlines()), 1)
+                    self.assertEqual(done.stderr, "")
+                finally:
+                    candidate.chmod(0o700)
+
+
+class RootSelectionProductionTests(unittest.TestCase):
+    """Production-entrypoint coverage for S1-S3 omitted by the in-process helper.
+
+    run_production invokes the shipped plan.py via /usr/bin/python3 without
+    injecting --repo, so Git discovery and repository_not_found branches are
+    exercised exactly as a user would. These tests do not assert prose wording.
+    """
+
+    def assert_ok(self, done: Outcome, operation: str) -> dict[str, object]:
+        self.assertEqual(done.returncode, 0, done.stderr or done.stdout)
+        body = json.loads(done.stdout)
+        self.assertIs(body["ok"], True)
+        self.assertEqual(body["operation"], operation)
+        self.assertNotIn("error", body)
+        return body
+
+    def assert_refusal(self, done: Outcome, operation: str, code: str) -> dict[str, object]:
+        self.assertEqual(done.returncode, 1, done.stderr or done.stdout)
+        self.assertEqual(done.stderr, "")
+        body = json.loads(done.stdout)
+        self.assertIs(body["ok"], False)
+        self.assertEqual(body["operation"], operation)
+        error = body["error"]
+        self.assertIsInstance(error, dict)
+        assert isinstance(error, dict)
+        self.assertEqual(error["code"], code)
+        self.assertEqual(error["paths"], sorted(error["paths"]))
+        self.assertTrue(error["repair"])
+        return body
+
+    def test_explicit_repo_from_another_cwd_uses_direct_directory_without_git_discovery(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_repo, tempfile.TemporaryDirectory() as tmp_cwd:
+            repo = Path(tmp_repo)
+            other = Path(tmp_cwd)
+            # Explicit --repo from another CWD must use that directory directly even though
+            # the CWD itself is outside Git and contains no record.
+            done = run_production(other, "--repo", str(repo), "create", "demo")
+            body = self.assert_ok(done, "create")
+            self.assertEqual(body["control_root"], str(repo.resolve()))
+            self.assertTrue((repo / ".agent_state/plans/demo").is_dir())
+            self.assertFalse((other / ".agent_state").exists())
+            # List from another CWD with explicit --repo
+            listed = self.assert_ok(run_production(other, "--repo", str(repo), "list"), "list")
+            self.assertEqual(listed["control_root"], str(repo.resolve()))
+            self.assertEqual(listed["location"], "active")
+            # Locate from another CWD with explicit --repo
+            located = self.assert_ok(run_production(other, "--repo", str(repo), "locate", "demo"), "locate")
+            self.assertEqual(located["control_root"], str(repo.resolve()))
+            self.assertEqual(located["location"], "active")
+            # Even when the CWD is itself a Git worktree, explicit --repo still wins and
+            # does not silently redirect to the CWD's worktree root.
+            subprocess.run(["/usr/bin/git", "init", "-q", str(other)], check=True)
+            located2 = self.assert_ok(run_production(other, "--repo", str(repo), "locate", "demo"), "locate")
+            self.assertEqual(located2["control_root"], str(repo.resolve()))
+
+    def test_nested_git_discovery_selects_worktree_root_via_production(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo = base / "repo"
+            repo.mkdir()
+            subprocess.run(["/usr/bin/git", "init", "-q", str(repo)], check=True)
+            nested = repo / "nested" / "deep"
+            nested.mkdir(parents=True)
+            # Without --repo, CWD inside nested directory must discover the worktree root.
+            created = self.assert_ok(run_production(nested, "create", "demo"), "create")
+            self.assertEqual(created["control_root"], str(repo.resolve()))
+            self.assertTrue((repo / ".agent_state/plans/demo").is_dir())
+            self.assertFalse((nested / ".agent_state").exists())
+            listed = self.assert_ok(run_production(nested, "list"), "list")
+            self.assertEqual(listed["control_root"], str(repo.resolve()))
+            located = self.assert_ok(run_production(nested, "locate", "demo"), "locate")
+            self.assertEqual(located["control_root"], str(repo.resolve()))
+            # Archive family also discovers via Git from nested CWD.
+            archived = self.assert_ok(run_production(nested, "archive", "demo"), "archive")
+            self.assertEqual(archived["control_root"], str(repo.resolve()))
+            self.assertTrue((repo / ".agent_state/archives/demo").is_dir())
+            restored = self.assert_ok(run_production(nested, "archive", "demo", "--undo"), "archive")
+            self.assertEqual(restored["control_root"], str(repo.resolve()))
+            self.assertTrue((repo / ".agent_state/plans/demo").is_dir())
+
+    def test_outside_git_without_repo_returns_repository_not_found_via_production(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = Path(tmp) / "outside"
+            outside.mkdir()
+            probe = subprocess.run(
+                ["/usr/bin/git", "rev-parse", "--show-toplevel"],
+                cwd=outside,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if probe.returncode == 0:
+                self.skipTest("outside dir unexpectedly inside Git")
+            for op in ("list", "create", "locate"):
+                with self.subTest(operation=op):
+                    args = [op] if op == "list" else [op, "someid"]
+                    done = run_production(outside, *args)
+                    body = self.assert_refusal(done, op, "repository_not_found")
+                    self.assertNotIn("control_root", body)
+                    self.assertIn("start_path", body)
+                    self.assertEqual(body["start_path"], str(outside.resolve()))
+                    self.assertEqual(len(done.stdout.splitlines()), 1)
+                    self.assertEqual(done.stderr, "")
+
+    def test_success_and_refusal_control_root_attribution_via_production(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            subprocess.run(["/usr/bin/git", "init", "-q", str(repo)], check=True)
+            # Success payloads include absolute control_root.
+            created = self.assert_ok(run_production(repo, "create", "demo"), "create")
+            self.assertEqual(created["control_root"], str(repo.resolve()))
+            listed = self.assert_ok(run_production(repo, "list"), "list")
+            self.assertEqual(listed["control_root"], str(repo.resolve()))
+            located = self.assert_ok(run_production(repo, "locate", "demo"), "locate")
+            self.assertEqual(located["control_root"], str(repo.resolve()))
+            archived = self.assert_ok(run_production(repo, "archive", "demo"), "archive")
+            self.assertEqual(archived["control_root"], str(repo.resolve()))
+            restored = self.assert_ok(run_production(repo, "archive", "demo", "--undo"), "archive")
+            self.assertEqual(restored["control_root"], str(repo.resolve()))
+            # Ordinary refusal after root selection includes control_root.
+            dup = self.assert_refusal(run_production(repo, "create", "demo"), "create", "record_exists")
+            self.assertEqual(dup["control_root"], str(repo.resolve()))
+            self.assertNotIn("start_path", dup)
+            bad = self.assert_refusal(run_production(repo, "create", "../bad"), "create", "invalid_argument")
+            self.assertEqual(bad["control_root"], str(repo.resolve()))
+            # Explicit --repo success also attributes control_root even when CWD is elsewhere.
+            with tempfile.TemporaryDirectory() as tmp2:
+                other = Path(tmp2)
+                explicit_ok = self.assert_ok(run_production(other, "--repo", str(repo), "locate", "demo"), "locate")
+                self.assertEqual(explicit_ok["control_root"], str(repo.resolve()))
+                # Refusal via explicit --repo still attributes that explicit root.
+                explicit_refused = self.assert_refusal(
+                    run_production(other, "--repo", str(repo), "create", "demo"), "create", "record_exists"
+                )
+                self.assertEqual(explicit_refused["control_root"], str(repo.resolve()))
+            # Repository-not-found refusal does not claim a selected root.
+            with tempfile.TemporaryDirectory() as tmp3:
+                outside = Path(tmp3) / "outside2"
+                outside.mkdir()
+                fail = self.assert_refusal(run_production(outside, "locate", "demo"), "locate", "repository_not_found")
+                self.assertNotIn("control_root", fail)
+                self.assertIn("start_path", fail)
+                self.assertEqual(fail["start_path"], str(outside.resolve()))
+
+    def test_archive_family_through_production_entrypoint_with_explicit_and_discovered_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            subprocess.run(["/usr/bin/git", "init", "-q", str(repo)], check=True)
+            with tempfile.TemporaryDirectory() as tmp_cwd:
+                other = Path(tmp_cwd)
+                # Create via explicit --repo from another CWD, outside Git.
+                self.assert_ok(run_production(other, "--repo", str(repo), "create", "todelete"), "create")
+                self.assertTrue((repo / ".agent_state/plans/todelete").is_dir())
+                # Archive via discovered root (CWD = repo).
+                arch = self.assert_ok(run_production(repo, "archive", "todelete"), "archive")
+                self.assertEqual(arch["control_root"], str(repo.resolve()))
+                self.assertEqual(arch["paths"], [".agent_state/archives/todelete"])
+                self.assertFalse((repo / ".agent_state/plans/todelete").exists())
+                self.assertTrue((repo / ".agent_state/archives/todelete").is_dir())
+                # Undo via explicit --repo from another CWD.
+                undone = self.assert_ok(run_production(other, "--repo", str(repo), "archive", "todelete", "--undo"), "archive")
+                self.assertEqual(undone["control_root"], str(repo.resolve()))
+                self.assertTrue((repo / ".agent_state/plans/todelete").is_dir())
+                self.assertFalse((repo / ".agent_state/archives/todelete").exists())
+                # Archive again via explicit --repo.
+                arch2 = self.assert_ok(run_production(other, "--repo", str(repo), "archive", "todelete"), "archive")
+                self.assertEqual(arch2["control_root"], str(repo.resolve()))
+                self.assertTrue((repo / ".agent_state/archives/todelete").is_dir())
+                # Locate archived record via production still attributes control_root.
+                located_archived = self.assert_ok(run_production(other, "--repo", str(repo), "locate", "todelete"), "locate")
+                self.assertEqual(located_archived["control_root"], str(repo.resolve()))
+                self.assertEqual(located_archived["location"], "archived")
 
 
 if __name__ == "__main__":

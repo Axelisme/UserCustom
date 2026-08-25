@@ -134,10 +134,12 @@ a promise, so rewrite it to assert through the Interface as you go. Hand back a 
 
 For an acceptance correction, use the evidence and the reviewer's blockers in the dispatch. Reusing
 the same writer is a context-cache optimization, not a continuity requirement; a fresh writer can
-continue from that evidence. Address supplied blockers within the original scope and search for
-direct siblings of the same failure class. Return `NEEDS_DECISION` instead when the only fix
-available inside that scope is a local workaround for a cause that sits in the seam, or when a
-failure class returns after a correction already addressed it: moving a seam is an Orchestrator
+continue from that evidence. Address supplied blockers within the original scope, fix the failure
+class rather than only the named examples, and search the same owning function for direct siblings
+of the same failure class governed by the same ticket expectation. Return `NEEDS_DECISION` instead
+when closure requires wider scope or the only fix available inside that scope is a local workaround
+for a cause that sits in the seam, or when a failure class returns after a correction already
+addressed it: moving a seam is an Orchestrator
 decision, and a second patch over one cause is evidence the seam is in the wrong place. A dispatch
 that explicitly authorizes moving a named seam lifts the original scope for that move alone. A
 correction changes the lane, so the changed lane needs a new review result.

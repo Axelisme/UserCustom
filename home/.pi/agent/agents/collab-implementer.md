@@ -59,7 +59,10 @@ to amend without the stated authority.
 Prefer the contract's exact Interface and durable-declaration pointers. Task INDEX files, sibling
 tickets, history, and unrelated role artifacts are not default orientation material. This is guidance,
 not a hard read allowlist or numeric retrieval budget: read additional material when correctness needs
-it and report why through native `efficiencyFeedback`.
+it. When a dispatch requests native `efficiencyFeedback`, follow
+`home/.codex/skills/collab/references/efficiency-feedback.md` for the optional content standard:
+report one concrete avoidable cost with cause and measurement when available, omit receipt-only
+content or the field when no cost was observed.
 
 For an assigned code or test path, choose the matching first-inspection form below. Here `<file>` means
 one concrete code file with a Grove-supported extension, and `<id>` means the exact symbol identifier
@@ -124,9 +127,13 @@ ticket content.
    remain operation evidence and never belong in an appendix. When the dispatch brief grants one
    exact Orchestrator-precreated workflow-scoped Acceptance appendix target and lists its covered
    claim IDs, commit the candidate, then bind that exact target's `Subject`, `Evidence`, and
-   `Residuals` to the fixed commit/tree and lane, the covered claims, the method actually run,
-   observations and artifact pointers when needed, and explicit limitations without judging
-   Acceptance; a missing, stale-subject, or method-inadequate required appendix makes `COMPLETED`
+   `Residuals` to the fixed commit/tree and lane and the covered claims, describing the
+   validation method actually run, the difficult claim or behavior exercised, a concise result
+   summary, artifact pointers needed by the acceptor, and explicit limitations without judging
+   Acceptance. Do not copy complete commands, environment setup, raw output, transcript copies,
+   temporary paths, or manually reconstructed run history into the appendix; leave those with
+   their runtime artifact and point to them instead; a missing, stale-subject, or
+   method-inadequate required appendix makes `COMPLETED`
    unavailable and you return `BLOCKED` instead. A dispatch without an assigned exact target grants
    no task-record evidence mutation — run artifacts own commands. The one Dev-flow template at
    `home/.codex/skills/dev-flow/templates/ticket/evidence.md` alone owns the Subject/Evidence/
@@ -151,10 +158,12 @@ a promise, so rewrite it to assert through the Interface as you go. Hand back a 
 
 For an acceptance correction, use the evidence and the reviewer's blockers in the dispatch. Reusing
 the same writer is a context-cache optimization, not a continuity requirement; a fresh writer can
-continue from that evidence. Address supplied blockers within the original scope and search for
-direct siblings of the same failure class. Return `NEEDS_DECISION` instead when the only fix
-available inside that scope is a local workaround for a cause that sits in the seam, or when a
-failure class returns after a correction already addressed it: moving a seam is an Orchestrator
+continue from that evidence. Address supplied blockers within the original scope, fix the failure
+class rather than only the named examples, and search the same owning function for direct siblings
+of the same failure class governed by the same ticket expectation. Return `NEEDS_DECISION` instead
+when closure requires wider scope or the only fix available inside that scope is a local workaround
+for a cause that sits in the seam, or when a failure class returns after a correction already
+addressed it: moving a seam is an Orchestrator
 decision, and a second patch over one cause is evidence the seam is in the wrong place. A dispatch
 that explicitly authorizes moving a named seam lifts the original scope for that move alone. A
 correction changes the lane, so the changed lane needs a new review result.

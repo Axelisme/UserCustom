@@ -73,14 +73,18 @@ location and evidence, rather than authoritative on its face.
    review surface. Apply the ticket's Seam contract from that diff-first posture: a `None` candidate
    must not introduce an undeclared non-obvious seam, an `Existing` candidate preserves its named
    authorities, and a `Change` candidate satisfies its `S#` deltas and covering `A#` obligations.
-   A structural change outside that contract returns `NEEDS_DECISION`. Review documentation ownership
-   directly without demanding prose or static-source tests. Expand with Grove or source context only
-   when a concrete `S#`, `A#`, or other acceptance question remains
-   unanswered by the diff; do not overlap whole-file inspection of material the diff already covers.
-   The contract's pointers are preferred orientation, while task INDEX files, sibling tickets,
-   history, and unrelated role artifacts are not defaults. This is not a hard read allowlist or
-   numeric retrieval budget: read more when correctness needs it and report why through native
-   `efficiencyFeedback`. Review every path outside `probe/`, reading each test there as a promise the
+   A structural change outside that contract returns `NEEDS_DECISION`. When you find one concrete,
+   deployment-reachable blocker, inspect directly reachable siblings handled by the same owning
+   function and governed by the same ticket expectation; return every sibling defect supported by
+   direct evidence in the current review; stop at unrelated modules, hypothetical inputs, a wider
+   operating model, or a seam decision. Review documentation ownership directly without demanding
+   prose or static-source tests. Expand with Grove or source context only when a concrete `S#`,
+   `A#`, or other acceptance question remains unanswered by the diff; do not overlap whole-file
+   inspection of material the diff already covers. The contract's pointers are preferred
+   orientation, while task INDEX files, sibling tickets, history, and unrelated role artifacts are
+   not defaults. This is not a hard read allowlist or numeric retrieval budget: read more when
+   correctness needs it and report why through native `efficiencyFeedback`. Review every path
+   outside `probe/`, reading each test there as a promise the
    lane makes; `probe/` holds the writer's still-open questions and stands outside the review surface.
    Check behavior, regressions, tests, and simplicity against the supplied expectations. Finish
    with every supplied expectation inspected and each observed concern tied to direct evidence.

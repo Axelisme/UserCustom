@@ -85,9 +85,10 @@ The preselected fresh fallback starts exactly one compatible implementer on the 
 payload contains only the original ticket contract and exact execution parameters, the latest typed
 blockers, and current lane placement; it contains no INDEX, sibling-ticket narrative, or reconstructed
 task history. Correction selection does not change budget accounting: each blocked-review transition
-consumes one slot, and exhausted-budget behavior is unchanged. Retained correction prompts request
-optional native `efficiencyFeedback` about retained-context friction; a fresh fallback receives that
-request only when it is already present in the original bounded worker brief.
+consumes one slot, and exhausted-budget behavior is unchanged. Retained correction prompts may
+request optional native `efficiencyFeedback` following the shared Collab efficiency-feedback guidance
+when a concrete avoidable cost was observed; a fresh fallback receives that request only when it is
+already present in the original bounded worker brief.
 
 Supply the tool only these bounded fields: `task_id` (the task identifier), `ticket_id` (the
 Dev-flow ticket identifier), `lane_id` (the existing managed lane), `worker_brief` (the bounded
@@ -194,6 +195,8 @@ session, return control or use the active goal's yield mechanism and let complet
 Use `subagent_wait` only when the current request must finish in the same turn; waiting does not make
 a child more authoritative.
 
+After the workflow reaches a terminal handoff, if the worker dispatch granted authority to toggle named Acceptance claims in the assigned `ticket.md`, reread that exact ticket before final Acceptance judgement, Resolution, lifecycle state, or task-progress reconciliation. Read only the assigned ticket; do not rescan the task or sibling tickets. This adds no post-wake `collab_status` read and no generic record-edit reread; completion processing, collection selection, and ticket mutation ownership remain unchanged.
+
 ## Run control
 
 Read this section only when a run is interrupted or needs status, steering, or stopping.
@@ -292,7 +295,7 @@ successful collection, lane drop, and task removal are explicit retirements and 
 - Land: moves the exact current integration result into a persistence branch, preserving the
   integration tree under a new commit identity — `collab_integration_land`.
 - Retire the lane, at task scope: force-removes the managed integration and its remaining lanes once
-  the task's collab-owned state is no longer needed — `collab_integration_remove`.
+  the task's collab-owned state is no longer needed — `collab_integration_remove`. When a Dev-flow task requested `efficiencyFeedback`, follow [dev-flow's feedback closeout](../dev-flow/references/collab-feedback-closeout.md) before `collab_integration_remove`; do not duplicate the procedure or change any public tool parameter.
 - Read-only inspection of a task's integration and lane state; supports every step above without
   mutating anything — `collab_status`.
 - Snapshot task state and telemetry to fixed report artifacts, with no cleanup or readiness

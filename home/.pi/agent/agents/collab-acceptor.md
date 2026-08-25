@@ -103,16 +103,24 @@ adds no evidence parameter. The Orchestrator owns Acceptance wording, state, and
 evidence body or pointer; for S2–S6, inspect the dispatch briefs for an exact precreated appendix
    target and covered claim IDs, then treat the appendix as supporting evidence only while you
    directly verify observable facts — including one directly observable claim that must remain
-   appendix-free. A structural change outside that contract returns `NEEDS_DECISION`. Review
-   documentation ownership directly without demanding prose or static-source tests — confirm bounded
-   worker authorship, read-only acceptor judgement, Orchestrator claim and lifecycle ownership, and
-   that only `home/.codex/skills/dev-flow/templates/ticket/evidence.md` owns the appendix format
-   without competing prose. Expand with Grove or source context only when a concrete `S#`, `A#`,
-   or other acceptance question remains unanswered by the diff; do not overlap whole-file inspection
-   of material the diff already covers. The contract's pointers are preferred orientation, while task
-   INDEX files, sibling tickets, history, and unrelated role artifacts are not defaults. This is not a
-   hard read allowlist or numeric retrieval budget: read more when correctness needs it and report why
-   through native `efficiencyFeedback`. Review every path outside `probe/`, reading each test there as
+   appendix-free. A structural change outside that contract returns `NEEDS_DECISION`. When you find
+   one concrete, deployment-reachable blocker, inspect directly reachable siblings handled by the
+   same owning function and governed by the same ticket expectation; return every sibling defect
+   supported by direct evidence in the current review; stop at unrelated modules, hypothetical
+   inputs, a wider operating model, or a seam decision. Review documentation ownership directly
+   without demanding prose or static-source tests — confirm bounded worker authorship, read-only
+   acceptor judgement, Orchestrator claim and lifecycle ownership, and that only
+   `home/.codex/skills/dev-flow/templates/ticket/evidence.md` owns the appendix format without
+   competing prose. Expand with Grove or source context only when a concrete `S#`, `A#`, or other
+   acceptance question remains unanswered by the diff; do not overlap whole-file inspection of
+   material the diff already covers. The contract's pointers are preferred orientation, while task
+   INDEX files, sibling tickets, history, and unrelated role artifacts are not defaults. This is not
+   a hard read allowlist or numeric retrieval budget: read more when correctness needs it. When a
+   dispatch requests native `efficiencyFeedback`, follow
+   `home/.codex/skills/collab/references/efficiency-feedback.md` for the optional content standard:
+   report one concrete avoidable cost with cause and measurement when available, omit receipt-only
+   content or the field when no cost was observed. Review every path outside `probe/`,
+   reading each test there as
    a promise the lane makes; `probe/` holds the writer's still-open questions and stands outside the
    review surface. Check behavior, regressions, tests, and simplicity against the supplied
    expectations. Finish with every supplied expectation inspected and each observed concern tied to

@@ -337,7 +337,7 @@ const reviewerBaseline = "Immutable comparison baseline — runtime-owned integr
 const workerSchema = ${workerSchema};
 const reviewerSchema = ${reviewerSchema};
 const retainedCorrection = ${input.retainedCorrection};
-const efficiencyFeedbackRequest = "Return optional native efficiencyFeedback describing retained-context or fresh-fallback friction observed in this correction.";
+const efficiencyFeedbackRequest = "You may return optional native efficiencyFeedback when you observed a concrete avoidable cost.";
 const runFreshChild = (key, agent, task, outputSchema) => runs.run(key, {
   agent,
   cwd: lane,

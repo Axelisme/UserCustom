@@ -28,10 +28,12 @@ directory it creates already exists in a new task, so nothing has to be invented
   INDEX.md
   tickets/<ticket-id>/ticket.md      the lifecycle ticket, plus that ticket's own evidence beside it
   spec/                              frozen contracts — to-spec owns their format
-  research/                          external findings — research owns their format
+  research/                          external findings and task-wide process findings with their supporting raw snapshots — research owns their format
   decisions/                         decisions this task made and must not relitigate
   standing-orders/                   custody sources; see custody.md
 ```
+
+Task-wide process findings and their supporting raw snapshots live under `research/`; receipt-only or empty results are preserved without fabricated findings and source-grounded findings keep an exact raw artifact pointer. `research/` does not enter `INDEX` history, which remains limited to current judgement and next action.
 
 **A ticket is a directory, not a file.** `tickets/<ticket-id>/ticket.md` carries the lifecycle
 frontmatter, and its `id` must equal the directory name — `locate` reports the ticket unreadable when

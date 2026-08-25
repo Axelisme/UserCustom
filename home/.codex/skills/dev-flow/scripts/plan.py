@@ -8,6 +8,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import NoReturn
@@ -44,17 +45,24 @@ def emit(operation: str, *, ok: bool, **values: object) -> None:
     print(json.dumps(body, ensure_ascii=True, separators=(",", ":")))
 
 
-def fail(operation: str, refusal: Refusal) -> NoReturn:
-    emit(
-        operation,
-        ok=False,
-        error={
+def fail(operation: str, refusal: Refusal, *, control_root: str | None = None, start_path: str | None = None) -> NoReturn:
+    body: dict[str, object] = {
+        "ok": False,
+        "operation": operation,
+        "error": {
             "code": refusal.code,
             "message": refusal.message,
             "paths": list(refusal.paths),
             "repair": refusal.repair,
         },
-    )
+    }
+    if control_root is not None:
+        body["control_root"] = control_root
+    if start_path is not None:
+        body["start_path"] = start_path
+    # Also include start_path inside error for compatibility if test expects it there?
+    # But spec says repository_not_found with start_path; include at top-level.
+    print(json.dumps(body, ensure_ascii=True, separators=(",", ":")))
     raise SystemExit(1)
 
 
@@ -210,7 +218,123 @@ def collision_paths(root: Path, location: str, task_id: str) -> tuple[Path, ...]
     )
 
 
-def command_create(root: Path, arguments: argparse.Namespace) -> None:
+def resolve_control_root(arguments: argparse.Namespace) -> Path:
+    """Select the repository control root per S1/S2.
+
+    - When --repo is present, resolve that path directly without Git discovery.
+    - When absent, use `git rev-parse --show-toplevel` from CWD.
+    Raises Refusal with repository_not_found (including start_path) or invalid_argument.
+    """
+    cwd = Path.cwd()
+    repo_arg: str | None = getattr(arguments, "repo", None)
+    if repo_arg is not None:
+        raw = repo_arg
+        # Expand ~ and resolve against cwd
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute():
+            candidate = cwd / candidate
+        # Resolve to canonical absolute (strict=False)
+        try:
+            candidate = candidate.resolve()
+        except OSError as exc:
+            raise Refusal(
+                "invalid_argument",
+                f"--repo path cannot be resolved: {raw}: {exc}",
+                "Provide an existing directory for --repo.",
+                (raw,),
+            ) from exc
+        # Require accessible directory
+        try:
+            st = candidate.stat()
+        except FileNotFoundError as exc:
+            raise Refusal(
+                "invalid_argument",
+                f"--repo path does not exist: {raw}",
+                "Provide an existing directory for --repo.",
+                (raw,),
+            ) from exc
+        except OSError as exc:
+            raise Refusal(
+                "invalid_argument",
+                f"--repo path cannot be accessed: {raw}: {exc}",
+                "Provide an existing directory for --repo.",
+                (raw,),
+            ) from exc
+        if not stat.S_ISDIR(st.st_mode):
+            raise Refusal(
+                "invalid_argument",
+                f"--repo path is not a directory: {raw}",
+                "Provide an existing directory for --repo.",
+                (raw,),
+            )
+        # Verify the directory is effectively accessible for the current process.
+        # Use os.access with effective IDs so POSIX ACLs and other extended
+        # permissions are honored, rather than reconstructing DAC from
+        # owner/group/other mode bits which would reject an ACL-granted
+        # directory (e.g., mode 000 with ACL r-x for the caller).
+        # Real stat/type checks above and enumeration via scandir below are retained.
+        try:
+            has_effective_access = os.access(candidate, os.R_OK | os.X_OK, effective_ids=True)
+        except TypeError:
+            # Fallback for platforms lacking effective_ids (not expected in lane)
+            has_effective_access = os.access(candidate, os.R_OK | os.X_OK)
+        if not has_effective_access:
+            raise Refusal(
+                "invalid_argument",
+                f"--repo path is not accessible: {raw}",
+                "Provide an existing directory for --repo.",
+                (raw,),
+            )
+        try:
+            with os.scandir(candidate):
+                pass
+        except OSError as exc:
+            raise Refusal(
+                "invalid_argument",
+                f"--repo path is not accessible: {raw}: {exc}",
+                "Provide an existing directory for --repo.",
+                (raw,),
+            ) from exc
+        # Also ensure it's a real directory (not symlink? allow symlink to directory? Followed stat already, but if symlink to file would not be dir)
+        # If candidate is symlink to directory, stat follows and says dir, but we may want to allow it. The spec says use directly, so allow.
+        return candidate
+    # No explicit --repo: discover via git
+    # Use the authorized git executable; fall back to "git" in PATH
+    git_bin = "/usr/bin/git"
+    if not Path(git_bin).exists():
+        git_bin = "git"
+    result = subprocess.run(
+        [git_bin, "rev-parse", "--show-toplevel"],
+        cwd=cwd,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        start_path = str(cwd.resolve())
+        # Raise with repository_not_found; caller will handle start_path
+        err = Refusal(
+            "repository_not_found",
+            f"not inside a Git worktree: {start_path}",
+            "Run inside a Git repository or provide --repo PATH.",
+        )
+        # Attach start_path for caller to emit
+        err.start_path = start_path  # type: ignore[attr-defined]
+        raise err
+    root_str = result.stdout.strip()
+    if not root_str:
+        start_path = str(cwd.resolve())
+        err = Refusal(
+            "repository_not_found",
+            f"Git discovery returned empty result from {start_path}",
+            "Run inside a Git repository or provide --repo PATH.",
+        )
+        err.start_path = start_path  # type: ignore[attr-defined]
+        raise err
+    return Path(root_str).resolve()
+
+
+def command_create(root: Path, arguments: argparse.Namespace, *, control_root: str) -> None:
     validate_task_id(arguments.task_id)
     collisions = tuple(
         path
@@ -246,6 +370,7 @@ def command_create(root: Path, arguments: argparse.Namespace) -> None:
     emit(
         "create",
         ok=True,
+        control_root=control_root,
         task_id=arguments.task_id,
         paths=[relative(root, destination / entry) for entry in scaffolded],
     )
@@ -424,11 +549,11 @@ def _ticket_counts(directory: Path) -> tuple[dict[str, int | None], dict[str, ob
     return {"pending": pending, "closed": closed, "total": pending + closed, "unreadable": 0}, None
 
 
-def command_list(root: Path, _arguments: argparse.Namespace) -> None:
+def command_list(root: Path, _arguments: argparse.Namespace, *, control_root: str) -> None:
     """List narrow references to active containers without reading their contents."""
     plans = root / ".agent_state" / "plans"
     if not require_directory_components(root, plans):
-        emit("list", ok=True, location="active", records=[])
+        emit("list", ok=True, control_root=control_root, location="active", records=[])
         return
 
     unsafe: list[str] = []
@@ -475,10 +600,10 @@ def command_list(root: Path, _arguments: argparse.Namespace) -> None:
             tuple(unsafe),
         )
     records.sort(key=lambda record: (record["lookup_id"].casefold(), record["lookup_id"]))
-    emit("list", ok=True, location="active", records=records)
+    emit("list", ok=True, control_root=control_root, location="active", records=records)
 
 
-def command_locate(root: Path, arguments: argparse.Namespace) -> None:
+def command_locate(root: Path, arguments: argparse.Namespace, *, control_root: str) -> None:
     """Resolve a container and expose only its narrow frontmatter orientation."""
     validate_task_id(arguments.task_id)
     matches = [
@@ -491,6 +616,7 @@ def command_locate(root: Path, arguments: argparse.Namespace) -> None:
         emit(
             "locate",
             ok=True,
+            control_root=control_root,
             location="missing",
             container=relative(root, expected),
             index=relative(root, expected / "INDEX.md"),
@@ -513,6 +639,7 @@ def command_locate(root: Path, arguments: argparse.Namespace) -> None:
         emit(
             "locate",
             ok=True,
+            control_root=control_root,
             location="ambiguous",
             container=None,
             index=None,
@@ -541,6 +668,7 @@ def command_locate(root: Path, arguments: argparse.Namespace) -> None:
     emit(
         "locate",
         ok=True,
+        control_root=control_root,
         location=location,
         container=relative(root, directory),
         index=relative(root, directory / "INDEX.md"),
@@ -552,7 +680,7 @@ def command_locate(root: Path, arguments: argparse.Namespace) -> None:
     )
 
 
-def command_move(root: Path, arguments: argparse.Namespace, operation: str) -> None:
+def command_move(root: Path, arguments: argparse.Namespace, operation: str, *, control_root: str) -> None:
     validate_task_id(arguments.task_id)
     undo = bool(getattr(arguments, "undo", False))
     source_location, destination_location = (
@@ -599,6 +727,7 @@ def command_move(root: Path, arguments: argparse.Namespace, operation: str) -> N
     emit(
         operation,
         ok=True,
+        control_root=control_root,
         task_id=arguments.task_id,
         undo=undo,
         paths=[relative(root, destination)],
@@ -607,6 +736,12 @@ def command_move(root: Path, arguments: argparse.Namespace, operation: str) -> N
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
+    result.add_argument(
+        "--repo",
+        dest="repo",
+        metavar="PATH",
+        help="explicit repository root directory",
+    )
     commands = result.add_subparsers(dest="operation", required=True)
     create = commands.add_parser("create")
     create.add_argument("task_id")
@@ -626,18 +761,29 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     """Route one parsed operation against the working directory; a refusal exits non-zero."""
     arguments = parser().parse_args(argv)
-    root = Path.cwd().resolve()
+    # Root selection precedes any task operation
+    try:
+        root = resolve_control_root(arguments)
+    except Refusal as refusal:
+        if refusal.code == "repository_not_found":
+            # Include start_path without control_root
+            start_path = getattr(refusal, "start_path", str(Path.cwd().resolve()))  # type: ignore[attr-defined]
+            fail(arguments.operation, refusal, start_path=start_path)
+        else:
+            # Explicit --repo invalid_argument: no control_root, no start_path
+            fail(arguments.operation, refusal)
+    control_root_str = str(root.resolve())
     try:
         if arguments.operation == "create":
-            command_create(root, arguments)
+            command_create(root, arguments, control_root=control_root_str)
         elif arguments.operation == "list":
-            command_list(root, arguments)
+            command_list(root, arguments, control_root=control_root_str)
         elif arguments.operation == "locate":
-            command_locate(root, arguments)
+            command_locate(root, arguments, control_root=control_root_str)
         else:
-            command_move(root, arguments, arguments.operation)
+            command_move(root, arguments, arguments.operation, control_root=control_root_str)
     except Refusal as refusal:
-        fail(arguments.operation, refusal)
+        fail(arguments.operation, refusal, control_root=control_root_str)
 
 
 if __name__ == "__main__":

@@ -378,18 +378,51 @@ const boundedMessage = (value) => {
   const m = value instanceof Error ? value.message : typeof value === "string" ? value : "unknown error";
   return m.replace(/[\\r\\n]+/g, " ").slice(0, 300);
 };
-const isInterruptionError = (err) => err && (err.name === "AbortError" || err.code === "ABORT_ERR" || err.code === "INTERRUPTED");
+const isInterruptionError = (err) => err && (err.name === "AbortError" || err.code === "ABORT_ERR" || err.code === "INTERRUPTED" || err.interrupted === true || err.stopped === true);
 const MAX_REVIEWER_RECOVERY_ATTEMPTS = 2;
+const hasRunsAll = typeof runs.all === "function";
 const runReviewerWithRecovery = (baseKey, task, phase) => {
   let lastError = null;
   const attemptReviewer = (attempt) => {
     const attemptKey = attempt === 0 ? baseKey : baseKey + "-retry-" + attempt;
+    if (hasRunsAll) {
+      return runs.all([{key: attemptKey, agent: "collab-acceptor", cwd: lane, worktree: false, context: "fresh", task, outputSchema: reviewerSchema}]).then((results) => {
+        const child = results[0];
+        if (child.interrupted === true || child.stopped === true) {
+          const err = new Error(child.error || child.output || (child.interrupted ? "reviewer interrupted" : "reviewer stopped"));
+          err.name = "AbortError";
+          err.code = child.interrupted ? "INTERRUPTED" : "STOPPED";
+          if (child.interrupted) err.interrupted = true;
+          if (child.stopped) err.stopped = true;
+          throw err;
+        }
+        if (child.ok === true) {
+          if (child.structuredOutput && (child.structuredOutput.verdict === "PASS" || child.structuredOutput.verdict === "BLOCKED" || child.structuredOutput.verdict === "NEEDS_DECISION")) {
+            return child;
+          }
+          const msg = boundedMessage(child.error || "reviewer returned invalid structured output");
+          const invErr = new Error(msg);
+          invErr.code = "INVALID_CHILD_RESULT";
+          throw invErr;
+        }
+        lastError = child.error || child.output || "reviewer runtime failure";
+        if (attempt === MAX_REVIEWER_RECOVERY_ATTEMPTS) {
+          const bounded = boundedMessage(lastError);
+          throw { __reviewerRecoveryExhausted: true, phase, error: bounded, attempts: MAX_REVIEWER_RECOVERY_ATTEMPTS + 1 };
+        }
+        return attemptReviewer(attempt + 1);
+      }).catch((e) => {
+        if (e && e.__reviewerRecoveryExhausted) throw e;
+        if (isInterruptionError(e)) throw e;
+        throw e;
+      });
+    }
     return runFreshChild(attemptKey, "collab-acceptor", task, reviewerSchema).catch((e) => {
       if (isInterruptionError(e)) throw e;
       lastError = e;
       if (attempt === MAX_REVIEWER_RECOVERY_ATTEMPTS) {
         const bounded = boundedMessage(lastError);
-        return Promise.reject({ __reviewerRecoveryExhausted: true, phase, error: bounded, attempts: MAX_REVIEWER_RECOVERY_ATTEMPTS + 1 });
+        throw { __reviewerRecoveryExhausted: true, phase, error: bounded, attempts: MAX_REVIEWER_RECOVERY_ATTEMPTS + 1 };
       }
       return attemptReviewer(attempt + 1);
     });

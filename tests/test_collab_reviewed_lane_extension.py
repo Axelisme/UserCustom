@@ -576,6 +576,15 @@ const runs = {
       ...writerEnvelope
     };
     return {structuredOutput:{verdict:"PASS", outOfEnvelopeFindings:[]}, results:[]};
+  },
+  async all(items) {
+    const results = [];
+    for (const item of items) {
+      const {key, ...options} = item;
+      const res = await this.run(key, options);
+      results.push({key, ok: true, structuredOutput: res.structuredOutput, runId: res.runId, output: res.output || "output", artifactPaths: [], results: res.results || []});
+    }
+    return results;
   }
 };
 const execute = Function("runs", `return (async () => {\n${workflowScript}\n})()`);

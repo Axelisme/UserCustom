@@ -1,6 +1,6 @@
 # Collab — Pi runtime
 
-Verified against `pi-subagents` 0.47.1. Check the installed package before trusting runtime-specific
+Verified against `pi-subagents` 0.56.0. Check the installed package before trusting runtime-specific
 placement details; Collab's core guidance remains runtime-neutral.
 
 ## Routing

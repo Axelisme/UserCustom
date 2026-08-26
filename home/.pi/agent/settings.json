@@ -2,7 +2,7 @@
   "theme": "dark",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.6-sol",
-  "defaultThinkingLevel": "high",
+  "defaultThinkingLevel": "medium",
   "packages": [
     "/home/axel/Documents/VSCode/Typescript/pi-goal",
     "/home/axel/Documents/VSCode/Typescript/pi-simple-tasks",
@@ -17,13 +17,17 @@
     },
     "npm:pi-claude-code-ui"
   ],
-  "lastChangelogVersion": "0.84.2",
+  "lastChangelogVersion": "0.84.3",
   "enabledModels": [
     "openai-codex/gpt-5.6-luna",
     "openai-codex/gpt-5.6-sol",
     "openai-codex/gpt-5.6-terra",
     "opencode-go/deepseek-v4-flash",
-    "opencode-go/muse-spark-1.2-contributor",
-    "stealth/ox-alpha"
-  ]
+    "opencode-go/muse-spark-1.2-contributor"
+  ],
+  "subagents": {
+    "defaultModel": "gpt-5.6-luna",
+    "defaultProvider": "openai-codex",
+    "defaultThinking": "max"
+  }
 }

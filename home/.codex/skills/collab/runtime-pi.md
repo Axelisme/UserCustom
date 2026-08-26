@@ -1,7 +1,8 @@
 # Collab — Pi runtime
 
-Verified against `pi-subagents` 0.56.0. Check the installed package before trusting runtime-specific
-placement details; Collab's core guidance remains runtime-neutral.
+Verified against `pi-subagents` 0.56.0 with the attached async supervisor lifecycle present at
+commit `0adb1842c48357b82f1c1e17a197be1e5acc04bb`. Check the installed package before trusting
+runtime-specific placement details; Collab's core guidance remains runtime-neutral.
 
 ## Routing
 
@@ -57,6 +58,24 @@ The Orchestrator preserves both unchanged, omitting `model` and `thinking` from 
 an override grants authority for that launch; task difficulty, retries, and review results grant
 none. This contract is satisfied only when every workflow- and child-level `model` and `thinking`
 field is absent or directly authorized by that instruction.
+
+### Supervisor coordination
+
+The reviewed-lane workflow does not override the configured native intercom bridge on worker or
+reviewer children. Because the tool launches one asynchronous `workflowScript`, pi-subagents keeps a
+blocking `contact_supervisor` request attached to the same workflow-owned child and the original
+`runs.run()` promise. The workflow and step remain running with `needs_attention`; the lane
+reservation remains owned; no provisional detached result reaches Collab control flow. A correlated
+reply completes the same tool call, the same child continues, and only its authoritative structured
+result can drive the existing terminal or correction branch.
+
+Pending coordination is not reviewer runtime failure and consumes neither reviewer recovery nor the
+semantic correction budget. Workflow-owned children reject user detach, while top-level direct
+foreground runs retain their separate detach behavior. Stop, timeout, terminal provider failure, and
+process loss remain terminal controls. Detached completion without a persisted JavaScript
+continuation stays fail-closed; Collab neither promotes it to workflow success nor replays arbitrary
+JavaScript. If the installed pi-subagents runtime does not provide this lifecycle, keep supervisor
+coordination disabled rather than launching reviewed lanes under the older detached-receipt behavior.
 
 A Collab lane is already one writable checkout with one live writer. The reviewed-lane tool keeps
 the delegated worker and reviewer on that exact lane, with role-specific structured results;

@@ -337,14 +337,12 @@ const reviewerBaseline = "Immutable comparison baseline — runtime-owned integr
 const workerSchema = ${workerSchema};
 const reviewerSchema = ${reviewerSchema};
 const retainedCorrection = ${input.retainedCorrection};
-const noIntercomBridge = { mode: "off" };
 const efficiencyFeedbackRequest = "You may return optional native efficiencyFeedback when you observed a concrete avoidable cost.";
 const runFreshChild = (key, agent, task, outputSchema) => runs.run(key, {
   agent,
   cwd: lane,
   worktree: false,
   context: "fresh",
-  intercomBridge: noIntercomBridge,
   task,
   outputSchema,
   ...(agent === "collab-implementer" ? { agentContract: { version: 1 } } : {})
@@ -388,7 +386,7 @@ const runReviewerWithRecovery = (baseKey, task, phase) => {
   const attemptReviewer = (attempt) => {
     const attemptKey = attempt === 0 ? baseKey : baseKey + "-retry-" + attempt;
     if (hasRunsAll) {
-      return runs.all([{key: attemptKey, agent: "collab-acceptor", cwd: lane, worktree: false, context: "fresh", intercomBridge: noIntercomBridge, task, outputSchema: reviewerSchema}]).then((results) => {
+      return runs.all([{key: attemptKey, agent: "collab-acceptor", cwd: lane, worktree: false, context: "fresh", task, outputSchema: reviewerSchema}]).then((results) => {
         const child = results[0];
         if (child.interrupted === true || child.stopped === true) {
           const err = new Error(child.error || child.output || (child.interrupted ? "reviewer interrupted" : "reviewer stopped"));

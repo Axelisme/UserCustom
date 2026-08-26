@@ -400,11 +400,12 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
         )
         for call in execution["calls"]:
             options = call["options"]
-            expected_keys = {"agent", "cwd", "worktree", "context", "task", "outputSchema"}
+            expected_keys = {"agent", "cwd", "worktree", "context", "intercomBridge", "task", "outputSchema"}
             if options["agent"] == "collab-implementer":
                 expected_keys.add("agentContract")
                 self.assertEqual(options["agentContract"], {"version": 1})
             self.assertEqual(set(options), expected_keys)
+            self.assertEqual(options["intercomBridge"], {"mode": "off"})
             self.assertEqual(options["cwd"], expected["lane"])
             self.assertIs(options["worktree"], False)
             self.assertEqual(options["context"], "fresh")
@@ -678,8 +679,9 @@ process.stdout.write(JSON.stringify({result, calls}));
         self.assertEqual(rereview["options"]["agent"], "collab-acceptor")
         self.assertEqual(
             set(rereview["options"]),
-            {"agent", "cwd", "worktree", "context", "task", "outputSchema"},
+            {"agent", "cwd", "worktree", "context", "intercomBridge", "task", "outputSchema"},
         )
+        self.assertEqual(rereview["options"]["intercomBridge"], {"mode": "off"})
         self.assertEqual(rereview["options"]["cwd"], expected["lane"])
         self.assertIs(rereview["options"]["worktree"], False)
         self.assertEqual(rereview["options"]["context"], "fresh")
@@ -839,8 +841,9 @@ process.stdout.write(JSON.stringify({result, calls}));
                     fallback = execution["calls"][2]["options"]
                     self.assertEqual(
                         set(fallback),
-                        {"agent", "cwd", "worktree", "context", "task", "outputSchema", "agentContract"},
+                        {"agent", "cwd", "worktree", "context", "intercomBridge", "task", "outputSchema", "agentContract"},
                     )
+                    self.assertEqual(fallback["intercomBridge"], {"mode": "off"})
                     self.assertEqual(fallback["agent"], "collab-implementer")
                     self.assertEqual(fallback["cwd"], expected["lane"])
                     self.assertIs(fallback["worktree"], False)
@@ -1053,11 +1056,12 @@ return { writerRunId: writer.runId };
                 self.assertEqual(execution["result"], expected_result)
                 self.assertEqual([call["key"] for call in execution["calls"]], expected_keys)
                 for call in execution["calls"]:
-                    expected_options = {"agent", "cwd", "worktree", "context", "task", "outputSchema"}
+                    expected_options = {"agent", "cwd", "worktree", "context", "intercomBridge", "task", "outputSchema"}
                     if call["options"]["agent"] == "collab-implementer":
                         expected_options.add("agentContract")
                         self.assertEqual(call["options"]["agentContract"], {"version": 1})
                     self.assertEqual(set(call["options"]), expected_options)
+                    self.assertEqual(call["options"]["intercomBridge"], {"mode": "off"})
                     self.assertIs(call["options"]["worktree"], False)
                     self.assertEqual(call["options"]["context"], "fresh")
                     self.assertIsInstance(call["options"]["outputSchema"], dict)
@@ -2423,7 +2427,9 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
                 self.assertEqual([call["key"] for call in execution["calls"]], expected_keys)
                 for call in execution["calls"]:
                     self.assertIsInstance(call["options"]["outputSchema"], dict)
-                    # every child uses fresh context and exact lane
+                    # reviewed-lane children must return typed NEEDS_DECISION instead of
+                    # detaching mid-workflow for supervisor coordination.
+                    self.assertEqual(call["options"]["intercomBridge"], {"mode": "off"})
                     self.assertEqual(call["options"]["context"], "fresh")
                     self.assertIs(call["options"]["worktree"], False)
 

@@ -1642,6 +1642,9 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
     def test_integration_land_derives_persistence_and_projects_common_result(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text(".agent_state/\n")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore managed state")
             seed_task_container(repository)
             seed_managed_task(repository)
 
@@ -1817,6 +1820,9 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
     def test_complete_lifecycle_uses_only_final_registered_tools(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text(".agent_state/\n")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore managed state")
             seed_task_container(repository)
 
             self.assertFalse(
@@ -3098,6 +3104,9 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             (repository / "stable.txt").write_text("stable\n", encoding="utf-8")
             git(repository, "add", "stable.txt")
             git(repository, "commit", "-m", "stable base")
+            (repository / ".gitignore").write_text(".agent_state/\n")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore managed state")
             expected = seed_managed_task(repository)
             seed_task_container(repository)
             (repository / "stable.txt").write_text("operator unstaged\n", encoding="utf-8")
@@ -3214,6 +3223,9 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
     def test_land_refuses_collisions_staged_changes_and_stale_persistence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, expected_base = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text(".agent_state/\n")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore managed state")
             expected = seed_managed_task(repository)
             # ordinary untracked collision (new file added by integration)
             (repository / "new.txt").write_text("operator\n", encoding="utf-8")
@@ -3243,7 +3255,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             def overlap(repository: Path) -> None:
                 (repository / "valuable.txt").write_text("operator\n", encoding="utf-8")
                 git(repository, "add", "--intent-to-add", "valuable.txt")
-            scenario = LandingTransition(temporary, base_files={}, local_overlap=overlap)
+            scenario = LandingTransition(temporary, base_files={".gitignore": ".agent_state/\n"}, local_overlap=overlap)
             observed = scenario.land()
             assert_transition_refused(self, scenario, observed, code="dirty_index")
             self.assertEqual((scenario.repository / "valuable.txt").read_text(encoding="utf-8"), "operator\n")
@@ -3256,7 +3268,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
                 git(integration, "add", "new.txt")
             def overlap(repository: Path) -> None:
                 (repository / "new.txt").write_text("operator\n", encoding="utf-8")
-            scenario = LandingTransition(temporary, base_files={}, transition=add_path, local_overlap=overlap)
+            scenario = LandingTransition(temporary, base_files={".gitignore": ".agent_state/\n"}, transition=add_path, local_overlap=overlap)
             observed = scenario.land()
             assert_transition_refused(self, scenario, observed, code="path_collision")
             self.assertEqual((scenario.repository / "new.txt").read_text(encoding="utf-8"), "operator\n")
@@ -3468,6 +3480,9 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
     def test_land_commit_failure_restores_persistence_and_authority(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text(".agent_state/\n")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore managed state")
             expected = seed_managed_task(repository)
             seed_task_container(repository)
             before = git(repository, "rev-parse", "main")
@@ -3521,6 +3536,9 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
     def test_land_optional_message_and_duplicate_are_actionable(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text(".agent_state/\n")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore managed state")
             expected = seed_managed_task(repository)
             seed_task_container(repository)
             observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo", "message": "Ship demo"})
@@ -3536,11 +3554,40 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
     def test_land_without_task_container_warns_without_creating_one(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text(".agent_state/\n")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore managed state")
             seed_managed_task(repository)
             observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
             self.assertFalse(observed["is_error"])
             self.assertTrue(any("telemetry" in warning for warning in observed["result"]["warnings"]))
             self.assertFalse((repository / ".agent_state/plans/demo").exists())
+
+    def test_land_refuses_non_ignored_agent_state_path_before_mutation(self) -> None:
+        # S4 regression: ordinary untracked .agent_state/operator.txt must be refused before refs or HEAD move
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            (repository / ".gitignore").write_text(".agent_state/worktrees/\n.agent_state/plans/\n.agent_state/archives/\n")
+            git(repository, "add", ".gitignore")
+            git(repository, "commit", "-m", "ignore managed worktrees")
+            expected = seed_managed_task(repository)
+            seed_task_container(repository)
+            (repository / ".agent_state/operator.txt").write_text("operator\n", encoding="utf-8")
+            before_refs = managed_ref_snapshot(repository)
+            before_head = git(repository, "rev-parse", "HEAD")
+            before_status = git(repository, "status", "--porcelain=v1", "--ignored=matching")
+            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            self.assertTrue(observed["is_error"])
+            self.assertEqual(observed["error"]["error"]["code"], "path_collision")
+            self.assertIn(".agent_state/operator.txt", observed["error"]["error"]["details"]["paths"])
+            self.assertEqual(managed_ref_snapshot(repository), before_refs)
+            self.assertEqual(git(repository, "rev-parse", "HEAD"), before_head)
+            self.assertEqual(git(repository, "status", "--porcelain=v1", "--ignored=matching"), before_status)
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), expected["integration_head"])
+            # Clean and verify landing succeeds when only the ordinary .agent_state file is removed
+            (repository / ".agent_state/operator.txt").unlink()
+            observed2 = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            self.assertFalse(observed2["is_error"])
 
 
 

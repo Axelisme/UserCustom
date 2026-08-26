@@ -3651,8 +3651,7 @@ async function integrationLand(
       "Commit or unstage persistence index changes before landing.",
     );
   }
-  const rawOrdinaryUntracked = await nulPathList(repo, persistenceWorktree, ["ls-files", "--others", "--exclude-standard", "-z", "--"], signal);
-  const ordinaryUntracked = rawOrdinaryUntracked.filter((p) => p !== ".agent_state" && !p.startsWith(".agent_state/"));
+  const ordinaryUntracked = await nulPathList(repo, persistenceWorktree, ["ls-files", "--others", "--exclude-standard", "-z", "--"], signal);
   if (ordinaryUntracked.length > 0) {
     throw new CollabOpError(
       "path_collision",

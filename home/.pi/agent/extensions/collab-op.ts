@@ -1270,11 +1270,12 @@ async function integrationAdopt(
   const sourceWasCanonical = sourceBranch.name === task.integrationBranch;
   const integrationRef = `refs/heads/${task.integrationBranch}`;
   const persistTarget = persistBranch.ref;
-  const allowedRefs = new Set([task.integrationBaseRef, task.persistenceRef]);
+  const allowedRefs = new Set([task.integrationBaseRef, task.persistenceRef, task.landedRef]);
 
   if (!sourceWasCanonical) {
+    const nonLegacyOwnedRefs = inventory.ownedRefs.filter((ref) => ref !== task.landedRef);
     if (
-      inventory.ownedRefs.length > 0 ||
+      nonLegacyOwnedRefs.length > 0 ||
       inventory.ownedBranches.length > 0 ||
       inventory.registeredUnderRoot.length > 0 ||
       inventory.rootMetadata !== null ||
@@ -1415,6 +1416,28 @@ async function integrationAdopt(
   }
 
   const warnings: string[] = [];
+  // S3 legacy ref lifecycle: delete an existing landed ref as tolerated migration state
+  try {
+    const landedNames = await refNames(controlRepository(repo), task.landedRef, signal);
+    const hasLanded = landedNames.includes(task.landedRef);
+    const hasDescendant = landedNames.some((n) => n !== task.landedRef && n.startsWith(`${task.landedRef}/`));
+    if (hasDescendant) {
+      warnings.push(`legacy landed ref has colliding descendant; retained for manual review: ${task.landedRef}`);
+    } else if (hasLanded) {
+      const symbolic = await symbolicRefTarget(controlRepository(repo), task.landedRef, signal);
+      if (symbolic !== null) {
+        warnings.push(`legacy landed ref is symbolic; retained for manual review: ${task.landedRef}`);
+      } else {
+        const landedVal = await commitAt(controlRepository(repo), task.landedRef, signal);
+        if (landedVal !== null) {
+          const del = await repo.git(mutationCwd(repo), ["update-ref", "-d", task.landedRef, landedVal], signal);
+          if (del.code !== 0) warnings.push(`legacy landed ref could not be deleted: ${boundedGitText(del.stderr || del.stdout)}`);
+        }
+      }
+    }
+  } catch (error) {
+    warnings.push(`legacy landed ref cleanup failed: ${boundedGitText(error instanceof Error ? error.message : String(error))}`);
+  }
   const telemetryWarning = await recordEvent(task, "integration-adopt", "success", {
     subject_sha: sourceSha,
     source_branch: sourceBranch.name,
@@ -3612,11 +3635,39 @@ async function integrationLand(
   const integration = await requireManagedIntegration(controlRepository(repo), task, signal);
   const integrationSha = integration.tip;
   const persistence = await requirePersistenceCheckout(repo, task, persistBranch, signal);
-  if (!(await persistenceIndexClean(repo, persistence.record.worktree!, signal))) {
+  const persistenceWorktree = persistence.record.worktree!;
+  // S4 native checkout contract: refuse staged, unstaged tracked, ordinary untracked before mutation
+  if (await hasMergeOrConflictState(repo, persistenceWorktree, signal)) {
+    throw new CollabOpError(
+      "dirty_worktree",
+      "persistence worktree has an active merge or conflict state",
+      "Finish or abort the persistence merge before landing.",
+    );
+  }
+  if (!(await persistenceIndexClean(repo, persistenceWorktree, signal))) {
     throw new CollabOpError(
       "dirty_index",
       "persistence index contains staged changes",
       "Commit or unstage persistence index changes before landing.",
+    );
+  }
+  const rawOrdinaryUntracked = await nulPathList(repo, persistenceWorktree, ["ls-files", "--others", "--exclude-standard", "-z", "--"], signal);
+  const ordinaryUntracked = rawOrdinaryUntracked.filter((p) => p !== ".agent_state" && !p.startsWith(".agent_state/"));
+  if (ordinaryUntracked.length > 0) {
+    throw new CollabOpError(
+      "path_collision",
+      "persistence worktree has ordinary untracked files",
+      "Move or clean the untracked persistence paths before landing; ignored files are allowed.",
+      { paths: [...new Set(ordinaryUntracked)].slice(0, 32) },
+    );
+  }
+  const unstagedTracked = await nulPathList(repo, persistenceWorktree, ["diff", "--name-only", "-z", "--"], signal);
+  if (unstagedTracked.length > 0) {
+    throw new CollabOpError(
+      "dirty_worktree",
+      "persistence worktree has unstaged tracked changes",
+      "Commit or discard the unstaged tracked changes in the persistence checkout before landing.",
+      { paths: [...new Set(unstagedTracked)].slice(0, 32) },
     );
   }
   if (!(await isAncestor(controlRepository(repo), persistence.tip, integrationSha, signal))) {
@@ -3624,13 +3675,6 @@ async function integrationLand(
       "stale_persistence",
       "persistence branch is ahead of integration",
       "Reconcile persistence into integration before landing.",
-    );
-  }
-  const previousLanded = await directAuthority(repo, task.landedRef, "landed", signal);
-  if (previousLanded === integrationSha) {
-    throw new CollabOpError(
-      "duplicate_landing",
-      "current integration has already been landed",
     );
   }
   const integrationTree = await treeAt(repo, integrationSha, signal);
@@ -3641,195 +3685,118 @@ async function integrationLand(
       "current integration would not change the persistence tree",
     );
   }
-  // Rename detection reports only a rename's destination, which would
-  // strand the source in the worktree behind a success report: restore,
-  // collision checks, rollback, and verification all scope to this list.
-  // Disabling detection makes each rename appear as its delete/add pair so
-  // the set carries both endpoints of the accepted transition.
-  const changedPaths = await nulPathList(
-    repo,
-    controlRepository(repo).worktreeRoot,
-    ["diff", "--no-renames", "--name-only", "-z", persistence.tip, integrationSha, "--"],
+  const beforeSha = persistence.tip;
+  // S1: create a non-fast-forward merge commit with ordered parents, hooks run natively
+  const mergeResult = await repo.git(
+    persistenceWorktree,
+    ["merge", "--no-ff", "-m", `${message}\n\nTask: ${taskId}\nLanded: ${integrationSha}`, integrationSha],
     signal,
   );
-  const trackedDirt = await nulPathList(
-    repo,
-    persistence.record.worktree!,
-    ["diff", "--name-only", "-z", "--"],
-    signal,
-  );
-  const ordinaryUntracked = await nulPathList(
-    repo,
-    persistence.record.worktree!,
-    ["ls-files", "--others", "--exclude-standard", "-z", "--"],
-    signal,
-  );
-  const baselinePaths = new Set(
-    await nulPathList(
-      repo,
-      controlRepository(repo).worktreeRoot,
-      ["ls-tree", "-r", "--name-only", "-z", persistence.tip],
-      signal,
-    ),
-  );
-  const integrationPaths = new Set(
-    await nulPathList(
-      repo,
-      controlRepository(repo).worktreeRoot,
-      ["ls-tree", "-r", "--name-only", "-z", integrationSha],
-      signal,
-    ),
-  );
-  const untrackedCollisions = ordinaryUntracked.filter((dirty) =>
-    changedPaths.some((changed) =>
-      transitionOverwrites(dirty, changed, baselinePaths, integrationPaths),
-    ),
-  );
-  if (untrackedCollisions.length > 0) {
-    throw new CollabOpError(
-      "path_collision",
-      "untracked persistence path collides with the integration tree",
-      "Move or clean the colliding persistence paths before landing.",
-      { paths: [...new Set(untrackedCollisions)].slice(0, 32) },
-    );
-  }
-
-  const beforeTree = persistenceTree;
-  const preflight = await landingPreflight(
-    repo,
-    persistence.record.worktree!,
-    persistence.tip,
-    integrationSha,
-    signal,
-  );
-  const worktreeSnapshot = await snapshotLandingWorktree(
-    persistence.record.worktree!,
-    changedPaths,
-  );
-
-  let landingSha: string | null = null;
-  try {
-    await restoreLandingWorktree(
-      repo,
-      persistence.record.worktree!,
-      preflight.mergedTree,
-      integrationTree,
-      changedPaths,
-      signal,
-    );
-    const commit = await repo.git(
-      persistence.record.worktree!,
-      [
-        // Synthetic publication must not invoke operator hooks: a trusted
-        // hook may mutate the checkout or index and still fail, which would
-        // leave untracked residue behind an otherwise restored report.
-        // /dev/null is a path no hook script can live under.
-        "-c",
-        "core.hooksPath=/dev/null",
-        "commit",
-        "-m",
-        message,
-        "-m",
-        `Task: ${taskId}\nLanded: ${integrationSha}`,
-      ],
-      signal,
-    );
-    if (commit.code !== 0) {
-      throw new CollabOpError(
-        "git_error",
-        `Git command failed: ${commit.stderr.trim() || commit.stdout.trim()}`,
-      );
-    }
-    landingSha = await commitAt(controlRepository(repo), persistBranch.ref, signal);
-    if (landingSha === null || (await treeAt(repo, landingSha, signal)) !== integrationTree) {
-      throw new CollabOpError(
-        "git_error",
-        "landing commit did not preserve the integration tree",
-      );
-    }
-    const indexTree = await requireGit(
-      repo.git,
-      persistence.record.worktree!,
-      ["write-tree"],
-      signal,
-    );
-    if (indexTree !== integrationTree) {
-      throw new CollabOpError(
-        "git_error",
-        "landing index did not preserve the integration tree",
-      );
-    }
-    const worktree = await repo.git(
-      persistence.record.worktree!,
-      ["diff", "--quiet", preflight.mergedTree, "--", ...changedPaths],
-      signal,
-    );
-    if (worktree.code !== 0) {
-      throw new CollabOpError(
-        "git_error",
-        worktree.code === 1
-          ? "landing worktree did not preserve local changes"
-          : `could not verify landing worktree: ${worktree.stderr.trim() || worktree.stdout.trim()}`,
-      );
-    }
-    if (!(await landingMessageMatches(repo, landingSha, message, taskId, integrationSha))) {
-      throw new CollabOpError(
-        "git_error",
-        "landing commit message did not match the required subject and trailers",
-      );
-    }
-    await requireGit(
-      repo.git,
-      mutationCwd(repo),
-      [
-        "update-ref",
-        "--no-deref",
-        task.landedRef,
-        integrationSha,
-        previousLanded ?? "0".repeat(integrationSha.length),
-      ],
-      signal,
-    );
-  } catch (error) {
-    const rollback = await rollbackLanding(
-      repo,
-      task,
-      persistBranch,
-      persistence.record.worktree!,
-      persistence.tip,
-      beforeTree,
-      preflight.oursTree,
-      changedPaths,
-      worktreeSnapshot,
-      landingSha,
-      previousLanded,
-      signal,
-    );
-    await discardLandingSnapshot(worktreeSnapshot);
+  if (mergeResult.code !== 0) {
+    // S4/S5: expose Git's resulting state without synthetic rollback
     throw new CollabOpError(
       "git_error",
-      error instanceof Error ? error.message : String(error),
-      undefined,
-      { rollback },
+      `Git merge failed: ${boundedGitText(mergeResult.stderr || mergeResult.stdout) || `exit ${mergeResult.code}`}`,
+      "Resolve the reported Git state (conflict, hook failure, or merge error) and retry.",
+      { stdout: boundedGitText(mergeResult.stdout), stderr: boundedGitText(mergeResult.stderr), code: mergeResult.code },
     );
   }
-  await discardLandingSnapshot(worktreeSnapshot);
-
+  const afterSha = await commitAt(controlRepository(repo), persistBranch.ref, signal);
+  if (afterSha === null) {
+    throw new CollabOpError("git_error", "landing merge did not produce a persistence commit");
+  }
+  // Verify S1 invariants: tree equals integration tree, parents ordered, message matches
+  const afterTree = await treeAt(repo, afterSha, signal);
+  if (afterTree !== integrationTree) {
+    // Decision stop: hook may have changed tree away from accepted integration tree
+    throw new CollabOpError(
+      "git_error",
+      "landing merge commit tree does not match the accepted integration tree (hook may have modified it)",
+      "Inspect the hook-modified commit; landing requires the merge tree to equal the integration tree without disabling hooks.",
+      { expected_tree: integrationTree, actual_tree: afterTree, persistence_sha: afterSha, integration_sha: integrationSha },
+    );
+  }
+  const parentsLine = await requireGit(repo.git, mutationCwd(repo), ["rev-list", "--parents", "-n", "1", afterSha], signal);
+  const parents = parentsLine.split(" ");
+  if (parents.length !== 3 || parents[1] !== beforeSha || parents[2] !== integrationSha) {
+    throw new CollabOpError(
+      "git_error",
+      "landing merge commit does not have the required ordered parents",
+      "The merge commit's first parent must be the previous persistence head and second parent the integration head.",
+      { expected_parents: [beforeSha, integrationSha], actual_parents: parents.slice(1), merge_sha: afterSha },
+    );
+  }
+  if (!(await landingMessageMatches(repo, afterSha, message, taskId, integrationSha))) {
+    throw new CollabOpError(
+      "git_error",
+      "landing commit message did not match the required subject and trailers",
+      "The merge commit message must be the landing subject followed by Task and Landed trailers.",
+      { expected_subject: message, task_id: taskId, integration_sha: integrationSha, merge_sha: afterSha },
+    );
+  }
+  // Advance integration branch to the shared merge commit
+  const integrationRef = `refs/heads/${task.integrationBranch}`;
+  const casResult = await repo.git(mutationCwd(repo), ["update-ref", "--no-deref", integrationRef, afterSha, integrationSha], signal);
+  if (casResult.code !== 0) {
+    throw new CollabOpError(
+      "git_error",
+      `could not advance integration to the landed merge: ${boundedGitText(casResult.stderr || casResult.stdout)}`,
+      "Verify the integration branch still points to the expected head and retry.",
+      { integration_sha: integrationSha, merge_sha: afterSha },
+    );
+  }
+  const reset = await repo.git(task.integrationPath, ["reset", "--hard", afterSha], signal);
+  if (reset.code !== 0) {
+    // Do not claim synthetic rollback; expose Git state
+    throw new CollabOpError(
+      "git_error",
+      `could not synchronize the integration worktree: ${boundedGitText(reset.stderr || reset.stdout)}`,
+      "Synchronize the integration worktree to the merge commit manually.",
+      { integration_sha: integrationSha, merge_sha: afterSha },
+    );
+  }
+  const persisted = await commitAt(controlRepository(repo), persistBranch.ref, signal);
+  const integrated = await commitAt(controlRepository(repo), integrationRef, signal);
+  if (persisted !== afterSha || integrated !== afterSha) {
+    throw new CollabOpError(
+      "git_error",
+      "persistence and integration branches are not at the shared merge commit after landing",
+      "Verify both branches point to the merge commit and retry if needed.",
+      { expected: afterSha, persistence: persisted, integration: integrated },
+    );
+  }
+  // S3 legacy ref lifecycle: delete an existing landed ref if safely within authority
   const warnings: string[] = [];
-  if (trackedDirt.length > 0) warnings.push("preserved unstaged tracked changes");
+  try {
+    const landedNames = await refNames(controlRepository(repo), task.landedRef, signal);
+    const hasLanded = landedNames.includes(task.landedRef);
+    const hasDescendant = landedNames.some((n) => n !== task.landedRef && n.startsWith(`${task.landedRef}/`));
+    if (hasDescendant) {
+      warnings.push(`legacy landed ref has colliding descendant; retained for manual review: ${task.landedRef}`);
+    } else if (hasLanded) {
+      const symbolic = await symbolicRefTarget(controlRepository(repo), task.landedRef, signal);
+      if (symbolic !== null) {
+        warnings.push(`legacy landed ref is symbolic; retained for manual review: ${task.landedRef}`);
+      } else {
+        const landedVal = await commitAt(controlRepository(repo), task.landedRef, signal);
+        if (landedVal !== null) {
+          const del = await repo.git(mutationCwd(repo), ["update-ref", "-d", task.landedRef, landedVal], signal);
+          if (del.code !== 0) warnings.push(`legacy landed ref could not be deleted: ${boundedGitText(del.stderr || del.stdout)}`);
+        }
+      }
+    }
+  } catch (error) {
+    warnings.push(`legacy landed ref cleanup failed: ${boundedGitText(error instanceof Error ? error.message : String(error))}`);
+  }
   const telemetryWarning = await recordEvent(task, "integration-land", "success", {
     integration_sha: integrationSha,
-    persistence_sha: landingSha,
-    landed_sha: integrationSha,
+    persistence_sha: afterSha,
   });
   if (telemetryWarning) warnings.push(telemetryWarning);
   return {
     ok: true,
     operation: "integration-land",
     tool_version: TOOL_VERSION,
-    integration_sha: integrationSha,
-    persistence_sha: landingSha,
-    landed_sha: integrationSha,
     ...(warnings.length ? { warnings } : {}),
   };
 }

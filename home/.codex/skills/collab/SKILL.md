@@ -247,15 +247,24 @@ This task-local collection is not landing and requires no separate landing grant
 ## Land
 
 Landing moves the exact current integration result into a user or product persistence branch such
-as `feat/*` or `main`, preserving the integration tree under the new commit identity. Collab
-creates no landing authority; stop at task integration unless a current user message or an
-in-force task-scoped user grant authorizes landing under its stated conditions. When the
-Orchestrator is running a dev-flow task, verify such a grant in dev-flow's [Custody
-reference](../dev-flow/references/custody.md), which owns how the record holds user authority.
-When landing is authorized and neither the user nor repository guidance names a method, default to
-squash. Landing evidence applies only to the reviewed lane; a changed lane first needs a new review
-result. The runtime pointer under "Choose the execution shape" above names the operation that
-carries out landing.
+as `feat/*` or `main` by creating one ordinary two-parent merge commit. The commit's first parent
+is the previous persistence head and second parent is the accepted integration head; the commit's
+tree is verified to equal the accepted integration tree, then both the persistence branch and the
+managed integration branch are advanced to that merge commit. Collab creates no landing authority;
+stop at task integration unless a current user message or an in-force task-scoped user grant
+authorizes landing under its stated conditions. When the Orchestrator is running a dev-flow task,
+verify such a grant in dev-flow's [Custody reference](../dev-flow/references/custody.md), which
+owns how the record holds user authority. Landing requires a clean persistence checkout: no staged,
+no unstaged tracked, and no ordinary untracked state before mutation (ignored files are allowed);
+path conflicts and ignored-file collisions follow native `git merge` behavior. Hooks run natively;
+merge or hook failure is reported as an actionable Git error exposing Git's resulting state, without
+synthetic publication or dirt-preservation rollback. Legacy `refs/orchestrate/<task-id>/landed` is
+no longer created; an existing instance is tolerated as migration state and is deleted by the next
+authorized adopt, land, or remove operation. Freshness and continued landing eligibility are
+determined by ordinary branch ancestry and shared heads; no landed-identity exception participates.
+Landing evidence applies only to the reviewed lane; a changed lane first needs a new review result.
+The runtime pointer under "Choose the execution shape" above names the operation that carries out
+landing.
 
 Land is the authority boundary Collab owns: its guidance ends once integration has moved into the
 persistence branch. Push and later persistence-branch handling stay outside Collab.

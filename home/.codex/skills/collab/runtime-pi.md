@@ -283,17 +283,25 @@ file-handling, and managed-worktree removal contracts.
 
 Generic Collab dirt means staged or unstaged tracked changes. Ordinary untracked and ignored paths do
 not by themselves block cleanliness checks or produce dirt, presence, preservation, status, or report
-warnings; active merge/conflict state and unclassifiable Git state retain their explicit protections.
+warnings, except that landing requires no ordinary untracked state before mutation; active
+merge/conflict state and unclassifiable Git state retain their explicit protections.
 
 File handling follows the Git operation used or modeled. Merge-backed reconciliation and stale
 collection retain native `git merge` collision behavior. Ready collection uses native
 `git reset --hard`, which preserves non-obstructing untracked or ignored paths and may delete either
-kind when it must write a tracked path. Synthetic landing continues to publish without invoking
-`git merge --squash`, but models its collision behavior: non-colliding untracked and ignored paths are
-preserved without presence warnings, ordinary untracked exact and file/directory overwrite collisions
-are refused, and ignored collisions may be overwritten. Failure compensation removes a newly created
-managed worktree with non-force `git worktree remove`, retaining the resource when Git refuses;
-successful collection, lane drop, and task removal are explicit retirements and use force removal.
+kind when it must write a tracked path. Landing creates a non-fast-forward merge commit in the
+persistence checkout via `git merge --no-ff`, verifies the resulting tree equals the accepted
+integration tree, then advances both the persistence and integration branches to that commit.
+Landing requires no staged, no unstaged tracked, and no ordinary untracked persistence state before
+mutation; ignored files are allowed and path collisions follow native merge behavior. Hooks execute
+natively and any merge or hook failure is reported as an actionable Git error exposing Git's
+resulting state without synthetic publication or dirt-preservation rollback. Failure compensation
+removes a newly created managed worktree with non-force `git worktree remove`, retaining the
+resource when Git refuses; successful collection, lane drop, and task removal are explicit
+retirements and use force removal. Freshness is determined by ordinary branch ancestry and shared
+heads; no landed-identity exception participates. Legacy `refs/orchestrate/<task-id>/landed` is
+tolerated when present and is deleted by the next authorized adopt, land, or remove operation; no
+new landed refs are created.
 
 - Establishes the task-local integration branch collection needs before any lane can be collected
   into it — `collab_integration_create`.
@@ -315,8 +323,10 @@ successful collection, lane drop, and task removal are explicit retirements and 
   of unrecognized resources remain unchanged.
 - Keeps the integration branch able to receive collection by merging current persistence back into
   it through a lane, when persistence has moved ahead of integration — `collab_integration_reconcile`.
-- Land: moves the exact current integration result into a persistence branch, preserving the
-  integration tree under a new commit identity — `collab_integration_land`.
+- Land: creates a non-fast-forward merge commit in the persistence checkout whose first parent
+  is the previous persistence head and second parent is the accepted integration head, verifies
+  the commit's tree equals the accepted integration tree, then advances both the persistence and
+  integration branches to that commit — `collab_integration_land`.
 - Retire the lane, at task scope: force-removes the managed integration and its remaining lanes once
   the task's collab-owned state is no longer needed — `collab_integration_remove`. When a Dev-flow task requested `efficiencyFeedback`, follow [dev-flow's feedback closeout](../dev-flow/references/collab-feedback-closeout.md) before `collab_integration_remove`; do not duplicate the procedure or change any public tool parameter.
 - Read-only inspection of a task's integration and lane state; supports every step above without

@@ -150,24 +150,19 @@ decision, and a second patch over one cause is evidence the seam is in the wrong
 that explicitly authorizes moving a named seam lifts the original scope for that move alone. A
 correction changes the lane, so the changed lane needs a new review result.
 
-## Result
+## Result — mechanical gates attestation, no Validation field
 
 Return only these fields, in this order. Keep each field concise: state only role-relevant
-checks, conclusions, and residual risks, without restating ticket prose, command output, or diff
-narration.
+routing, risks, and stop reasons, without restating ticket prose, command output, or diff
+narration. The reviewed terminal result carries no free-text `validation` and no evidence body
+or pointer; `COMPLETED` is the binary attestation that every required Mechanical gate passed.
 
 - `Outcome`: `COMPLETED | BLOCKED | NEEDS_DECISION`
-- `Residual risks`: bounded unknowns or `none` — unified channel for all non-blocking codebase findings; `outOfEnvelopeFindings` is removed
-  `result: PASSED | FAILED`, and a concise `summary`; operational Git and runtime checks are
-  categorically ineligible here even when you ran them, and each check name and summary
-  describes only the behavior/Interface outcome observed, never the operational command or
-  checkout, tree, lane, branch, commit, diff, staged, clean, ancestry, runtime, or lifecycle
-  state it ran against
-- `Residual risks`: bounded unknowns or `none`
+- `Residual risks`: bounded unknowns or `none` — unified channel for all non-blocking codebase findings; `outOfEnvelopeFindings` is removed and `efficiencyFeedback` remains process feedback only
 - `Blocker`: the specific blocker, for `BLOCKED`
 - `Decision needed`: why a decision is needed and the exact question, for `NEEDS_DECISION`
 
-`COMPLETED` means you validated the change, committed it under the supplied lane-local authority, and
+`COMPLETED` attests that every required Mechanical gate passed, you committed it under the supplied lane-local authority, and
 left the lane clean for review. Check results are observations, not workflow routing: an unrelated
 failed semantic check may remain on a `COMPLETED` handoff when its non-blocking significance is
 explained in residual risks. Do not relay changed paths, staged-file state, diff summaries, commit

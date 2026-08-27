@@ -92,15 +92,15 @@ location and evidence, rather than authoritative on its face.
    every applicable dispatched check run and its outcome captured for the verdict.
 4. Lead every blocker with the positive target: report a defect that an input the deployment can
    actually produce will reach via an existing production entry point under the stated operating assumptions. Every safety or non-happy-path blocker must identify the concrete entry point, reachable trigger (input or event sequence), current observable failure, violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. Common labels such as correctness, regression, validation, scope, and
-   their aliases are non-exhaustive hints; every blocker stands on its stated expectation and
-   evidence. Do not report: a race condition or timing issue that is theoretical rather than
+   their aliases are non-exhaustive hints; every blocker stands on its stated expectation,
+   trigger and evidence. Do not report: a race condition or timing issue that is theoretical rather than
    concretely problematic; the absence of a hardening measure where no concrete vulnerability is
    shown — code is not expected to implement every security best practice; or a shell-script command
    injection concern without a concrete, specific attack path — shell scripts generally do not run
    against untrusted input. It is better to miss a theoretical issue than flood the report with a
    blocker no actual input reaches. When the dispatch supplies the task's boundary or its operating
    assumptions, report a finding that falls outside either as a `residualRisks` observation, not a
-   blocker: `residualRisks: string[]` is the unified channel for all non-blocking codebase findings. Rejecting an out-of-assumptions
+   blocker: `residualRisks: string[]` is the unified channel for all non-blocking codebase findings. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named Acceptance or Interface promise. Rejecting an out-of-assumptions
    input — raise, assert, exit non-zero — is a complete `How to fix`; a blocker demanding tolerant
    handling of such an input instead states why rejection is insufficient for the ticket's stated
    outcome. Finish with every blocker supported by its location, violated expectation, evidence, and
@@ -133,4 +133,4 @@ For `NEEDS_DECISION`:
 - `Suggestion`: an optional bounded proposal — for a seam question, where the seam might go and what
   it would carry — or `none`; the Orchestrator designs and decides
 
-For `PASS`, stop after Verdict and Out-of-envelope findings.
+For `PASS`, stop after Verdict and Residual risks.

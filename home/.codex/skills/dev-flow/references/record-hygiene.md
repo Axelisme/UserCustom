@@ -69,7 +69,7 @@ It must record 5W1H and be authored by its execution owner:
 
 - **Who:** execution operator and evidence writer; Orchestrator writes itself/user/external-owner validation, delegated worker writes only the exact assigned difficult-claim appendix, acceptor is read-only.
 - **What:** covered Acceptance IDs, scenario, expected/actual observations, PASSED/FAILED, bounded artifact pointers and residual limitations.
-- **When:** exact clean candidate formed after final Acceptance and before closure, with timezone; candidate change invalidates prior evidence.
+- **When:** after the exact clean candidate is formed and before final Acceptance and closure, with timezone; candidate change invalidates prior evidence.
 - **Where:** exact candidate identity (commit/tree, lane) and execution environment/backend/device/MCP host identity.
 - **Why:** why observation cannot be cheaply reproduced, depends on external mutable state, needs operator judgement, is costly or explicitly requires durable audit.
 - **How:** shipped entry point, bounded inputs, script or MCP sequence, judgement and cleanup method; when a task-record script is used, record its path and SHA-256.

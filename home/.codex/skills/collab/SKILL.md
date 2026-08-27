@@ -149,12 +149,6 @@ scope creep. The ticket therefore names the next single step and the unverified 
 edits are validated, which are not, and what must not be redone or widened. A ticket that leaves the
 replacement to re-derive those is an unfinished brief, not a terse one.
 
-**A replacement reads its ticket, not the task.** Its context is that ticket and whatever the ticket
-points to; the task record and sibling tickets belong to the Orchestrator, and handing them over invites
-scope creep. The ticket therefore names the next single step and the unverified boundary — which
-edits are validated, which are not, and what must not be redone or widened. A ticket that leaves the
-replacement to re-derive those is an unfinished brief, not a terse one.
-
 **Mechanical finish.** When a run ends after its semantic work is validated but before the checkout
 is clean and committed, dispatch a fresh writer for that close-out alone: no semantic edits, lane-owned
 temporary state removed, staged paths and diff inspected, ancestry checked, one clean commit. The

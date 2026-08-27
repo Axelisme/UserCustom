@@ -374,14 +374,24 @@ const runCorrection = (key, resumeTarget, blockers) =>
   retainedCorrection && resumeTarget !== undefined
     ? runs.run(key, { resume: resumeTarget, task: retainedCorrectionTask(blockers) })
     : runFreshChild(key, "collab-implementer", freshCorrectionTask(blockers), workerSchema);
-const projectNeedsDecision = (child) => ({
-  outcome: "NEEDS_DECISION",
-  why: child.structuredOutput.decision.why,
-  question: child.structuredOutput.decision.question
-});
-const projectWorkerStop = (child) => child.structuredOutput.outcome === "BLOCKED"
-  ? { outcome: "BLOCKED", blocker: child.structuredOutput.blocker }
-  : projectNeedsDecision(child);
+const projectNeedsDecision = (child) => {
+  const base = {
+    outcome: "NEEDS_DECISION",
+    why: child.structuredOutput.decision.why,
+    question: child.structuredOutput.decision.question
+  };
+  if (Array.isArray(child.structuredOutput.residualRisks) && child.structuredOutput.residualRisks.length > 0) base.residualRisks = child.structuredOutput.residualRisks;
+  else if (Array.isArray(child.structuredOutput.residualRisks)) base.residualRisks = [];
+  return base;
+};
+const projectWorkerStop = (child) => {
+  if (child.structuredOutput.outcome === "BLOCKED") {
+    const out = { outcome: "BLOCKED", blocker: child.structuredOutput.blocker };
+    if (Array.isArray(child.structuredOutput.residualRisks)) out.residualRisks = child.structuredOutput.residualRisks;
+    return out;
+  }
+  return projectNeedsDecision(child);
+};
 const boundedMessage = (value) => {
   const m = value instanceof Error ? value.message : typeof value === "string" ? value : "unknown error";
   return m.replace(/[\\r\\n]+/g, " ").slice(0, 300);
@@ -438,44 +448,94 @@ const runReviewerWithRecovery = (baseKey, task, phase) => {
   return attemptReviewer(0);
 };
 let writer = await runFreshChild("impl-0", "collab-implementer", ${JSON.stringify(input.workerBrief)}, workerSchema);
-if (writer.structuredOutput.outcome !== "COMPLETED") return projectWorkerStop(writer);
+if (writer.structuredOutput.outcome !== "COMPLETED") {
+  const ws = projectWorkerStop(writer);
+  return ws;
+}
 let resumeTarget = successfulRunId(writer);
 const mergeResidualRisks = (a, b) => {
   const aw = Array.isArray(a) ? a : [];
   const bw = Array.isArray(b) ? b : [];
-  return [...aw, ...bw];
+  const merged = [...aw, ...bw];
+  return merged;
 };
-const correctionBaseOf = (rev) => typeof rev.structuredOutput.correctionBase === "string" && rev.structuredOutput.correctionBase.length > 0 ? rev.structuredOutput.correctionBase : integrationTip;
+const correctionBaseOf = (rev) => {
+  const cb = rev.structuredOutput.correctionBase;
+  if (typeof cb !== "string" || cb.trim().length === 0) {
+    const msg = "reviewer BLOCKED missing required correctionBase";
+    const err = new Error(msg);
+    err.code = "INVALID_CHILD_RESULT";
+    throw err;
+  }
+  return cb;
+};
 let reviewer;
 try {
   reviewer = await runReviewerWithRecovery("review-0", ${JSON.stringify(input.reviewBrief)} + "\\n\\n" + initialReviewerBaseline, "REVIEW");
 } catch (e) {
   if (e && e.__reviewerRecoveryExhausted) {
-    return { outcome: "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED", phase: e.phase, error: e.error };
+    const out = { outcome: "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED", phase: e.phase, error: e.error };
+    if (writer && Array.isArray(writer.structuredOutput.residualRisks)) out.residualRisks = writer.structuredOutput.residualRisks;
+    return out;
   }
   throw e;
 }
-if (reviewer.structuredOutput.verdict === "NEEDS_DECISION") return projectNeedsDecision(reviewer);
+if (reviewer.structuredOutput.verdict === "NEEDS_DECISION") {
+  const nd = projectNeedsDecision(reviewer);
+  if (writer && Array.isArray(writer.structuredOutput.residualRisks) && writer.structuredOutput.residualRisks.length > 0 && (!nd.residualRisks || nd.residualRisks.length === 0)) {
+    // preserve available risks: latest worker then final reviewer already handled in projectNeedsDecision, but also ensure worker risks are preserved on reviewer decision branch
+    const merged = mergeResidualRisks(writer.structuredOutput.residualRisks, reviewer.structuredOutput.residualRisks);
+    if (merged.length > 0) nd.residualRisks = merged;
+  } else if (writer && Array.isArray(writer.structuredOutput.residualRisks)) {
+    const merged = mergeResidualRisks(writer.structuredOutput.residualRisks, reviewer.structuredOutput.residualRisks);
+    if (merged.length > 0) nd.residualRisks = merged;
+  }
+  return nd;
+}
 let round = 1;
-let currentCorrectionBase = correctionBaseOf(reviewer);
+let currentCorrectionBase = null;
+if (reviewer.structuredOutput.verdict === "BLOCKED") {
+  currentCorrectionBase = correctionBaseOf(reviewer);
+}
 while (reviewer.structuredOutput.verdict === "BLOCKED" && round <= budget) {
   writer = await runCorrection(
     "impl-" + round,
     resumeTarget,
     reviewer.structuredOutput.blockers
   );
-  if (writer.structuredOutput.outcome !== "COMPLETED") return projectWorkerStop(writer);
+  if (writer.structuredOutput.outcome !== "COMPLETED") {
+    const ws = projectWorkerStop(writer);
+    // preserve latest reviewer risks on worker-stop branches
+    if (reviewer && Array.isArray(reviewer.structuredOutput.residualRisks) && reviewer.structuredOutput.residualRisks.length > 0) {
+      const merged = mergeResidualRisks(writer.structuredOutput.residualRisks, reviewer.structuredOutput.residualRisks);
+      if (merged.length > 0) ws.residualRisks = merged;
+      else if (Array.isArray(ws.residualRisks) && ws.residualRisks.length === 0) ws.residualRisks = [];
+    }
+    return ws;
+  }
   resumeTarget = successfulRunId(writer);
+  if (currentCorrectionBase === null) {
+    const err = new Error("reviewer BLOCKED missing required correctionBase for rereview");
+    err.code = "INVALID_CHILD_RESULT";
+    throw err;
+  }
   const rereviewBaseline = rereviewBaselineFor(currentCorrectionBase);
   try {
-    reviewer = await runReviewerWithRecovery("review-" + round, ${JSON.stringify(input.reviewBrief)} + " — rereview the complete current lane diff against retained correctionBase.\\n\\n" + rereviewBaseline, "REREVIEW");
+    reviewer = await runReviewerWithRecovery("review-" + round, ${JSON.stringify(input.reviewBrief)} + " — rereview the complete current lane diff against retained correctionBase.\\n\\n" + rereviewBaseline + "\\n\\nPrior blockers: " + JSON.stringify(reviewer.structuredOutput.blockers) + "\\n\\nOriginal brief: " + ${JSON.stringify(input.reviewBrief)}, "REREVIEW");
   } catch (e) {
     if (e && e.__reviewerRecoveryExhausted) {
-      return { outcome: "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED", phase: e.phase, error: e.error };
+      const out = { outcome: "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED", phase: e.phase, error: e.error };
+      if (writer && Array.isArray(writer.structuredOutput.residualRisks)) out.residualRisks = writer.structuredOutput.residualRisks;
+      return out;
     }
     throw e;
   }
-  if (reviewer.structuredOutput.verdict === "NEEDS_DECISION") return projectNeedsDecision(reviewer);
+  if (reviewer.structuredOutput.verdict === "NEEDS_DECISION") {
+    const nd = projectNeedsDecision(reviewer);
+    const merged = mergeResidualRisks(writer.structuredOutput.residualRisks, reviewer.structuredOutput.residualRisks);
+    if (merged.length > 0) nd.residualRisks = merged;
+    return nd;
+  }
   if (reviewer.structuredOutput.verdict === "BLOCKED") currentCorrectionBase = correctionBaseOf(reviewer);
   round += 1;
 }

@@ -143,9 +143,7 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         self.assertNotIn("validation", result["workerResult"])
         self.assertIn("residualRisks", result["workerResult"])
         self.assertEqual(result["reviewResult"]["verdict"], "PASS")
-        self.assertNotEqual(
-            output["invocations"][1][0], output["invocations"][3][0]
-        )
+        self.assertNotEqual(output["invocations"][1][0], output["invocations"][3][0])
 
         for prompt, _options in output["invocations"]:
             self.assertIn(VALID_INPUT["lane"], prompt)
@@ -244,7 +242,9 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         self.assertEqual(result["workerResult"]["outcome"], "COMPLETED")
         self.assertEqual(result["reviewResult"]["verdict"], "BLOCKED")
 
-    def test_rereview_terminals_are_finite_and_keep_latest_canonical_results(self) -> None:
+    def test_rereview_terminals_are_finite_and_keep_latest_canonical_results(
+        self,
+    ) -> None:
         args = {**VALID_INPUT, "correctionBudget": 1}
         for scenario, outcome, stop_reason, verdict in (
             ("correction-rereview-pass", "REVIEWED", "REVIEW_PASS", "PASS"),
@@ -287,7 +287,9 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
                     )
                 self.assertEqual(output["calls"], 4)
 
-    def test_rereview_failures_preserve_corrected_worker_and_initial_review(self) -> None:
+    def test_rereview_failures_preserve_corrected_worker_and_initial_review(
+        self,
+    ) -> None:
         args = {**VALID_INPUT, "correctionBudget": 1}
         for scenario, code in (
             ("rereview-null", "NULL_CHILD_RESULT"),
@@ -384,7 +386,9 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(result["reviewResult"]["verdict"], "PASS")
 
-    def test_reviewer_decision_suggestion_is_optional_and_allowed_when_present(self) -> None:
+    def test_reviewer_decision_suggestion_is_optional_and_allowed_when_present(
+        self,
+    ) -> None:
         for scenario, decision_keys in (
             ("reviewer-needs-decision", {"why", "question", "suggestion"}),
             ("reviewer-needs-decision-no-suggestion", {"why", "question"}),
@@ -403,9 +407,7 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
                     calls=2,
                 )
                 self.assertEqual(result["reviewResult"]["verdict"], "NEEDS_DECISION")
-                self.assertEqual(
-                    set(result["reviewResult"]["decision"]), decision_keys
-                )
+                self.assertEqual(set(result["reviewResult"]["decision"]), decision_keys)
 
     def test_reviewer_blocked_is_blocked_and_never_falls_back(self) -> None:
         output = self.run_installed(scenario="reviewer-blocked")
@@ -448,7 +450,9 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         self.assertIsNone(result["workerResult"])
         self.assertIsNone(result["reviewResult"])
 
-    def test_null_reviewer_result_preserves_completed_worker_without_semantic_outcome(self) -> None:
+    def test_null_reviewer_result_preserves_completed_worker_without_semantic_outcome(
+        self,
+    ) -> None:
         output = self.run_installed(scenario="null-reviewer")
 
         result = self.assert_terminal(
@@ -502,7 +506,9 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
                 )
                 self.assertEqual(result["capability"]["dispatch"], "native-child-agent")
 
-    def test_reviewer_runtime_and_capability_failures_preserve_worker_without_extra_dispatch(self) -> None:
+    def test_reviewer_runtime_and_capability_failures_preserve_worker_without_extra_dispatch(
+        self,
+    ) -> None:
         expected_worker = {
             "outcome": "COMPLETED",
             "residualRisks": [],
@@ -522,11 +528,16 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
                 self.assertEqual(result["workerResult"], expected_worker)
                 self.assertIsNone(result["reviewResult"])
                 self.assertEqual(
-                    [invocation[1]["agentType"] for invocation in output["invocations"]],
+                    [
+                        invocation[1]["agentType"]
+                        for invocation in output["invocations"]
+                    ],
                     ["collab-implementer", "collab-acceptor"],
                 )
 
-    def test_missing_native_dispatch_returns_capability_gap_before_child_dispatch(self) -> None:
+    def test_missing_native_dispatch_returns_capability_gap_before_child_dispatch(
+        self,
+    ) -> None:
         output = self.run_installed(scenario="missing")
 
         result = self.assert_terminal(
@@ -623,7 +634,9 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         self.assertEqual(result["workerResult"]["outcome"], "COMPLETED")
         self.assertIsNone(result["reviewResult"])
 
-    def test_structured_output_is_consumed_but_free_form_output_is_not_routing_input(self) -> None:
+    def test_structured_output_is_consumed_but_free_form_output_is_not_routing_input(
+        self,
+    ) -> None:
         output = self.run_installed(scenario="structured-happy")
 
         result = self.assert_terminal(
@@ -648,6 +661,7 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
                     },
                     {
                         "verdict": "BLOCKED",
+                        "correctionBase": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
                         "blockers": [
                             {
                                 "where": "line one\nline two",
@@ -675,7 +689,9 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         self.assertEqual(result["workerResult"]["outcome"], "COMPLETED")
         self.assertIsNone(result["reviewResult"])
 
-    def test_invalid_inputs_dispatch_no_child_and_preserve_six_value_interface(self) -> None:
+    def test_invalid_inputs_dispatch_no_child_and_preserve_six_value_interface(
+        self,
+    ) -> None:
         cases = (
             (
                 {key: value for key, value in VALID_INPUT.items() if key != "envelope"},
@@ -683,16 +699,32 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
                 {"envelope"},
             ),
             (
-                {key: value for key, value in VALID_INPUT.items() if key != "operatorNotes"},
+                {
+                    key: value
+                    for key, value in VALID_INPUT.items()
+                    if key != "operatorNotes"
+                },
                 "MISSING_INPUT",
                 {"operatorNotes"},
             ),
             ({**VALID_INPUT, "extra": True}, "UNKNOWN_INPUT", {"extra"}),
-            ({**VALID_INPUT, "correctionBudget": 2}, "UNUSABLE_INPUT", {"correctionBudget"}),
+            (
+                {**VALID_INPUT, "correctionBudget": 2},
+                "UNUSABLE_INPUT",
+                {"correctionBudget"},
+            ),
             ({**VALID_INPUT, "lane": "relative/lane"}, "UNUSABLE_INPUT", {"lane"}),
             ({**VALID_INPUT, "ticket": "ticket.md"}, "UNUSABLE_INPUT", {"ticket"}),
-            ({**VALID_INPUT, "envelope": "envelope.md"}, "UNUSABLE_INPUT", {"envelope"}),
-            ({**VALID_INPUT, "startingHead": "   "}, "UNUSABLE_INPUT", {"startingHead"}),
+            (
+                {**VALID_INPUT, "envelope": "envelope.md"},
+                "UNUSABLE_INPUT",
+                {"envelope"},
+            ),
+            (
+                {**VALID_INPUT, "startingHead": "   "},
+                "UNUSABLE_INPUT",
+                {"startingHead"},
+            ),
             (
                 {**VALID_INPUT, "lane": "/tmp/collab-lane\n/extra"},
                 "UNUSABLE_INPUT",
@@ -710,7 +742,11 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
             ),
             ({**VALID_INPUT, "operatorNotes": ""}, "UNUSABLE_INPUT", {"operatorNotes"}),
             ({**VALID_INPUT, "operatorNotes": 42}, "UNUSABLE_INPUT", {"operatorNotes"}),
-            ({**VALID_INPUT, "operatorNotes": "   \n  "}, "UNUSABLE_INPUT", {"operatorNotes"}),
+            (
+                {**VALID_INPUT, "operatorNotes": "   \n  "},
+                "UNUSABLE_INPUT",
+                {"operatorNotes"},
+            ),
             (
                 # A tab is a control character other than the newline/carriage-return pair
                 # operatorNotes permits, so it still fails the field.
@@ -866,7 +902,10 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
             correction_output["invocations"][3][1]["schema"], reviewer_schema
         )
         self.assertEqual(
-            [invocation[1]["agentType"] for invocation in correction_output["invocations"]],
+            [
+                invocation[1]["agentType"]
+                for invocation in correction_output["invocations"]
+            ],
             [
                 "collab-implementer",
                 "collab-acceptor",
@@ -875,7 +914,9 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
             ],
         )
 
-    def test_terminal_projection_excludes_operational_identity_and_telemetry(self) -> None:
+    def test_terminal_projection_excludes_operational_identity_and_telemetry(
+        self,
+    ) -> None:
         output = self.run_installed()
         result = output["result"]
 

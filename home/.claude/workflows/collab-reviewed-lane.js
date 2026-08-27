@@ -282,7 +282,8 @@ function validReviewerResult(value) {
     return true
   }
   if (value.verdict === 'BLOCKED') {
-    if (!('blockers' in value) || 'decision' in value) return false
+    if (!('blockers' in value) || !('correctionBase' in value) || 'decision' in value) return false
+    if (!boundedText(value.correctionBase)) return false
     return validReviewBlockers(value.blockers)
   }
   if (value.verdict === 'NEEDS_DECISION') {
@@ -469,14 +470,27 @@ function correctionPrompt(input, blockers) {
   ].join('\n')
 }
 
-function rereviewerPrompt(input) {
+function rereviewerPrompt(input, blockers, correctionBase) {
   return [
     'Review the changed protected lane read-only as one fresh collab-acceptor.',
     'Begin with the assigned ticket and the bounded lane change from startingHead to the changed protected current state; independently validate every supplied expectation and inspect no post-run task evidence or unrelated repository surface.',
-    'The prior reviewer result does not cover the correction. Return only the canonical collab-acceptor Result required by the supplied schema.',
+    'This is a rereview: you receive the original brief, prior typed blockers and internal correctionBase SHA. Verify every prior blocker is closed and check correction-reachable semantic effects without rerunning mechanical gates or restarting the whole review. Obtain the delta from Git with: git diff --find-renames ' + correctionBase + '...HEAD --',
     `Six-value Workflow input: ${JSON.stringify(input)}`,
+    `Prior typed blockers: ${JSON.stringify(blockers)}`,
+    `Internal correctionBase: ${correctionBase}`,
     ...operatorNotesLines(input),
   ].join('\n')
+}
+function stripCorrectionBase(result) {
+  if (!isRecord(result) || !('correctionBase' in result)) return result
+  const copy = { ...result }
+  delete copy.correctionBase
+  return copy
+}
+function mergeResidualRisks(a, b) {
+  const aw = Array.isArray(a) ? a : []
+  const bw = Array.isArray(b) ? b : []
+  return [...aw, ...bw]
 }
 
 function failureFromChild(
@@ -610,7 +624,8 @@ if (reviewResult.verdict === 'PASS') {
     stoppedAt: 'REVIEW',
     stopReason: 'REVIEW_PASS',
     workerResult,
-    reviewResult,
+    reviewResult: stripCorrectionBase(reviewResult),
+    residualRisks: mergeResidualRisks(workerResult.residualRisks, reviewResult.residualRisks),
   })
 }
 if (reviewResult.verdict === 'NEEDS_DECISION') {
@@ -620,7 +635,8 @@ if (reviewResult.verdict === 'NEEDS_DECISION') {
     stoppedAt: 'REVIEW',
     stopReason: 'DECISION_REQUIRED',
     workerResult,
-    reviewResult,
+    reviewResult: stripCorrectionBase(reviewResult),
+    residualRisks: mergeResidualRisks(workerResult.residualRisks, reviewResult.residualRisks),
   })
 }
 
@@ -631,7 +647,8 @@ if (supplied.correctionBudget === 0) {
     stoppedAt: 'REVIEW',
     stopReason: 'REVIEW_BLOCKED',
     workerResult,
-    reviewResult,
+    reviewResult: stripCorrectionBase(reviewResult),
+    residualRisks: mergeResidualRisks(workerResult.residualRisks, reviewResult.residualRisks),
   })
 }
 
@@ -667,7 +684,8 @@ if (correctedWorkerResult.outcome === 'BLOCKED') {
     stopReason: 'WORKER_BLOCKED',
     correctionsUsed,
     workerResult: correctedWorkerResult,
-    reviewResult,
+    reviewResult: stripCorrectionBase(reviewResult),
+    residualRisks: mergeResidualRisks(correctedWorkerResult.residualRisks, reviewResult.residualRisks),
   })
 }
 if (correctedWorkerResult.outcome === 'NEEDS_DECISION') {
@@ -678,14 +696,15 @@ if (correctedWorkerResult.outcome === 'NEEDS_DECISION') {
     stopReason: 'DECISION_REQUIRED',
     correctionsUsed,
     workerResult: correctedWorkerResult,
-    reviewResult,
+    reviewResult: stripCorrectionBase(reviewResult),
+    residualRisks: mergeResidualRisks(correctedWorkerResult.residualRisks, reviewResult.residualRisks),
   })
 }
 
 if (typeof phase === 'function') phase('Rereview')
 const rereviewDispatch = await dispatchChild(
   'collab-acceptor',
-  rereviewerPrompt(input),
+  rereviewerPrompt(input, reviewResult.blockers, reviewResult.correctionBase),
   REVIEWER_SCHEMA,
   validReviewerResult,
   'REREVIEW',
@@ -711,7 +730,8 @@ if (rereviewResult.verdict === 'PASS') {
     stopReason: 'REVIEW_PASS',
     correctionsUsed,
     workerResult: correctedWorkerResult,
-    reviewResult: rereviewResult,
+    reviewResult: stripCorrectionBase(rereviewResult),
+    residualRisks: mergeResidualRisks(correctedWorkerResult.residualRisks, rereviewResult.residualRisks),
   })
 }
 if (rereviewResult.verdict === 'NEEDS_DECISION') {
@@ -722,7 +742,8 @@ if (rereviewResult.verdict === 'NEEDS_DECISION') {
     stopReason: 'DECISION_REQUIRED',
     correctionsUsed,
     workerResult: correctedWorkerResult,
-    reviewResult: rereviewResult,
+    reviewResult: stripCorrectionBase(rereviewResult),
+    residualRisks: mergeResidualRisks(correctedWorkerResult.residualRisks, rereviewResult.residualRisks),
   })
 }
 
@@ -733,5 +754,6 @@ return terminal({
   stopReason: 'CORRECTION_BUDGET_EXHAUSTED',
   correctionsUsed,
   workerResult: correctedWorkerResult,
-  reviewResult: rereviewResult,
+  reviewResult: stripCorrectionBase(rereviewResult),
+  residualRisks: mergeResidualRisks(correctedWorkerResult.residualRisks, rereviewResult.residualRisks),
 })

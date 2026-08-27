@@ -200,7 +200,7 @@ or empty is never a runtime or acceptance failure and never drives workflow bran
 enforcement, review verdict, correction budget, or composed terminal projection. It is not copied into
 `.collab_op/lane_loop_report` or lifecycle `telemetry.jsonl` and does not reintroduce a lane sidecar or
 stdout probe. Acceptor child `PASS` is the child’s own acceptance verdict; the composed workflow
-terminal `REVIEWED` projects the latest writer’s validation plus optional reviewer findings and is
+terminal `REVIEWED` merges latest worker `residualRisks` then final reviewer `residualRisks` and carries no `validation` (internal `correctionBase` never projected) and is
 not the same as child `PASS`.
 
 ## Post-launch

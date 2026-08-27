@@ -48,6 +48,7 @@ export const reviewedLaneWorkerSchema = {
       properties: {
         outcome: { const: "BLOCKED" },
         blocker: { type: "string" },
+        residualRisks: { type: "array", items: { type: "string" } },
         efficiencyFeedback: {
           type: "string",
           maxLength: 10000,
@@ -62,6 +63,7 @@ export const reviewedLaneWorkerSchema = {
       properties: {
         outcome: { const: "NEEDS_DECISION" },
         decision: reviewedLaneDecisionSchema,
+        residualRisks: { type: "array", items: { type: "string" } },
         efficiencyFeedback: {
           type: "string",
           maxLength: 10000,
@@ -124,7 +126,7 @@ export const reviewedLaneReviewerSchema = {
         },
       },
       additionalProperties: false,
-      required: ["verdict", "blockers"],
+      required: ["verdict", "blockers", "correctionBase"],
     },
     {
       type: "object",
@@ -191,10 +193,14 @@ export function isValidWorkerOutput(value: unknown): boolean {
     return true;
   }
   if (outcome === "BLOCKED") {
-    const allowed = new Set(["outcome", "blocker", "efficiencyFeedback"]);
+    const allowed = new Set(["outcome", "blocker", "residualRisks", "efficiencyFeedback"]);
     for (const k of Object.keys(value)) if (!allowed.has(k)) return false;
     if (!("outcome" in value) || !("blocker" in value)) return false;
     if (!isString(value["blocker"])) return false;
+    if ("residualRisks" in value) {
+      if (!Array.isArray(value["residualRisks"])) return false;
+      for (const r of value["residualRisks"] as unknown[]) if (!isString(r)) return false;
+    }
     if ("efficiencyFeedback" in value) {
       const fb = value["efficiencyFeedback"];
       if (!isString(fb)) return false;
@@ -203,10 +209,14 @@ export function isValidWorkerOutput(value: unknown): boolean {
     return true;
   }
   if (outcome === "NEEDS_DECISION") {
-    const allowed = new Set(["outcome", "decision", "efficiencyFeedback"]);
+    const allowed = new Set(["outcome", "decision", "residualRisks", "efficiencyFeedback"]);
     for (const k of Object.keys(value)) if (!allowed.has(k)) return false;
     if (!("outcome" in value) || !("decision" in value)) return false;
     if (!isValidDecision(value["decision"])) return false;
+    if ("residualRisks" in value) {
+      if (!Array.isArray(value["residualRisks"])) return false;
+      for (const r of value["residualRisks"] as unknown[]) if (!isString(r)) return false;
+    }
     if ("efficiencyFeedback" in value) {
       const fb = value["efficiencyFeedback"];
       if (!isString(fb)) return false;
@@ -238,16 +248,15 @@ export function isValidReviewerOutput(value: unknown): boolean {
   if (verdict === "BLOCKED") {
     const allowed = new Set(["verdict", "blockers", "residualRisks", "correctionBase", "efficiencyFeedback"]);
     for (const k of Object.keys(value)) if (!allowed.has(k)) return false;
-    if (!("verdict" in value) || !("blockers" in value)) return false;
+    if (!("verdict" in value) || !("blockers" in value) || !("correctionBase" in value)) return false;
     if (!Array.isArray(value["blockers"])) return false;
     for (const b of value["blockers"] as unknown[]) if (!isValidBlockerItem(b)) return false;
     if ("residualRisks" in value) {
       if (!Array.isArray(value["residualRisks"])) return false;
       for (const r of value["residualRisks"] as unknown[]) if (!isString(r)) return false;
     }
-    if ("correctionBase" in value) {
-      if (!isString(value["correctionBase"])) return false;
-    }
+    if (!isString(value["correctionBase"])) return false;
+    if (isString(value["correctionBase"]) && value["correctionBase"].trim().length === 0) return false;
     if ("efficiencyFeedback" in value) {
       const fb = value["efficiencyFeedback"];
       if (!isString(fb)) return false;

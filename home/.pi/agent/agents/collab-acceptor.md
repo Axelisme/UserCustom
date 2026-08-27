@@ -174,4 +174,4 @@ For `NEEDS_DECISION`:
 - `Suggestion`: an optional bounded proposal — for a seam question, where the seam might go and what
   it would carry — or `none`; the Orchestrator designs and decides
 
-For `PASS`, stop after Verdict and Out-of-envelope findings.
+For `PASS`, stop after Verdict and Residual risks.

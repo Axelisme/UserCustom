@@ -55,6 +55,7 @@ function passReviewer() {
 function blockedReviewer(where = 'reviewed behavior') {
   return {
     verdict: 'BLOCKED',
+    correctionBase: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
     blockers: [
       {
         where,
@@ -92,12 +93,24 @@ function namedScenario(name) {
       return { steps: [decisionWorker()] }
     case 'reviewer-blocked':
       return { steps: [completedWorker(), blockedReviewer()] }
+    case 'reviewer-blocked-missing-base':
+      return {
+        steps: [
+          completedWorker(),
+          {
+            verdict: 'BLOCKED',
+            blockers: blockedReviewer().blockers,
+            residualRisks: [],
+          },
+        ],
+      }
     case 'reviewer-blocked-missing-trigger':
       return {
         steps: [
           completedWorker(),
           {
             verdict: 'BLOCKED',
+            correctionBase: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
             blockers: [
               {
                 where: 'reviewed behavior',

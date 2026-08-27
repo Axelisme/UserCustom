@@ -30,6 +30,7 @@ const REQUIRED_KEYS = [...INPUT_KEYS]
 const EXACT_ROLES = ['collab-implementer', 'collab-acceptor']
 const NATIVE_DISPATCH = 'native-child-agent'
 const MAX_TEXT = 4096
+const MAX_EFFICIENCY_FEEDBACK = 10000
 const MAX_ARRAY_ITEMS = 32
 const MAX_BLOCKERS = 16
 
@@ -43,6 +44,12 @@ const RESIDUAL_RISKS_SCHEMA = {
   type: 'array',
   maxItems: MAX_ARRAY_ITEMS,
   items: { ...TEXT_SCHEMA },
+}
+
+const EFFICIENCY_FEEDBACK_SCHEMA = {
+  type: 'string',
+  maxLength: MAX_EFFICIENCY_FEEDBACK,
+  description: 'Optional process-efficiency feedback; never a codebase finding and never part of verdict or correction-budget routing.',
 }
 
 const WORKER_DECISION_SCHEMA = {
@@ -103,6 +110,7 @@ const WORKER_SCHEMA = {
   properties: {
     outcome: { enum: ['COMPLETED', 'BLOCKED', 'NEEDS_DECISION'] },
     residualRisks: RESIDUAL_RISKS_SCHEMA,
+    efficiencyFeedback: EFFICIENCY_FEEDBACK_SCHEMA,
     blocker: { ...TEXT_SCHEMA },
     decision: WORKER_DECISION_SCHEMA,
   },
@@ -119,6 +127,7 @@ const REVIEWER_SCHEMA = {
   properties: {
     verdict: { enum: ['PASS', 'BLOCKED', 'NEEDS_DECISION'] },
     residualRisks: RESIDUAL_RISKS_SCHEMA,
+    efficiencyFeedback: EFFICIENCY_FEEDBACK_SCHEMA,
     blockers: REVIEW_BLOCKERS_SCHEMA,
     correctionBase: { ...TEXT_SCHEMA, description: 'Internal correction base SHA of the reviewed lane HEAD at initial BLOCKED; runtime-owned, never projected to public terminal.' },
     decision: REVIEW_DECISION_SCHEMA,
@@ -179,20 +188,6 @@ function boundedText(value) {
   return usableText(value)
 }
 
-function validValidation(value) {
-  return (
-    Array.isArray(value) &&
-    value.length <= MAX_ARRAY_ITEMS &&
-    value.every(
-      (item) =>
-        hasExactKeys(item, ['check', 'result', 'summary']) &&
-        boundedText(item.check) &&
-        ['PASSED', 'FAILED'].includes(item.result) &&
-        boundedText(item.summary),
-    )
-  )
-}
-
 function validTextArray(value) {
   return (
     Array.isArray(value) &&
@@ -209,12 +204,17 @@ function validWorkerDecision(value) {
   )
 }
 
+function validEfficiencyFeedback(value) {
+  return typeof value === 'string' && Array.from(value).length <= MAX_EFFICIENCY_FEEDBACK
+}
+
 function validWorkerResult(value) {
   if (!isRecord(value) || typeof value.outcome !== 'string') return false
   if ('validation' in value) return false
   if ('residualRisks' in value && !validTextArray(value.residualRisks)) return false
+  if ('efficiencyFeedback' in value && !validEfficiencyFeedback(value.efficiencyFeedback)) return false
   if ('outOfEnvelopeFindings' in value) return false
-  const allowedBase = new Set(['outcome', 'residualRisks', 'blocker', 'decision'])
+  const allowedBase = new Set(['outcome', 'residualRisks', 'efficiencyFeedback', 'blocker', 'decision'])
   for (const k of Object.keys(value)) if (!allowedBase.has(k)) return false
   if (value.outcome === 'COMPLETED') {
     if ('blocker' in value || 'decision' in value) return false
@@ -272,10 +272,11 @@ function validReviewerResult(value) {
   if ('outOfEnvelopeFindings' in value) return false
   if ('validation' in value) return false
   if ('residualRisks' in value && !validTextArray(value.residualRisks)) return false
+  if ('efficiencyFeedback' in value && !validEfficiencyFeedback(value.efficiencyFeedback)) return false
   if ('correctionBase' in value && !boundedText(value.correctionBase)) return false
   if ('blockers' in value && !validReviewBlockers(value.blockers)) return false
   if ('decision' in value && !validReviewDecision(value.decision)) return false
-  const allowed = new Set(['verdict', 'residualRisks', 'blockers', 'correctionBase', 'decision'])
+  const allowed = new Set(['verdict', 'residualRisks', 'efficiencyFeedback', 'blockers', 'correctionBase', 'decision'])
   for (const k of Object.keys(value)) if (!allowed.has(k)) return false
   if (value.verdict === 'PASS') {
     if ('blockers' in value || 'decision' in value || 'correctionBase' in value) return false
@@ -301,6 +302,7 @@ function terminal({
   correctionsUsed = 0,
   workerResult = null,
   reviewResult = null,
+  residualRisks,
   error,
   capability,
 }) {
@@ -312,8 +314,9 @@ function terminal({
     stopReason,
     correctionsUsed,
     workerResult,
-    reviewResult,
+    reviewResult: stripCorrectionBase(reviewResult),
   }
+  if (residualRisks !== undefined) result.residualRisks = residualRisks
   if (error !== undefined) result.error = error
   if (capability !== undefined) result.capability = capability
   return result
@@ -345,6 +348,7 @@ function capabilityFailure(
     correctionsUsed,
     workerResult,
     reviewResult,
+    residualRisks: mergeResidualRisks(workerResult?.residualRisks, reviewResult?.residualRisks),
     error: { code },
     capability: {
       status: 'RUNTIME_GAP',
@@ -368,6 +372,7 @@ function interruptionFailure(
     correctionsUsed,
     workerResult,
     reviewResult,
+    residualRisks: mergeResidualRisks(workerResult?.residualRisks, reviewResult?.residualRisks),
   })
 }
 
@@ -470,15 +475,14 @@ function correctionPrompt(input, blockers) {
   ].join('\n')
 }
 
-function rereviewerPrompt(input, blockers, correctionBase) {
+function rereviewerPrompt(originalReviewBrief, blockers, correctionBase) {
   return [
     'Review the changed protected lane read-only as one fresh collab-acceptor.',
-    'Begin with the assigned ticket and the bounded lane change from startingHead to the changed protected current state; independently validate every supplied expectation and inspect no post-run task evidence or unrelated repository surface.',
-    'This is a rereview: you receive the original brief, prior typed blockers and internal correctionBase SHA. Verify every prior blocker is closed and check correction-reachable semantic effects without rerunning mechanical gates or restarting the whole review. Obtain the delta from Git with: git diff --find-renames ' + correctionBase + '...HEAD --',
-    `Six-value Workflow input: ${JSON.stringify(input)}`,
+    'This is a bounded rereview, not a restarted initial review: verify every prior blocker and correction-reachable semantic effect, and do not rerun mechanical gates or re-audit unaffected expectations.',
+    'Obtain the correction delta from Git with: git diff --find-renames ' + correctionBase + '...HEAD --',
+    `Original review brief (retained exactly as context; its initial-review baseline instruction does not restart this rereview): ${originalReviewBrief}`,
     `Prior typed blockers: ${JSON.stringify(blockers)}`,
     `Internal correctionBase: ${correctionBase}`,
-    ...operatorNotesLines(input),
   ].join('\n')
 }
 function stripCorrectionBase(result) {
@@ -590,6 +594,7 @@ if (workerResult.outcome === 'BLOCKED') {
     stoppedAt: 'IMPLEMENT',
     stopReason: 'WORKER_BLOCKED',
     workerResult,
+    residualRisks: mergeResidualRisks(workerResult.residualRisks, undefined),
   })
 }
 if (workerResult.outcome === 'NEEDS_DECISION') {
@@ -599,13 +604,15 @@ if (workerResult.outcome === 'NEEDS_DECISION') {
     stoppedAt: 'IMPLEMENT',
     stopReason: 'DECISION_REQUIRED',
     workerResult,
+    residualRisks: mergeResidualRisks(workerResult.residualRisks, undefined),
   })
 }
 
 if (typeof phase === 'function') phase('Review')
+const originalReviewBrief = reviewerPrompt(input)
 const reviewDispatch = await dispatchChild(
   'collab-acceptor',
-  reviewerPrompt(input),
+  originalReviewBrief,
   REVIEWER_SCHEMA,
   validReviewerResult,
   'REVIEW',
@@ -704,7 +711,7 @@ if (correctedWorkerResult.outcome === 'NEEDS_DECISION') {
 if (typeof phase === 'function') phase('Rereview')
 const rereviewDispatch = await dispatchChild(
   'collab-acceptor',
-  rereviewerPrompt(input, reviewResult.blockers, reviewResult.correctionBase),
+  rereviewerPrompt(originalReviewBrief, reviewResult.blockers, reviewResult.correctionBase),
   REVIEWER_SCHEMA,
   validReviewerResult,
   'REREVIEW',

@@ -145,6 +145,23 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         self.assertEqual(result["reviewResult"]["verdict"], "PASS")
         self.assertNotEqual(output["invocations"][1][0], output["invocations"][3][0])
 
+        initial_review_prompt = output["invocations"][1][0]
+        rereview_prompt = output["invocations"][3][0]
+        self.assertIn(
+            f"Original review brief (retained exactly as context; its initial-review baseline instruction does not restart this rereview): {initial_review_prompt}",
+            rereview_prompt,
+        )
+        self.assertIn(
+            "git diff --find-renames a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...HEAD --",
+            rereview_prompt,
+        )
+        self.assertIn("Prior typed blockers:", rereview_prompt)
+        self.assertIn("not a restarted initial review", rereview_prompt)
+        self.assertNotIn(
+            "Begin with the assigned ticket and the bounded lane change from startingHead to the changed protected current state",
+            rereview_prompt,
+        )
+
         for prompt, _options in output["invocations"]:
             self.assertIn(VALID_INPUT["lane"], prompt)
             self.assertIn(VALID_INPUT["startingHead"], prompt)
@@ -159,6 +176,93 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
             "Correct the bounded behavior before another review.",
         ):
             self.assertIn(blocker_text, correction_prompt)
+
+    def test_efficiency_feedback_is_optional_process_data_without_routing_effect(
+        self,
+    ) -> None:
+        scenario = json.dumps(
+            {
+                "steps": [
+                    {
+                        "outcome": "COMPLETED",
+                        "residualRisks": [],
+                        "efficiencyFeedback": "worker process note",
+                    },
+                    {
+                        "verdict": "PASS",
+                        "residualRisks": [],
+                        "efficiencyFeedback": "review process note",
+                    },
+                ]
+            }
+        )
+        output = self.run_installed(scenario=scenario)
+        self.assertEqual(output["result"]["outcome"], "REVIEWED")
+        self.assertEqual(
+            output["result"]["workerResult"]["efficiencyFeedback"],
+            "worker process note",
+        )
+        self.assertEqual(
+            output["result"]["reviewResult"]["efficiencyFeedback"],
+            "review process note",
+        )
+
+    def test_residual_risks_are_projected_in_latest_worker_then_final_reviewer_order(
+        self,
+    ) -> None:
+        base = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+        blocker = {
+            "where": "reviewed behavior",
+            "why": "The protected lane misses one expectation.",
+            "howToFix": "Correct the bounded behavior.",
+            "trigger": "The existing reviewed-lane entry point reaches the gap.",
+        }
+        scenario = json.dumps(
+            {
+                "steps": [
+                    {"outcome": "COMPLETED", "residualRisks": ["initial-worker"]},
+                    {
+                        "verdict": "BLOCKED",
+                        "blockers": [blocker],
+                        "correctionBase": base,
+                        "residualRisks": ["initial-reviewer"],
+                    },
+                    {"outcome": "COMPLETED", "residualRisks": ["latest-worker"]},
+                    {"verdict": "PASS", "residualRisks": ["final-reviewer"]},
+                ]
+            }
+        )
+        output = self.run_installed(
+            {**VALID_INPUT, "correctionBudget": 1}, scenario=scenario
+        )
+        self.assertEqual(
+            output["result"]["residualRisks"],
+            ["latest-worker", "final-reviewer"],
+        )
+
+        recovery_scenario = json.dumps(
+            {
+                "steps": [
+                    {"outcome": "COMPLETED", "residualRisks": ["initial-worker"]},
+                    {
+                        "verdict": "BLOCKED",
+                        "blockers": [blocker],
+                        "correctionBase": base,
+                        "residualRisks": ["initial-reviewer"],
+                    },
+                    {"outcome": "COMPLETED", "residualRisks": ["latest-worker"]},
+                    {"throw": "error"},
+                ]
+            }
+        )
+        recovery = self.run_installed(
+            {**VALID_INPUT, "correctionBudget": 1}, scenario=recovery_scenario
+        )
+        self.assertEqual(
+            recovery["result"]["residualRisks"],
+            ["latest-worker", "initial-reviewer"],
+        )
+        self.assertNotIn("correctionBase", recovery["result"]["reviewResult"])
 
     def test_correction_blocked_or_decision_stops_before_rereview(self) -> None:
         args = {**VALID_INPUT, "correctionBudget": 1}
@@ -215,6 +319,7 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
                 self.assertEqual(result["error"], {"code": code})
                 self.assertEqual(result["workerResult"]["outcome"], "COMPLETED")
                 self.assertEqual(result["reviewResult"]["verdict"], "BLOCKED")
+                self.assertNotIn("correctionBase", result["reviewResult"])
                 self.assertEqual(
                     result["reviewResult"]["blockers"][0]["where"],
                     "reviewed behavior",
@@ -241,6 +346,7 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         self.assertNotIn("error", result)
         self.assertEqual(result["workerResult"]["outcome"], "COMPLETED")
         self.assertEqual(result["reviewResult"]["verdict"], "BLOCKED")
+        self.assertNotIn("correctionBase", result["reviewResult"])
 
     def test_rereview_terminals_are_finite_and_keep_latest_canonical_results(
         self,
@@ -317,6 +423,7 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
                 self.assertEqual(result["error"], {"code": code})
                 self.assertNotIn("validation", result["workerResult"])
                 self.assertEqual(result["reviewResult"]["verdict"], "BLOCKED")
+                self.assertNotIn("correctionBase", result["reviewResult"])
                 self.assertEqual(
                     result["reviewResult"]["blockers"][0]["where"],
                     "reviewed behavior",
@@ -343,6 +450,7 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         self.assertNotIn("validation", result["workerResult"])
         self.assertIn("residualRisks", result["workerResult"])
         self.assertEqual(result["reviewResult"]["verdict"], "BLOCKED")
+        self.assertNotIn("correctionBase", result["reviewResult"])
 
     def test_worker_blocked_stops_before_review(self) -> None:
         output = self.run_installed(scenario="worker-blocked")
@@ -421,6 +529,20 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
             calls=2,
         )
         self.assertEqual(result["reviewResult"]["verdict"], "BLOCKED")
+        self.assertNotIn("correctionBase", result["reviewResult"])
+
+    def test_reviewer_blocked_missing_correction_base_is_rejected(self) -> None:
+        output = self.run_installed(scenario="reviewer-blocked-missing-base")
+
+        result = self.assert_terminal(
+            output,
+            execution="RUNTIME_GAP",
+            outcome=None,
+            stopped_at="REVIEW",
+            stop_reason="CAPABILITY_UNAVAILABLE",
+            calls=2,
+        )
+        self.assertEqual(result["error"], {"code": "INVALID_CHILD_RESULT"})
 
     def test_reviewer_blocker_missing_trigger_is_rejected(self) -> None:
         output = self.run_installed(scenario="reviewer-blocked-missing-trigger")
@@ -866,7 +988,7 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(
             set(worker_schema["properties"]),
-            {"outcome", "residualRisks", "blocker", "decision"},
+            {"outcome", "residualRisks", "efficiencyFeedback", "blocker", "decision"},
         )
         self.assertNotIn("blocker", worker_schema["required"])
         self.assertNotIn("decision", worker_schema["required"])
@@ -881,7 +1003,14 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(
             set(reviewer_schema["properties"]),
-            {"verdict", "residualRisks", "blockers", "correctionBase", "decision"},
+            {
+                "verdict",
+                "residualRisks",
+                "efficiencyFeedback",
+                "blockers",
+                "correctionBase",
+                "decision",
+            },
         )
         self.assertNotIn("blockers", reviewer_schema["required"])
         self.assertNotIn("decision", reviewer_schema["required"])
@@ -931,6 +1060,7 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
                 "correctionsUsed",
                 "workerResult",
                 "reviewResult",
+                "residualRisks",
             },
         )
         for forbidden in (

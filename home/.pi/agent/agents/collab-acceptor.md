@@ -158,9 +158,10 @@ Return only these fields, in this order. Keep each field concise and evidence-ba
 restating ticket prose, the diff, or lane material the review already shows. Public terminal results never expose internal `correctionBase`; the reviewer obtains the delta from Git.
 
 - `Verdict`: `PASS | BLOCKED | NEEDS_DECISION`
-- `Residual risks`: optional `residualRisks: string[]` for all non-blocking codebase findings (unified, whether inside or outside the envelope or operating assumptions), or `none`; `outOfEnvelopeFindings` is removed and `efficiencyFeedback` remains process feedback only
+- `Residual risks`: optional `residualRisks: string[]` for all non-blocking codebase findings (unified, whether inside or outside the envelope or operating assumptions), or `none`; `outOfEnvelopeFindings` is removed
+- `Efficiency feedback`: optional `efficiencyFeedback` process feedback only; never place codebase findings here or use it to affect verdict or budget
 
-For `BLOCKED`, repeat for each blocker:
+For `BLOCKED`, return `correctionBase` as the exact full lane `HEAD` SHA you inspected, then repeat for each blocker:
 
 - `Where`: affected location
 - `Why`: violated ticket expectation or Interface promise, plus direct evidence

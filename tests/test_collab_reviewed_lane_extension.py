@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 import uuid
 from pathlib import Path
@@ -1492,8 +1493,6 @@ def make_session(
     return "\n".join(lines)
 
 
-import textwrap
-
 COLLREPORT = ROOT / "home/.pi/agent/extensions/collab-shared/report.ts"
 
 
@@ -1573,7 +1572,7 @@ def run_report_node(request: dict) -> dict:
             raise AssertionError(
                 f"node failed: {run.stderr}\n{run.stdout}\nscript:{script}"
             )
-        lines = [l for l in run.stdout.strip().splitlines() if l.strip()]
+        lines = [line for line in run.stdout.strip().splitlines() if line.strip()]
         return json.loads(lines[-1])
     finally:
         Path(fname).unlink(missing_ok=True)
@@ -2603,10 +2602,7 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
             console.warn = origWarn;
             process.stdout.write(JSON.stringify({{ok:true}}));
         ''')
-        import subprocess, textwrap as _tw, json as _json, tempfile as _tf
-        from pathlib import Path as _P
-
-        with _tf.NamedTemporaryFile(mode="w", suffix=".mjs", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".mjs", delete=False) as f:
             f.write(script)
             fname = f.name
         try:
@@ -2616,16 +2612,17 @@ class CollabReviewedLaneT06ReportTests(CollabReviewedLaneExtensionTests):
             self.assertEqual(
                 run.returncode, 0, f"node failed: {run.stderr}\\n{run.stdout}"
             )
-            out = _json.loads(run.stdout.strip().splitlines()[-1])
+            out = json.loads(run.stdout.strip().splitlines()[-1])
             self.assertTrue(out.get("ok"))
             # ensure no global operation warnings file was created at repo control root (our dummy /tmp/repo should not have file)
             self.assertFalse(
                 (
-                    _P("/tmp/repo") / ".agent_state/.collab_op_operation_warnings.jsonl"
+                    Path("/tmp/repo")
+                    / ".agent_state/.collab_op_operation_warnings.jsonl"
                 ).exists()
             )
         finally:
-            _P(fname).unlink(missing_ok=True)
+            Path(fname).unlink(missing_ok=True)
 
 
 def run_feedback_node(request: dict) -> dict:
@@ -2690,7 +2687,7 @@ def run_feedback_node(request: dict) -> dict:
             raise AssertionError(
                 f"node failed: {run.stderr}\n{run.stdout}\nscript:{script}"
             )
-        lines = [l for l in run.stdout.strip().splitlines() if l.strip()]
+        lines = [line for line in run.stdout.strip().splitlines() if line.strip()]
         return json.loads(lines[-1])
     finally:
         Path(fname).unlink(missing_ok=True)
@@ -2736,7 +2733,7 @@ def run_schema_validation(request: dict) -> dict:
             raise AssertionError(
                 f"node schema validation failed: {run.stderr}\n{run.stdout}"
             )
-        lines = [l for l in run.stdout.strip().splitlines() if l.strip()]
+        lines = [line for line in run.stdout.strip().splitlines() if line.strip()]
         return json.loads(lines[-1])
     finally:
         Path(fname).unlink(missing_ok=True)
@@ -2802,7 +2799,7 @@ def run_blocker_schema_agreement(cases: list[dict]) -> dict:
             raise AssertionError(
                 f"node blocker schema agreement check failed: {run.stderr}\n{run.stdout}"
             )
-        lines = [l for l in run.stdout.strip().splitlines() if l.strip()]
+        lines = [line for line in run.stdout.strip().splitlines() if line.strip()]
         return json.loads(lines[-1])
     finally:
         Path(fname).unlink(missing_ok=True)
@@ -4089,12 +4086,12 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
         # Portable harness test: after exactly two failed replacements (three attempts) the
         # workflow returns REVIEWER_RUNTIME_RECOVERY_EXHAUSTED with bounded phase/diagnostics,
         # not an unclassified exception. Cover both REVIEW and REREVIEW phases.
-        worker = {"outcome": "COMPLETED", "residualRisks": []}
+        worker = {"outcome": "COMPLETED", "residualRisks": ["worker-risk"]}
         blocked = {
             "verdict": "BLOCKED",
             "correctionBase": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
             "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}],
-            "residualRisks": [],
+            "residualRisks": ["reviewer-risk"],
         }
         # REVIEW exhaustion
         with tempfile.TemporaryDirectory() as temporary:
@@ -4128,6 +4125,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
                 execution["result"]["outcome"], "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED"
             )
             self.assertEqual(execution["result"]["phase"], "REVIEW")
+            self.assertEqual(execution["result"]["residualRisks"], ["worker-risk"])
             self.assertIsInstance(execution["result"]["error"], str)
             self.assertGreater(len(execution["result"]["error"]), 0)
             self.assertLessEqual(len(execution["result"]["error"]), 300)
@@ -4173,6 +4171,10 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
                 execution2["result"]["outcome"], "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED"
             )
             self.assertEqual(execution2["result"]["phase"], "REREVIEW")
+            self.assertEqual(
+                execution2["result"]["residualRisks"],
+                ["worker-risk", "reviewer-risk"],
+            )
             self.assertIsInstance(execution2["result"]["error"], str)
             self.assertLessEqual(len(execution2["result"]["error"]), 300)
             self.assertEqual(

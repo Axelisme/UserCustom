@@ -525,7 +525,8 @@ while (reviewer.structuredOutput.verdict === "BLOCKED" && round <= budget) {
   } catch (e) {
     if (e && e.__reviewerRecoveryExhausted) {
       const out = { outcome: "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED", phase: e.phase, error: e.error };
-      if (writer && Array.isArray(writer.structuredOutput.residualRisks)) out.residualRisks = writer.structuredOutput.residualRisks;
+      const merged = mergeResidualRisks(writer && writer.structuredOutput.residualRisks, reviewer && reviewer.structuredOutput.residualRisks);
+      if (merged.length > 0 || (writer && Array.isArray(writer.structuredOutput.residualRisks)) || (reviewer && Array.isArray(reviewer.structuredOutput.residualRisks))) out.residualRisks = merged;
       return out;
     }
     throw e;

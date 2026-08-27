@@ -30,6 +30,7 @@ const REQUIRED_KEYS = [...INPUT_KEYS]
 const EXACT_ROLES = ['collab-implementer', 'collab-acceptor']
 const NATIVE_DISPATCH = 'native-child-agent'
 const MAX_TEXT = 4096
+const MAX_EFFICIENCY_FEEDBACK = 10000
 const MAX_ARRAY_ITEMS = 32
 const MAX_BLOCKERS = 16
 
@@ -39,25 +40,16 @@ const TEXT_SCHEMA = {
   maxLength: MAX_TEXT,
 }
 
-const VALIDATION_SCHEMA = {
-  type: 'array',
-  maxItems: MAX_ARRAY_ITEMS,
-  items: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['check', 'result', 'summary'],
-    properties: {
-      check: { ...TEXT_SCHEMA },
-      result: { enum: ['PASSED', 'FAILED'] },
-      summary: { ...TEXT_SCHEMA },
-    },
-  },
-}
-
 const RESIDUAL_RISKS_SCHEMA = {
   type: 'array',
   maxItems: MAX_ARRAY_ITEMS,
   items: { ...TEXT_SCHEMA },
+}
+
+const EFFICIENCY_FEEDBACK_SCHEMA = {
+  type: 'string',
+  maxLength: MAX_EFFICIENCY_FEEDBACK,
+  description: 'Optional process-efficiency feedback; never a codebase finding and never part of verdict or correction-budget routing.',
 }
 
 const WORKER_DECISION_SCHEMA = {
@@ -70,19 +62,7 @@ const WORKER_DECISION_SCHEMA = {
   },
 }
 
-const FINDINGS_SCHEMA = {
-  type: 'array',
-  maxItems: MAX_ARRAY_ITEMS,
-  items: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['location', 'evidence'],
-    properties: {
-      location: { ...TEXT_SCHEMA },
-      evidence: { ...TEXT_SCHEMA },
-    },
-  },
-}
+
 
 const REVIEW_BLOCKERS_SCHEMA = {
   type: 'array',
@@ -121,14 +101,16 @@ const REVIEW_DECISION_SCHEMA = {
 // fields (blocker, decision) are declared optional with their existing
 // sub-schemas unchanged. The closed-branch (exact-keys-per-outcome)
 // guarantee remains enforced by validWorkerResult below, not by this schema.
+// S3: worker Validation is absent; COMPLETED is binary attestation that required mechanical gates passed;
+// residualRisks carries optional non-blocking findings, efficiencyFeedback remains process feedback.
 const WORKER_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['outcome', 'validation', 'residualRisks'],
+  required: ['outcome'],
   properties: {
     outcome: { enum: ['COMPLETED', 'BLOCKED', 'NEEDS_DECISION'] },
-    validation: VALIDATION_SCHEMA,
     residualRisks: RESIDUAL_RISKS_SCHEMA,
+    efficiencyFeedback: EFFICIENCY_FEEDBACK_SCHEMA,
     blocker: { ...TEXT_SCHEMA },
     decision: WORKER_DECISION_SCHEMA,
   },
@@ -136,14 +118,18 @@ const WORKER_SCHEMA = {
 
 // Same flattening for the reviewer's three closed branches; the closed-branch
 // guarantee remains enforced by validReviewerResult below.
+// S1/S3: reviewer carries optional residualRisks for all non-blocking findings; outOfEnvelopeFindings is removed;
+// initial BLOCKED may carry internal correctionBase (runtime-owned, never projected to public terminal).
 const REVIEWER_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['verdict', 'outOfEnvelopeFindings'],
+  required: ['verdict'],
   properties: {
     verdict: { enum: ['PASS', 'BLOCKED', 'NEEDS_DECISION'] },
-    outOfEnvelopeFindings: FINDINGS_SCHEMA,
+    residualRisks: RESIDUAL_RISKS_SCHEMA,
+    efficiencyFeedback: EFFICIENCY_FEEDBACK_SCHEMA,
     blockers: REVIEW_BLOCKERS_SCHEMA,
+    correctionBase: { ...TEXT_SCHEMA, description: 'Internal correction base SHA of the reviewed lane HEAD at initial BLOCKED; runtime-owned, never projected to public terminal.' },
     decision: REVIEW_DECISION_SCHEMA,
   },
 }
@@ -202,20 +188,6 @@ function boundedText(value) {
   return usableText(value)
 }
 
-function validValidation(value) {
-  return (
-    Array.isArray(value) &&
-    value.length <= MAX_ARRAY_ITEMS &&
-    value.every(
-      (item) =>
-        hasExactKeys(item, ['check', 'result', 'summary']) &&
-        boundedText(item.check) &&
-        ['PASSED', 'FAILED'].includes(item.result) &&
-        boundedText(item.summary),
-    )
-  )
-}
-
 function validTextArray(value) {
   return (
     Array.isArray(value) &&
@@ -232,49 +204,34 @@ function validWorkerDecision(value) {
   )
 }
 
+function validEfficiencyFeedback(value) {
+  return typeof value === 'string' && Array.from(value).length <= MAX_EFFICIENCY_FEEDBACK
+}
+
 function validWorkerResult(value) {
   if (!isRecord(value) || typeof value.outcome !== 'string') return false
-  if (!validValidation(value.validation) || !validTextArray(value.residualRisks)) {
-    return false
-  }
-
+  if ('validation' in value) return false
+  if ('residualRisks' in value && !validTextArray(value.residualRisks)) return false
+  if ('efficiencyFeedback' in value && !validEfficiencyFeedback(value.efficiencyFeedback)) return false
+  if ('outOfEnvelopeFindings' in value) return false
+  const allowedBase = new Set(['outcome', 'residualRisks', 'efficiencyFeedback', 'blocker', 'decision'])
+  for (const k of Object.keys(value)) if (!allowedBase.has(k)) return false
   if (value.outcome === 'COMPLETED') {
-    return hasExactKeys(value, ['outcome', 'validation', 'residualRisks'])
+    if ('blocker' in value || 'decision' in value) return false
+    return true
   }
   if (value.outcome === 'BLOCKED') {
-    return (
-      hasExactKeys(
-        value,
-        ['outcome', 'validation', 'residualRisks', 'blocker'],
-      ) && boundedText(value.blocker)
-    )
+    if (!('blocker' in value) || 'decision' in value) return false
+    return boundedText(value.blocker)
   }
   if (value.outcome === 'NEEDS_DECISION') {
-    return (
-      hasExactKeys(
-        value,
-        ['outcome', 'validation', 'residualRisks', 'decision'],
-      ) && validWorkerDecision(value.decision)
-    )
+    if (!('decision' in value) || 'blocker' in value) return false
+    return validWorkerDecision(value.decision)
   }
   return false
 }
 
-function validFinding(value) {
-  return (
-    hasExactKeys(value, ['location', 'evidence']) &&
-    boundedText(value.location) &&
-    boundedText(value.evidence)
-  )
-}
 
-function validFindings(value) {
-  return (
-    Array.isArray(value) &&
-    value.length <= MAX_ARRAY_ITEMS &&
-    value.every((finding) => validFinding(finding))
-  )
-}
 
 function validReviewBlockers(value) {
   return (
@@ -311,23 +268,28 @@ function validReviewDecision(value) {
 }
 
 function validReviewerResult(value) {
-  if (!isRecord(value) || !validFindings(value.outOfEnvelopeFindings)) {
-    return false
-  }
+  if (!isRecord(value) || typeof value.verdict !== 'string') return false
+  if ('outOfEnvelopeFindings' in value) return false
+  if ('validation' in value) return false
+  if ('residualRisks' in value && !validTextArray(value.residualRisks)) return false
+  if ('efficiencyFeedback' in value && !validEfficiencyFeedback(value.efficiencyFeedback)) return false
+  if ('correctionBase' in value && !boundedText(value.correctionBase)) return false
+  if ('blockers' in value && !validReviewBlockers(value.blockers)) return false
+  if ('decision' in value && !validReviewDecision(value.decision)) return false
+  const allowed = new Set(['verdict', 'residualRisks', 'efficiencyFeedback', 'blockers', 'correctionBase', 'decision'])
+  for (const k of Object.keys(value)) if (!allowed.has(k)) return false
   if (value.verdict === 'PASS') {
-    return hasExactKeys(value, ['verdict', 'outOfEnvelopeFindings'])
+    if ('blockers' in value || 'decision' in value || 'correctionBase' in value) return false
+    return true
   }
   if (value.verdict === 'BLOCKED') {
-    return (
-      hasExactKeys(value, ['verdict', 'blockers', 'outOfEnvelopeFindings']) &&
-      validReviewBlockers(value.blockers)
-    )
+    if (!('blockers' in value) || !('correctionBase' in value) || 'decision' in value) return false
+    if (!boundedText(value.correctionBase)) return false
+    return validReviewBlockers(value.blockers)
   }
   if (value.verdict === 'NEEDS_DECISION') {
-    return (
-      hasExactKeys(value, ['verdict', 'decision', 'outOfEnvelopeFindings']) &&
-      validReviewDecision(value.decision)
-    )
+    if (!('decision' in value) || 'blockers' in value || 'correctionBase' in value) return false
+    return validReviewDecision(value.decision)
   }
   return false
 }
@@ -340,6 +302,7 @@ function terminal({
   correctionsUsed = 0,
   workerResult = null,
   reviewResult = null,
+  residualRisks,
   error,
   capability,
 }) {
@@ -351,8 +314,9 @@ function terminal({
     stopReason,
     correctionsUsed,
     workerResult,
-    reviewResult,
+    reviewResult: stripCorrectionBase(reviewResult),
   }
+  if (residualRisks !== undefined) result.residualRisks = residualRisks
   if (error !== undefined) result.error = error
   if (capability !== undefined) result.capability = capability
   return result
@@ -384,6 +348,7 @@ function capabilityFailure(
     correctionsUsed,
     workerResult,
     reviewResult,
+    residualRisks: mergeResidualRisks(workerResult?.residualRisks, reviewResult?.residualRisks),
     error: { code },
     capability: {
       status: 'RUNTIME_GAP',
@@ -407,6 +372,7 @@ function interruptionFailure(
     correctionsUsed,
     workerResult,
     reviewResult,
+    residualRisks: mergeResidualRisks(workerResult?.residualRisks, reviewResult?.residualRisks),
   })
 }
 
@@ -509,14 +475,26 @@ function correctionPrompt(input, blockers) {
   ].join('\n')
 }
 
-function rereviewerPrompt(input) {
+function rereviewerPrompt(originalReviewBrief, blockers, correctionBase) {
   return [
     'Review the changed protected lane read-only as one fresh collab-acceptor.',
-    'Begin with the assigned ticket and the bounded lane change from startingHead to the changed protected current state; independently validate every supplied expectation and inspect no post-run task evidence or unrelated repository surface.',
-    'The prior reviewer result does not cover the correction. Return only the canonical collab-acceptor Result required by the supplied schema.',
-    `Six-value Workflow input: ${JSON.stringify(input)}`,
-    ...operatorNotesLines(input),
+    'This is a bounded rereview, not a restarted initial review: verify every prior blocker and correction-reachable semantic effect, and do not rerun mechanical gates or re-audit unaffected expectations.',
+    'Obtain the correction delta from Git with: git diff --find-renames ' + correctionBase + '...HEAD --',
+    `Original review brief (retained exactly as context; its initial-review baseline instruction does not restart this rereview): ${originalReviewBrief}`,
+    `Prior typed blockers: ${JSON.stringify(blockers)}`,
+    `Internal correctionBase: ${correctionBase}`,
   ].join('\n')
+}
+function stripCorrectionBase(result) {
+  if (!isRecord(result) || !('correctionBase' in result)) return result
+  const copy = { ...result }
+  delete copy.correctionBase
+  return copy
+}
+function mergeResidualRisks(a, b) {
+  const aw = Array.isArray(a) ? a : []
+  const bw = Array.isArray(b) ? b : []
+  return [...aw, ...bw]
 }
 
 function failureFromChild(
@@ -616,6 +594,7 @@ if (workerResult.outcome === 'BLOCKED') {
     stoppedAt: 'IMPLEMENT',
     stopReason: 'WORKER_BLOCKED',
     workerResult,
+    residualRisks: mergeResidualRisks(workerResult.residualRisks, undefined),
   })
 }
 if (workerResult.outcome === 'NEEDS_DECISION') {
@@ -625,13 +604,15 @@ if (workerResult.outcome === 'NEEDS_DECISION') {
     stoppedAt: 'IMPLEMENT',
     stopReason: 'DECISION_REQUIRED',
     workerResult,
+    residualRisks: mergeResidualRisks(workerResult.residualRisks, undefined),
   })
 }
 
 if (typeof phase === 'function') phase('Review')
+const originalReviewBrief = reviewerPrompt(input)
 const reviewDispatch = await dispatchChild(
   'collab-acceptor',
-  reviewerPrompt(input),
+  originalReviewBrief,
   REVIEWER_SCHEMA,
   validReviewerResult,
   'REVIEW',
@@ -650,7 +631,8 @@ if (reviewResult.verdict === 'PASS') {
     stoppedAt: 'REVIEW',
     stopReason: 'REVIEW_PASS',
     workerResult,
-    reviewResult,
+    reviewResult: stripCorrectionBase(reviewResult),
+    residualRisks: mergeResidualRisks(workerResult.residualRisks, reviewResult.residualRisks),
   })
 }
 if (reviewResult.verdict === 'NEEDS_DECISION') {
@@ -660,7 +642,8 @@ if (reviewResult.verdict === 'NEEDS_DECISION') {
     stoppedAt: 'REVIEW',
     stopReason: 'DECISION_REQUIRED',
     workerResult,
-    reviewResult,
+    reviewResult: stripCorrectionBase(reviewResult),
+    residualRisks: mergeResidualRisks(workerResult.residualRisks, reviewResult.residualRisks),
   })
 }
 
@@ -671,7 +654,8 @@ if (supplied.correctionBudget === 0) {
     stoppedAt: 'REVIEW',
     stopReason: 'REVIEW_BLOCKED',
     workerResult,
-    reviewResult,
+    reviewResult: stripCorrectionBase(reviewResult),
+    residualRisks: mergeResidualRisks(workerResult.residualRisks, reviewResult.residualRisks),
   })
 }
 
@@ -707,7 +691,8 @@ if (correctedWorkerResult.outcome === 'BLOCKED') {
     stopReason: 'WORKER_BLOCKED',
     correctionsUsed,
     workerResult: correctedWorkerResult,
-    reviewResult,
+    reviewResult: stripCorrectionBase(reviewResult),
+    residualRisks: mergeResidualRisks(correctedWorkerResult.residualRisks, reviewResult.residualRisks),
   })
 }
 if (correctedWorkerResult.outcome === 'NEEDS_DECISION') {
@@ -718,14 +703,15 @@ if (correctedWorkerResult.outcome === 'NEEDS_DECISION') {
     stopReason: 'DECISION_REQUIRED',
     correctionsUsed,
     workerResult: correctedWorkerResult,
-    reviewResult,
+    reviewResult: stripCorrectionBase(reviewResult),
+    residualRisks: mergeResidualRisks(correctedWorkerResult.residualRisks, reviewResult.residualRisks),
   })
 }
 
 if (typeof phase === 'function') phase('Rereview')
 const rereviewDispatch = await dispatchChild(
   'collab-acceptor',
-  rereviewerPrompt(input),
+  rereviewerPrompt(originalReviewBrief, reviewResult.blockers, reviewResult.correctionBase),
   REVIEWER_SCHEMA,
   validReviewerResult,
   'REREVIEW',
@@ -751,7 +737,8 @@ if (rereviewResult.verdict === 'PASS') {
     stopReason: 'REVIEW_PASS',
     correctionsUsed,
     workerResult: correctedWorkerResult,
-    reviewResult: rereviewResult,
+    reviewResult: stripCorrectionBase(rereviewResult),
+    residualRisks: mergeResidualRisks(correctedWorkerResult.residualRisks, rereviewResult.residualRisks),
   })
 }
 if (rereviewResult.verdict === 'NEEDS_DECISION') {
@@ -762,7 +749,8 @@ if (rereviewResult.verdict === 'NEEDS_DECISION') {
     stopReason: 'DECISION_REQUIRED',
     correctionsUsed,
     workerResult: correctedWorkerResult,
-    reviewResult: rereviewResult,
+    reviewResult: stripCorrectionBase(rereviewResult),
+    residualRisks: mergeResidualRisks(correctedWorkerResult.residualRisks, rereviewResult.residualRisks),
   })
 }
 
@@ -773,5 +761,6 @@ return terminal({
   stopReason: 'CORRECTION_BUDGET_EXHAUSTED',
   correctionsUsed,
   workerResult: correctedWorkerResult,
-  reviewResult: rereviewResult,
+  reviewResult: stripCorrectionBase(rereviewResult),
+  residualRisks: mergeResidualRisks(correctedWorkerResult.residualRisks, rereviewResult.residualRisks),
 })

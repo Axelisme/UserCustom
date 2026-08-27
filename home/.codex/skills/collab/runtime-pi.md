@@ -124,11 +124,10 @@ authority, validation expectations, protected-lane and writer-stopped stop condi
 and cleanup ownership as applicable, role-specific deltas, and the optional task-boundary pointer.
 The tool rejects extra fields and unbounded or empty briefs.
 
-Terminal outcomes:
+Terminal outcomes — every branch preserves `residualRisks` and `REVIEWED` merges latest worker then final reviewer risks:
 
 - `REVIEWED` — the worker returned `COMPLETED` and the reviewer returned `PASS`. It projects the
-  latest worker's semantic validation and optional residual risks plus the reviewer's optional
-  out-of-envelope findings.
+  merged `residualRisks` (latest worker `residualRisks` then final reviewer `residualRisks`) and carries no `validation`, no `outOfEnvelopeFindings` and no `correctionBase` (internal only).
 - `BLOCKED` — the worker returned `BLOCKED`; it carries the worker blocker.
 - `NEEDS_DECISION` — a worker or reviewer returned it; it carries why, the exact question, and any
   bounded suggestion the reviewer offered, and returns immediately to the Orchestrator.
@@ -140,14 +139,13 @@ Terminal outcomes:
   (`REVIEW` or `REREVIEW`) and a bounded error summary. It is distinct from `BLOCKED`,
   `NEEDS_DECISION`, and correction-budget exhaustion and does not masquerade as a semantic outcome.
 
-### Reviewer runtime recovery
+### Reviewer runtime recovery — distinct baselines, same budget semantics
 
 The reviewed-lane workflow owns bounded recovery for read-only reviewer transport failures. Each
 review and rereview round allows exactly two fresh replacement attempts after its initial failed
 reviewer child (three attempts total per round). Every replacement runs with fresh context
 (`context: "fresh"`) against the same protected lane, the same ticket expectations and review brief
-as the failed round, and the same runtime-owned immutable integration baseline (`integrationTip`
-and the canonical `git diff --find-renames <tip>...HEAD --` command). Recovery attempts do not
+as the failed round, and the runtime-owned baseline for that round: initial review uses immutable `integrationTip` (`git diff --find-renames <integrationTip>...HEAD --`), rereview uses the `correctionBase` SHA carried from the initial `BLOCKED` (`git diff --find-renames <correctionBase>...HEAD --`). Recovery attempts do not
 consume or reset the semantic correction budget — only a `BLOCKED` reviewer verdict followed by a
 writer correction consumes that budget. Only a schema-valid structured verdict (`PASS`, `BLOCKED`,
 `NEEDS_DECISION`) returned by a successful child may drive workflow branching; free-form output
@@ -186,33 +184,11 @@ one structured result per child and do not combine it with Pi's generic acceptan
 both default Collab profiles set `acceptance: { level: none, ... }` with a reason, and a launch needing
 another acceptance policy selects it explicitly.
 
-Worker (`collab-implementer`) — `COMPLETED` carries the behavior/Interface semantic checks actually
-performed, each with `check`, `result: PASSED | FAILED`, and a concise `summary`, and may carry
-`residualRisks`; operational Git and runtime checks — status, diff, diff-check, staged state,
-cleanliness, ancestry, commit identity, and lifecycle — are categorically ineligible for `validation`
-even when the worker runs them and receive no semantic check name or summary; each check name and
-summary describes only the behavior/Interface outcome observed, never the operational command or
-checkout, tree, lane, branch, commit, diff, staged, clean, ancestry, runtime, or lifecycle state it
-ran against; `BLOCKED` carries
-`blocker`; `NEEDS_DECISION` carries `decision: { why, question }`; every branch may also carry optional
-`efficiencyFeedback` (plain string, `maxLength: 10000`, no `minLength`; empty string is valid) as
-qualitative feedback for a requested efficiency investigation — not a substitute for runtime counts or
-timing. `outcome` discriminates the three branches (`COMPLETED`, `BLOCKED`, `NEEDS_DECISION`); each
-branch is closed to exactly its own fields plus the shared `outcome` and optional
-`efficiencyFeedback`. The child's own `outputSchema` is authoritative for the exact shape; this
-paragraph names the fields, not their JSON Schema encoding.
+Worker (`collab-implementer`) — `COMPLETED` is the binary attestation that the ticket's required mechanical gates passed; it carries no `validation` field (rejected via `additionalProperties: false`) and may carry optional `residualRisks: string[]`; `BLOCKED` carries `blocker`; `NEEDS_DECISION` carries `decision: { why, question }`; every branch may also carry optional `efficiencyFeedback` (plain string, `maxLength: 10000`, no `minLength`; empty string is valid) as qualitative process feedback — not a substitute for runtime counts or timing. Ordinary mechanical gate commands and outputs stay with run artifacts and reviewed roles do not reopen them; difficult-claim observations belong only to the Orchestrator-precreated workflow-scoped Acceptance appendix at the exact dispatched target when dispatched. `outcome` discriminates the three branches (`COMPLETED`, `BLOCKED`, `NEEDS_DECISION`); each branch is closed to exactly its own fields plus the shared `outcome` and optional `efficiencyFeedback` and optional `residualRisks`. The child's own `outputSchema` is authoritative for the exact shape; this paragraph names the fields, not their JSON Schema encoding.
 
-Reviewer (`collab-acceptor`) — `PASS` needs no filler; `BLOCKED` carries `blockers`, each with its
-`where`, `why`, bounded `howToFix`, and a required `trigger` — the concrete input or call sequence
-that produces the defect, and the existing entry point it reaches from; `NEEDS_DECISION` carries
-`decision: { why, question }`; any verdict may add optional `outOfEnvelopeFindings`, each with
-`location` and `evidence`; every verdict branch may also carry optional `efficiencyFeedback` (plain
-string, `maxLength: 10000`, no `minLength`; empty string is valid) as qualitative feedback for a
-requested efficiency investigation — not a substitute for runtime counts or timing. `verdict`
-discriminates the three branches (`PASS`, `BLOCKED`, `NEEDS_DECISION`); each branch is closed to
-exactly its own fields plus the shared `verdict`, optional `outOfEnvelopeFindings`, and optional
-`efficiencyFeedback`. The child's own `outputSchema` is authoritative for the exact shape; this
-paragraph names the fields, not their JSON Schema encoding.
+Reviewer (`collab-acceptor`) — `PASS` needs no filler; `BLOCKED` carries `blockers`, each with its `where`, `why`, bounded `howToFix`, and a required `trigger` — the concrete production-reachable input or call sequence that produces the defect, and the existing entry point it reaches from — and may carry internal `correctionBase` (exact lane HEAD SHA at `BLOCKED`, runtime-owned, never projected to public terminal); `NEEDS_DECISION` carries `decision: { why, question }`; every verdict may add optional `residualRisks: string[]` (unified for all non-blocking findings, `outOfEnvelopeFindings` is removed) and optional `efficiencyFeedback`. Initial review exhausts every non-mechanical Acceptance claim and directly reachable siblings before returning `BLOCKED` with `correctionBase`; rereview receives the original brief, prior typed blockers and that base, obtains its delta from Git and verifies every prior blocker plus correction-reachable effects without rerunning gates or restarting the whole review; `correctionBase` is never copied as a diff cache and never appears in public terminal results. `verdict` discriminates the three branches (`PASS`, `BLOCKED`, `NEEDS_DECISION`); each branch is closed to exactly its own fields plus the shared `verdict`, optional `residualRisks` and optional `efficiencyFeedback` (plus internal `correctionBase` on `BLOCKED`). The child's own `outputSchema` is authoritative for the exact shape; this paragraph names the fields, not their JSON Schema encoding.
+
+`efficiencyFeedback` remains optional process feedback only and never carries codebase findings nor affects verdicts, budgets or routing; `residualRisks` is the unified non-blocking channel and `REVIEWED` merges latest worker then final reviewer risks without changing routing.
 
 `efficiencyFeedback` is an optional plain string on every worker outcome (`COMPLETED`, `BLOCKED`,
 `NEEDS_DECISION`) and every reviewer verdict (`PASS`, `BLOCKED`, `NEEDS_DECISION`): `maxLength: 10000`,
@@ -224,7 +200,7 @@ or empty is never a runtime or acceptance failure and never drives workflow bran
 enforcement, review verdict, correction budget, or composed terminal projection. It is not copied into
 `.collab_op/lane_loop_report` or lifecycle `telemetry.jsonl` and does not reintroduce a lane sidecar or
 stdout probe. Acceptor child `PASS` is the child’s own acceptance verdict; the composed workflow
-terminal `REVIEWED` projects the latest writer’s validation plus optional reviewer findings and is
+terminal `REVIEWED` merges latest worker `residualRisks` then final reviewer `residualRisks` and carries no `validation` (internal `correctionBase` never projected) and is
 not the same as child `PASS`.
 
 ## Post-launch

@@ -20,13 +20,6 @@ function completedWorker(
 ) {
   return {
     outcome: 'COMPLETED',
-    validation: [
-      {
-        check: 'workflow behavior',
-        result: 'PASSED',
-        summary,
-      },
-    ],
     residualRisks: [],
   }
 }
@@ -36,7 +29,6 @@ function blockedWorker(
 ) {
   return {
     outcome: 'BLOCKED',
-    validation: [],
     residualRisks: [],
     blocker,
   }
@@ -45,7 +37,6 @@ function blockedWorker(
 function decisionWorker() {
   return {
     outcome: 'NEEDS_DECISION',
-    validation: [],
     residualRisks: [],
     decision: {
       why: 'The requested behavior requires an unapproved seam decision.',
@@ -57,13 +48,14 @@ function decisionWorker() {
 function passReviewer() {
   return {
     verdict: 'PASS',
-    outOfEnvelopeFindings: [],
+    residualRisks: [],
   }
 }
 
 function blockedReviewer(where = 'reviewed behavior') {
   return {
     verdict: 'BLOCKED',
+    correctionBase: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
     blockers: [
       {
         where,
@@ -72,7 +64,7 @@ function blockedReviewer(where = 'reviewed behavior') {
         trigger: 'A reviewer inspects the delegated scope and finds the gap directly reachable.',
       },
     ],
-    outOfEnvelopeFindings: [],
+    residualRisks: [],
   }
 }
 
@@ -85,7 +77,7 @@ function decisionReviewer(includeSuggestion = true) {
   return {
     verdict: 'NEEDS_DECISION',
     decision,
-    outOfEnvelopeFindings: [],
+    residualRisks: [],
   }
 }
 
@@ -101,12 +93,24 @@ function namedScenario(name) {
       return { steps: [decisionWorker()] }
     case 'reviewer-blocked':
       return { steps: [completedWorker(), blockedReviewer()] }
+    case 'reviewer-blocked-missing-base':
+      return {
+        steps: [
+          completedWorker(),
+          {
+            verdict: 'BLOCKED',
+            blockers: blockedReviewer().blockers,
+            residualRisks: [],
+          },
+        ],
+      }
     case 'reviewer-blocked-missing-trigger':
       return {
         steps: [
           completedWorker(),
           {
             verdict: 'BLOCKED',
+            correctionBase: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
             blockers: [
               {
                 where: 'reviewed behavior',
@@ -114,7 +118,7 @@ function namedScenario(name) {
                 howToFix: 'Correct the bounded behavior before another review.',
               },
             ],
-            outOfEnvelopeFindings: [],
+            residualRisks: [],
           },
         ],
       }
@@ -180,7 +184,6 @@ function namedScenario(name) {
           blockedReviewer(),
           {
             outcome: 'COMPLETED',
-            validation: [],
             residualRisks: [],
             structuredOutput: completedWorker(),
           },
@@ -228,7 +231,7 @@ function namedScenario(name) {
           completedWorker(),
           blockedReviewer(),
           completedWorker('The bounded correction matches the supplied Interface.'),
-          { verdict: 'PASS', outOfEnvelopeFindings: [], blockers: [] },
+          { verdict: 'PASS', residualRisks: [], blockers: [] },
         ],
       }
     case 'null':
@@ -257,7 +260,6 @@ function namedScenario(name) {
         steps: [
           {
             outcome: 'COMPLETED',
-            validation: [],
             residualRisks: [],
             structuredOutput: completedWorker(),
           },
@@ -267,7 +269,7 @@ function namedScenario(name) {
       return {
         steps: [
           completedWorker(),
-          { verdict: 'PASS', outOfEnvelopeFindings: [], blockers: [] },
+          { verdict: 'PASS', residualRisks: [], blockers: [] },
         ],
       }
     case 'invalid-worker-completed-with-blocker':
@@ -287,7 +289,6 @@ function namedScenario(name) {
         steps: [
           {
             outcome: 'BLOCKED',
-            validation: [],
             residualRisks: [],
           },
         ],
@@ -321,7 +322,7 @@ function namedScenario(name) {
       return {
         steps: [
           completedWorker(),
-          { verdict: 'BLOCKED', outOfEnvelopeFindings: [] },
+          { verdict: 'BLOCKED', residualRisks: [] },
         ],
       }
     case 'invalid-reviewer-needs-decision-with-blockers':
@@ -345,7 +346,7 @@ function namedScenario(name) {
               question: 'Should the Orchestrator authorize a seam change?',
               extra: 'Unknown fields remain rejected.',
             },
-            outOfEnvelopeFindings: [],
+            residualRisks: [],
           },
         ],
       }

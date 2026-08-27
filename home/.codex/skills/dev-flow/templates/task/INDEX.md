@@ -29,6 +29,10 @@ Write or select the first ticket.
      acceptance claims out. -->
 Not yet recorded.
 
+## Scripts
+<!-- Guiding locations: `<task>/scripts/` for Orchestrator-owned task helpers; `<ticket>/scripts/` for the assigned writer's ticket-scripts subtree (acceptor read-only). No cleanup, use restriction, graduation or deduplication policy is introduced; ticket scripts remain with closed ticket content. Dispatch provides the ticket folder path; roles derive needed container from it. -->
+None yet — see `scripts/` and `tickets/<id>/scripts/`.
+
 ## Standing orders
 <!-- In-force orders only. Follow the active dev-flow skill's references/custody.md when adding,
      retiring, or reading an entry here: preserve each verbatim grant, its source, and lapse.

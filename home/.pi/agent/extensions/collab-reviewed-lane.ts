@@ -310,13 +310,20 @@ function requireCorrectionBudget(value: unknown, error: ReviewedLaneErrorFactory
 }
 
 /**
- * Pi reviewed result projection
+ * Pi reviewed result projection — S1/S3 aligned
  *
  * This projection keeps typed routing in REVIEWED/CORRECTION_BUDGET_EXHAUSTED/BLOCKED/NEEDS_DECISION/REVIEWER_RUNTIME_RECOVERY_EXHAUSTED,
- * preserves residualRisks and reviewer outOfEnvelopeFindings, but carries no free-text validation
- * and no evidence body or pointer. Commands remain with run artifacts; durable observations for
- * difficult claims belong to the Orchestrator-precreated workflow-scoped Acceptance appendix at the
- * exact dispatched target. The runtime adds no evidence parameter and does not validate assignment.
+ * merges latest worker residualRisks then final reviewer residualRisks (every branch preserves available risks, REVIEWED merges both),
+ * carries no free-text validation, no outOfEnvelopeFindings and no evidence body or pointer; correctionBase is internal
+ * to the reviewed loop (initial BLOCKED carries exact lane HEAD SHA, rereview receives original brief, prior blockers and that base,
+ * reviewer obtains delta via Git) and never appears in public terminal results. Commands remain with run artifacts; durable
+ * observations for difficult claims belong to the Orchestrator-precreated workflow-scoped Acceptance appendix at the
+ * exact dispatched target. The runtime adds no evidence parameter, does not validate assignment, and carries only original
+ * review brief, prior typed blockers and correctionBase for rereview with no ancestry, reconciliation, scope or
+ * incremental-eligibility policy.
+ * Initial review exhausts every non-mechanical Acceptance claim and directly reachable siblings in the same failure class
+ * before returning BLOCKED; rereview verifies every prior blocker and correction-reachable semantic effect without rerunning
+ * mechanical gates or restarting the whole review.
  */
 export function reviewedLaneWorkflowScript(input: {
   lane: string;
@@ -324,7 +331,7 @@ export function reviewedLaneWorkflowScript(input: {
   reviewBrief: string;
   correctionBudget: number;
   retainedCorrection: boolean;
-  /** Runtime-owned immutable comparison baseline for every reviewer round. */
+  /** Runtime-owned immutable comparison baseline for initial review. */
   integrationTip: string;
 }): string {
   const workerSchema = JSON.stringify(reviewedLaneWorkerSchema);
@@ -333,7 +340,8 @@ export function reviewedLaneWorkflowScript(input: {
 const budget = ${input.correctionBudget};
 const lane = ${JSON.stringify(input.lane)};
 const integrationTip = ${JSON.stringify(input.integrationTip)};
-const reviewerBaseline = "Immutable comparison baseline — runtime-owned integration tip " + integrationTip + ". Review the complete candidate lane diff with this read-only canonical command: git diff --find-renames " + integrationTip + "...HEAD --";
+const initialReviewerBaseline = "Initial review — runtime-owned integration tip " + integrationTip + ". Exhaust every non-mechanical Acceptance claim and directly reachable siblings before returning BLOCKED. Use this read-only canonical command for the complete candidate lane diff: git diff --find-renames " + integrationTip + "...HEAD --";
+const rereviewBaselineFor = (base) => "Rereview — fresh reviewer receives original brief, prior typed blockers and internal correctionBase " + base + ". Verify every prior blocker and correction-reachable semantic effect without rerunning mechanical gates or restarting the whole review. Obtain delta from Git with this read-only canonical command: git diff --find-renames " + base + "...HEAD --";
 const workerSchema = ${workerSchema};
 const reviewerSchema = ${reviewerSchema};
 const retainedCorrection = ${input.retainedCorrection};
@@ -366,14 +374,24 @@ const runCorrection = (key, resumeTarget, blockers) =>
   retainedCorrection && resumeTarget !== undefined
     ? runs.run(key, { resume: resumeTarget, task: retainedCorrectionTask(blockers) })
     : runFreshChild(key, "collab-implementer", freshCorrectionTask(blockers), workerSchema);
-const projectNeedsDecision = (child) => ({
-  outcome: "NEEDS_DECISION",
-  why: child.structuredOutput.decision.why,
-  question: child.structuredOutput.decision.question
-});
-const projectWorkerStop = (child) => child.structuredOutput.outcome === "BLOCKED"
-  ? { outcome: "BLOCKED", blocker: child.structuredOutput.blocker }
-  : projectNeedsDecision(child);
+const projectNeedsDecision = (child) => {
+  const base = {
+    outcome: "NEEDS_DECISION",
+    why: child.structuredOutput.decision.why,
+    question: child.structuredOutput.decision.question
+  };
+  if (Array.isArray(child.structuredOutput.residualRisks) && child.structuredOutput.residualRisks.length > 0) base.residualRisks = child.structuredOutput.residualRisks;
+  else if (Array.isArray(child.structuredOutput.residualRisks)) base.residualRisks = [];
+  return base;
+};
+const projectWorkerStop = (child) => {
+  if (child.structuredOutput.outcome === "BLOCKED") {
+    const out = { outcome: "BLOCKED", blocker: child.structuredOutput.blocker };
+    if (Array.isArray(child.structuredOutput.residualRisks)) out.residualRisks = child.structuredOutput.residualRisks;
+    return out;
+  }
+  return projectNeedsDecision(child);
+};
 const boundedMessage = (value) => {
   const m = value instanceof Error ? value.message : typeof value === "string" ? value : "unknown error";
   return m.replace(/[\\r\\n]+/g, " ").slice(0, 300);
@@ -430,45 +448,104 @@ const runReviewerWithRecovery = (baseKey, task, phase) => {
   return attemptReviewer(0);
 };
 let writer = await runFreshChild("impl-0", "collab-implementer", ${JSON.stringify(input.workerBrief)}, workerSchema);
-if (writer.structuredOutput.outcome !== "COMPLETED") return projectWorkerStop(writer);
+if (writer.structuredOutput.outcome !== "COMPLETED") {
+  const ws = projectWorkerStop(writer);
+  return ws;
+}
 let resumeTarget = successfulRunId(writer);
+const mergeResidualRisks = (a, b) => {
+  const aw = Array.isArray(a) ? a : [];
+  const bw = Array.isArray(b) ? b : [];
+  const merged = [...aw, ...bw];
+  return merged;
+};
+const correctionBaseOf = (rev) => {
+  const cb = rev.structuredOutput.correctionBase;
+  if (typeof cb !== "string" || cb.trim().length === 0) {
+    const msg = "reviewer BLOCKED missing required correctionBase";
+    const err = new Error(msg);
+    err.code = "INVALID_CHILD_RESULT";
+    throw err;
+  }
+  return cb;
+};
 let reviewer;
 try {
-  reviewer = await runReviewerWithRecovery("review-0", ${JSON.stringify(input.reviewBrief)} + "\\n\\n" + reviewerBaseline, "REVIEW");
+  reviewer = await runReviewerWithRecovery("review-0", ${JSON.stringify(input.reviewBrief)} + "\\n\\n" + initialReviewerBaseline, "REVIEW");
 } catch (e) {
   if (e && e.__reviewerRecoveryExhausted) {
-    return { outcome: "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED", phase: e.phase, error: e.error };
+    const out = { outcome: "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED", phase: e.phase, error: e.error };
+    if (writer && Array.isArray(writer.structuredOutput.residualRisks)) out.residualRisks = writer.structuredOutput.residualRisks;
+    return out;
   }
   throw e;
 }
-if (reviewer.structuredOutput.verdict === "NEEDS_DECISION") return projectNeedsDecision(reviewer);
+if (reviewer.structuredOutput.verdict === "NEEDS_DECISION") {
+  const nd = projectNeedsDecision(reviewer);
+  if (writer && Array.isArray(writer.structuredOutput.residualRisks) && writer.structuredOutput.residualRisks.length > 0 && (!nd.residualRisks || nd.residualRisks.length === 0)) {
+    // preserve available risks: latest worker then final reviewer already handled in projectNeedsDecision, but also ensure worker risks are preserved on reviewer decision branch
+    const merged = mergeResidualRisks(writer.structuredOutput.residualRisks, reviewer.structuredOutput.residualRisks);
+    if (merged.length > 0) nd.residualRisks = merged;
+  } else if (writer && Array.isArray(writer.structuredOutput.residualRisks)) {
+    const merged = mergeResidualRisks(writer.structuredOutput.residualRisks, reviewer.structuredOutput.residualRisks);
+    if (merged.length > 0) nd.residualRisks = merged;
+  }
+  return nd;
+}
 let round = 1;
+let currentCorrectionBase = null;
+if (reviewer.structuredOutput.verdict === "BLOCKED") {
+  currentCorrectionBase = correctionBaseOf(reviewer);
+}
 while (reviewer.structuredOutput.verdict === "BLOCKED" && round <= budget) {
   writer = await runCorrection(
     "impl-" + round,
     resumeTarget,
     reviewer.structuredOutput.blockers
   );
-  if (writer.structuredOutput.outcome !== "COMPLETED") return projectWorkerStop(writer);
+  if (writer.structuredOutput.outcome !== "COMPLETED") {
+    const ws = projectWorkerStop(writer);
+    // preserve latest reviewer risks on worker-stop branches
+    if (reviewer && Array.isArray(reviewer.structuredOutput.residualRisks) && reviewer.structuredOutput.residualRisks.length > 0) {
+      const merged = mergeResidualRisks(writer.structuredOutput.residualRisks, reviewer.structuredOutput.residualRisks);
+      if (merged.length > 0) ws.residualRisks = merged;
+      else if (Array.isArray(ws.residualRisks) && ws.residualRisks.length === 0) ws.residualRisks = [];
+    }
+    return ws;
+  }
   resumeTarget = successfulRunId(writer);
+  if (currentCorrectionBase === null) {
+    const err = new Error("reviewer BLOCKED missing required correctionBase for rereview");
+    err.code = "INVALID_CHILD_RESULT";
+    throw err;
+  }
+  const rereviewBaseline = rereviewBaselineFor(currentCorrectionBase);
   try {
-    reviewer = await runReviewerWithRecovery("review-" + round, ${JSON.stringify(input.reviewBrief)} + " — rereview the complete current lane diff against the same immutable baseline.\\n\\n" + reviewerBaseline, "REREVIEW");
+    reviewer = await runReviewerWithRecovery("review-" + round, ${JSON.stringify(input.reviewBrief)} + " — rereview the complete current lane diff against retained correctionBase.\\n\\n" + rereviewBaseline + "\\n\\nPrior blockers: " + JSON.stringify(reviewer.structuredOutput.blockers) + "\\n\\nOriginal brief: " + ${JSON.stringify(input.reviewBrief)}, "REREVIEW");
   } catch (e) {
     if (e && e.__reviewerRecoveryExhausted) {
-      return { outcome: "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED", phase: e.phase, error: e.error };
+      const out = { outcome: "REVIEWER_RUNTIME_RECOVERY_EXHAUSTED", phase: e.phase, error: e.error };
+      const merged = mergeResidualRisks(writer && writer.structuredOutput.residualRisks, reviewer && reviewer.structuredOutput.residualRisks);
+      if (merged.length > 0 || (writer && Array.isArray(writer.structuredOutput.residualRisks)) || (reviewer && Array.isArray(reviewer.structuredOutput.residualRisks))) out.residualRisks = merged;
+      return out;
     }
     throw e;
   }
-  if (reviewer.structuredOutput.verdict === "NEEDS_DECISION") return projectNeedsDecision(reviewer);
+  if (reviewer.structuredOutput.verdict === "NEEDS_DECISION") {
+    const nd = projectNeedsDecision(reviewer);
+    const merged = mergeResidualRisks(writer.structuredOutput.residualRisks, reviewer.structuredOutput.residualRisks);
+    if (merged.length > 0) nd.residualRisks = merged;
+    return nd;
+  }
+  if (reviewer.structuredOutput.verdict === "BLOCKED") currentCorrectionBase = correctionBaseOf(reviewer);
   round += 1;
 }
 if (reviewer.structuredOutput.verdict === "BLOCKED") {
-  return { outcome: "CORRECTION_BUDGET_EXHAUSTED", blockers: reviewer.structuredOutput.blockers };
+  return { outcome: "CORRECTION_BUDGET_EXHAUSTED", blockers: reviewer.structuredOutput.blockers, residualRisks: mergeResidualRisks(writer.structuredOutput.residualRisks, reviewer.structuredOutput.residualRisks) };
 }
 return {
   outcome: "REVIEWED",
-  residualRisks: writer.structuredOutput.residualRisks,
-  outOfEnvelopeFindings: reviewer.structuredOutput.outOfEnvelopeFindings
+  residualRisks: mergeResidualRisks(writer.structuredOutput.residualRisks, reviewer.structuredOutput.residualRisks)
 };`;
 }
 

@@ -7,9 +7,7 @@ state: pending
 <!-- Copy this to tickets/<ticket-id>/ticket.md. The frontmatter `id` must equal that directory name.
      This ticket's durable evidence lives beside this file in the same directory — copy
      the evidence.md beside this template for each piece — and the whole directory is what closure
-     discharges.
-
-     The Orchestrator owns this ticket. Keep state pending until the Orchestrator resolves the ticket;
+     discharges. Guiding script location: `<ticket>/scripts/` for the assigned writer's helpers (Orchestrator owns `<task>/scripts/`, acceptor read-only; no cleanup/graduation/dedup policy). The Orchestrator owns this ticket. Keep state pending until the Orchestrator resolves the ticket;
      only the Orchestrator sets state closed or writes Resolution. -->
 
 | Ticket field | Value |
@@ -37,6 +35,16 @@ state: pending
      read-only. A worker-reviewer loop is complete when every delegated claim is verified; its
      handoff reports remaining Orchestrator or user observations without treating them as blockers. -->
 - [ ] **A1** — <observable criterion>
+
+## Mechanical gates
+<!-- Ordered binary gate plan owned by this ticket. Every listed gate must pass before `COMPLETED`.
+     Do not duplicate repository-owned commands: use pointer or existing owner, only add ticket-specific gates and execution order.
+     Implementer runs in order: focused (or explicitly failing) → affected → formatter/style (re-run affected after any mutation) → broader/full.
+     Example gates (replace with ticket-specific ones): -->
+- [ ] Focused behavior gates for changed reviewed-workflow schema and prompt composition
+- [ ] Affected TypeScript/JavaScript static checks and profile/configuration format checks
+- [ ] Formatter and import/style checks (re-run affected gates if files were mutated)
+- [ ] Broader reviewed-lane and Dev-flow template selections after focused gates pass
 
 ## Resolution
 <!-- The Orchestrator writes this once when closing the ticket. Normal closure follows completion of all

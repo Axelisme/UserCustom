@@ -135,15 +135,19 @@ For a writer, include these compact blocks:
 ## Continuity is a cache
 
 Evidence and the protected current lane carry continuity: the bounded brief, direct observations,
-validation results, and the lane's current clean state.
+and the lane's current clean state. Ticket-owned mechanical gates are validated by the implementer and proved only by lane state; they are not re-executed by reviewers.
 
 When a writer's run ends before its work does, dispatch a fresh compatible child carrying the original
-bounded contract, the current typed blockers, and the applicable validation, authority, and escalation
+bounded contract, the current typed blockers, and the applicable authority and escalation
 boundary. In the composed loop, every correction and rereview is a fresh compatible child: a
 correction brief carries the original bounded worker contract plus the current typed blockers; a
-rereview brief carries the
-original review expectations and inspects the changed protected current lane. Give the replacement
-the evidence, not unverified role narration.
+rereview brief carries the original review brief, prior typed blockers and the internal `correctionBase` SHA of the exact reviewed lane HEAD that the initial reviewer inspected. The runtime carries only that original brief, prior typed blockers and correctionBase for rereview — no ancestry, reconciliation, scope or incremental-eligibility policy is added, and diff content or changed-path caches never enter the prompt; Git (`git diff --find-renames <correctionBase>...HEAD --`) is the delta authority. A new fixed subject after correction does not equate to a full review restart: initial review and rereview have distinct responsibilities (see Review placement) and reviewers obtain the delta from Git rather than receiving a copied diff.
+
+**A replacement reads its ticket, not the task.** Its context is that ticket and whatever the ticket
+points to; the task record and sibling tickets belong to the Orchestrator, and handing them over invites
+scope creep. The ticket therefore names the next single step and the unverified boundary — which
+edits are validated, which are not, and what must not be redone or widened. A ticket that leaves the
+replacement to re-derive those is an unfinished brief, not a terse one.
 
 **A replacement reads its ticket, not the task.** Its context is that ticket and whatever the ticket
 points to; the task record and sibling tickets belong to the Orchestrator, and handing them over invites
@@ -156,50 +160,39 @@ is clean and committed, dispatch a fresh writer for that close-out alone: no sem
 temporary state removed, staged paths and diff inspected, ancestry checked, one clean commit. The
 lane still needs a review result.
 
-## Worker results are semantic
+## Worker results are semantic — ticket-owned mechanical gates, no Validation field
 
-Worker Validation reports the behavior and Interface semantic checks the worker actually ran — each
-with `check`, `result: PASSED | FAILED`, and a concise `summary` — plus residual risks for
-non-blocking discoveries. Operational Git and runtime checks are categorically ineligible for
-Validation and terminal semantic projection even when the worker runs them: status, diff, diff-check,
-staged state, cleanliness, ancestry, commit identity, and runtime or lifecycle checks remain
-operation evidence and receive no semantic check name or summary. Each semantic check name and
-summary describes only the behavior/Interface outcome observed, never the operational command or
-checkout, tree, lane, branch, commit, diff, staged, clean, ancestry, runtime, or lifecycle state
-it ran against. The obligation to report every check run applies only to behavior/Interface
-semantic checks. A check may be a command or direct
-inspection; guidance prose is not turned into an automated test. Check results are observations, not
-workflow routing: an unrelated failed check may remain on a `COMPLETED` handoff when its non-blocking
-significance is explained in residual risks. Workers write no repo-local validation receipt; the run
-artifact and Git own the evidence, and reviewers read the lane directly. Results state only
-role-relevant checks, conclusions, and residual risks, without restating ticket prose, command
-output, or evidence the ticket, Git, or the run artifact already own.
+The ticket owns the ordered binary Mechanical gates plan; every listed gate must pass before the implementer may return `COMPLETED`. The implementer fixes failures within scope in the required order — focused failures first, then affected, then formatter/style (re-running affected after any mutation), then broader — and returns one complete `BLOCKED` result when closure exceeds authority. `COMPLETED` is the binary attestation that the required gates passed; it carries no free-text `Validation` array and creates no durable receipt. Ordinary mechanical gate commands and raw outputs stay with the run artifact; durable observations for difficult claims belong only to the Orchestrator-precreated workflow-scoped Acceptance appendix at the exact dispatched target (see Dispatch brief). Reviewed roles do not reopen run artifacts to judge gates. All non-blocking codebase findings across every worker and reviewer outcome branch — whether inside or outside the task envelope — are carried as optional `residualRisks: string[]`; the former `outOfEnvelopeFindings` is removed and every terminal branch preserves available risks, with `REVIEWED` merging latest worker then final reviewer risks without changing routing. `efficiencyFeedback` is optional skill/profile/runtime process feedback only: one concrete avoidable cost with cause and measurement when available, omitted otherwise; it never carries codebase findings and never affects verdicts, budgets or routing.
 
-## Generic Acceptance
+Operational Git and runtime checks — status, diff, diff-check, staged state, cleanliness, ancestry, commit identity, and lifecycle — remain operation evidence and never belong in an appendix. Results state only role-relevant routing, risks, and stop reasons, without restating ticket prose, command output, or evidence the ticket, Git, or the run artifact already own.
+
+## Generic Acceptance — read-only, production-reachable blockers only
 
 Ordinary Generic Acceptance reviews the protected current lane: the writer is stopped, the lane is
-clean, and the acceptor reads its current state directly, read-only. It returns only, in this order:
+clean, and the acceptor reads its current state directly, read-only. Bash use is limited to read-only retrieval (`git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find`, Grove); it excludes pytest, type/lint/format gates, Python/import probes and runtime/process workflows. The acceptor does not execute mechanical gates; it judges ticket gate coverage and Acceptance that gates cannot mechanically prove. It returns only, in this order:
 
 - `Verdict`: `PASS | BLOCKED | NEEDS_DECISION`
 - for each blocker (only for `BLOCKED`):
   - `Where`: the affected location
   - `Why`: the violated ticket expectation or Interface promise, plus direct evidence
   - `How to fix`: a bounded advisory suggestion
+  - `Trigger`: the concrete production-reachable input or call sequence that produces the defect, and the existing entry point it reaches from
 - for `NEEDS_DECISION`: why a decision is needed and the exact question
-- `Out-of-envelope findings`: optional non-blocking observations outside the supplied boundary, each
-  with its location and evidence
+- `Residual risks`: optional `residualRisks: string[]` for all non-blocking codebase findings (unified, whether inside or outside the envelope); `outOfEnvelopeFindings` is removed
 
-A `PASS` ends after Verdict and any out-of-envelope findings; it needs no empty filler. The verdict
+Every safety or non-happy-path blocker must be production-reachable under the stated operating assumptions: identify the existing production entry point, a concrete reachable input or event sequence, the current observable failure, the violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named promise, using only bounded advisory fixes that do not expand scope via robustness or future-proofing. A finding that depends on a wider operating model than the dispatch declared is reported via residual risks, not as a blocker.
+
+A `PASS` ends after Verdict and any residual risks; it needs no empty filler. The verdict
 is a review result, not ticket Acceptance: the Orchestrator owns the final judgement and closure.
 `NEEDS_DECISION` returns a contract contradiction or new-scope question to the Orchestrator instead
 of routing rework. A correction or reconciliation changes the lane, so review runs again against its
-new current state. Generic Acceptance carries no fixed-subject result fields; specialized
+new current state (distinct responsibilities — see Review placement, not a full restart). Generic Acceptance carries no fixed-subject result fields and no `correctionBase` projection; public terminal results never expose the internal base. Specialized
 procedures such as [code-review](../code-review/SKILL.md) keep their own identity contracts.
 
 When delegated red/green validation needs several commands, a fixed working directory, or owned
 temporary state, use [TDD Gate mode](../tdd/gate.md). Keep a one-command loop direct.
 
-## Review placement and the correction loop
+## Review placement and the correction loop — initial review versus rereview
 
 Reviewer placement may be composed by the runtime or an external workflow. For delegated closed work
 — bounded brief, delegated Acceptance criteria, placement, mutation authority, and escalation
@@ -207,10 +200,16 @@ boundary all closed — prefer a runtime-composed worker → reviewer → bounde
 consumes one terminal handoff: a reviewed lane, a worker blocker, a decision request, or an
 exhausted correction budget. The Orchestrator supplies a finite correction budget per composed
 workflow; initial implementation does not consume it, each `BLOCKED → writer correction` transition
-consumes one, and exhausting it returns to the Orchestrator without selecting a redesign procedure.
+consumes one, and exhausting it returns to the Orchestrator without selecting a redesign procedure. Correction budget, accounting, reviewer recovery, lane lifecycle, collection, landing and push behavior remain unchanged by this task.
 Scope, architecture, authority, or contract decisions terminate the loop at the Orchestrator.
 Intermediate rounds stay in workflow context unless an observation independently justifies a durable
 record.
+
+**Initial review** (fresh acceptor, protected current lane, runtime-owned `integrationTip` baseline, `git diff --find-renames <integrationTip>...HEAD --`) exhausts every non-mechanical Acceptance claim and directly reachable siblings in the same failure class handled by the same owning function and governed by the same ticket expectation, before returning one complete `BLOCKED` set with `correctionBase` set to the exact reviewed lane HEAD. It does not equate a new fixed subject with a full review restart.
+
+**Rereview** is performed by a fresh acceptor (not a resume of the prior reviewer) against the changed protected lane. It receives the original review brief, prior typed blockers and that `correctionBase` SHA, obtains the delta from Git (`git diff --find-renames <correctionBase>...HEAD --`) rather than receiving a copied diff or changed-path cache, verifies every prior blocker is closed, and checks correction-reachable semantic effects. It does not rerun mechanical gates and does not restart the whole review. A correction that leaves the lane unchanged still consumes one budget slot; the single count is never reset.
+
+Public terminal projections of `BLOCKED`, `CORRECTION_BUDGET_EXHAUSTED` and `REVIEWED` carry blockers (with `trigger`), `residualRisks` and `efficiencyFeedback` only; `correctionBase` is internal and never projected, and no ancestry, reconciliation, scope or incremental-eligibility policy is added by the runtime.
 
 A **seam correction** is one of those decisions carried back into the loop rather than a separate
 stage or a new task: a reviewer may propose where the seam belongs, the Orchestrator decides, and

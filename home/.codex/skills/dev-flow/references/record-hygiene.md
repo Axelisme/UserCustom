@@ -11,9 +11,8 @@ Everything else already has a home, so compaction is a **move**, never a rewrite
   entry keeps the verbatim quote, exact pointer, and lapse condition.
 - Lapsed orders move to `standing-orders/lapsed.md`, whole and verbatim.
 - Evidence that must outlive a past gate belongs to one gate-owned file under its ticket.
-- Durable validation commands, results, and subject identities belong to one `validation.md` under
-  the owning ticket; a later judgement points to it only when needed. Cheap reproducible observations
-  may remain in the terminal handoff instead.
+- Durable ticket validation that must persist across sessions belongs to `validation.md` or `validation-<scenario>.md` under the owning ticket (see Durable validation below); routine mechanical gates remain ephemeral and stay with the run artifact. Cheap reproducible observations may remain in the terminal handoff instead.
+- Guiding script locations are `scripts/` under the task (Orchestrator-owned) and `scripts/` under each ticket (assigned writer's subtree, acceptor read-only); ticket scripts remain with closed ticket content and no cleanup, use-restriction, graduation or deduplication policy is introduced.
 
 Compact at an accepted boundary rather than mid-slice, and list what moved in the same reply.
 Summarizing custody to make the record shorter is a failure: preserve the authoritative text.
@@ -57,3 +56,22 @@ A ticket's directory is also its discharge unit: whatever [closing a
 ticket](../SKILL.md#closing-a-ticket) does not retain leaves with the directory, and every deliberate
 retention states its owner and discharge condition in Resolution. An unbounded directory surviving
 closure means that obligation went unpaid.
+
+## Guiding script locations (S5)
+
+`templates/task/` provides `<task>/scripts/` and `templates/ticket/` provides `<ticket>/scripts/` as guiding locations. The Orchestrator owns task-level scripts; the assigned writer may create or modify its ticket's `scripts/` subtree without gaining wider record mutation authority (no per-file grant needed, but no extension to other ticket-folder content). The acceptor remains read-only. Dispatch provides the ticket folder path; roles derive the needed container from it. Ticket closure retains scripts with the same lifecycle as other ticket content; no cleanup, use-restriction, graduation or deduplication policy is introduced.
+
+## Durable validation that must persist (A14–A15)
+
+Reserve `validation.md` for a single durable scenario and `validation-<scenario>.md` for multiple independent owners beside the owning `ticket.md`. Routine mechanical gates (pytest, type/lint, formatter) remain ephemeral. Durable validation is for production, manual, MCP, external-service, hardware, benchmark or migration observations that must survive the session.
+
+It must record 5W1H and be authored by its execution owner:
+
+- **Who:** execution operator and evidence writer; Orchestrator writes itself/user/external-owner validation, delegated worker writes only the exact assigned difficult-claim appendix, acceptor is read-only.
+- **What:** covered Acceptance IDs, scenario, expected/actual observations, PASSED/FAILED, bounded artifact pointers and residual limitations.
+- **When:** exact clean candidate formed after final Acceptance and before closure, with timezone; candidate change invalidates prior evidence.
+- **Where:** exact candidate identity (commit/tree, lane) and execution environment/backend/device/MCP host identity.
+- **Why:** why observation cannot be cheaply reproduced, depends on external mutable state, needs operator judgement, is costly or explicitly requires durable audit.
+- **How:** shipped entry point, bounded inputs, script or MCP sequence, judgement and cleanup method; when a task-record script is used, record its path and SHA-256.
+
+Durable script/MCP/production validation binds exact candidate, environment, covered claims, method, observations, limitations and cleanup; referenced task-record scripts include path and SHA-256. Evidence uses the `Subject / Evidence / Residuals` shape from `templates/ticket/evidence.md`; large logs and transcripts remain outside the evidence body with bounded pointers. Only `evidence.md` owns that Subject/Evidence/Residuals spine; do not duplicate it.

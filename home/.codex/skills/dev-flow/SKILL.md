@@ -66,7 +66,11 @@ that ticket's durable evidence, and only when the evidence must persist.
 
 The Orchestrator owns all ticket content and exclusively changes lifecycle state and Resolution. A
 delegated writer may only toggle the Acceptance claims explicitly assigned to it; a reviewer reads
-and verifies without editing the ticket.
+and verifies without editing the ticket. The ticket owns the ordered binary Mechanical gates plan (see `templates/ticket/ticket.md`); every listed gate must pass before `COMPLETED` and repository-owned commands are referenced by pointer rather than duplicated.
+
+Guiding script locations are `templates/task/scripts/` and `templates/ticket/scripts/`; Orchestrator owns task scripts, assigned writer may use its ticket `scripts/` subtree, acceptor is read-only; no cleanup, use-restriction, graduation or deduplication policy is introduced and ticket scripts remain with the closed ticket content. See `references/record-hygiene.md`.
+
+Durable ticket validation that must persist across sessions uses `validation.md` or `validation-<scenario>.md` beside the ticket with 5W1H content and execution-owner authorship; routine mechanical gates remain ephemeral. See `references/record-hygiene.md`.
 
 Workflow-scoped Acceptance appendix: for named difficult claims that a read-only acceptor cannot
 adequately reproduce, the Orchestrator copies `templates/ticket/evidence.md` to one fresh exact

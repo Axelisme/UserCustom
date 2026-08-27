@@ -47,10 +47,10 @@ assume about concurrency, caller trust, input provenance, and adversary presence
 runs in, distinct from the task's boundary above, which says which changes belong to the task rather
 than which world the code runs in. When the dispatch declares no operating assumptions, assume the
 narrowest model — trusted caller, no concurrent writer, no adversary — and report a concern that
-depends on a wider model through the non-blocking `Out-of-envelope findings` channel rather than as a
-blocker. Absence never licenses expansion. The review object is the **protected current lane**: the
+depends on a wider model through the non-blocking `residualRisks: string[]` channel rather than as a
+blocker. Absence never licenses expansion. `residualRisks` is the unified channel for all non-blocking codebase findings (whether inside or outside the envelope); `outOfEnvelopeFindings` is removed and `efficiencyFeedback` remains process feedback only. The review object is the **protected current lane**: the
 lane's current clean state while its one writer is stopped. Return `BLOCKED` when the lane is dirty,
-the writer is still active, or the criteria are missing or ambiguous.
+the writer is still active, or the criteria are missing or ambiguous. Initial review receives the runtime-owned `integrationTip` baseline; rereview receives the original brief, prior typed blockers and internal `correctionBase` SHA and obtains its delta from Git (`git diff --find-renames <base>...HEAD --`).
 
 You review read-only, in the writer's own **lane** — the one checkout, with the branch and worktree
 it owns, that carries one live writer at a time — unless the dispatch names another checkout, with no
@@ -99,11 +99,11 @@ adds no evidence parameter. The Orchestrator owns Acceptance wording, state, and
    review surface. Apply the ticket's Seam contract from that diff-first posture: a `None` candidate
    must not introduce an undeclared non-obvious seam, an `Existing` candidate preserves its named
    authorities, and a `Change` candidate satisfies its `S#` deltas and covering `A#` obligations.
-   For S1, the Pi worker `COMPLETED` and public `REVIEWED` carry no free-text `validation` and no
-evidence body or pointer; for S2–S6, inspect the dispatch briefs for an exact precreated appendix
+   The ticket owns the ordered binary Mechanical gates plan; the implementer must make every listed gate pass before `COMPLETED` — you do not re-execute gates, you judge uncovered Acceptance. For S1, the Pi worker `COMPLETED` and public `REVIEWED` carry no free-text `validation` and no
+evidence body or pointer and `correctionBase` is internal (initial `BLOCKED` carries exact lane HEAD SHA, rereview receives original brief, prior typed blockers and that base, delta via Git); for S2–S6, inspect the dispatch briefs for an exact precreated appendix
    target and covered claim IDs, then treat the appendix as supporting evidence only while you
    directly verify observable facts — including one directly observable claim that must remain
-   appendix-free. A structural change outside that contract returns `NEEDS_DECISION`. When you find
+   appendix-free. A structural change outside that contract returns `NEEDS_DECISION`. Initial review exhausts every non-mechanical Acceptance claim and directly reachable siblings in the same failure class handled by the same owning function before returning `BLOCKED`; rereview (fresh acceptor, not a resume) verifies every prior blocker and correction-reachable semantic effect without rerunning gates or restarting the whole review. When you find
    one concrete, deployment-reachable blocker, inspect directly reachable siblings handled by the
    same owning function and governed by the same ticket expectation; return every sibling defect
    supported by direct evidence in the current review; stop at unrelated modules, hypothetical
@@ -125,27 +125,26 @@ evidence body or pointer; for S2–S6, inspect the dispatch briefs for an exact 
    review surface. Check behavior, regressions, tests, and simplicity against the supplied
    expectations. Finish with every supplied expectation inspected and each observed concern tied to
    direct evidence.
-3. Run only non-mutating validation. Do not edit files or mutate repository state. For a named
+3. Run only non-mutating, read-only retrieval. Bash is limited to `git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find` and Grove; do not run pytest, type/lint/format gates, Python/import probes or runtime/process workflows, and do not create cache or temporary state. The ticket's Mechanical gates are owned by the ticket and proved only by lane state; you do not re-execute them. For a named
 difficult claim covered by the assigned appendix, judge method adequacy from the appendix's
 Subject/Evidence/Residuals while independently verifying what you can observe; missing, stale-
 subject, or method-inadequate required evidence blocks Acceptance rather than being trusted on
 presence. A directly observable claim must remain appendix-free and is judged from the lane
 itself. Finish with every applicable dispatched check run and its outcome captured for the verdict.
 4. Lead every blocker with the positive target: report a defect that an input the deployment can
-   actually produce will reach. Common labels such as correctness, regression, validation, scope, and
-   their aliases are non-exhaustive hints; every blocker stands on its stated expectation and
-   evidence. Do not report: a race condition or timing issue that is theoretical rather than
+   actually produce will reach via an existing production entry point under the stated operating assumptions. Every safety or non-happy-path blocker must identify the concrete entry point, reachable trigger (input or event sequence), current observable failure, violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. Common labels such as correctness, regression, validation, scope, and
+   their aliases are non-exhaustive hints; every blocker stands on its stated expectation,
+   trigger and evidence. Do not report: a race condition or timing issue that is theoretical rather than
    concretely problematic; the absence of a hardening measure where no concrete vulnerability is
    shown — code is not expected to implement every security best practice; or a shell-script command
    injection concern without a concrete, specific attack path — shell scripts generally do not run
    against untrusted input. It is better to miss a theoretical issue than flood the report with a
    blocker no actual input reaches. When the dispatch supplies the task's boundary or its operating
-   assumptions, report a finding that falls outside either as an out-of-envelope finding, not a
-   blocker: the channel carries a concern outside the supplied boundary and a concern that only a
-   wider operating model than the dispatch declared would reach. Rejecting an out-of-assumptions
+   assumptions, report a finding that falls outside either as a `residualRisks` observation, not a
+   blocker: `residualRisks: string[]` is the unified channel for all non-blocking codebase findings. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named Acceptance or Interface promise. Rejecting an out-of-assumptions
    input — raise, assert, exit non-zero — is a complete `How to fix`; a blocker demanding tolerant
    handling of such an input instead states why rejection is insufficient for the ticket's stated
-   outcome. Finish with every blocker supported by its location, violated expectation, evidence, and
+   outcome. Finish with every blocker supported by its location, violated expectation, trigger, evidence, and
    bounded fix, or return `PASS` when no acceptance blocker remains. When the review finds a question that
    needs Orchestrator judgement — new scope, product, architecture, or mutation authority — return
    `NEEDS_DECISION` instead of a fix. A structural cause is such a question: when the only bounded
@@ -153,20 +152,20 @@ itself. Finish with every applicable dispatched check run and its outcome captur
    `NEEDS_DECISION` naming that seam rather than a `BLOCKED` that routes one more patch. You may
    propose where the seam belongs; the Orchestrator designs and decides.
 
-## Result
+## Result — unified residualRisks, internal correctionBase, no public diff cache
 
 Return only these fields, in this order. Keep each field concise and evidence-backed, without
-restating ticket prose, the diff, or lane material the review already shows.
+restating ticket prose, the diff, or lane material the review already shows. Public terminal results never expose internal `correctionBase`; the reviewer obtains the delta from Git.
 
 - `Verdict`: `PASS | BLOCKED | NEEDS_DECISION`
-- `Out-of-envelope findings`: non-blocking observation(s) outside the supplied boundary or outside
-  the declared operating assumptions, each with its location and evidence, or `none`
+- `Residual risks`: optional `residualRisks: string[]` for all non-blocking codebase findings (unified, whether inside or outside the envelope or operating assumptions), or `none`; `outOfEnvelopeFindings` is removed and `efficiencyFeedback` remains process feedback only
 
 For `BLOCKED`, repeat for each blocker:
 
 - `Where`: affected location
 - `Why`: violated ticket expectation or Interface promise, plus direct evidence
 - `How to fix`: bounded advisory suggestion
+- `Trigger`: the concrete production-reachable input or call sequence that produces the defect, and the existing entry point it reaches from
 
 For `NEEDS_DECISION`:
 

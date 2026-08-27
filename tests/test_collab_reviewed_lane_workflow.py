@@ -140,10 +140,8 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
             output["phases"],
             ["Validate", "Implement", "Review", "Correct", "Rereview"],
         )
-        self.assertEqual(
-            result["workerResult"]["validation"][0]["summary"],
-            "The bounded correction matches the supplied Interface.",
-        )
+        self.assertNotIn("validation", result["workerResult"])
+        self.assertIn("residualRisks", result["workerResult"])
         self.assertEqual(result["reviewResult"]["verdict"], "PASS")
         self.assertNotEqual(
             output["invocations"][1][0], output["invocations"][3][0]
@@ -280,10 +278,7 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
                         "collab-acceptor",
                     ],
                 )
-                self.assertEqual(
-                    result["workerResult"]["validation"][0]["summary"],
-                    "The bounded correction matches the supplied Interface.",
-                )
+                self.assertNotIn("validation", result["workerResult"])
                 self.assertEqual(result["reviewResult"]["verdict"], verdict)
                 if verdict == "BLOCKED":
                     self.assertEqual(
@@ -318,10 +313,7 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
                     ],
                 )
                 self.assertEqual(result["error"], {"code": code})
-                self.assertEqual(
-                    result["workerResult"]["validation"][0]["summary"],
-                    "The bounded correction matches the supplied Interface.",
-                )
+                self.assertNotIn("validation", result["workerResult"])
                 self.assertEqual(result["reviewResult"]["verdict"], "BLOCKED")
                 self.assertEqual(
                     result["reviewResult"]["blockers"][0]["where"],
@@ -346,10 +338,8 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
             ],
         )
         self.assertNotIn("error", result)
-        self.assertEqual(
-            result["workerResult"]["validation"][0]["summary"],
-            "The bounded correction matches the supplied Interface.",
-        )
+        self.assertNotIn("validation", result["workerResult"])
+        self.assertIn("residualRisks", result["workerResult"])
         self.assertEqual(result["reviewResult"]["verdict"], "BLOCKED")
 
     def test_worker_blocked_stops_before_review(self) -> None:
@@ -515,13 +505,6 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
     def test_reviewer_runtime_and_capability_failures_preserve_worker_without_extra_dispatch(self) -> None:
         expected_worker = {
             "outcome": "COMPLETED",
-            "validation": [
-                {
-                    "check": "workflow behavior",
-                    "result": "PASSED",
-                    "summary": "The bounded behavior matches the supplied Interface.",
-                }
-            ],
             "residualRisks": [],
         }
         for scenario in ("runtime-error-reviewer", "capability-failure-reviewer"):
@@ -661,9 +644,6 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
                 "steps": [
                     {
                         "outcome": "COMPLETED",
-                        "validation": [
-                            {"check": "c", "result": "PASSED", "summary": "s"}
-                        ],
                         "residualRisks": [],
                     },
                     {
@@ -676,7 +656,7 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
                                 "trigger": "A reviewer submits a multi-line where.",
                             }
                         ],
-                        "outOfEnvelopeFindings": [],
+                        "residualRisks": [],
                     },
                 ]
             }
@@ -846,11 +826,11 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(
             set(worker_schema["required"]),
-            {"outcome", "validation", "residualRisks"},
+            {"outcome"},
         )
         self.assertEqual(
             set(worker_schema["properties"]),
-            {"outcome", "validation", "residualRisks", "blocker", "decision"},
+            {"outcome", "residualRisks", "blocker", "decision"},
         )
         self.assertNotIn("blocker", worker_schema["required"])
         self.assertNotIn("decision", worker_schema["required"])
@@ -861,11 +841,11 @@ class CollabReviewedLaneWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(
             set(reviewer_schema["required"]),
-            {"verdict", "outOfEnvelopeFindings"},
+            {"verdict"},
         )
         self.assertEqual(
             set(reviewer_schema["properties"]),
-            {"verdict", "outOfEnvelopeFindings", "blockers", "decision"},
+            {"verdict", "residualRisks", "blockers", "correctionBase", "decision"},
         )
         self.assertNotIn("blockers", reviewer_schema["required"])
         self.assertNotIn("decision", reviewer_schema["required"])

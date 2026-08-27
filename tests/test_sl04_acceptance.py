@@ -73,15 +73,16 @@ class SL04LeanTerminalTests(unittest.TestCase):
 
     def test_A1_public_reviewed_omits_validation_preserves_typed_branches(self):
         # Worker COMPLETED without validation preserves residualRisks and reviewer findings flow to REVIEWED
-        # Verify workflowScript projection omits validation but keeps residualRisks/outOfEnvelopeFindings via text inspection
+        # Verify workflowScript projection omits validation but keeps residualRisks via text inspection
         text = REVIEWED_LANE.read_text(encoding="utf-8")
         self.assertNotIn("writer.structuredOutput.validation", text, "REVIEWED must not copy validation")
-        # The RETURN block for REVIEWED should contain residualRisks and outOfEnvelopeFindings but not validation
+        # The RETURN block for REVIEWED should contain residualRisks but not validation and not outOfEnvelopeFindings
         # Find the REVIEWED return snippet
         idx = text.find('outcome: "REVIEWED"')
         snippet = text[idx-500: idx+2000] if idx!=-1 else text
         self.assertIn("residualRisks", snippet)
-        self.assertIn("outOfEnvelopeFindings", snippet)
+        self.assertNotIn("outOfEnvelopeFindings", snippet)
+        self.assertNotIn("validation", snippet)
         # Ensure the worker schema in result-schema has no validation
         result_text = RESULT_SCHEMA.read_text(encoding="utf-8")
         # The COMPLETED branch should have no validation property

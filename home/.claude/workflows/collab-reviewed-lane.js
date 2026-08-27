@@ -39,21 +39,6 @@ const TEXT_SCHEMA = {
   maxLength: MAX_TEXT,
 }
 
-const VALIDATION_SCHEMA = {
-  type: 'array',
-  maxItems: MAX_ARRAY_ITEMS,
-  items: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['check', 'result', 'summary'],
-    properties: {
-      check: { ...TEXT_SCHEMA },
-      result: { enum: ['PASSED', 'FAILED'] },
-      summary: { ...TEXT_SCHEMA },
-    },
-  },
-}
-
 const RESIDUAL_RISKS_SCHEMA = {
   type: 'array',
   maxItems: MAX_ARRAY_ITEMS,
@@ -70,19 +55,7 @@ const WORKER_DECISION_SCHEMA = {
   },
 }
 
-const FINDINGS_SCHEMA = {
-  type: 'array',
-  maxItems: MAX_ARRAY_ITEMS,
-  items: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['location', 'evidence'],
-    properties: {
-      location: { ...TEXT_SCHEMA },
-      evidence: { ...TEXT_SCHEMA },
-    },
-  },
-}
+
 
 const REVIEW_BLOCKERS_SCHEMA = {
   type: 'array',
@@ -121,13 +94,14 @@ const REVIEW_DECISION_SCHEMA = {
 // fields (blocker, decision) are declared optional with their existing
 // sub-schemas unchanged. The closed-branch (exact-keys-per-outcome)
 // guarantee remains enforced by validWorkerResult below, not by this schema.
+// S3: worker Validation is absent; COMPLETED is binary attestation that required mechanical gates passed;
+// residualRisks carries optional non-blocking findings, efficiencyFeedback remains process feedback.
 const WORKER_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['outcome', 'validation', 'residualRisks'],
+  required: ['outcome'],
   properties: {
     outcome: { enum: ['COMPLETED', 'BLOCKED', 'NEEDS_DECISION'] },
-    validation: VALIDATION_SCHEMA,
     residualRisks: RESIDUAL_RISKS_SCHEMA,
     blocker: { ...TEXT_SCHEMA },
     decision: WORKER_DECISION_SCHEMA,
@@ -136,14 +110,17 @@ const WORKER_SCHEMA = {
 
 // Same flattening for the reviewer's three closed branches; the closed-branch
 // guarantee remains enforced by validReviewerResult below.
+// S1/S3: reviewer carries optional residualRisks for all non-blocking findings; outOfEnvelopeFindings is removed;
+// initial BLOCKED may carry internal correctionBase (runtime-owned, never projected to public terminal).
 const REVIEWER_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['verdict', 'outOfEnvelopeFindings'],
+  required: ['verdict'],
   properties: {
     verdict: { enum: ['PASS', 'BLOCKED', 'NEEDS_DECISION'] },
-    outOfEnvelopeFindings: FINDINGS_SCHEMA,
+    residualRisks: RESIDUAL_RISKS_SCHEMA,
     blockers: REVIEW_BLOCKERS_SCHEMA,
+    correctionBase: { ...TEXT_SCHEMA, description: 'Internal correction base SHA of the reviewed lane HEAD at initial BLOCKED; runtime-owned, never projected to public terminal.' },
     decision: REVIEW_DECISION_SCHEMA,
   },
 }
@@ -234,47 +211,27 @@ function validWorkerDecision(value) {
 
 function validWorkerResult(value) {
   if (!isRecord(value) || typeof value.outcome !== 'string') return false
-  if (!validValidation(value.validation) || !validTextArray(value.residualRisks)) {
-    return false
-  }
-
+  if ('validation' in value) return false
+  if ('residualRisks' in value && !validTextArray(value.residualRisks)) return false
+  if ('outOfEnvelopeFindings' in value) return false
+  const allowedBase = new Set(['outcome', 'residualRisks', 'blocker', 'decision'])
+  for (const k of Object.keys(value)) if (!allowedBase.has(k)) return false
   if (value.outcome === 'COMPLETED') {
-    return hasExactKeys(value, ['outcome', 'validation', 'residualRisks'])
+    if ('blocker' in value || 'decision' in value) return false
+    return true
   }
   if (value.outcome === 'BLOCKED') {
-    return (
-      hasExactKeys(
-        value,
-        ['outcome', 'validation', 'residualRisks', 'blocker'],
-      ) && boundedText(value.blocker)
-    )
+    if (!('blocker' in value) || 'decision' in value) return false
+    return boundedText(value.blocker)
   }
   if (value.outcome === 'NEEDS_DECISION') {
-    return (
-      hasExactKeys(
-        value,
-        ['outcome', 'validation', 'residualRisks', 'decision'],
-      ) && validWorkerDecision(value.decision)
-    )
+    if (!('decision' in value) || 'blocker' in value) return false
+    return validWorkerDecision(value.decision)
   }
   return false
 }
 
-function validFinding(value) {
-  return (
-    hasExactKeys(value, ['location', 'evidence']) &&
-    boundedText(value.location) &&
-    boundedText(value.evidence)
-  )
-}
 
-function validFindings(value) {
-  return (
-    Array.isArray(value) &&
-    value.length <= MAX_ARRAY_ITEMS &&
-    value.every((finding) => validFinding(finding))
-  )
-}
 
 function validReviewBlockers(value) {
   return (
@@ -311,23 +268,26 @@ function validReviewDecision(value) {
 }
 
 function validReviewerResult(value) {
-  if (!isRecord(value) || !validFindings(value.outOfEnvelopeFindings)) {
-    return false
-  }
+  if (!isRecord(value) || typeof value.verdict !== 'string') return false
+  if ('outOfEnvelopeFindings' in value) return false
+  if ('validation' in value) return false
+  if ('residualRisks' in value && !validTextArray(value.residualRisks)) return false
+  if ('correctionBase' in value && !boundedText(value.correctionBase)) return false
+  if ('blockers' in value && !validReviewBlockers(value.blockers)) return false
+  if ('decision' in value && !validReviewDecision(value.decision)) return false
+  const allowed = new Set(['verdict', 'residualRisks', 'blockers', 'correctionBase', 'decision'])
+  for (const k of Object.keys(value)) if (!allowed.has(k)) return false
   if (value.verdict === 'PASS') {
-    return hasExactKeys(value, ['verdict', 'outOfEnvelopeFindings'])
+    if ('blockers' in value || 'decision' in value || 'correctionBase' in value) return false
+    return true
   }
   if (value.verdict === 'BLOCKED') {
-    return (
-      hasExactKeys(value, ['verdict', 'blockers', 'outOfEnvelopeFindings']) &&
-      validReviewBlockers(value.blockers)
-    )
+    if (!('blockers' in value) || 'decision' in value) return false
+    return validReviewBlockers(value.blockers)
   }
   if (value.verdict === 'NEEDS_DECISION') {
-    return (
-      hasExactKeys(value, ['verdict', 'decision', 'outOfEnvelopeFindings']) &&
-      validReviewDecision(value.decision)
-    )
+    if (!('decision' in value) || 'blockers' in value || 'correctionBase' in value) return false
+    return validReviewDecision(value.decision)
   }
   return false
 }

@@ -122,7 +122,7 @@ ticket content.
    instead of reconstructing its contract from its implementation. Remain the only
    writer in this checkout; do not create another writable checkout or launch agents. Finish when
    every supplied criterion is met, every changed path is in scope, and protected state is intact.
-3. Run focused validation and inspect the resulting diff. Operational Git and runtime checks —
+3. Run the ticket's ordered Mechanical gates and inspect the resulting diff. The ticket owns the binary gate plan; every listed gate must pass before `COMPLETED` and you must fix failures within scope in required order: focused (or explicitly failing) gates first, then affected, then formatter/style (and re-run affected after any mutation), then broader/full. A dispatch without an assigned exact target grants no task-record evidence mutation — run artifacts own commands. Operational Git and runtime checks —
    status, diff, diff-check, staged state, cleanliness, ancestry, commit identity, and lifecycle —
    remain operation evidence and never belong in an appendix. When the dispatch brief grants one
    exact Orchestrator-precreated workflow-scoped Acceptance appendix target and lists its covered
@@ -134,13 +134,12 @@ ticket content.
    temporary paths, or manually reconstructed run history into the appendix; leave those with
    their runtime artifact and point to them instead; a missing, stale-subject, or
    method-inadequate required appendix makes `COMPLETED`
-   unavailable and you return `BLOCKED` instead. A dispatch without an assigned exact target grants
-   no task-record evidence mutation — run artifacts own commands. The one Dev-flow template at
+   unavailable and you return `BLOCKED` instead. The one Dev-flow template at
    `home/.codex/skills/dev-flow/templates/ticket/evidence.md` alone owns the Subject/Evidence/
    Residuals shape; do not duplicate that format elsewhere. Automatic corrections update the same
    assigned target sequentially for the latest candidate; a later separately dispatched workflow
-   receives a fresh target and you do not rewrite the earlier appendix. Finish with every changed
-   path characterized.
+   receives a fresh target and you do not rewrite the earlier appendix. If a required gate cannot be closed within authority (needs contract decision, wider scope, or has no bounded path), return one complete `BLOCKED` result aggregating all such blockers rather than a partial fix. Finish with every changed
+   path characterized and every required gate passing.
 4. Commit the change under the dispatch's lane-local authority and leave the lane clean for review.
    The reviewer inspects the lane's current clean state directly, so the result reports semantics,
    not Git or runtime observations: no changed paths, staged-file state, diff summaries, commit
@@ -182,10 +181,9 @@ observations when present.
 - `Blocker`: the specific blocker, for `BLOCKED`
 - `Decision needed`: why a decision is needed and the exact question, for `NEEDS_DECISION`
 
-`COMPLETED` means you validated the change, committed it under the supplied lane-local authority,
+`COMPLETED` attests that every required Mechanical gate passed, you committed the change under the supplied lane-local authority,
 left the lane clean for review, and when required, completed the exact assigned appendix with fixed
-subject, covered claims, method, observations, and limitations without judging Acceptance. An
-unrelated failed semantic check may remain on a `COMPLETED` handoff when its non-blocking
-significance is explained in residual risks. Do not relay changed paths, staged-file state, diff
+subject, covered claims, method, observations, and limitations without judging Acceptance. Ordinary mechanical gates create no durable receipt and you do not write a repo-local validation receipt; an unrelated failed semantic check may remain on a `COMPLETED` handoff when its non-blocking
+significance is explained in `residualRisks`. Do not relay changed paths, staged-file state, diff
 summaries, commit identities, review findings, or an appendix body; Git and the run artifact own
-those facts and the appendix lives at its one assigned target.
+those facts and the appendix lives at its one assigned target. If closure exceeds authority, return one complete `BLOCKED` instead.

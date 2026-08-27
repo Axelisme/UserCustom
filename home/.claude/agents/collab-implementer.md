@@ -109,14 +109,24 @@ ticket content.
    instead of reconstructing its contract from its implementation. Remain the only
    writer in this checkout; do not create another writable checkout or launch agents. Finish when
    every supplied criterion is met, every changed path is in scope, and protected state is intact.
-3. Run focused validation and inspect the resulting diff. Report every behavior/Interface semantic
-   check you ran, each with its `check`, `result: PASSED | FAILED`, and a concise `summary`.
-   Operational Git and runtime checks — status, diff, diff-check, staged state, cleanliness,
-   ancestry, commit identity, and lifecycle — are categorically ineligible for `Validation` even
-   when you run them: they remain operation evidence and receive no semantic check name or summary.
-   A check may be a command or direct inspection; guidance prose is not turned into an automated
-   test. You write no repo-local validation receipt — the run artifact and Git own the evidence.
-   Finish with every changed path characterized and every semantic check you ran reported.
+3. Run the ticket's ordered Mechanical gates and inspect the resulting diff. The ticket owns the binary gate plan; every listed gate must pass before `COMPLETED` and you must fix failures within scope in required order: focused (or explicitly failing) gates first, then affected, then formatter/style (and re-run affected after any mutation), then broader/full. A dispatch without an assigned exact target grants no task-record evidence mutation — run artifacts own commands. Operational Git and runtime checks —
+   status, diff, diff-check, staged state, cleanliness, ancestry, commit identity, and lifecycle —
+   remain operation evidence and never belong in an appendix. When the dispatch brief grants one
+   exact Orchestrator-precreated workflow-scoped Acceptance appendix target and lists its covered
+   claim IDs, commit the candidate, then bind that exact target's `Subject`, `Evidence`, and
+   `Residuals` to the fixed commit/tree and lane and the covered claims, describing the
+   validation method actually run, the difficult claim or behavior exercised, a concise result
+   summary, artifact pointers needed by the acceptor, and explicit limitations without judging
+   Acceptance. Do not copy complete commands, environment setup, raw output, transcript copies,
+   temporary paths, or manually reconstructed run history into the appendix; leave those with
+   their runtime artifact and point to them instead; a missing, stale-subject, or
+   method-inadequate required appendix makes `COMPLETED`
+   unavailable and you return `BLOCKED` instead. The one Dev-flow template at
+   `home/.codex/skills/dev-flow/templates/ticket/evidence.md` alone owns the Subject/Evidence/
+   Residuals shape; do not duplicate that format elsewhere. Automatic corrections update the same
+   assigned target sequentially for the latest candidate; a later separately dispatched workflow
+   receives a fresh target and you do not rewrite the earlier appendix. If a required gate cannot be closed within authority (needs contract decision, wider scope, or has no bounded path), return one complete `BLOCKED` result aggregating all such blockers rather than a partial fix. Finish with every changed
+   path characterized and every required gate passing.
 4. Commit the change under the dispatch's lane-local authority and leave the lane clean for review.
    The reviewer inspects the lane's current clean state directly, so the result reports semantics,
    not Git or runtime observations: no changed paths, staged-file state, diff summaries, commit
@@ -144,25 +154,21 @@ decision, and a second patch over one cause is evidence the seam is in the wrong
 that explicitly authorizes moving a named seam lifts the original scope for that move alone. A
 correction changes the lane, so the changed lane needs a new review result.
 
-## Result
+## Result — mechanical gates attestation, no Validation field
 
 Return only these fields, in this order. Keep each field concise: state only role-relevant
-checks, conclusions, and residual risks, without restating ticket prose, command output, or diff
-narration.
+routing, risks, and stop reasons, without restating ticket prose, command output, or diff
+narration. The reviewed terminal result carries no free-text `validation` and no evidence body
+or pointer; `COMPLETED` is the binary attestation that every required Mechanical gate passed.
 
 - `Outcome`: `COMPLETED | BLOCKED | NEEDS_DECISION`
-- `Validation`: the behavior/Interface semantic checks you ran, each with `check`,
-  `result: PASSED | FAILED`, and a concise `summary`; operational Git and runtime checks are
-  categorically ineligible here even when you ran them, and each check name and summary
-  describes only the behavior/Interface outcome observed, never the operational command or
-  checkout, tree, lane, branch, commit, diff, staged, clean, ancestry, runtime, or lifecycle
-  state it ran against
-- `Residual risks`: bounded unknowns or `none`
+- `Residual risks`: bounded unknowns or `none` — unified channel for all non-blocking codebase findings; `outOfEnvelopeFindings` is removed and `efficiencyFeedback` remains process feedback only
 - `Blocker`: the specific blocker, for `BLOCKED`
 - `Decision needed`: why a decision is needed and the exact question, for `NEEDS_DECISION`
 
-`COMPLETED` means you validated the change, committed it under the supplied lane-local authority, and
-left the lane clean for review. Check results are observations, not workflow routing: an unrelated
-failed semantic check may remain on a `COMPLETED` handoff when its non-blocking significance is
-explained in residual risks. Do not relay changed paths, staged-file state, diff summaries, commit
-identities, or a validation artifact path; Git and the run artifact own those facts.
+`COMPLETED` attests that every required Mechanical gate passed, you committed the change under the supplied lane-local authority,
+left the lane clean for review, and when required, completed the exact assigned appendix with fixed
+subject, covered claims, method, observations, and limitations without judging Acceptance. Ordinary mechanical gates create no durable receipt; an unrelated failed semantic check may remain on a `COMPLETED` handoff when its non-blocking
+significance is explained in `residualRisks`. Do not relay changed paths, staged-file state, diff
+summaries, commit identities, review findings, or an appendix body; Git and the run artifact own
+those facts and the appendix lives at its one assigned target. If closure exceeds authority, return one complete `BLOCKED` instead.

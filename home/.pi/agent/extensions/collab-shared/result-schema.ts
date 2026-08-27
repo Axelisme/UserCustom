@@ -5,10 +5,13 @@
  * It keeps typed routing, residualRisks and reviewer findings but excludes free-text validation and
  * evidence bodies. Worker COMPLETED carries outcome and optional residualRisks/efficiencyFeedback
  * with additionalProperties false rejecting any validation field; BLOCKED and NEEDS_DECISION keep their
- * typed branches. Public REVIEWED retains residualRisks and outOfEnvelopeFindings but no validation
- * or evidence pointer. Commands remain with run artifacts and durable observations remain with the
- * assigned workflow-scoped Acceptance appendix when dispatched; runtime does not add an evidence
- * parameter or enforce assignment.
+ * typed branches. Public REVIEWED merges latest worker residualRisks then final reviewer residualRisks
+ * and carries no validation, no outOfEnvelopeFindings and no evidence pointer; correctionBase is
+ * internal to the reviewed loop and never projected to public terminal results. Commands remain with
+ * run artifacts and durable observations remain with the assigned workflow-scoped Acceptance appendix
+ * when dispatched; runtime does not add an evidence parameter or enforce assignment; runtime carries
+ * only original review brief, prior typed blockers and correctionBase for rereview with no ancestry,
+ * reconciliation, scope or incremental-eligibility policy.
  */
 
 const reviewedLaneDecisionSchema = {
@@ -21,15 +24,7 @@ const reviewedLaneDecisionSchema = {
   },
 } as const;
 
-const reviewedLaneFindingSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["location", "evidence"],
-  properties: {
-    location: { type: "string" },
-    evidence: { type: "string" },
-  },
-} as const;
+
 
 export const reviewedLaneWorkerSchema = {
   type: "object",
@@ -86,7 +81,7 @@ export const reviewedLaneReviewerSchema = {
       type: "object",
       properties: {
         verdict: { const: "PASS" },
-        outOfEnvelopeFindings: { type: "array", items: reviewedLaneFindingSchema },
+        residualRisks: { type: "array", items: { type: "string" } },
         efficiencyFeedback: {
           type: "string",
           maxLength: 10000,
@@ -117,7 +112,11 @@ export const reviewedLaneReviewerSchema = {
             },
           },
         },
-        outOfEnvelopeFindings: { type: "array", items: reviewedLaneFindingSchema },
+        residualRisks: { type: "array", items: { type: "string" } },
+        correctionBase: {
+          type: "string",
+          description: "Internal correction base SHA of the reviewed lane HEAD at initial BLOCKED; runtime-owned delta authority, never projected to public terminal.",
+        },
         efficiencyFeedback: {
           type: "string",
           maxLength: 10000,
@@ -132,7 +131,7 @@ export const reviewedLaneReviewerSchema = {
       properties: {
         verdict: { const: "NEEDS_DECISION" },
         decision: reviewedLaneDecisionSchema,
-        outOfEnvelopeFindings: { type: "array", items: reviewedLaneFindingSchema },
+        residualRisks: { type: "array", items: { type: "string" } },
         efficiencyFeedback: {
           type: "string",
           maxLength: 10000,
@@ -163,24 +162,6 @@ function isValidDecision(value: unknown): boolean {
   if (keys.length !== 2) return false;
   if (!keys.includes("why") || !keys.includes("question")) return false;
   return isString(value["why"]) && isString(value["question"]);
-}
-
-function isValidFinding(value: unknown): boolean {
-  if (!isPlainObject(value)) return false;
-  const keys = Object.keys(value);
-  if (keys.length !== 2) return false;
-  if (!keys.includes("location") || !keys.includes("evidence")) return false;
-  return isString(value["location"]) && isString(value["evidence"]);
-}
-
-function isValidValidationItem(value: unknown): boolean {
-  if (!isPlainObject(value)) return false;
-  const keys = Object.keys(value);
-  if (keys.length !== 3) return false;
-  if (!keys.includes("check") || !keys.includes("result") || !keys.includes("summary")) return false;
-  if (!isString(value["check"]) || !isString(value["summary"])) return false;
-  const r = value["result"];
-  return r === "PASSED" || r === "FAILED";
 }
 
 function isValidBlockerItem(value: unknown): boolean {
@@ -240,12 +221,12 @@ export function isValidReviewerOutput(value: unknown): boolean {
   if (!isPlainObject(value)) return false;
   const verdict = value["verdict"];
   if (verdict === "PASS") {
-    const allowed = new Set(["verdict", "outOfEnvelopeFindings", "efficiencyFeedback"]);
+    const allowed = new Set(["verdict", "residualRisks", "efficiencyFeedback"]);
     for (const k of Object.keys(value)) if (!allowed.has(k)) return false;
     if (!("verdict" in value)) return false;
-    if ("outOfEnvelopeFindings" in value) {
-      if (!Array.isArray(value["outOfEnvelopeFindings"])) return false;
-      for (const f of value["outOfEnvelopeFindings"] as unknown[]) if (!isValidFinding(f)) return false;
+    if ("residualRisks" in value) {
+      if (!Array.isArray(value["residualRisks"])) return false;
+      for (const r of value["residualRisks"] as unknown[]) if (!isString(r)) return false;
     }
     if ("efficiencyFeedback" in value) {
       const fb = value["efficiencyFeedback"];
@@ -255,14 +236,17 @@ export function isValidReviewerOutput(value: unknown): boolean {
     return true;
   }
   if (verdict === "BLOCKED") {
-    const allowed = new Set(["verdict", "blockers", "outOfEnvelopeFindings", "efficiencyFeedback"]);
+    const allowed = new Set(["verdict", "blockers", "residualRisks", "correctionBase", "efficiencyFeedback"]);
     for (const k of Object.keys(value)) if (!allowed.has(k)) return false;
     if (!("verdict" in value) || !("blockers" in value)) return false;
     if (!Array.isArray(value["blockers"])) return false;
     for (const b of value["blockers"] as unknown[]) if (!isValidBlockerItem(b)) return false;
-    if ("outOfEnvelopeFindings" in value) {
-      if (!Array.isArray(value["outOfEnvelopeFindings"])) return false;
-      for (const f of value["outOfEnvelopeFindings"] as unknown[]) if (!isValidFinding(f)) return false;
+    if ("residualRisks" in value) {
+      if (!Array.isArray(value["residualRisks"])) return false;
+      for (const r of value["residualRisks"] as unknown[]) if (!isString(r)) return false;
+    }
+    if ("correctionBase" in value) {
+      if (!isString(value["correctionBase"])) return false;
     }
     if ("efficiencyFeedback" in value) {
       const fb = value["efficiencyFeedback"];
@@ -272,13 +256,13 @@ export function isValidReviewerOutput(value: unknown): boolean {
     return true;
   }
   if (verdict === "NEEDS_DECISION") {
-    const allowed = new Set(["verdict", "decision", "outOfEnvelopeFindings", "efficiencyFeedback"]);
+    const allowed = new Set(["verdict", "decision", "residualRisks", "efficiencyFeedback"]);
     for (const k of Object.keys(value)) if (!allowed.has(k)) return false;
     if (!("verdict" in value) || !("decision" in value)) return false;
     if (!isValidDecision(value["decision"])) return false;
-    if ("outOfEnvelopeFindings" in value) {
-      if (!Array.isArray(value["outOfEnvelopeFindings"])) return false;
-      for (const f of value["outOfEnvelopeFindings"] as unknown[]) if (!isValidFinding(f)) return false;
+    if ("residualRisks" in value) {
+      if (!Array.isArray(value["residualRisks"])) return false;
+      for (const r of value["residualRisks"] as unknown[]) if (!isString(r)) return false;
     }
     if ("efficiencyFeedback" in value) {
       const fb = value["efficiencyFeedback"];

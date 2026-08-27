@@ -379,7 +379,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
         worker = {
             "outcome": "COMPLETED",
             "residualRisks": ["bounded risk"]}
-        reviewer = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        reviewer = {"verdict": "PASS", "residualRisks": []}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             _, expected, capture, observed = self.launch_case(base)
@@ -417,7 +417,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
         worker = {
             "outcome": "COMPLETED",
             "residualRisks": []}
-        reviewer = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        reviewer = {"verdict": "PASS", "residualRisks": []}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             _, expected, capture, observed = self.launch_case(base)
@@ -452,8 +452,8 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
         blocked = {
             "verdict": "BLOCKED",
             "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}],
-            "outOfEnvelopeFindings": []}
-        passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+            "residualRisks": []}
+        passed = {"verdict": "PASS", "residualRisks": []}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             _, expected, capture, observed = self.launch_case(base, correction_budget=2)
@@ -488,7 +488,10 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
         for key, task in review_tasks.items():
             self.assertIn(sha, task, key)
             self.assertIn(canonical, task, key)
-            self.assertIn("complete candidate lane diff", task, key)
+            if key == "review-0":
+                self.assertIn("complete candidate lane diff", task, key)
+            else:
+                self.assertIn("complete current lane diff", task, key)
         # Rereviews inspect the complete current lane diff after correction,
         # not only the latest change.
         for key in ("review-1", "review-2"):
@@ -501,7 +504,7 @@ class CollabReviewedLaneExtensionTests(unittest.TestCase):
         worker = {
             "outcome": "COMPLETED",
             "residualRisks": []}
-        reviewer = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        reviewer = {"verdict": "PASS", "residualRisks": []}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             _, expected, capture, observed = self.launch_case(base)
@@ -575,7 +578,7 @@ const runs = {
       structuredOutput: {outcome:"COMPLETED", residualRisks:[]},
       ...writerEnvelope
     };
-    return {structuredOutput:{verdict:"PASS", outOfEnvelopeFindings:[]}, results:[]};
+    return {structuredOutput:{verdict:"PASS", residualRisks:[]}, results:[]};
   },
   async all(items) {
     const results = [];
@@ -624,7 +627,7 @@ process.stdout.write(JSON.stringify({result, calls}));
             ([{"outcome": "BLOCKED", "blocker": "blocked"}], {"outcome": "BLOCKED", "blocker": "blocked"}, 1),
             ([{"outcome": "NEEDS_DECISION", "decision": {"why": "why", "question": "question"}}], {"outcome": "NEEDS_DECISION", "why": "why", "question": "question"}, 1),
             ([completed_step(completed), {"verdict": "NEEDS_DECISION", "decision": {"why": "review why", "question": "review question"}}], {"outcome": "NEEDS_DECISION", "why": "review why", "question": "review question"}, 2),
-            ([completed_step(completed), {"verdict": "BLOCKED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}]}], {"outcome": "CORRECTION_BUDGET_EXHAUSTED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}]}, 2)]
+            ([completed_step(completed), {"verdict": "BLOCKED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}]}], {"outcome": "CORRECTION_BUDGET_EXHAUSTED", "blockers": [{"location": "x", "reason": "y", "fix": "z"}], "residualRisks": []}, 2)]
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             _, _, capture, observed = self.launch_case(base)
@@ -648,8 +651,8 @@ process.stdout.write(JSON.stringify({result, calls}));
         blocked = {
             "verdict": "BLOCKED",
             "blockers": [{"location": "current.ts", "reason": "missing behavior", "fix": "add behavior"}],
-            "outOfEnvelopeFindings": []}
-        passed = {"verdict": "PASS", "outOfEnvelopeFindings": [{"location": "scope", "evidence": "finding"}]}
+            "residualRisks": []}
+        passed = {"verdict": "PASS", "residualRisks": ["scope: finding"]}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             _, expected, capture, observed = self.launch_case(base, correction_budget=1)
@@ -664,10 +667,7 @@ process.stdout.write(JSON.stringify({result, calls}));
             )
 
         self.assertEqual(execution["result"], {
-            "outcome": "REVIEWED",
-            
-            "residualRisks": worker["residualRisks"],
-            "outOfEnvelopeFindings": passed["outOfEnvelopeFindings"]})
+            "outcome": "REVIEWED", "residualRisks": worker["residualRisks"] + passed["residualRisks"]})
         self.assertEqual([call["key"] for call in execution["calls"]], ["impl-0", "review-0", "impl-1", "review-1"])
         self.assertEqual([call["options"]["cwd"] for call in execution["calls"]], [expected["lane"]] * 4)
         self.assertIn('"location":"current.ts"', execution["calls"][2]["options"]["task"])
@@ -707,7 +707,7 @@ process.stdout.write(JSON.stringify({result, calls}));
                     "howToFix": "correct it again",
                     "trigger": "rereview one"}
             ]}
-        passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        passed = {"verdict": "PASS", "residualRisks": []}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             capture = base / "supported-rpc.jsonl"
@@ -788,7 +788,7 @@ process.stdout.write(JSON.stringify({result, calls}));
                     "howToFix": "apply the bounded correction",
                     "trigger": "fresh fallback probe"}
             ]}
-        passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        passed = {"verdict": "PASS", "residualRisks": []}
         original_contract = (
             "Original ticket contract marker.\n\n"
             "Exact execution parameters: installed node; environment variables none; "
@@ -871,7 +871,7 @@ process.stdout.write(JSON.stringify({result, calls}));
 
     def test_harness_rejects_fresh_reviewer_run_as_writer_resume_target(self) -> None:
         completed = {"outcome": "COMPLETED", "residualRisks": []}
-        passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        passed = {"verdict": "PASS", "residualRisks": []}
         workflow_script = """
 const writer = await runs.run("impl-0", { agent: "collab-implementer" });
 const reviewer = await runs.run("review-0", { agent: "collab-acceptor" });
@@ -996,7 +996,8 @@ return { writerRunId: writer.runId };
 
         self.assertEqual(execution["result"], {
             "outcome": "CORRECTION_BUDGET_EXHAUSTED",
-            "blockers": blocked["blockers"]})
+            "blockers": blocked["blockers"],
+            "residualRisks": []})
         self.assertEqual(
             [call["key"] for call in execution["calls"]],
             ["impl-0", "review-0", "impl-1", "review-1", "impl-2", "review-2"],
@@ -1011,7 +1012,7 @@ return { writerRunId: writer.runId };
         blocked = {
             "verdict": "BLOCKED",
             "blockers": [{"location": "lane.ts", "reason": "expectation", "fix": "correct it"}],
-            "outOfEnvelopeFindings": []}
+            "residualRisks": []}
         cases = [
             (
                 1,
@@ -1034,7 +1035,7 @@ return { writerRunId: writer.runId };
             (
                 1,
                 [completed_step(completed), blocked, completed_step(completed), blocked],
-                {"outcome": "CORRECTION_BUDGET_EXHAUSTED", "blockers": blocked["blockers"]},
+                {"outcome": "CORRECTION_BUDGET_EXHAUSTED", "blockers": blocked["blockers"], "residualRisks": []},
                 ["impl-0", "review-0", "impl-1", "review-1"],
             )]
         for budget, steps, expected_result, expected_keys in cases:
@@ -2382,7 +2383,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
 
     def test_workflow_with_feedback_preserves_call_sequence_branching_and_projection(self) -> None:
         worker_completed = {"outcome": "COMPLETED", "residualRisks": [], "efficiencyFeedback": "qualitative worker feedback"}
-        reviewer_pass = {"verdict": "PASS", "outOfEnvelopeFindings": [], "efficiencyFeedback": "review feedback"}
+        reviewer_pass = {"verdict": "PASS", "residualRisks": [], "efficiencyFeedback": "review feedback"}
         worker_blocked = {"outcome": "BLOCKED", "blocker": "blocked reason", "efficiencyFeedback": "blocked feedback"}
         worker_needs = {"outcome": "NEEDS_DECISION", "decision": {"why": "why", "question": "q"}, "efficiencyFeedback": "needs feedback"}
         reviewer_blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "efficiencyFeedback": "review blocked fb"}
@@ -2394,7 +2395,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
                     "outcome": "REVIEWED",
                     
                     "residualRisks": worker_completed["residualRisks"],
-                    "outOfEnvelopeFindings": reviewer_pass["outOfEnvelopeFindings"]},
+                    "residualRisks": reviewer_pass["residualRisks"]},
                 ["impl-0", "review-0"],
             ),
             ([worker_blocked], {"outcome": "BLOCKED", "blocker": "blocked reason"}, ["impl-0"]),
@@ -2402,7 +2403,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
             ([completed_step(worker_completed), reviewer_needs], {"outcome": "NEEDS_DECISION", "why": "why", "question": "q"}, ["impl-0", "review-0"]),
             (
                 [completed_step(worker_completed), reviewer_blocked],
-                {"outcome": "CORRECTION_BUDGET_EXHAUSTED", "blockers": reviewer_blocked["blockers"]},
+                {"outcome": "CORRECTION_BUDGET_EXHAUSTED", "blockers": reviewer_blocked["blockers"], "residualRisks": []},
                 ["impl-0", "review-0"],
             )]
         for steps, expected_terminal, expected_keys in cases:
@@ -2441,7 +2442,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
                 "efficiencyFeedback": "fb2"}
             passed_with_fb = {
                 "verdict": "PASS",
-                "outOfEnvelopeFindings": [{"location": "scope", "evidence": "finding"}],
+                "residualRisks": ["scope: finding"],
                 "efficiencyFeedback": "fb3"}
             run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps([completed_step(completed_with_fb), blocked_review, completed_step(completed_with_fb), passed_with_fb])], capture_output=True, text=True, check=True)
             execution = json.loads(run.stdout)
@@ -2449,9 +2450,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
                 execution["result"],
                 {
                     "outcome": "REVIEWED",
-                    
-                    "residualRisks": completed_with_fb["residualRisks"],
-                    "outOfEnvelopeFindings": passed_with_fb["outOfEnvelopeFindings"]},
+                    "residualRisks": completed_with_fb["residualRisks"] + passed_with_fb["residualRisks"]},
             )
             self.assertNotIn("efficiencyFeedback", execution["result"])
             self.assertEqual([c["key"] for c in execution["calls"]], ["impl-0", "review-0", "impl-1", "review-1"])
@@ -2460,12 +2459,12 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
         # Portable harness test: initial review transport failure is recovered via one
         # fresh replacement; every attempt uses fresh context, same lane/brief/baseline.
         worker = {"outcome": "COMPLETED", "residualRisks": []}
-        passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        passed = {"verdict": "PASS", "residualRisks": []}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             _, expected, capture, observed = self.launch_case(base, correction_budget=1)
             self.assertFalse(observed["is_error"], observed)
-            steps = [completed_step(worker), {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "WebSocket provider_transport_failure"}, passed]
+            steps = [completed_step(worker), {"structuredOutput": {"verdict": "PASS", "residualRisks": []}, "throwMessage": "WebSocket provider_transport_failure"}, passed]
             run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
             self.assertEqual(run.returncode, 0, run.stderr)
             execution = json.loads(run.stdout)
@@ -2489,13 +2488,13 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
         # Portable harness test: rereview transport failure after a correction is recovered;
         # subject (lane/brief/baseline) unchanged and correction accounting preserved.
         worker = {"outcome": "COMPLETED", "residualRisks": ["bounded"]}
-        blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "outOfEnvelopeFindings": []}
-        passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "residualRisks": []}
+        passed = {"verdict": "PASS", "residualRisks": []}
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             _, expected, capture, observed = self.launch_case(base, correction_budget=1)
             self.assertFalse(observed["is_error"], observed)
-            steps = [completed_step(worker), blocked, completed_step(worker), {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "provider_transport_failure"}, passed]
+            steps = [completed_step(worker), blocked, completed_step(worker), {"structuredOutput": {"verdict": "PASS", "residualRisks": []}, "throwMessage": "provider_transport_failure"}, passed]
             run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
             self.assertEqual(run.returncode, 0, run.stderr)
             execution = json.loads(run.stdout)
@@ -2523,13 +2522,13 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
         # workflow returns REVIEWER_RUNTIME_RECOVERY_EXHAUSTED with bounded phase/diagnostics,
         # not an unclassified exception. Cover both REVIEW and REREVIEW phases.
         worker = {"outcome": "COMPLETED", "residualRisks": []}
-        blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "outOfEnvelopeFindings": []}
+        blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "residualRisks": []}
         # REVIEW exhaustion
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             _, expected, capture, observed = self.launch_case(base, correction_budget=1)
             self.assertFalse(observed["is_error"], observed)
-            steps = [completed_step(worker), {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport fail 1"}, {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport fail 2"}, {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport fail 3"}]
+            steps = [completed_step(worker), {"structuredOutput": {"verdict": "PASS", "residualRisks": []}, "throwMessage": "transport fail 1"}, {"structuredOutput": {"verdict": "PASS", "residualRisks": []}, "throwMessage": "transport fail 2"}, {"structuredOutput": {"verdict": "PASS", "residualRisks": []}, "throwMessage": "transport fail 3"}]
             run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
             self.assertEqual(run.returncode, 0, run.stderr)
             execution = json.loads(run.stdout)
@@ -2546,7 +2545,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
             base = Path(temporary)
             _, expected2, capture2, observed2 = self.launch_case(base, correction_budget=2)
             self.assertFalse(observed2["is_error"], observed2)
-            steps2 = [completed_step(worker), blocked, completed_step(worker), {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport fail 1"}, {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport fail 2"}, {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport fail 3"}]
+            steps2 = [completed_step(worker), blocked, completed_step(worker), {"structuredOutput": {"verdict": "PASS", "residualRisks": []}, "throwMessage": "transport fail 1"}, {"structuredOutput": {"verdict": "PASS", "residualRisks": []}, "throwMessage": "transport fail 2"}, {"structuredOutput": {"verdict": "PASS", "residualRisks": []}, "throwMessage": "transport fail 3"}]
             run2 = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture2), json.dumps(steps2)], capture_output=True, text=True, check=False)
             self.assertEqual(run2.returncode, 0, run2.stderr)
             execution2 = json.loads(run2.stdout)
@@ -2562,8 +2561,8 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
         # Portable harness test: semantic BLOCKED/PASS/NEEDS_DECISION do not trigger retry;
         # recovery does not consume or reset correction budget.
         worker = {"outcome": "COMPLETED", "residualRisks": []}
-        blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "outOfEnvelopeFindings": []}
-        passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "residualRisks": []}
+        passed = {"verdict": "PASS", "residualRisks": []}
         needs = {"verdict": "NEEDS_DECISION", "decision": {"why": "why", "question": "q"}}
         # semantic BLOCKED drives correction, not retry
         with tempfile.TemporaryDirectory() as temporary:
@@ -2594,7 +2593,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
             base = Path(temporary)
             _, _, capture, observed = self.launch_case(base, correction_budget=1)
             self.assertFalse(observed["is_error"], observed)
-            steps = [completed_step(worker), blocked, completed_step(worker), {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport"}, passed]
+            steps = [completed_step(worker), blocked, completed_step(worker), {"structuredOutput": {"verdict": "PASS", "residualRisks": []}, "throwMessage": "transport"}, passed]
             run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
             self.assertEqual(run.returncode, 0, run.stderr)
             execution = json.loads(run.stdout)
@@ -2606,7 +2605,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
             _, _, capture, observed = self.launch_case(base, correction_budget=1)
             self.assertFalse(observed["is_error"], observed)
             retry_blocked = blocked  # second BLOCKED after retry
-            steps = [completed_step(worker), blocked, completed_step(worker), {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "transport"}, retry_blocked]
+            steps = [completed_step(worker), blocked, completed_step(worker), {"structuredOutput": {"verdict": "PASS", "residualRisks": []}, "throwMessage": "transport"}, retry_blocked]
             run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
             self.assertEqual(run.returncode, 0, run.stderr)
             execution = json.loads(run.stdout)
@@ -2616,13 +2615,13 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
 
     def test_writer_runtime_failure_does_not_retry(self) -> None:
         worker_pass = {"outcome": "COMPLETED", "residualRisks": []}
-        blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "outOfEnvelopeFindings": []}
+        blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "residualRisks": []}
         # initial writer throw - no replacement
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             _, _, capture, observed = self.launch_case(base, correction_budget=1)
             self.assertFalse(observed["is_error"], observed)
-            steps = [{"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "lane partially mutated transport failure"}]
+            steps = [{"structuredOutput": {"verdict": "PASS", "residualRisks": []}, "throwMessage": "lane partially mutated transport failure"}]
             run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
             self.assertNotEqual(run.returncode, 0)
             execution = json.loads(run.stdout)
@@ -2634,7 +2633,7 @@ class CollabReviewedLaneT07FeedbackTests(CollabReviewedLaneT06ReportTests):
             base = Path(temporary)
             _, _, capture, observed = self.launch_case(base, correction_budget=1)
             self.assertFalse(observed["is_error"], observed)
-            steps = [completed_step(worker_pass), blocked, {"structuredOutput": {"verdict": "PASS", "outOfEnvelopeFindings": []}, "throwMessage": "correction transport failure"}]
+            steps = [completed_step(worker_pass), blocked, {"structuredOutput": {"verdict": "PASS", "residualRisks": []}, "throwMessage": "correction transport failure"}]
             run = subprocess.run(["node", str(SCRIPT_HARNESS), str(capture), json.dumps(steps)], capture_output=True, text=True, check=False)
             self.assertNotEqual(run.returncode, 0)
             execution = json.loads(run.stdout)

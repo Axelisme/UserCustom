@@ -35,8 +35,8 @@ Define each at its first use:
    a checkout carries one live writer, and reassigning it once that writer's run is over is not a
    second writer. That checkout is the lane. Parallelize read-only work; give each concurrent
    writer a separate writable checkout.
-2. **Review reads the protected current lane.** A reviewer inspects the lane's current clean state
-   while its writer is stopped. A correction or collection-time reconciliation changes that lane, so
+2. **Review reads the protected current lane.** Where a review is placed, a reviewer inspects the
+   lane's current clean state while its writer is stopped. A correction or collection-time reconciliation changes that lane, so
    review runs again against its new current state.
 3. **Results carry semantics; identities belong to operations.** Exact commit and tree identities
    stay with the operations that require them — collection, landing, and runtime tracking. Ordinary
@@ -76,9 +76,20 @@ For a writer, include these compact blocks:
    decision and every receiver field is supplied.
 2. **Choose the execution shape.** The Orchestrator selects direct writing, separate dispatches,
    runtime composition, or another fitting shape, and safely places the next writer. The
-   Orchestrator may be that writer for a bounded change: one-writer lane exclusivity still applies,
-   and review is performed separately; when delegation would cost about as much as the change, no
-   worker subagent is needed. When implementation is delegated and its brief, delegated Acceptance
+   Orchestrator may be that writer for a bounded change: one-writer lane exclusivity still applies.
+
+   **Placement is two independent questions**, and the asymmetry of answering only one is what
+   leaves a lane overstaffed or unguarded.
+
+   **Who writes.** When describing the change costs about as much as making it — the brief would
+   have to state the change itself to be intelligible — the Orchestrator writes it directly;
+   otherwise dispatch a writer.
+
+   **Who verifies.** Each Acceptance claim is either **proved** — some listed Mechanical gate's
+   pass/fail is that claim — or it is **residue**. Residue is what an acceptor exists to judge, so
+   residue places one and its absence does not. All four combinations are ordinary.
+
+   When implementation is delegated and its brief, delegated Acceptance
    criteria, placement, mutation authority, and escalation boundary are closed, prefer runtime
    composition of a worker → reviewer → bounded correction loop; coordinate a transition separately
    when it depends on Orchestrator judgement. This is a preference, not a restriction on
@@ -105,15 +116,15 @@ For a writer, include these compact blocks:
 
    This step is complete when the writer has one bounded brief and one safe writable checkout, with
    the repository-declared bootstrap applied when the repository requires one.
-3. **Implement and review.** Execute the chosen shape; for delegated closed work, prefer runtime
-   composition of worker, reviewer, and bounded correction under a finite Orchestrator-supplied
+3. **Implement and review.** Execute the chosen shape; for delegated closed work that places a
+   reviewer, prefer runtime composition of worker, reviewer, and bounded correction under a finite Orchestrator-supplied
    correction budget. The runtime pointer under boundary 2 carries the registered composition path
    and its terminal outcomes. Generic Acceptance below reviews the protected current lane; specialized
    procedures (such as code-review) remain alternatives with their own identity contracts. This
-   step is complete when the lane carries a worker result and an independent review result, or a
-   terminal blocker or decision request.
+   step is complete when the lane carries a worker result and, where boundary 2 placed a reviewer, an
+   independent review result — or a terminal blocker or decision request.
 4. **Judge the result.** The Orchestrator makes the final Acceptance judgement and chooses what
-   follows: accept the reviewed lane, return a bounded defect for correction, return a decision
+   follows: accept the judged lane, return a bounded defect for correction, return a decision
    request or exhausted correction budget to its owner, or select another shape. A correction
    returns to boundary 3 against the changed lane. When the task owns an integration branch, an
    accepted lane goes to the collection boundary below before its lane retires. This step is
@@ -151,8 +162,8 @@ replacement to re-derive those is an unfinished brief, not a terse one.
 
 **Mechanical finish.** When a run ends after its semantic work is validated but before the checkout
 is clean and committed, dispatch a fresh writer for that close-out alone: no semantic edits, lane-owned
-temporary state removed, staged paths and diff inspected, ancestry checked, one clean commit. The
-lane still needs a review result.
+temporary state removed, staged paths and diff inspected, ancestry checked, one clean commit. It
+carries no semantic edit, so it leaves no residue and is judged on its gates.
 
 ## Worker results are semantic — ticket-owned mechanical gates, no Validation field
 
@@ -163,7 +174,7 @@ Operational Git and runtime checks — status, diff, diff-check, staged state, c
 ## Generic Acceptance — read-only, production-reachable blockers only
 
 Ordinary Generic Acceptance reviews the protected current lane: the writer is stopped, the lane is
-clean, and the acceptor reads its current state directly, read-only. Bash use is limited to read-only retrieval (`git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find`, Grove); it excludes pytest, type/lint/format gates, Python/import probes and runtime/process workflows. The acceptor does not execute mechanical gates; it judges ticket gate coverage and Acceptance that gates cannot mechanically prove. It returns only, in this order:
+clean, and the acceptor reads its current state directly, read-only. Bash use is limited to read-only retrieval (`git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find`, Grove); it excludes pytest, type/lint/format gates, Python/import probes and runtime/process workflows. The acceptor does not execute mechanical gates; it judges ticket gate coverage and the Acceptance claims no gate proved. It returns only, in this order:
 
 - `Verdict`: `PASS | BLOCKED | NEEDS_DECISION`
 - for each blocker (only for `BLOCKED`):
@@ -187,6 +198,8 @@ When delegated red/green validation needs several commands, a fixed working dire
 temporary state, use [TDD Gate mode](../tdd/gate.md). Keep a one-command loop direct.
 
 ## Review placement and the correction loop — initial review versus rereview
+
+Boundary 2 decides whether a reviewer is placed at all. This section governs the review once one is.
 
 Reviewer placement may be composed by the runtime or an external workflow. For delegated closed work
 — bounded brief, delegated Acceptance criteria, placement, mutation authority, and escalation

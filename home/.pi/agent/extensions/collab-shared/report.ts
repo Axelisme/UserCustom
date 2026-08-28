@@ -50,7 +50,7 @@ import { isValidStructuredOutput } from "./result-schema.ts";
  * Permanent structural correlation failures are fixed value contradictions that cannot become valid through session-file readiness waiting:
  *   - lane/workflow identity contradictions (runId mismatch, lane identity mismatch, missing cwd, duplicate/missing trace/step entries, non-terminal trace state, missing sessionFile field)
  *   - structurally invalid session identity/path (relative sessionFile, path lacking correlated childRunId segment, unsafe ancestry, symlink)
- * These route immediately through permanent settlement with complete seen, identifying affected step as unavailable, others warning-only, publishing exact manifest with durable warning in one task-lock phase.
+ * These route immediately through permanent settlement publishing exact manifest with durable warning for the affected step in one task-lock phase; each step is classified on its own derivation outcome and a permanent failure on one step does not determine siblings' classification — siblings that derive are published.
  * Retryable is genuinely missing/incomplete material that may appear within deadline: missing status file, temporarily unreadable/partial JSON, nonterminal state, incomplete trace extraction (no readable unique trace), missing or unreadable session file content.
  * Retryable waits with 50 ms polling up to 1 s deadline, then settles warning-only with manifest per lastSeen; early no-readable-trace remains warning-only without denominator. Permanent stops waiting immediately.
  *
@@ -858,16 +858,16 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
         sessionFile = corr.sessionFile;
       } catch (e) {
         const msg = `derivation failed for ${workflowKey}/${childRunId}: ${boundedMessage(e)}`;
-        if (isPermanentMessage(msg)) return { state: "permanent", message: msg, workflowKey, childRunId, ignoredReason: "permanent derivation failure", seen, sessionTexts };
+        if (isPermanentMessage(msg)) return { state: "permanent", message: msg, workflowKey, childRunId, ignoredReason: "permanent derivation failure", seen, sessionTexts, statusObj };
         return { state: "retryable", reason: msg, statusObj, seen, sessionTexts };
       }
       if (!(await isAncestrySafe(repoControlRoot, sessionFile))) {
-        return { state: "permanent", message: `session file ancestry is unsafe for ${workflowKey} at ${sessionFile}`, workflowKey, childRunId, ignoredReason: "unsafe session ancestry", seen, sessionTexts };
+        return { state: "permanent", message: `session file ancestry is unsafe for ${workflowKey} at ${sessionFile}`, workflowKey, childRunId, ignoredReason: "unsafe session ancestry", seen, sessionTexts, statusObj };
       }
       const sessMeta = await pathMetadata(sessionFile);
       if (sessMeta !== null && (sessMeta.isSymbolicLink() || !sessMeta.isFile())) {
         const msg = sessMeta.isSymbolicLink() ? `session file is a symlink for ${workflowKey} at ${sessionFile}` : `session file is not a regular file for ${workflowKey} at ${sessionFile}`;
-        return { state: "permanent", message: msg, workflowKey, childRunId, ignoredReason: "unsafe session artifact", seen, sessionTexts };
+        return { state: "permanent", message: msg, workflowKey, childRunId, ignoredReason: "unsafe session artifact", seen, sessionTexts, statusObj };
       }
       if (sessMeta === null) {
         return { state: "retryable", reason: `session file is not a regular file for ${workflowKey} at ${sessionFile}`, statusObj, seen, sessionTexts };
@@ -890,17 +890,113 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
       if (hasSeen) {
         const affectedKey = attempt.workflowKey ?? "unknown";
         const affectedChild = attempt.childRunId ?? "unknown";
-        const doPermanentSettlement = async (): Promise<{ warnings: string[] }> => {
+        const statusObj = (attempt as any).statusObj as Record<string, unknown> | undefined;
+        const sessionTexts = (attempt as any).sessionTexts as Map<string, string> | undefined;
+        const doPermanentSettlement = async (): Promise<{ warnings: string[]; published: string[] }> => {
           const warning = await appendWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey: affectedKey, childRunId: affectedChild, message: attempt.message });
           const warnings: string[] = [warning];
           const classifications: Array<{ workflowKey: string; childRunId: string; classification: string }> = [];
-          for (const { workflowKey, childRunId } of seen!.values()) {
+          const published: string[] = [];
+          const seenMap = seen!;
+          const texts = sessionTexts ?? new Map<string, string>();
+          const sObj = statusObj ?? ({} as Record<string, unknown>);
+          for (const { workflowKey, childRunId } of seenMap.values()) {
             const isAffected = workflowKey === affectedKey && childRunId === affectedChild;
-            classifications.push({ workflowKey, childRunId, classification: isAffected ? "unavailable" : "warning-only" });
+            if (isAffected) {
+              classifications.push({ workflowKey, childRunId, classification: "unavailable" });
+              continue;
+            }
+            let sessionText: string | null = texts.get(`${workflowKey}\0${childRunId}`) ?? null;
+            let sessionFile: string | null = null;
+            if (sessionText === null) {
+              try {
+                const corr = correlateArtifacts({ statusObj: sObj, workflowId, workflowKey, childRunId, lanePath });
+                sessionFile = corr.sessionFile;
+              } catch (e) {
+                const w = await appendWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `derivation failed for ${workflowKey}/${childRunId}: ${boundedMessage(e)}` });
+                warnings.push(w);
+                const lower = w.toLowerCase();
+                const isUnavail = lower.includes("ancestry is unsafe") || lower.includes("is not a regular") || lower.includes("unsafe");
+                classifications.push({ workflowKey, childRunId, classification: isUnavail ? "unavailable" : "warning-only" });
+                continue;
+              }
+              if (!(await isAncestrySafe(repoControlRoot, sessionFile))) {
+                const w = await appendWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `session file ancestry is unsafe for ${workflowKey} at ${sessionFile}` });
+                warnings.push(w);
+                classifications.push({ workflowKey, childRunId, classification: "unavailable" });
+                continue;
+              }
+              const sessMeta = await pathMetadata(sessionFile);
+              if (sessMeta !== null && (sessMeta.isSymbolicLink() || !sessMeta.isFile())) {
+                const msg = sessMeta.isSymbolicLink() ? `session file is a symlink for ${workflowKey} at ${sessionFile}` : `session file is not a regular file for ${workflowKey} at ${sessionFile}`;
+                const w = await appendWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: msg });
+                warnings.push(w);
+                classifications.push({ workflowKey, childRunId, classification: "unavailable" });
+                continue;
+              }
+              if (sessMeta === null) {
+                const w = await appendWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `session file is not a regular file for ${workflowKey} at ${sessionFile}` });
+                warnings.push(w);
+                classifications.push({ workflowKey, childRunId, classification: "warning-only" });
+                continue;
+              }
+              try {
+                sessionText = await readFile(sessionFile, "utf8");
+              } catch (e) {
+                const w = await appendWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `missing or unreadable session for ${workflowKey} at ${String(sessionFile)}: ${boundedMessage(e)}` });
+                warnings.push(w);
+                classifications.push({ workflowKey, childRunId, classification: "warning-only" });
+                continue;
+              }
+            }
+            let report: Record<string, unknown> | null = null;
+            try {
+              report = deriveReportFromArtifacts({ taskId, ticketId, laneId, workflowId, workflowKey, childRunId, lanePath, statusObj: sObj, sessionText });
+            } catch (e) {
+              const w = await appendWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `derivation failed for ${workflowKey}/${childRunId}: ${boundedMessage(e)}` });
+              warnings.push(w);
+              const lower = w.toLowerCase();
+              const isUnavail = lower.includes("ancestry is unsafe") || lower.includes("is not a regular") || lower.includes("unsafe");
+              classifications.push({ workflowKey, childRunId, classification: isUnavail ? "unavailable" : "warning-only" });
+              continue;
+            }
+            const result = await publishReport({ repoControlRoot, taskId, ticketId, laneId, workflowId, workflowKey, childRunId, lanePath, report });
+            if (result.published) {
+              published.push(`${workflowKey}/${childRunId}`);
+              classifications.push({ workflowKey, childRunId, classification: "published" });
+            } else if (result.isDuplicate) {
+              classifications.push({ workflowKey, childRunId, classification: "published" });
+            } else if (result.warning) {
+              warnings.push(result.warning);
+              const lower = result.warning.toLowerCase();
+              const isUnavail = lower.includes("ancestry is unsafe") || lower.includes("is not a regular");
+              classifications.push({ workflowKey, childRunId, classification: isUnavail ? "unavailable" : "warning-only" });
+            } else {
+              classifications.push({ workflowKey, childRunId, classification: "unavailable" });
+            }
+            try {
+              const fb = await readEfficiencyFeedbackValue(sObj, workflowId, workflowKey, childRunId, lanePath);
+              if (fb.warning) {
+                const w = await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: fb.warning });
+                warnings.push(w);
+              }
+              if (fb.found) {
+                if (typeof fb.value !== "string") {
+                  const w = await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `efficiencyFeedback is not a string for ${workflowKey}/${childRunId}` });
+                  warnings.push(w);
+                } else if (unicodeLength(fb.value as string) > 10000) {
+                  const w = await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `efficiencyFeedback exceeds maxLength 10000 for ${workflowKey}/${childRunId}` });
+                  warnings.push(w);
+                } else {
+                  const fbResult = await publishFeedback({ repoControlRoot, taskId, ticketId, laneId, workflowId, workflowKey, childRunId, lanePath, efficiencyFeedback: fb.value as string });
+                  if (fbResult.warning) warnings.push(fbResult.warning);
+                }
+              }
+            } catch {}
           }
           classifications.sort((a, b) => a.workflowKey.localeCompare(b.workflowKey) || a.childRunId.localeCompare(b.childRunId));
           const knownSteps = classifications.length;
-          const publishedReports = 0;
+          const publishedReports = classifications.filter(c => c.classification === "published").length;
           const warningOnlySteps = classifications.filter(c => c.classification === "warning-only").length;
           const unavailableSteps = classifications.filter(c => c.classification === "unavailable").length;
           const manifest: Record<string, unknown> = {
@@ -915,13 +1011,15 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
           };
           const covResult = await publishCoverageManifest({ repoControlRoot, taskId, workflowId, manifest });
           if (covResult.warning) warnings.push(covResult.warning);
-          return { warnings };
+          return { warnings, published };
         };
         let warnings: string[];
+        let published: string[] = [];
         if (withTaskLock) {
           try {
             const res = await withTaskLock(doPermanentSettlement);
             warnings = res.warnings;
+            published = res.published;
           } catch (e) {
             const w = boundedMessage(e).slice(0, 500);
             try { console.warn(`[collab-report] ${w}`); } catch {}
@@ -931,8 +1029,9 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
         } else {
           const res = await doPermanentSettlement();
           warnings = res.warnings;
+          published = res.published;
         }
-        return { handled: true, published: [], warnings, ignoredReason: attempt.ignoredReason ?? "permanent input" };
+        return { handled: true, published, warnings, ignoredReason: attempt.ignoredReason ?? "permanent input" };
       } else {
         const doWarn = () => appendWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey: attempt.workflowKey ?? "unknown", childRunId: attempt.childRunId ?? "unknown", message: attempt.message });
         let warning: string;

@@ -529,7 +529,7 @@ class SL03S3PermanentSessionCoverageTests(unittest.TestCase):
             res1 = run_handle_with_lock_count(control_root, "demo", "T001", "writer-1", lane_path, workflow_id, str(async_dir))
             self.assertTrue(res1["ok"], res1)
             self.assertTrue(res1["result"]["handled"], res1)
-            self.assertEqual(res1["result"]["published"], [], res1)
+            self.assertEqual(res1["result"]["published"], [f"impl-0/{child_readable}"], res1)
             self.assertEqual(res1["lockCount"], 1, f"expected exactly one lock phase for warning+manifest, got {res1['lockCount']}")
             self.assertGreaterEqual(len(res1["result"]["warnings"]), 1)
             # No extra coverage warning on success (manifest published, not collision)
@@ -539,13 +539,13 @@ class SL03S3PermanentSessionCoverageTests(unittest.TestCase):
             self.assertTrue(manifest_path.is_file(), f"manifest not created at {manifest_path}")
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(manifest["knownSteps"], 2)
-            self.assertEqual(manifest["publishedReports"], 0)
-            self.assertEqual(manifest["warningOnlySteps"], 1)
+            self.assertEqual(manifest["publishedReports"], 1)
+            self.assertEqual(manifest["warningOnlySteps"], 0)
             self.assertEqual(manifest["unavailableSteps"], 1)
             self.assertEqual(manifest["knownSteps"], manifest["publishedReports"] + manifest["warningOnlySteps"] + manifest["unavailableSteps"])
             self.assertEqual(len(manifest["steps"]), 2)
             # exact unique identities sorted lexicographically
-            expected_steps = sorted([{"workflowKey":"impl-0","childRunId":child_readable,"classification":"warning-only"},{"workflowKey":"review-0","childRunId":child_dir,"classification":"unavailable"}], key=lambda x: (x["workflowKey"], x["childRunId"]))
+            expected_steps = sorted([{"workflowKey":"impl-0","childRunId":child_readable,"classification":"published"},{"workflowKey":"review-0","childRunId":child_dir,"classification":"unavailable"}], key=lambda x: (x["workflowKey"], x["childRunId"]))
             # manifest steps are sorted; verify exact set
             got_set = {(s["workflowKey"], s["childRunId"], s["classification"]) for s in manifest["steps"]}
             exp_set = {(s["workflowKey"], s["childRunId"], s["classification"]) for s in expected_steps}
@@ -572,8 +572,8 @@ class SL03S3PermanentSessionCoverageTests(unittest.TestCase):
             data = json.loads((repo / "reports/collab-report.json").read_text(encoding="utf-8"))
             coverage = data["lane_loop_coverage"]
             self.assertEqual(coverage["known_steps"], 2)
-            self.assertEqual(coverage["published_reports"], 0)
-            self.assertEqual(coverage["warning_only_steps"], 1)
+            self.assertEqual(coverage["published_reports"], 1)
+            self.assertEqual(coverage["warning_only_steps"], 0)
             self.assertEqual(coverage["unavailable_steps"], 1)
             self.assertEqual(coverage["known_steps"], coverage["published_reports"]+coverage["warning_only_steps"]+coverage["unavailable_steps"])
             self.assertEqual(coverage["manifest_workflows"], 1)
@@ -619,13 +619,14 @@ class SL03S3PermanentSessionCoverageTests(unittest.TestCase):
             self.assertTrue(res["ok"], res)
             self.assertTrue(res["result"]["handled"])
             self.assertEqual(res["lockCount"], 1)
+            self.assertEqual(res["result"]["published"], [f"impl-0/{child_readable}"])
             manifest_path = repo / ".agent_state/plans/demo/.collab_op/lane_loop_report/coverage" / f"{workflow_id}.json"
             self.assertTrue(manifest_path.is_file())
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(manifest["knownSteps"], 2)
             self.assertEqual(manifest["unavailableSteps"], 1)
-            self.assertEqual(manifest["warningOnlySteps"], 1)
-            self.assertEqual(manifest["publishedReports"], 0)
+            self.assertEqual(manifest["warningOnlySteps"], 0)
+            self.assertEqual(manifest["publishedReports"], 1)
             # unavailable should be the symlink one
             unavailable = [s for s in manifest["steps"] if s["classification"]=="unavailable"]
             self.assertEqual(len(unavailable), 1)
@@ -693,7 +694,7 @@ class SL03StructuralCorrelationTests(unittest.TestCase):
             # No readiness-delay fallthrough: permanent should be immediate (<500ms), not 1s deadline
             self.assertLess(elapsed, 0.5, f"relative sessionFile should not wait 1s, elapsed {elapsed}")
             self.assertEqual(res1["lockCount"], 1, f"expected exactly one lock phase, got {res1['lockCount']}")
-            self.assertEqual(res1["result"]["published"], [], res1)
+            self.assertEqual(res1["result"]["published"], [f"impl-0/{child_ok}"], res1)
             self.assertGreaterEqual(len(res1["result"]["warnings"]), 1)
             self.assertEqual(len(res1["result"]["warnings"]), 1)
             self.assertIn("is not absolute", res1["result"]["warnings"][0].lower())
@@ -701,13 +702,13 @@ class SL03StructuralCorrelationTests(unittest.TestCase):
             self.assertTrue(manifest_path.is_file(), f"manifest not created at {manifest_path}")
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(manifest["knownSteps"], 2)
-            self.assertEqual(manifest["publishedReports"], 0)
-            self.assertEqual(manifest["warningOnlySteps"], 1)
+            self.assertEqual(manifest["publishedReports"], 1)
+            self.assertEqual(manifest["warningOnlySteps"], 0)
             self.assertEqual(manifest["unavailableSteps"], 1)
             self.assertEqual(manifest["knownSteps"], manifest["publishedReports"] + manifest["warningOnlySteps"] + manifest["unavailableSteps"])
             self.assertEqual(len(manifest["steps"]), 2)
             got_set = {(s["workflowKey"], s["childRunId"], s["classification"]) for s in manifest["steps"]}
-            exp_set = {("impl-0", child_ok, "warning-only"), ("review-0", child_rel, "unavailable")}
+            exp_set = {("impl-0", child_ok, "published"), ("review-0", child_rel, "unavailable")}
             self.assertEqual(got_set, exp_set)
             # unique identities
             keys = {(s["workflowKey"], s["childRunId"]) for s in manifest["steps"]}
@@ -730,8 +731,8 @@ class SL03StructuralCorrelationTests(unittest.TestCase):
             data = json.loads((repo / "reports/collab-report.json").read_text(encoding="utf-8"))
             cov = data["lane_loop_coverage"]
             self.assertEqual(cov["known_steps"], 2)
-            self.assertEqual(cov["published_reports"], 0)
-            self.assertEqual(cov["warning_only_steps"], 1)
+            self.assertEqual(cov["published_reports"], 1)
+            self.assertEqual(cov["warning_only_steps"], 0)
             self.assertEqual(cov["unavailable_steps"], 1)
 
     def test_absolute_sessionFile_lacking_childRunId_is_permanent_structural_with_one_lock(self):
@@ -770,19 +771,19 @@ class SL03StructuralCorrelationTests(unittest.TestCase):
             self.assertTrue(res1["result"]["handled"], res1)
             self.assertLess(elapsed, 0.5, f"childRunId mismatch should not wait 1s, elapsed {elapsed}")
             self.assertEqual(res1["lockCount"], 1)
-            self.assertEqual(res1["result"]["published"], [])
+            self.assertEqual(res1["result"]["published"], [f"impl-0/{child_ok}"])
             self.assertEqual(len(res1["result"]["warnings"]), 1)
             self.assertIn("does not contain childrunid", res1["result"]["warnings"][0].lower())
             manifest_path = repo / ".agent_state/plans/demo/.collab_op/lane_loop_report/coverage" / f"{workflow_id}.json"
             self.assertTrue(manifest_path.is_file())
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(manifest["knownSteps"], 2)
-            self.assertEqual(manifest["publishedReports"], 0)
-            self.assertEqual(manifest["warningOnlySteps"], 1)
+            self.assertEqual(manifest["publishedReports"], 1)
+            self.assertEqual(manifest["warningOnlySteps"], 0)
             self.assertEqual(manifest["unavailableSteps"], 1)
             self.assertEqual(manifest["knownSteps"], manifest["publishedReports"] + manifest["warningOnlySteps"] + manifest["unavailableSteps"])
             got_set = {(s["workflowKey"], s["childRunId"], s["classification"]) for s in manifest["steps"]}
-            exp_set = {("impl-0", child_ok, "warning-only"), ("review-0", child_bad, "unavailable")}
+            exp_set = {("impl-0", child_ok, "published"), ("review-0", child_bad, "unavailable")}
             self.assertEqual(got_set, exp_set)
             keys = {(s["workflowKey"], s["childRunId"]) for s in manifest["steps"]}
             self.assertEqual(len(keys), 2)
@@ -796,8 +797,8 @@ class SL03StructuralCorrelationTests(unittest.TestCase):
             data = json.loads((repo / "reports2/collab-report.json").read_text(encoding="utf-8"))
             cov = data["lane_loop_coverage"]
             self.assertEqual(cov["known_steps"], 2)
-            self.assertEqual(cov["published_reports"], 0)
-            self.assertEqual(cov["warning_only_steps"], 1)
+            self.assertEqual(cov["published_reports"], 1)
+            self.assertEqual(cov["warning_only_steps"], 0)
             self.assertEqual(cov["unavailable_steps"], 1)
 
     def test_genuinely_missing_session_remains_retryable_and_settles_warning_only(self):

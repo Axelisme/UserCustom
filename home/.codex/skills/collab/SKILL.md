@@ -1,6 +1,6 @@
 ---
 name: collab
-description: "Orchestrator coordination for one bounded change: use when the Orchestrator bounds a change, chooses an execution shape, judges a reviewed lane, collects, or lands."
+description: "Orchestrator coordination for one bounded change: use when the Orchestrator bounds a change, chooses an execution shape, judges the lane, collects, or lands."
 ---
 
 # Collab

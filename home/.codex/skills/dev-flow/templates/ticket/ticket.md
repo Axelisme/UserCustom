@@ -40,6 +40,10 @@ state: pending
 <!-- Ordered binary gate plan owned by this ticket. Every listed gate must pass before `COMPLETED`.
      Do not duplicate repository-owned commands: use pointer or existing owner, only add ticket-specific gates and execution order.
      Implementer runs in order: focused (or explicitly failing) → affected → formatter/style (re-run affected after any mutation) → broader/full.
+     Gate-mapping test (canonical definition: ~/.codex/skills/collab/SKILL.md boundary 2): an
+     Acceptance claim above is mechanically provable iff some listed gate below's pass/fail is
+     exactly that claim. Map each claim while drafting this list; any claim left unmapped means an
+     acceptor is dispatched for this ticket.
      Example gates (replace with ticket-specific ones): -->
 - [ ] Focused behavior gates for changed reviewed-workflow schema and prompt composition
 - [ ] Affected TypeScript/JavaScript static checks and profile/configuration format checks

@@ -14,11 +14,10 @@ After compaction, or in a session that did not create the task, run `locate <tas
 Dev-flow owns the durable task lifecycle, record structure, the conditional route through wayfinder,
 to-spec and to-tickets, and S0 design admission. It remains the sole durable narrative, status, and
 authority record before and after delegated work. Candidate-backlog owns backlog eligibility.
-A ticket dispatches through one of two peer implementation paths, chosen by [Routing to implement or
-collab](#routing-to-implement-or-collab) below: [collab](../collab/SKILL.md), for dispatched writers
-and independent review, or [implement](../implement/SKILL.md), for one writer finishing in one
-context. Collab consumes bounded task intent and returns evidence without creating another task
-lifecycle.
+The task-level fork: a task that owns a managed integration runs every ticket through
+[collab](../collab/SKILL.md), where collab's own two placement axes decide writer and verifier; a
+task with no managed integration works its tickets through [implement](../implement/SKILL.md).
+Collab consumes bounded task intent and returns evidence without creating another task lifecycle.
 
 Point to the owner and stop; restatement creates a drifting second authority. When evolving this
 workflow, read the [design principles](references/design-principles.md).
@@ -32,24 +31,6 @@ Before starting any stage, read
 Decision-only tasks without implementation output and small corrections completed in Orchestrator's
 single context may skip the sequence. They still record the `Envelope` pointer to the frozen file
 holding the task's out-of-scope boundary.
-
-## Routing to implement or collab
-
-Once tickets exist, each one dispatches through `collab` or `implement` — two peer implementation
-paths, neither a fallback or a lesser form of the other. Read this criterion at dispatch rather than
-inventing one.
-
-The criterion reads the concurrency disposition Slicing already made explicit for each Slice (see
-[S0's Slicing stage](references/s0-design-admission.md#slicing)); it does not judge concurrency a
-second time, because a second judgement can disagree with the first and leave neither authoritative.
-A ticket declared part of a parallel antichain, or one that needs independent third-party acceptance,
-routes to `collab`. A serial ticket one writer finishes in one context, whose acceptance the
-Orchestrator or the user can observe directly, routes to `implement`.
-
-The agent recommends the route; the user decides. `ask-matt` carries a routing line pointing here for
-the same fork, because its trigger differs from this one — it fires when a user asks which skill
-fits, this fires when the Orchestrator reaches dispatch. If the two ever disagree, this document
-wins.
 
 ## One task record
 

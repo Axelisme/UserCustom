@@ -904,8 +904,8 @@ class SL03StructuralCorrelationTests(unittest.TestCase):
             self.assertTrue(manifest_path.is_file())
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(manifest["knownSteps"], 2)
-            self.assertEqual(manifest["unavailableSteps"], 1)
-            self.assertEqual(manifest["warningOnlySteps"], 1)
+            self.assertEqual(manifest["unavailableSteps"], 2)
+            self.assertEqual(manifest["warningOnlySteps"], 0)
 
 class SL03S4SnapshotReconciliationTests(unittest.TestCase):
     def test_A5_copies_version1_and_version2_and_reconciles_with_warnings(self):

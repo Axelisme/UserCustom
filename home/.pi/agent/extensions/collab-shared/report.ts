@@ -915,8 +915,7 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
               } catch (e) {
                 const w = await appendWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `derivation failed for ${workflowKey}/${childRunId}: ${boundedMessage(e)}` });
                 warnings.push(w);
-                const lower = w.toLowerCase();
-                const isUnavail = lower.includes("ancestry is unsafe") || lower.includes("is not a regular") || lower.includes("unsafe");
+                const isUnavail = isPermanentStructuralFailure(w);
                 classifications.push({ workflowKey, childRunId, classification: isUnavail ? "unavailable" : "warning-only" });
                 continue;
               }
@@ -955,8 +954,7 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
             } catch (e) {
               const w = await appendWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `derivation failed for ${workflowKey}/${childRunId}: ${boundedMessage(e)}` });
               warnings.push(w);
-              const lower = w.toLowerCase();
-              const isUnavail = lower.includes("ancestry is unsafe") || lower.includes("is not a regular") || lower.includes("unsafe");
+              const isUnavail = isPermanentStructuralFailure(w);
               classifications.push({ workflowKey, childRunId, classification: isUnavail ? "unavailable" : "warning-only" });
               continue;
             }

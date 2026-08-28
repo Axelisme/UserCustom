@@ -243,4 +243,3 @@ class P1SiblingClassificationTests(unittest.TestCase):
             self.assertEqual(manifest["knownSteps"], manifest["publishedReports"]+manifest["warningOnlySteps"]+manifest["unavailableSteps"])
             allowed = {"coverageVersion","taskId","workflowId","knownSteps","publishedReports","warningOnlySteps","unavailableSteps","steps","generatedAt"}
             self.assertTrue(set(manifest.keys()).issubset(allowed), f"new field {set(manifest.keys())-allowed}")
-

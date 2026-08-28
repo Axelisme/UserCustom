@@ -18,7 +18,7 @@ Typed results states its own enabling condition.
   that lets completion wake the session.
 - **Run control** — only when a run is interrupted or needs status, steering, or stopping.
 - **Placement** — only when the canonical lane placement does not fit the chosen shape.
-- **Collection** — only after the Orchestrator judges the reviewed lane and chooses collection.
+- **Collection** — only after the Orchestrator judges the lane and chooses collection.
 - **Operations** — only when selecting which `collab_*` tool carries out a Collab step.
 
 ## Managed lane environment
@@ -238,6 +238,13 @@ replace the canonical tool with a handwritten worker/reviewer loop. Keep executi
 separate: status, steering, stopping, and other controls use their management action without
 execution fields.
 
+For a gates-only lane, dispatch `collab-implementer` with ordinary asynchronous `subagent` execution,
+using the exact managed lane worktree as `cwd` and `worktree: false`. Omit `model` and `thinking` so
+the profile owns them. This lane has no reviewer, so the direct writer dispatch is not a handwritten
+worker/reviewer loop and `collab_run_reviewed_lane` does not apply. Supply no correction budget; after
+the writer stops, an in-scope correction is another ordinary dispatch onto the same lane. The
+Orchestrator judges the writer's mechanical-gate result before collection.
+
 Use `context: "fresh"` for independent review. Use `context: "fork"` only when the child should
 inherit the persisted parent conversation; it is not a filtered review context. A profile's configured
 default applies when the call omits context.
@@ -248,16 +255,17 @@ read-only; parallel writers each need their own writable checkout.
 
 ## Collection
 
-Read this section only after the Orchestrator judges the reviewed lane and chooses collection.
+Read this section only after the Orchestrator judges the lane and chooses collection.
 
 `lane_collect`'s own stale-lane behavior is the default collection path after the Orchestrator
-judges the reviewed lane. A `collected` result completes collection. A `reconciled` result stops
-before collection: launch a fresh typed reviewer against the reconciled protected current lane, have
-the Orchestrator judge again, and only then retry collection. A `conflicted` result returns to the
-Orchestrator. `lane_reconcile` remains available but is not an extra default pre-step.
+judges the lane. A `collected` result completes collection. A `reconciled` result stops before
+collection: apply the core lane-reconciliation placement test to the reconciled protected current
+lane, have the Orchestrator judge again, and only then retry collection. Where that test places a
+reviewer, launch a fresh typed reviewer. A `conflicted` result returns to the Orchestrator.
+`lane_reconcile` remains available but is not an extra default pre-step.
 
 ```javascript
-// lane_collect returned "reconciled": stop before collection
+// lane_collect returned "reconciled" and residue placed a reviewer: stop before collection
 const reconciledReview = await runs.run("review-reconcile-1", {
   agent: "collab-acceptor",
   cwd: lane,

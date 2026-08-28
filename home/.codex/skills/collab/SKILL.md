@@ -36,8 +36,9 @@ Define each at its first use:
    second writer. That checkout is the lane. Parallelize read-only work; give each concurrent
    writer a separate writable checkout.
 2. **Review reads the protected current lane.** Where a review is placed, a reviewer inspects the
-   lane's current clean state while its writer is stopped. A correction or collection-time reconciliation changes that lane, so
-   review runs again against its new current state.
+   lane's current clean state while its writer is stopped. A correction or reconciliation changes
+   that lane, so review runs again against its new current state (see Reconciliation for lane versus
+   integration reconciliation).
 3. **Results carry semantics; identities belong to operations.** Exact commit and tree identities
    stay with the operations that require them — collection, landing, and runtime tracking. Ordinary
    worker and reviewer results carry only what workflow branching needs.
@@ -133,8 +134,8 @@ For a writer, include these compact blocks:
 5. **Collect.** Move the Orchestrator-accepted current lane into the integration branch one lane at
    a time. A stale lane is synchronized with current integration first and stops at the reconciled
    lane or a conflict; the reconciled lane needs its own review and Orchestrator judgement before
-   collection. This step is complete when the accepted lane is the integration head and its lane is
-   retired or its retention is reported.
+   collection (see Reconciliation). This step is complete when the accepted lane is the integration
+   head and its lane is retired or its retention is reported.
 6. **Retire the lane.** When a writer or reviewer lane reaches its terminal handoff and will not
    continue, inventory and remove lane-owned
    worktree registrations, temporary files or directories, sessions or processes, and agent-created
@@ -233,6 +234,25 @@ Acceptance verdict. The terminal handoff carries the reviewed lane's outcome, th
 needed, applicable direct observations, and residual risk. Orchestrator- and user-observed
 Acceptance items are reported there rather than mislabelled as blockers.
 
+## Reconciliation
+
+Two operations share this name and carry different review costs; each is defined here once.
+
+**Lane reconciliation** brings a stale lane up to current integration. Its review stays bounded to
+the current ticket: boundary 2's proved/residue test applies to the reconciled lane exactly as it
+applies to any other lane state.
+
+**Integration reconciliation** brings persistence into integration when persistence has moved ahead of
+it; the runtime pointer under "Choose the execution shape" names the operation that carries it out.
+What it brings in was covered by no ticket's Acceptance, so the Orchestrator re-evaluates the task's
+Acceptance, not only the current ticket's. Boundary 2 places an acceptor for residue — an Acceptance
+claim no listed gate proves — and content no ticket ever claimed has no gate to prove it, so residue
+is never empty for integration reconciliation: an acceptor is always placed there, a consequence of
+boundary 2's test rather than a rule of its own.
+
+Either reconciliation's review brief names the parent provenance it introduced, so a reviewer reports
+inherited history as inherited rather than judging it as current-task scope creep.
+
 ## Collection boundary
 
 When existing work becomes the managed integration, adoption previews its mutation before
@@ -245,8 +265,9 @@ carry these out and tells you when their absence means your runtime needs none.
 The runtime verifies the exact lane tip, that current integration is contained in the judged lane,
 and that managed refs and worktrees are clean and identity-exact, then advances integration to the
 accepted lane and retires it when it is clean. A stale lane is reconciled first; the reconciled
-current lane is reviewed and judged again before collection. Dirt or ambiguity in the lane is
-preserved and reported rather than deleted or inferred away.
+current lane is reviewed and judged again before collection (see Reconciliation for lane versus
+integration reconciliation). Dirt or ambiguity in the lane is preserved and reported rather than
+deleted or inferred away.
 
 This task-local collection is not landing and requires no separate landing grant.
 

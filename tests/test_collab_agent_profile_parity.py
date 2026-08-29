@@ -81,9 +81,14 @@ class CollabAgentProfileParityTests(unittest.TestCase):
         # Reading it out of the template rather than restating it here keeps this a match check,
         # so rewording the rule in both places stays legal and rewording one of them does not.
         template = (HOME / ".codex/skills/dev-flow/templates/ticket/ticket.md").read_text("utf-8")
-        match = re.search(r"Implementer runs in order: (.+)$", template, re.MULTILINE)
+        match = re.search(r"Implementer runs in order: ([^\n]+)", template)
         self.assertIsNotNone(match, "the ticket template no longer states the gate repair order")
         order = match.group(1).strip()
+        self.assertTrue(
+            order.endswith("."),
+            f"the template's repair order runs past one line, so this check would only compare "
+            f"its first fragment: {order}",
+        )
         profile = support.load_runtime_profile(HOME, "collab-implementer")
         for runtime, prompt in support.runtime_prompts(profile).items():
             with self.subTest(runtime=runtime):
@@ -91,6 +96,21 @@ class CollabAgentProfileParityTests(unittest.TestCase):
                     order in prompt,
                     f"collab-implementer/{runtime} does not carry the template's repair order: {order}",
                 )
+
+    def test_skill_paths_named_in_profiles_resolve(self) -> None:
+        # A profile's pointer is the whole of its reader's route to the rule: the child cannot ask
+        # where a moved file went. Renaming a reference is exactly how one of these goes silently
+        # dangling, and it is the failure this task exists to remove.
+        for name in PARITY_NAMES + tuple(SHARED_CLAUSES):
+            profile = support.load_runtime_profile(HOME, name)
+            for runtime, prompt in support.runtime_prompts(profile).items():
+                for path in re.findall(r"~/\.codex/skills/[\w./-]+?\.\w+", prompt):
+                    with self.subTest(profile=name, runtime=runtime, path=path):
+                        target = HOME / ".codex" / path.split("~/.codex/", 1)[1]
+                        self.assertTrue(
+                            target.exists(),
+                            f"{name}/{runtime} points at {path}, which does not exist",
+                        )
 
     def test_orchestrator_readable_sections_exist_in_every_runtime_copy(self) -> None:
         # collab/SKILL.md bounds the Orchestrator's read of a receiver profile to that profile's

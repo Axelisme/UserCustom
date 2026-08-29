@@ -41,7 +41,8 @@ without duplicating either skill's checks.
     than the taxonomy's. Prefer the pointer to a second copy: duplication fails silently, a broken
     pointer fails loudly. Two limits bind the choice. A carrier consumed by authoring holds nothing —
     a ticket's template comments survive publication in 7 of this repository's 85 tickets, against
-    23 of 41 for an `INDEX.md`, which is edited section by section instead of written out once. So
+    23 of 41 for an `INDEX.md`, which is edited section by section instead of written out once
+    (both measured 2026-08-29; re-measure before resting a decision on the ratio). So
     `keep this in the published ticket` is a request and not a mechanism, and which carrier the
     rule sits in is what decides that. And readers who cannot reach each other's
     documents each need their own copy, which obliges a test that keeps the copies consistent.

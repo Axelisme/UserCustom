@@ -4,7 +4,9 @@
      Orchestrator precreates one exact target per workflow: `cp` this file to
      a fresh collision-free path under tickets/<ticket-id>/, then places that
      exact path plus covered claim IDs in both worker and review briefs. No
-     assignment grants no task-record evidence mutation.
+     assignment grants no task-record evidence mutation. When an appendix is
+     required and what a target grants are owned by
+     ~/.codex/skills/dev-flow/references/record-hygiene.md.
      One Dev-flow template owns the Subject/Evidence/Residuals spine. Do not
      duplicate this format elsewhere. The appendix binds the fixed candidate
      without judging Acceptance; the Orchestrator owns wording, state, and

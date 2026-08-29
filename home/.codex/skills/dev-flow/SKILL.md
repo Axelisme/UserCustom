@@ -103,7 +103,8 @@ declares what its own scaffolding is and when it comes down (for example
 - **A decision falls outside the task's out-of-scope boundary** → [custody](references/custody.md),
   following the `Envelope` section's pointer to its frozen artifact.
 - **You are about to create a ticket, an Acceptance appendix, a research note, a spec, or a
-  scripts container, or you are the one writing `INDEX.md`** →
+  scripts container; you are the one writing `INDEX.md`; or you are about to write durable
+  evidence of any other kind** →
   [record-hygiene](references/record-hygiene.md), which holds what stays in INDEX, the container
   shape every task already has, where each content kind lives, and the workflow-scoped Acceptance
   appendix for a difficult claim a read-only acceptor cannot reproduce.

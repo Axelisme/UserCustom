@@ -12,4 +12,4 @@ When a dispatch requests native `efficiencyFeedback`:
 
 When a dispatch does not request `efficiencyFeedback`, omit the field entirely; do not invent receipt-only content.
 
-This reference does not define JSON shape, length limits, routing isolation, storage, verdict, coverage, telemetry, or terminal projection; those remain with `home/.codex/skills/collab/runtime-pi.md` and the runtime schema.
+This reference does not define JSON shape, length limits, routing isolation, storage, verdict, coverage, telemetry, or terminal projection; those remain with `~/.codex/skills/collab/runtime-pi.md` and the runtime schema.

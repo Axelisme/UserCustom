@@ -103,7 +103,7 @@ const LANE_CREATE_POLL_MS = 25;
  * Task mutation lock Module
  *
  * Fail-fast default: withTaskLock without a bounded-wait policy attempts the filesystem lock immediately and throws task_busy if held.
- * Lane-create-only bounded-wait: only registered collab_lane_create may pass { policy: "bounded-wait", signal, timeoutMs: 10000 } to wait.
+ * Lane-create-only bounded-wait: only registered collab_lane with action create may pass { policy: "bounded-wait", signal, timeoutMs: 10000 } to wait.
  * FIFO boundary: one process-local FIFO per canonical repository control root (path.resolve) and taskId; only its head polls the ownership-safe filesystem lock at a short bounded interval; no fairness promise against another OS process.
  * Cancellation: an AbortSignal abort removes only that waiter, returns request_aborted, and advances the next eligible waiter without cancelling siblings.
  * Timeout: a fixed ten-second deadline returns the existing task_busy error with bounded wait facts (task_id, waited_ms, timeout_ms) without mutation or leaked queue state.
@@ -4911,28 +4911,6 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
       const repo = await discoverRepository(runGit, ctx.cwd, signal);
       const taskId = requireIdentifier(request.task_id, "task id");
       return withTaskLock(repo, taskId, () => handler(request, signal, ctx));
-    };
-  }
-
-  function laneCreateTaskLocked(
-    handler: (
-      request: Record<string, unknown>,
-      signal: AbortSignal | undefined,
-      ctx: ExtensionContext,
-    ) => Promise<Record<string, unknown>>,
-  ): (
-    request: Record<string, unknown>,
-    signal: AbortSignal | undefined,
-    ctx: ExtensionContext,
-  ) => Promise<Record<string, unknown>> {
-    return async (request, signal, ctx) => {
-      const repo = await discoverRepository(runGit, ctx.cwd, signal);
-      const taskId = requireIdentifier(request.task_id, "task id");
-      return withTaskLock(repo, taskId, () => handler(request, signal, ctx), {
-        policy: "bounded-wait",
-        signal,
-        timeoutMs: LANE_CREATE_BOUNDED_WAIT_MS,
-      });
     };
   }
 

@@ -50,18 +50,20 @@ assume about concurrency, caller trust, input provenance, and adversary presence
 runs in, distinct from the task's boundary above, which says which changes belong to the task rather
 than which world the code runs in.
 
+When the dispatch declares no operating assumptions, assume the narrowest model — trusted caller, no
+concurrent writer, no adversary — and report a concern that depends on a wider model through the
+non-blocking `residualRisks: string[]` channel rather than as a blocker. Absence never licenses
+expansion.
+
 The review object is the **protected current lane**: the lane's current clean state while its one
 writer is stopped. Initial review receives the runtime-owned `integrationTip` baseline; rereview
 receives the original brief, prior typed blockers and internal `correctionBase` SHA and obtains its
-delta from Git (`git diff --find-renames <base>...HEAD --`).
+delta from Git (`git diff --find-renames <base>...HEAD --`). Return `BLOCKED` when the lane is dirty,
+the writer is still active, or the criteria are missing or ambiguous.
 
 ## Preconditions
 
-When the dispatch declares no operating assumptions, assume the
-narrowest model — trusted caller, no concurrent writer, no adversary — and report a concern that
-depends on a wider model through the non-blocking `residualRisks: string[]` channel rather than as a
-blocker. Absence never licenses expansion. `residualRisks` is the unified channel for all non-blocking codebase findings (whether inside or outside the envelope); `outOfEnvelopeFindings` is removed and `efficiencyFeedback` remains process feedback only. Return `BLOCKED` when the lane is dirty,
-the writer is still active, or the criteria are missing or ambiguous.
+`residualRisks` is the unified channel for all non-blocking codebase findings (whether inside or outside the envelope); `outOfEnvelopeFindings` is removed and `efficiencyFeedback` remains process feedback only.
 
 You review read-only, in the writer's own **lane** — the one checkout, with the branch and worktree
 it owns, that carries one live writer at a time — unless the dispatch names another checkout, with no

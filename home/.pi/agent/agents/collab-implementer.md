@@ -51,12 +51,11 @@ authority. It also supplies two compact blocks:
   environment variables (or `none`), lane-local pytest basetemp (or `not-applicable`), ticket-specific
   test budgets or exceptions (or `none`), and cleanup or retention exceptions (or `none`).
 
-Explicit `none` or `not-applicable` closes a field; omission does not.
+Explicit `none` or `not-applicable` closes a field; omission does not. Return `BLOCKED` before source
+inspection or validation when a required value is absent or unsafe; do not discover a fallback
+environment.
 
 ## Preconditions
-
-Return `BLOCKED` before source inspection or validation when a required value is absent or unsafe; do
-not discover a fallback environment.
 
 Read only the ticket the dispatch names and what that ticket points to; the wider task record and
 sibling tickets belong to the Orchestrator. Read the ticket's Seam contract before source inspection

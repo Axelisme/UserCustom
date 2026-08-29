@@ -45,6 +45,21 @@ class CollabAgentProfileParityTests(unittest.TestCase):
                 claude_prompt = support.markdown_prompt(profile.claude_path)
                 self.assertNotEqual(pi_prompt, claude_prompt)
 
+    def test_orchestrator_readable_sections_exist_in_every_runtime_copy(self) -> None:
+        # collab/SKILL.md bounds the Orchestrator's read of a receiver profile to that profile's
+        # `Dispatch contract` and `Result` sections. Bodies may diverge per runtime; these two
+        # sections may not go missing, or that instruction dangles under the runtime that lacks one.
+        for name in ("collab-implementer", "collab-acceptor"):
+            profile = support.load_runtime_profile(HOME, name)
+            for runtime, prompt in support.runtime_prompts(profile).items():
+                with self.subTest(profile=name, runtime=runtime):
+                    headings = support.section_headings(prompt)
+                    self.assertIn("## Dispatch contract", headings)
+                    self.assertTrue(
+                        any(heading.startswith("## Result") for heading in headings),
+                        f"{name}/{runtime} carries no Result section: {headings}",
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()

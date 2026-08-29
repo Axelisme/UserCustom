@@ -30,7 +30,23 @@ def load_runtime_profile(home: Path, name: str) -> RuntimeProfile:
     )
 
 
+def codex_prompt(path: Path) -> str:
+    return tomllib.loads(path.read_text(encoding="utf-8"))["developer_instructions"].strip()
+
+
+def runtime_prompts(profile: RuntimeProfile) -> dict[str, str]:
+    """Every runtime's copy of one profile body, keyed by runtime."""
+    return {
+        "pi": markdown_prompt(profile.pi_path),
+        "claude": markdown_prompt(profile.claude_path),
+        "codex": codex_prompt(profile.codex_path),
+    }
+
+
+def section_headings(prompt: str) -> list[str]:
+    return [line.strip() for line in prompt.splitlines() if line.startswith("## ")]
+
+
 def assert_prompt_parity(case: unittest.TestCase, profile: RuntimeProfile) -> None:
     case.assertEqual(profile.prompt, markdown_prompt(profile.claude_path))
-    codex = tomllib.loads(profile.codex_path.read_text(encoding="utf-8"))
-    case.assertEqual(profile.prompt, codex["developer_instructions"].strip())
+    case.assertEqual(profile.prompt, codex_prompt(profile.codex_path))

@@ -97,11 +97,12 @@ def node_loader_script(repo_path: str, body: str) -> str:
         await loader.reload();
         const loaded = loader.getExtensions();
         const regs = new Map(loaded.extensions.flatMap(e => [...e.tools.entries()]));
-        const laneCreate = regs.get("collab_lane_create");
-        const laneDrop = regs.get("collab_lane_drop");
+        const collabLane = regs.get("collab_lane");
+        if (!collabLane) throw new Error("collab_lane not found");
+        const laneCreate = {{ definition: {{ execute: (id, req, signal, onUpdate, ctx) => collabLane.definition.execute(id, {{ action: "create", ...req }}, signal, onUpdate, ctx) }} }};
+        const laneDrop = {{ definition: {{ execute: (id, req, signal, onUpdate, ctx) => collabLane.definition.execute(id, {{ action: "drop", ...req }}, signal, onUpdate, ctx) }} }};
         const reportTool = regs.get("collab_report");
         const statusTool = regs.get("collab_status");
-        if (!laneCreate) throw new Error("lane_create not found");
         {body}
     """)
 
@@ -653,7 +654,9 @@ exec "$real_git" "$@"
                       const l = new DefaultResourceLoader({{ cwd, agentDir: cwd+"/.empty-pi-agent", additionalExtensionPaths: [extensionPath], settingsManager }});
                       await l.reload();
                       const regs = new Map(l.getExtensions().extensions.flatMap(e=>[...e.tools.entries()]));
-                      return regs.get("collab_lane_create");
+                      const collabLane = regs.get("collab_lane");
+                      if (!collabLane) throw new Error("collab_lane not found");
+                      return {{ definition: {{ execute: (id, req, signal, onUpdate, ctx) => collabLane.definition.execute(id, {{ action: "create", ...req }}, signal, onUpdate, ctx) }} }};
                     }}
                     const toolA = await loaderFor(repoAPath);
                     const toolB = await loaderFor(repoBPath);

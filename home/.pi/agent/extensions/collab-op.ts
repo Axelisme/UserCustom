@@ -4708,48 +4708,23 @@ const registeredLaneComment = {
   type: "string",
   minLength: 1,
   maxLength: 500,
-  description: "Optional trimmed comment of 1-500 Unicode characters without control characters.",
+  description: "Optional for create only: trimmed 1-500 Unicode characters without control characters.",
 } as const;
 
-const registeredLaneCreateParameters = {
+const registeredLaneParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    action: {
+      type: "string",
+      enum: ["create", "reconcile", "collect", "drop"],
+      description: "Lane action to perform.",
+    },
     task_id: registeredTaskId,
     lane_id: registeredLaneId,
     comment: registeredLaneComment,
   },
-  required: ["task_id", "lane_id"],
-} as const;
-
-const registeredLaneReconcileParameters = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    task_id: registeredTaskId,
-    lane_id: registeredLaneId,
-  },
-  required: ["task_id", "lane_id"],
-} as const;
-
-const registeredLaneCollectParameters = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    task_id: registeredTaskId,
-    lane_id: registeredLaneId,
-  },
-  required: ["task_id", "lane_id"],
-} as const;
-
-const registeredLaneDropParameters = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    task_id: registeredTaskId,
-    lane_id: registeredLaneId,
-  },
-  required: ["task_id", "lane_id"],
+  required: ["action", "task_id", "lane_id"],
 } as const;
 
 const registeredIntegrationCreateParameters = {
@@ -5206,127 +5181,93 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerTool({
-    name: "collab_lane_create",
-    label: "Create Collab lane",
-    description: "Create a Git-managed lane from the current integration tip.",
-    parameters: registeredLaneCreateParameters,
-    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
-      const result = await executeRegisteredTool(
-        request as Record<string, unknown>,
-        ctx,
-        (value, innerSignal, innerCtx) => {
-          const params = validateRegisteredRequest(
-            value,
-            "collab_lane_create",
-            ["task_id", "lane_id"],
-            ["task_id", "lane_id", "comment"],
-          );
-          return laneCreateTaskLocked((lockedRequest, lockedSignal, lockedCtx) =>
-            laneCreate(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((created) =>
-              registeredMutationResult(created),
-            ),
-          )(params, innerSignal, innerCtx);
-        },
-        signal,
-      );
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        details: result,
-      };
-    },
-  });
-
-  pi.registerTool({
-    name: "collab_lane_reconcile",
-    label: "Reconcile Collab lane",
-    description: "Reconcile the current integration tip into a Git-managed lane.",
-    parameters: registeredLaneReconcileParameters,
-    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
-      const result = await executeRegisteredTool(
-        request as Record<string, unknown>,
-        ctx,
-        (value, innerSignal, innerCtx) => {
-          const params = validateRegisteredRequest(
-            value,
-            "collab_lane_reconcile",
-            ["task_id", "lane_id"],
-            ["task_id", "lane_id"],
-          );
-          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
-            laneReconcile(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((reconciled) =>
-              registeredMutationResult(reconciled, ["state"]),
-            ),
-          )(params, innerSignal, innerCtx);
-        },
-        signal,
-      );
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        details: result,
-      };
-    },
-  });
-
-  pi.registerTool({
-    name: "collab_lane_collect",
-    label: "Collect Collab lane",
+    name: "collab_lane",
+    label: "Manage Collab lane",
     description:
-      "Collect a Git-managed lane using its current lane and integration tips. On success this " +
-      "retires the lane by force-removing its worktree, so any untracked or ignored files left " +
-      "there are lost. If the worktree still has tracked changes or an active merge or conflict " +
-      "state, the lane is kept instead of removed, and a warning is returned.",
-    parameters: registeredLaneCollectParameters,
+      "Manage a task lane. `create` makes a branch and worktree at the integration tip (optional comment only for create). `reconcile` merges integration into the lane. `collect` fast-forwards integration to the lane tip and force-retires the lane worktree — untracked or ignored files there are lost, tracked dirt or merge conflict keeps the lane with a warning. `drop` force-retires the lane without collecting, discarding uncollected work and warning if dirty, conflicted or incomplete.",
+    parameters: registeredLaneParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        async (value, innerSignal, innerCtx) => {
           const params = validateRegisteredRequest(
             value,
-            "collab_lane_collect",
-            ["task_id", "lane_id"],
-            ["task_id", "lane_id"],
+            "collab_lane",
+            ["action", "task_id", "lane_id"],
+            ["action", "task_id", "lane_id", "comment"],
           );
-          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
-            laneCollect(runGit, lockedCtx.cwd, lockedRequest, lockedSignal, true).then((collected) =>
-              registeredMutationResult(collected, ["state"]),
-            ),
-          )(params, innerSignal, innerCtx);
-        },
-        signal,
-      );
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        details: result,
-      };
-    },
-  });
-
-  pi.registerTool({
-    name: "collab_lane_drop",
-    label: "Drop Collab lane",
-    description: "Best-effort force-removal of a Git-managed lane and its recognizable resources.",
-    parameters: registeredLaneDropParameters,
-    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
-      const result = await executeRegisteredTool(
-        request as Record<string, unknown>,
-        ctx,
-        (value, innerSignal, innerCtx) => {
-          const params = validateRegisteredRequest(
-            value,
-            "collab_lane_drop",
-            ["task_id", "lane_id"],
-            ["task_id", "lane_id"],
-          );
-          return taskLocked(async (lockedRequest, lockedSignal, lockedCtx) => {
-            const repo = await discoverRepository(runGit, lockedCtx.cwd, lockedSignal);
-            const taskId = requireIdentifier(lockedRequest.task_id, "task id");
-            const laneId = requireLaneId(lockedRequest.lane_id);
+          const action = params.action as string;
+          if (!["create", "reconcile", "collect", "drop"].includes(action)) {
+            throw new CollabOpError(
+              "invalid_parameters",
+              "action must be one of create, reconcile, collect, drop",
+              "Pass action as create, reconcile, collect, or drop.",
+              { action },
+            );
+          }
+          if (params.comment !== undefined && action !== "create") {
+            throw new CollabOpError(
+              "invalid_parameters",
+              "comment is only valid for action create",
+              "Omit comment for reconcile, collect, and drop, or use action create.",
+              { action },
+            );
+          }
+          if (action === "create") {
+            const repo = await discoverRepository(runGit, innerCtx.cwd, innerSignal);
+            const taskId = requireIdentifier(params.task_id, "task id");
+            return withTaskLock(
+              repo,
+              taskId,
+              async () => {
+                const created = await laneCreate(
+                  runGit,
+                  innerCtx.cwd,
+                  { task_id: params.task_id, lane_id: params.lane_id, comment: params.comment },
+                  innerSignal,
+                );
+                return registeredMutationResult(created);
+              },
+              { policy: "bounded-wait", signal: innerSignal, timeoutMs: LANE_CREATE_BOUNDED_WAIT_MS },
+            );
+          }
+          if (action === "reconcile") {
+            const repo = await discoverRepository(runGit, innerCtx.cwd, innerSignal);
+            const taskId = requireIdentifier(params.task_id, "task id");
+            return withTaskLock(repo, taskId, async () => {
+              const reconciled = await laneReconcile(
+                runGit,
+                innerCtx.cwd,
+                { task_id: params.task_id, lane_id: params.lane_id },
+                innerSignal,
+              );
+              return registeredMutationResult(reconciled, ["state"]);
+            });
+          }
+          if (action === "collect") {
+            const repo = await discoverRepository(runGit, innerCtx.cwd, innerSignal);
+            const taskId = requireIdentifier(params.task_id, "task id");
+            return withTaskLock(repo, taskId, async () => {
+              const collected = await laneCollect(
+                runGit,
+                innerCtx.cwd,
+                { task_id: params.task_id, lane_id: params.lane_id },
+                innerSignal,
+                true,
+              );
+              return registeredMutationResult(collected, ["state"]);
+            });
+          }
+          const repo = await discoverRepository(runGit, innerCtx.cwd, innerSignal);
+          const taskId = requireIdentifier(params.task_id, "task id");
+          return withTaskLock(repo, taskId, async () => {
+            const laneId = requireLaneId(params.lane_id);
             const task = new TaskLayout(repo, taskId);
-            const inventory = await laneInventory(repo, task, laneId, lockedSignal);
-            const dropped = await laneAbandon(repo, task, laneId, inventory, lockedSignal);
+            const inventory = await laneInventory(repo, task, laneId, innerSignal);
+            const dropped = await laneAbandon(repo, task, laneId, inventory, innerSignal);
             return registeredMutationResult(dropped);
-          })(params, innerSignal, innerCtx);
+          });
         },
         signal,
       );

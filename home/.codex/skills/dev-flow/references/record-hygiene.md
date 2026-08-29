@@ -43,10 +43,15 @@ splitting the record. Everything that ticket produces sits beside it: `admission
 `validation.md`, `acceptance.md`, `gate-<timestamp>.log`, whatever the work actually needed. One
 ticket, one directory, and `ls` over it is that ticket's whole story.
 
-Start a ticket by copying `templates/ticket/ticket.md` to `tickets/<ticket-id>/ticket.md`, and each
-piece of evidence by copying `templates/ticket/evidence.md` beside it — that template carries the
-Subject / Evidence / Residuals spine every evidence kind shares, and the situational sections are
-yours to add. Copy an evidence file when you are ready to write it: an empty `validation.md` sitting
+Start a ticket by copying `templates/ticket/ticket.md` to `tickets/<ticket-id>/ticket.md` and
+filling its placeholders. An evidence file needs no placeholder filling, so copy it as a copy:
+
+```
+cp ~/.codex/skills/dev-flow/templates/ticket/evidence.md <task>/tickets/<ticket-id>/<name>.md
+```
+
+That template carries the Subject / Evidence / Residuals spine every evidence kind shares, and the
+situational sections are yours to add. Copy an evidence file when you are ready to write it: an empty `validation.md` sitting
 in a ticket directory reads as validation that exists, so let absence stay honest.
 
 The filesystem is the inventory; a second inventory drifts. That holds only while every file is

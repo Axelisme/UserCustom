@@ -1,4 +1,4 @@
-# {{TICKET_ID}} — Acceptance appendix
+# Acceptance appendix
 
 <!-- Workflow-scoped Acceptance appendix for named difficult claims.
      Orchestrator precreates one exact target per workflow by copying this

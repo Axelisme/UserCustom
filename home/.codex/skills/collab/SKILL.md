@@ -186,7 +186,7 @@ never carries codebase findings and never affects verdicts, budgets, or routing.
 Results state only role-relevant routing, risks, and stop reasons, without restating ticket prose,
 command output, or evidence the ticket, Git, or the run artifact already own.
 
-## Generic Acceptance — read-only, production-reachable blockers only
+## Generic Acceptance
 
 Ordinary Generic Acceptance reviews the protected current lane: the writer is stopped, the lane is
 clean, and the acceptor reads its current state directly, read-only. Bash use is limited to read-only retrieval (`git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find`, Grove); it excludes pytest, type/lint/format gates, Python/import probes and runtime/process workflows. The acceptor does not execute mechanical gates; it judges ticket gate coverage and the Acceptance claims no gate proved. It returns only, in this order:
@@ -211,7 +211,7 @@ contracts and produce separate Standards/Spec findings rather than a PASS/BLOCKE
 When delegated red/green validation needs several commands, a fixed working directory, or owned
 temporary state, use [TDD Gate mode](../tdd/gate.md). Keep a one-command loop direct.
 
-## Review placement and the correction loop — initial review versus rereview
+## Review placement and the correction loop
 
 Boundary 2 decides whether a reviewer is placed at all. This section governs the review once one is.
 

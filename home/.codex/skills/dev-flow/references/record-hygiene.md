@@ -75,3 +75,16 @@ It must record 5W1H and be authored by its execution owner:
 - **How:** shipped entry point, bounded inputs, script or MCP sequence, judgement and cleanup method; when a task-record script is used, record its path and SHA-256.
 
 Durable script/MCP/production validation binds exact candidate, environment, covered claims, method, observations, limitations and cleanup; referenced task-record scripts include path and SHA-256. Evidence uses the `Subject / Evidence / Residuals` shape from `templates/ticket/evidence.md`; large logs and transcripts remain outside the evidence body with bounded pointers. Only `evidence.md` owns that Subject/Evidence/Residuals spine; do not duplicate it.
+
+## Workflow-scoped Acceptance appendix
+
+For named difficult claims that a read-only acceptor cannot adequately reproduce, the Orchestrator
+copies `templates/ticket/evidence.md` to one fresh exact target under the ticket directory before
+dispatch and places that exact path plus covered claim IDs in both role briefs. The worker may mutate
+only that exact target, binding the fixed candidate and covered claims to method, observations,
+artifact pointers when needed, and explicit limitations without judging Acceptance; if a required
+appendix cannot be completed, `COMPLETED` is unavailable. A dispatch without an assigned target
+grants no task-record evidence mutation. Automatic corrections update the same target sequentially
+for the latest candidate; a later separately dispatched workflow receives a fresh target and leaves
+earlier workflow evidence unchanged. The acceptor stays read-only, directly checks observable claims,
+and judges only whether the appendix describes a reasonable process for the covered difficult claims.

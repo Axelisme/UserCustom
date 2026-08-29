@@ -42,7 +42,6 @@ export class TaskLayout {
   readonly integrationBaseRef: string;
   readonly integrationPath: string;
   readonly persistenceRef: string;
-  readonly landedRef: string;
 
   constructor(
     readonly repo: Repository,
@@ -53,7 +52,6 @@ export class TaskLayout {
     this.integrationBaseRef = `refs/orchestrate/${taskId}/integration/base`;
     this.integrationPath = path.join(this.root, "integration");
     this.persistenceRef = `refs/orchestrate/${taskId}/persistence`;
-    this.landedRef = `refs/orchestrate/${taskId}/landed`;
   }
 
   laneBranch(laneId: string): string {
@@ -1270,12 +1268,11 @@ async function integrationAdopt(
   const sourceWasCanonical = sourceBranch.name === task.integrationBranch;
   const integrationRef = `refs/heads/${task.integrationBranch}`;
   const persistTarget = persistBranch.ref;
-  const allowedRefs = new Set([task.integrationBaseRef, task.persistenceRef, task.landedRef]);
+  const allowedRefs = new Set([task.integrationBaseRef, task.persistenceRef]);
 
   if (!sourceWasCanonical) {
-    const nonLegacyOwnedRefs = inventory.ownedRefs.filter((ref) => ref !== task.landedRef);
     if (
-      nonLegacyOwnedRefs.length > 0 ||
+      inventory.ownedRefs.length > 0 ||
       inventory.ownedBranches.length > 0 ||
       inventory.registeredUnderRoot.length > 0 ||
       inventory.rootMetadata !== null ||
@@ -1416,28 +1413,6 @@ async function integrationAdopt(
   }
 
   const warnings: string[] = [];
-  // S3 legacy ref lifecycle: delete an existing landed ref as tolerated migration state
-  try {
-    const landedNames = await refNames(controlRepository(repo), task.landedRef, signal);
-    const hasLanded = landedNames.includes(task.landedRef);
-    const hasDescendant = landedNames.some((n) => n !== task.landedRef && n.startsWith(`${task.landedRef}/`));
-    if (hasDescendant) {
-      warnings.push(`legacy landed ref has colliding descendant; retained for manual review: ${task.landedRef}`);
-    } else if (hasLanded) {
-      const symbolic = await symbolicRefTarget(controlRepository(repo), task.landedRef, signal);
-      if (symbolic !== null) {
-        warnings.push(`legacy landed ref is symbolic; retained for manual review: ${task.landedRef}`);
-      } else {
-        const landedVal = await commitAt(controlRepository(repo), task.landedRef, signal);
-        if (landedVal !== null) {
-          const del = await repo.git(mutationCwd(repo), ["update-ref", "-d", task.landedRef, landedVal], signal);
-          if (del.code !== 0) warnings.push(`legacy landed ref could not be deleted: ${boundedGitText(del.stderr || del.stdout)}`);
-        }
-      }
-    }
-  } catch (error) {
-    warnings.push(`legacy landed ref cleanup failed: ${boundedGitText(error instanceof Error ? error.message : String(error))}`);
-  }
   const telemetryWarning = await recordEvent(task, "integration-adopt", "success", {
     subject_sha: sourceSha,
     source_branch: sourceBranch.name,
@@ -3516,111 +3491,6 @@ async function restoreLandingWorktree(
   );
 }
 
-async function rollbackLanding(
-  repo: Repository,
-  task: TaskLayout,
-  persistBranch: { ref: string },
-  persistencePath: string,
-  beforeSha: string,
-  beforeTree: string,
-  oursTree: string,
-  transitionPaths: readonly string[],
-  worktreeSnapshot: LandingWorktreeSnapshot,
-  landingSha: string | null,
-  previousLanded: string | null,
-  signal?: AbortSignal,
-): Promise<Record<string, unknown>> {
-  const evidence: Record<string, unknown> = {
-    persistence_sha_before: beforeSha,
-    landing_sha: landingSha,
-  };
-  let branchRestored = false;
-  let landedRestored = false;
-  let worktreeRestored = false;
-  let snapshotRestored = false;
-  try {
-    const current = await commitAt(controlRepository(repo), persistBranch.ref, signal);
-    if (current === beforeSha) {
-      branchRestored = true;
-    } else if (current !== null) {
-      const restored = await repo.git(
-        mutationCwd(repo),
-        ["update-ref", "--no-deref", persistBranch.ref, beforeSha, current],
-        signal,
-      );
-      branchRestored = restored.code === 0;
-      if (!branchRestored) {
-        evidence.persistence_ref_restore_error = boundedGitText(restored.stderr || restored.stdout);
-      }
-    } else {
-      evidence.persistence_ref_restore_error = "persistence branch disappeared during landing";
-    }
-  } catch (error) {
-    evidence.persistence_ref_restore_error = boundedGitText(error instanceof Error ? error.message : String(error));
-  }
-  try {
-    const currentLanded = await commitAt(controlRepository(repo), task.landedRef, signal);
-    if (currentLanded === previousLanded) {
-      landedRestored = true;
-    } else if (currentLanded !== null) {
-      const restored = previousLanded === null
-        ? await repo.git(
-            mutationCwd(repo),
-            ["update-ref", "--no-deref", "-d", task.landedRef, currentLanded],
-            signal,
-          )
-        : await repo.git(
-            mutationCwd(repo),
-            ["update-ref", "--no-deref", task.landedRef, previousLanded, currentLanded],
-            signal,
-          );
-      landedRestored = restored.code === 0;
-      if (!landedRestored) {
-        evidence.landed_ref_restore_error = boundedGitText(restored.stderr || restored.stdout);
-      }
-    } else if (previousLanded === null) {
-      landedRestored = true;
-    } else {
-      evidence.landed_ref_restore_error = "landed ref disappeared during landing";
-    }
-  } catch (error) {
-    evidence.landed_ref_restore_error = boundedGitText(error instanceof Error ? error.message : String(error));
-  }
-  try {
-    await restoreLandingWorktree(repo, persistencePath, oursTree, beforeTree, transitionPaths, signal);
-    worktreeRestored = true;
-  } catch (error) {
-    evidence.worktree_restore_error = boundedGitText(error instanceof Error ? error.message : String(error));
-  }
-  try {
-    await restoreLandingSnapshot(persistencePath, worktreeSnapshot);
-    snapshotRestored = true;
-  } catch (error) {
-    evidence.path_snapshot_restore_error = boundedGitText(error instanceof Error ? error.message : String(error));
-  }
-  try {
-    evidence.persistence_sha_after = await commitAt(controlRepository(repo), persistBranch.ref, signal);
-    evidence.landed_sha_after = await commitAt(controlRepository(repo), task.landedRef, signal);
-    evidence.persistence_index_tree = await requireGit(
-      repo.git,
-      persistencePath,
-      ["write-tree"],
-      signal,
-    );
-  } catch (error) {
-    evidence.verification_error = boundedGitText(error instanceof Error ? error.message : String(error));
-  }
-  evidence.restored =
-    branchRestored &&
-    landedRestored &&
-    worktreeRestored &&
-    snapshotRestored &&
-    evidence.persistence_sha_after === beforeSha &&
-    evidence.landed_sha_after === previousLanded &&
-    evidence.persistence_index_tree === beforeTree;
-  return evidence;
-}
-
 async function integrationLand(
   run: GitRunner,
   cwd: string,
@@ -3764,29 +3634,7 @@ async function integrationLand(
       { expected: afterSha, persistence: persisted, integration: integrated },
     );
   }
-  // S3 legacy ref lifecycle: delete an existing landed ref if safely within authority
   const warnings: string[] = [];
-  try {
-    const landedNames = await refNames(controlRepository(repo), task.landedRef, signal);
-    const hasLanded = landedNames.includes(task.landedRef);
-    const hasDescendant = landedNames.some((n) => n !== task.landedRef && n.startsWith(`${task.landedRef}/`));
-    if (hasDescendant) {
-      warnings.push(`legacy landed ref has colliding descendant; retained for manual review: ${task.landedRef}`);
-    } else if (hasLanded) {
-      const symbolic = await symbolicRefTarget(controlRepository(repo), task.landedRef, signal);
-      if (symbolic !== null) {
-        warnings.push(`legacy landed ref is symbolic; retained for manual review: ${task.landedRef}`);
-      } else {
-        const landedVal = await commitAt(controlRepository(repo), task.landedRef, signal);
-        if (landedVal !== null) {
-          const del = await repo.git(mutationCwd(repo), ["update-ref", "-d", task.landedRef, landedVal], signal);
-          if (del.code !== 0) warnings.push(`legacy landed ref could not be deleted: ${boundedGitText(del.stderr || del.stdout)}`);
-        }
-      }
-    }
-  } catch (error) {
-    warnings.push(`legacy landed ref cleanup failed: ${boundedGitText(error instanceof Error ? error.message : String(error))}`);
-  }
   const telemetryWarning = await recordEvent(task, "integration-land", "success", {
     integration_sha: integrationSha,
     persistence_sha: afterSha,
@@ -3841,7 +3689,6 @@ type RemovalReportSnapshot = {
   baseSha: string | null;
   integrationSha: string | null;
   integrationDiff: Record<string, unknown> | null;
-  landedSha: string | null;
 };
 
 async function computeLaneLoopCoverage(repoControlRoot: string, taskId: string): Promise<{ coverage: Record<string, unknown>; warnings: string[] }> {
@@ -4223,8 +4070,7 @@ async function captureRemovalReportSnapshot(
     );
     integrationDiff = { base_sha: baseSha, integration_sha: integrationSha, commits, files };
   }
-  const landedSha = await commitAt(controlRepository(task.repo), task.landedRef, signal);
-  return { telemetry, baseSha, integrationSha, integrationDiff, landedSha };
+  return { telemetry, baseSha, integrationSha, integrationDiff };
 }
 
 async function writeRemovalReport(
@@ -4283,9 +4129,6 @@ async function writeRemovalReport(
       }
     }
   }
-  const authorities = {
-    landed: captured.landedSha,
-  };
   const taskTiming = times.length
     ? {
         started_at: new Date(Math.min(...times)).toISOString(),
@@ -4300,7 +4143,6 @@ async function writeRemovalReport(
     ...facts,
     counts: { operations: operationCounts, outcomes: outcomeCounts },
     integration_diff: captured.integrationDiff,
-    authorities,
     lane_durations: laneDurations,
     task_timing: taskTiming,
     warnings: reportWarnings,
@@ -4380,7 +4222,6 @@ async function collabReport(
       facts: {
         integration_sha: reportSnapshot.integrationSha,
         base_sha: reportSnapshot.baseSha,
-        landed_sha: reportSnapshot.landedSha,
         lanes,
         warnings,
         lane_loop_coverage: coverage,
@@ -4443,7 +4284,7 @@ async function integrationRemoveBestEffort(
   const integrationBranchRef = `refs/heads/${task.integrationBranch}`;
   const hasRecognizableTaskResource =
     inventory.ownedRefs.some(
-      (ref) => ref === task.integrationBaseRef || ref === task.persistenceRef || ref === task.landedRef,
+      (ref) => ref === task.integrationBaseRef || ref === task.persistenceRef,
     ) ||
     inventory.ownedBranches.some((ref) => ref === integrationBranchRef || laneIdFromRef(ref, `refs/heads/wave/${task.taskId}/`) !== null) ||
     inventory.registeredUnderRoot.length > 0;
@@ -4508,7 +4349,7 @@ async function integrationRemoveBestEffort(
     warnings.push(`integration branch: ${boundedGitText(error instanceof Error ? error.message : String(error))}`);
   }
 
-  const removableRefs = [task.integrationBaseRef, task.landedRef];
+  const removableRefs = [task.integrationBaseRef];
   for (const ref of removableRefs) {
     try {
       const names = await refNames(controlRepository(repo), ref, signal);
@@ -4552,7 +4393,7 @@ async function integrationRemoveBestEffort(
     warnings.push(`persistence ref: ${boundedGitText(error instanceof Error ? error.message : String(error))}`);
   }
 
-  const knownRefs = new Set([task.integrationBaseRef, task.persistenceRef, task.landedRef]);
+  const knownRefs = new Set([task.integrationBaseRef, task.persistenceRef]);
   const unknownRefs = inventory.ownedRefs.filter((ref) => !knownRefs.has(ref));
   if (unknownRefs.length > 0) {
     warnings.push(`unrecognized task refs retained: ${unknownRefs.slice(0, 8).join(", ")}`);

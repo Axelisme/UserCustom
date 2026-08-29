@@ -173,3 +173,12 @@ hand-maintained list could perform on itself.
     rests on where the rule uses it. An undefined one does not read as missing: each agent supplies
     a plausible meaning and obeys the rule it invented, so the defect surfaces as inconsistent
     behaviour rather than as a question.
+19. **`ask-matt`'s implement/collab routing sentence names a task-level fork** — upstream has no
+    such fork, and the sentence previously pointed at a per-ticket criterion in `dev-flow` that this
+    fleet retired for never firing: across three archived tasks, 39 tickets dispatched and not one
+    of them by that criterion. The replacement names the fork this fleet makes once per task — a
+    task owning a managed integration runs its tickets through `collab`, one without works them
+    through `implement` — and points at `dev-flow`'s `Jurisdiction`, which owns it. The clause
+    offering `/collab` as something to reach for when you want delegated review goes with it:
+    `collab` is the ordinary path here, not an option. Deviation 14 reaches only the validation
+    criterion in the router's `/implement` sentence, not this one.

@@ -12,7 +12,7 @@ intent, acceptance criteria, final Acceptance judgement, and every scope or auth
 ## Workflow root
 
 This profile is the complete workflow root for the generic collab-acceptor, governing the run from
-Preconditions through Result. Placement is the checkout named by the dispatch and its writer
+`Dispatch contract` through `Result`. Placement is the checkout named by the dispatch and its writer
 activity state; lifecycle is the review boundary and cleanup owner supplied by the dispatch; authority
 is the read-only review scope supplied by the dispatch. Repository instructions already present in
 inherited effective project context are governing job inputs; do not reopen or duplicate their files
@@ -21,7 +21,10 @@ inspect; this profile supplies workflow guidance. An internal profile pointer na
 workflow document and states its enabling condition; follow a pointer only when that condition applies. The Orchestrator selects specialized review as
 a separate dispatch; this generic route reviews the protected current lane here.
 
-## Preconditions
+## Dispatch contract
+
+The Orchestrator's Interface to this role. With `Result`, it is the whole of this profile the
+Orchestrator reads; every other section is this role's own workflow.
 
 The dispatch identifies the repository or cwd, ticket expectations or Interface promises,
 validation expectations, and review placement. A module's declared Interface — the invariants,
@@ -34,12 +37,22 @@ already carry. This input is optional; a ticket routed through the lightweight i
 may carry none. The dispatch may also declare **operating assumptions**: what the reviewer may
 assume about concurrency, caller trust, input provenance, and adversary presence — the world the code
 runs in, distinct from the task's boundary above, which says which changes belong to the task rather
-than which world the code runs in. When the dispatch declares no operating assumptions, assume the
-narrowest model — trusted caller, no concurrent writer, no adversary — and report a concern that
-depends on a wider model through the non-blocking `residualRisks: string[]` channel rather than as a
-blocker. `residualRisks` is the unified channel for all non-blocking codebase findings; `outOfEnvelopeFindings` is removed and `efficiencyFeedback` remains process feedback only. Initial review receives the runtime-owned `integrationTip` baseline; rereview receives the original brief, prior typed blockers and internal `correctionBase` SHA and obtains its delta from Git (`git diff --find-renames <base>...HEAD --`). Absence never licenses expansion. The review object is the **protected current lane**: the
-lane's current clean state while its one writer is stopped. Return `BLOCKED` when the lane is dirty,
+than which world the code runs in.
+
+When the dispatch declares no operating assumptions, assume the narrowest model — trusted caller, no
+concurrent writer, no adversary — and report a concern that depends on a wider model through the
+non-blocking `residualRisks: string[]` channel rather than as a blocker. Absence never licenses
+expansion.
+
+The review object is the **protected current lane**: the lane's current clean state while its one
+writer is stopped. Initial review receives the runtime-owned `integrationTip` baseline; rereview
+receives the original brief, prior typed blockers and internal `correctionBase` SHA and obtains its
+delta from Git (`git diff --find-renames <base>...HEAD --`). Return `BLOCKED` when the lane is dirty,
 the writer is still active, or the criteria are missing or ambiguous.
+
+## Preconditions
+
+`residualRisks` is the unified channel for all non-blocking codebase findings; `outOfEnvelopeFindings` is removed and `efficiencyFeedback` remains process feedback only.
 
 You review read-only, in the writer's own **lane** — the one checkout, with the branch and worktree
 it owns, that carries one live writer at a time — unless the dispatch names another checkout, with no

@@ -7,7 +7,7 @@ state: pending
 <!-- Copy this to tickets/<ticket-id>/ticket.md. The frontmatter `id` must equal that directory name.
      This ticket's durable evidence lives beside this file in the same directory — copy
      the evidence.md beside this template for each piece — and the whole directory is what closure
-     discharges. Guiding script location: `<ticket>/scripts/` for the assigned writer's helpers (Orchestrator owns `<task>/scripts/`, acceptor read-only; no cleanup/graduation/dedup policy). The Orchestrator owns this ticket. Keep state pending until the Orchestrator resolves the ticket;
+     discharges. Guiding script location: `<ticket>/scripts/` for the assigned writer's helpers; the Orchestrator owns `<task>/scripts/` and the acceptor is read-only. The Orchestrator owns this ticket. Keep state pending until the Orchestrator resolves the ticket;
      only the Orchestrator sets state closed or writes Resolution. -->
 
 | Ticket field | Value |
@@ -31,8 +31,7 @@ state: pending
 <!-- The Orchestrator owns this whole checklist and may revise it. Start every claim unchecked: unchecked
      means unproven, not necessarily that an executable test is red. Name an Orchestrator, user, manual,
      external, or production-path observer when it is not obvious. Stable labels are encouraged but
-     optional. A delegated writer may only toggle claims explicitly assigned to it; a reviewer is
-     read-only. A worker-reviewer loop is complete when every delegated claim is verified; its
+     optional. A worker-reviewer loop is complete when every delegated claim is verified; its
      handoff reports remaining Orchestrator or user observations without treating them as blockers. -->
 - [ ] **A1** — <observable criterion>
 
@@ -40,6 +39,11 @@ state: pending
 <!-- Ordered binary gate plan owned by this ticket. Every listed gate must pass before `COMPLETED`.
      Do not duplicate repository-owned commands: use pointer or existing owner, only add ticket-specific gates and execution order.
      Implementer runs in order: focused (or explicitly failing) → affected → formatter/style (re-run affected after any mutation) → broader/full.
+     That order is this section's own rule and the implementer reads it here; keep the line in the published ticket.
+     Gate-mapping test (canonical definition: ~/.codex/skills/collab/SKILL.md boundary 2): an
+     Acceptance claim above is mechanically provable iff some listed gate below's pass/fail is
+     exactly that claim. Map each claim while drafting this list; any claim left unmapped means an
+     acceptor is dispatched for this ticket.
      Example gates (replace with ticket-specific ones): -->
 - [ ] Focused behavior gates for changed reviewed-workflow schema and prompt composition
 - [ ] Affected TypeScript/JavaScript static checks and profile/configuration format checks

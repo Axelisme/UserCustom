@@ -133,8 +133,8 @@ class Pi56EnvelopeTests(unittest.TestCase):
     def test_rereview_ordinary_failure_retries_and_preserves_budget(self):
         script, expected, _ = self._launch_and_get_script(correction_budget=1)
         worker = {"outcome": "COMPLETED", "residualRisks": ["bounded"]}
-        blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "outOfEnvelopeFindings": []}
-        passed = {"verdict": "PASS", "outOfEnvelopeFindings": []}
+        blocked = {"verdict": "BLOCKED", "blockers": [{"where": "x", "why": "y", "howToFix": "z", "trigger": "t"}], "correctionBase": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", "residualRisks": []}
+        passed = {"verdict": "PASS", "residualRisks": []}
         steps = [
             completed_step(worker),
             blocked,
@@ -152,7 +152,8 @@ class Pi56EnvelopeTests(unittest.TestCase):
             self.assertEqual(opts["context"], "fresh")
         tasks = [next(c["options"]["task"] for c in data["calls"] if c["key"] == k) for k in ("review-1", "review-1-retry-1")]
         self.assertEqual(tasks[0], tasks[1])
-        self.assertIn(expected["integration_head"], tasks[0])
+        self.assertIn(blocked["correctionBase"], tasks[0])
+        self.assertIn(f"git diff --find-renames {blocked['correctionBase']}...HEAD --", tasks[0])
         self.assertIn("complete current lane diff", tasks[0])
         self.assertEqual([c["key"] for c in data["calls"] if c["key"].startswith("impl-")], ["impl-0", "impl-1"])
 

@@ -86,8 +86,8 @@ that authority, return `NEEDS_DECISION`; another document cannot silently substi
 ## Publication and change control
 
 The Orchestrator exclusively owns mode selection, seam prose, `S#` placement, graduation, and
-Acceptance wording. Writers may toggle only explicitly delegated Acceptance checkboxes. Reviewers
-remain read-only. A correction blocker does not authorize either role to amend the contract.
+Acceptance wording. A correction blocker does not authorize a writer or a reviewer to amend the
+contract.
 
 Stop publication or dispatch when the mode is missing, unresolved, or a placeholder; an authority
 pointer does not resolve; a Change `S#` lacks an `A# covers S#` observer; graduation has an empty

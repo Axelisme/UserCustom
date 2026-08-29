@@ -188,7 +188,6 @@ def seed_managed_task(repository: Path, task_id: str = "demo") -> dict[str, str]
         str(lane),
         integration_head,
     )
-    git(repository, "update-ref", f"refs/orchestrate/{task_id}/landed", base)
     return {
         "base": base,
         "integration_head": integration_head,
@@ -3003,7 +3002,7 @@ def assert_transition_landed(
     repository = scenario.repository
     expected_tree = git(repository, "rev-parse", f"{scenario.integration_head}^{{tree}}")
     test.assertFalse(observed["is_error"])
-    # S3: landed ref must not be created; legacy is deleted
+    # S3: no landed ref is created
     result = subprocess.run(
         ["git", "-C", str(repository), "rev-parse", "--verify", "--quiet", "refs/orchestrate/demo/landed"],
         capture_output=True,
@@ -3046,14 +3045,6 @@ def assert_transition_refused(
     test.assertEqual(
         git(repository, "status", "--porcelain=v1", "--ignored=matching"), scenario.before_status
     )
-    # S3: legacy landed tolerated, remains at base after refusal (not deleted)
-    # Check landed still at base if it existed before
-    result = subprocess.run(
-        ["git", "-C", str(repository), "rev-parse", "--verify", "--quiet", "refs/orchestrate/demo/landed"],
-        capture_output=True,
-    )
-    if result.returncode == 0:
-        test.assertEqual(git(repository, "rev-parse", "refs/orchestrate/demo/landed"), scenario.base)
     test.assertEqual(
         git(repository, "rev-parse", "wave/demo/integration"), scenario.integration_head
     )
@@ -3091,7 +3082,7 @@ def ignored_landing_collision(temporary: str | Path, shape: str) -> LandingTrans
 
 
 class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase):
-    def test_land_default_commit_preserves_dirt_and_records_landed_identity(self) -> None:
+    def test_land_default_commit_preserves_dirt(self) -> None:
         # S4: native checkout requires clean persistence; unstaged and ordinary untracked must be refused before merge
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
@@ -3112,7 +3103,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             self.assertIn(observed["error"]["error"]["code"], ("dirty_worktree", "path_collision"))
             self.assertEqual(managed_ref_snapshot(repository), before_refs)
             self.assertEqual(git(repository, "rev-parse", "HEAD"), before_head)
-            # Clean and retry should succeed with native merge topology (S1) and no landed ref (S3)
+            # Clean and retry should succeed with native merge topology (S1) and no landed ref
             git(repository, "restore", "stable.txt")
             (repository / "untracked.txt").unlink()
             observed2 = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
@@ -4733,7 +4724,7 @@ class CollabOpT07FeedbackTests(unittest.TestCase):
             ("impl-0", {"outcome": "BLOCKED", "blocker": "b", "efficiencyFeedback": "fb_impl_blocked"}),
             ("impl-0", {"outcome": "NEEDS_DECISION", "decision": {"why": "w", "question": "q"}, "efficiencyFeedback": "fb_impl_needs"}),
             ("review-0", {"verdict": "PASS", "efficiencyFeedback": "fb_review_pass"}),
-            ("review-0", {"verdict": "BLOCKED", "blockers": [{"where":"x","why":"y","howToFix":"z","trigger":"t"}], "efficiencyFeedback": "fb_review_blocked"}),
+            ("review-0", {"verdict": "BLOCKED", "blockers": [{"where":"x","why":"y","howToFix":"z","trigger":"t"}], "correctionBase": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", "efficiencyFeedback": "fb_review_blocked"}),
             ("review-0", {"verdict": "NEEDS_DECISION", "decision": {"why":"w","question":"q"}, "efficiencyFeedback": "fb_review_needs"})]
         for workflow_key, structured in branches:
             with self.subTest(key=workflow_key, fb=structured.get("efficiencyFeedback")):

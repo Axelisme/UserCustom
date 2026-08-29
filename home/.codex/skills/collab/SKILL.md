@@ -155,9 +155,8 @@ carries no semantic edit, so it leaves no residue and is judged on its gates.
 ## Worker results are semantic
 
 **Gates.** dev-flow's record rules give the ticket the ordered binary gate plan and require every
-listed gate to pass before `COMPLETED`. The implementer fixes failures within scope in the required
-order — focused failures first, then affected, then formatter/style, re-running affected
-after any mutation, then broader — and returns one complete `BLOCKED` result when closure exceeds
+listed gate to pass before `COMPLETED`. The implementer fixes failures within scope in the order that
+ticket section states, and returns one complete `BLOCKED` result when closure exceeds
 authority. Ticket-owned gates are validated by the implementer and proved only by lane state;
 reviewed roles neither re-execute them nor reopen run artifacts to judge them.
 

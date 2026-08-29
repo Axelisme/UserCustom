@@ -121,7 +121,7 @@ ticket content.
    instead of reconstructing its contract from its implementation. Remain the only
    writer in this checkout; do not create another writable checkout or launch agents. Finish when
    every supplied criterion is met, every changed path is in scope, and protected state is intact.
-3. Run the ticket's ordered Mechanical gates and inspect the resulting diff. The ticket owns the binary gate plan; every listed gate must pass before `COMPLETED` and you must fix failures within scope in required order: focused (or explicitly failing) gates first, then affected, then formatter/style (and re-run affected after any mutation), then broader/full. A dispatch without an assigned exact target grants no task-record evidence mutation — run artifacts own commands. Operational Git and runtime checks —
+3. Run the ticket's ordered Mechanical gates and inspect the resulting diff. The ticket owns the binary gate plan; every listed gate must pass before `COMPLETED` and you must fix failures within scope in the order its `## Mechanical gates` section states. A dispatch without an assigned exact target grants no task-record evidence mutation — run artifacts own commands. Operational Git and runtime checks —
    status, diff, diff-check, staged state, cleanliness, ancestry, commit identity, and lifecycle —
    remain operation evidence and never belong in an appendix. When the dispatch brief grants one
    exact Orchestrator-precreated workflow-scoped Acceptance appendix target and lists its covered

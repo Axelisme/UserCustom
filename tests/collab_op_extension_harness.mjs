@@ -39,8 +39,19 @@ const schemas = Object.fromEntries(
     ]),
 );
 
+const laneActionMap = {
+  collab_lane_create: "create",
+  collab_lane_reconcile: "reconcile",
+  collab_lane_collect: "collect",
+  collab_lane_drop: "drop",
+};
 async function execute(envelope) {
-  const toolName = typeof envelope.tool === "string" ? envelope.tool : "collab_op";
+  let toolName = typeof envelope.tool === "string" ? envelope.tool : "collab_op";
+  let laneAction = laneActionMap[toolName];
+  const originalToolName = toolName;
+  if (laneAction) {
+    toolName = "collab_lane";
+  }
   const registration = registrations.get(toolName);
   if (!registration) {
     return {
@@ -69,9 +80,12 @@ async function execute(envelope) {
       { cwd },
     );
   }
-  const request = Object.fromEntries(
+  let request = Object.fromEntries(
     Object.entries(envelope).filter(([key]) => key !== "tool" && key !== "__rpc"),
   );
+  if (laneAction) {
+    request = { action: laneAction, ...request };
+  }
   try {
     const result = await registration.definition.execute(
       "test-call",

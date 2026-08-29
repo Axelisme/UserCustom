@@ -45,7 +45,8 @@ holding the task's out-of-scope boundary.
 
 Durable work lives under `.agent_state/plans/<task-id>/`, managed by `scripts/plan.py` in this
 skill's directory, not a repository-local `scripts/` directory. `plan.py --help` owns the command
-Interface and `templates/` the current scaffold. Four things neither one tells you:
+Interface and `templates/` the current scaffold and frontmatter shape. Four things neither one
+tells you:
 
 - `.agent_state` is gitignored, so a worktree carries no task record. Run `plan.py` from the main
   checkout.
@@ -54,11 +55,11 @@ Interface and `templates/` the current scaffold. Four things neither one tells y
 - `list` returns narrow references for immediate active containers without reading INDEX or ticket
   content. **Active** means only that the container is placed under `.agent_state/plans/`, not that
   work or tickets remain.
-- `locate` reports active, archived, missing, or ambiguous location; canonical container and INDEX
-  paths; readable task identity and spec; exact pending, closed, and total counts when all ticket
-  headers are readable; and bounded parse limitations. It does not list ticket paths, inspect
-  narrative sections, dependencies, or artifacts, select focus, infer completion, or claim health —
-  read `INDEX.md` and the relevant ticket narratives for those judgements.
+- `locate` is read-only. It reports active, archived, missing, or ambiguous location; canonical
+  container and INDEX paths; readable task identity and spec; exact pending, closed, and total counts
+  when all ticket headers are readable; and bounded parse limitations. It does not list ticket paths,
+  inspect narrative sections, dependencies, or artifacts, select focus, infer completion, or claim
+  health — read `INDEX.md` and the relevant ticket narratives for those judgements.
 
 The script owns container lifecycle, not narrative truth: archive restoration reverses the opaque
 container move, and narrative sections remain human-authored rather than script-validated schema.
@@ -97,8 +98,7 @@ declares what its own scaffolding is and when it comes down (for example
 ## When to read what
 
 - **This task's `Standing orders` is about to change, or you quote or apply an entry it already
-  holds** → [custody](references/custody.md). A section reading `None` holds no entry, so only the
-  first condition can fire.
+  holds** → [custody](references/custody.md).
 - **A decision falls outside the task's out-of-scope boundary** → [custody](references/custody.md),
   following the `Envelope` section's pointer to its frozen artifact.
 - **You are the one writing `INDEX.md`, or you are about to write durable evidence anywhere** →

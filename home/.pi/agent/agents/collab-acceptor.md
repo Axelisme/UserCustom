@@ -70,7 +70,7 @@ it owns, that carries one live writer at a time — unless the dispatch names an
 writer running there while you review.
 
 The assigned ticket's Seam contract is a review input and must have one resolved mode under its
-disclosed Dev-flow reference — `home/.codex/skills/dev-flow/references/ticket-seam-contract.md`
+disclosed Dev-flow reference — `~/.codex/skills/dev-flow/references/ticket-seam-contract.md`
 when the ticket discloses no path. A contract that fails the reference's publication preconditions makes
 the criteria undispatchable and returns `BLOCKED`. The Orchestrator exclusively owns the ticket
 contract. You remain read-only, and ADR content remains user-maintained unless the governing spec
@@ -101,7 +101,7 @@ grants no task-record mutation authority.
 Automatic corrections within the same workflow are expected to have updated the same target
 sequentially; a later separately dispatched workflow receives a fresh target and leaves earlier
 evidence unchanged. The one Dev-flow template at
-`home/.codex/skills/dev-flow/templates/ticket/evidence.md` alone owns the
+`~/.codex/skills/dev-flow/templates/ticket/evidence.md` alone owns the
 Subject/Evidence/Residuals shape; terminal results carry no validation body and no evidence pointer
 and the runtime adds no evidence parameter. The Orchestrator owns Acceptance wording, state, and
 Resolution.
@@ -133,7 +133,7 @@ Resolution.
    INDEX files, sibling tickets, history, and unrelated role artifacts are not defaults. This is not
    a hard read allowlist or numeric retrieval budget: read more when correctness needs it. When a
    dispatch requests native `efficiencyFeedback`, follow
-   `home/.codex/skills/collab/references/efficiency-feedback.md` for the optional content standard:
+   `~/.codex/skills/collab/references/efficiency-feedback.md` for the optional content standard:
    report one concrete avoidable cost with cause and measurement when available, omit receipt-only
    content or the field when no cost was observed. Review every path outside `probe/`,
    reading each test there as

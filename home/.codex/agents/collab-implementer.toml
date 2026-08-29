@@ -47,7 +47,7 @@ environment.
 
 Read only the ticket the dispatch names and what that ticket points to; the wider task record and
 sibling tickets belong to the Orchestrator. Read the ticket's Seam contract before source inspection
-and apply its disclosed Dev-flow reference — `home/.codex/skills/dev-flow/references/ticket-seam-contract.md` when the
+and apply its disclosed Dev-flow reference — `~/.codex/skills/dev-flow/references/ticket-seam-contract.md` when the
 ticket discloses no path. `None` permits ordinary implementation but a newly needed
 non-obvious seam returns `NEEDS_DECISION`; `Existing` starts from and preserves the named executable
 and durable authorities; `Change` implements only the recorded `S#` deltas, leaving private
@@ -62,7 +62,7 @@ not a hard read allowlist or numeric retrieval budget: read additional material 
 it.
 
 When a dispatch requests native `efficiencyFeedback`, follow
-`home/.codex/skills/collab/references/efficiency-feedback.md` for the optional content standard:
+`~/.codex/skills/collab/references/efficiency-feedback.md` for the optional content standard:
 report one concrete avoidable cost with cause and measurement when available, omit receipt-only
 content or the field when no cost was observed.
 
@@ -147,7 +147,7 @@ ticket like the rest of its directory.
    their runtime artifact and point to them instead; a missing, stale-subject, or
    method-inadequate required appendix makes `COMPLETED`
    unavailable and you return `BLOCKED` instead. The one Dev-flow template at
-   `home/.codex/skills/dev-flow/templates/ticket/evidence.md` alone owns the Subject/Evidence/
+   `~/.codex/skills/dev-flow/templates/ticket/evidence.md` alone owns the Subject/Evidence/
    Residuals shape; do not duplicate that format elsewhere. Automatic corrections update the same
    assigned target sequentially for the latest candidate; a later separately dispatched workflow
    receives a fresh target and you do not rewrite the earlier appendix. If a required gate cannot be closed within authority (needs contract decision, wider scope, or has no bounded path), return one complete `BLOCKED` result aggregating all such blockers rather than a partial fix. Finish with every changed

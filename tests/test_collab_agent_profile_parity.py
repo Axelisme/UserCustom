@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -10,14 +11,6 @@ except ImportError:  # Direct test-file execution keeps tests/ on sys.path.
 
 ROOT = Path(__file__).resolve().parents[1]
 HOME = ROOT / "home"
-
-PROFILE_NAMES = (
-    "collab-acceptor",
-    "collab-implementer",
-    "contract-reviewer",
-    "repo-investigator",
-    "mechanical-implementer",
-)
 
 # The two Collab roles carry runtime-specific tooling, so their three copies are not byte-identical
 # and cannot be checked the way the profiles below are.
@@ -34,9 +27,6 @@ PARITY_NAMES = (
 # wording, which stays each runtime's own business.
 SHARED_CLAUSES = {
     "collab-implementer": (
-        # The ticket's own `## Mechanical gates` order governs when it states one. It usually does
-        # not survive publication, so the default belongs where the writer already is.
-        "focused (or explicitly failing) → affected → formatter/style",
         # A mandatory `BLOCKED` keyed to that reference's publication preconditions needs its path.
         "references/ticket-seam-contract.md",
         # record-hygiene grants the writer this container and expects the role to derive it.
@@ -46,6 +36,7 @@ SHARED_CLAUSES = {
         "class rather than only the named examples",
         "when closure requires wider scope",
         "completed the exact assigned appendix",
+        "references/efficiency-feedback.md",
         "## Assigned ticket checkboxes",
     ),
     "collab-acceptor": (
@@ -56,6 +47,7 @@ SHARED_CLAUSES = {
         "grants no task-record mutation",
         "remain appendix-free and is judged from the lane itself",
         "references/ticket-seam-contract.md",
+        "you do not re-execute gates",
         # Dropping the qualifier turns an out-of-envelope finding back into a blocker.
         "whether inside or outside the envelope",
         "references/efficiency-feedback.md",
@@ -86,21 +78,18 @@ class CollabAgentProfileParityTests(unittest.TestCase):
     def test_gate_repair_order_matches_the_ticket_template(self) -> None:
         # The order is copied because its two readers cannot reach each other: the Orchestrator
         # drafting a ticket reads the template, the dispatched writer reads only its own profile.
-        # Nothing else keeps the two statements of it in step.
-        order = (
-            "focused (or explicitly failing) → affected → formatter/style "
-            "(re-run affected after any mutation) → broader/full."
-        )
+        # Reading it out of the template rather than restating it here keeps this a match check,
+        # so rewording the rule in both places stays legal and rewording one of them does not.
         template = (HOME / ".codex/skills/dev-flow/templates/ticket/ticket.md").read_text("utf-8")
-        self.assertTrue(
-            order in template, "the ticket template no longer states the gate repair order"
-        )
+        match = re.search(r"Implementer runs in order: (.+)$", template, re.MULTILINE)
+        self.assertIsNotNone(match, "the ticket template no longer states the gate repair order")
+        order = match.group(1).strip()
         profile = support.load_runtime_profile(HOME, "collab-implementer")
         for runtime, prompt in support.runtime_prompts(profile).items():
             with self.subTest(runtime=runtime):
                 self.assertTrue(
                     order in prompt,
-                    f"collab-implementer/{runtime} states a gate repair order the template does not",
+                    f"collab-implementer/{runtime} does not carry the template's repair order: {order}",
                 )
 
     def test_orchestrator_readable_sections_exist_in_every_runtime_copy(self) -> None:

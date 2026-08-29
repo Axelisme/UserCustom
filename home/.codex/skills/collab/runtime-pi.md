@@ -23,7 +23,7 @@ Typed results states its own enabling condition.
 
 ## Managed lane environment
 
-Read this section after `collab_lane_create` succeeds when the repository declares a worktree
+Read this section after `collab_lane` with `action: create` succeeds when the repository declares a worktree
 bootstrap. Apply that repository-owned contract to the exact managed lane before invoking
 `collab_run_reviewed_lane`. Successful bootstrap and presence of the ordinary-path environment are
 preconditions for reviewed dispatch; if either is observed to fail, report `BLOCKED`, do not invoke
@@ -33,7 +33,7 @@ After the precondition succeeds, roles consume the provisioned environment throu
 dispatched execution parameters without syncing or provisioning it. The reviewed-lane tool retains
 its existing composition responsibility and gains no provisioning behavior or runtime-specific
 parameter. Keep the runtime as lane-owned state through implementation, correction, review, and
-owner-decision waits. Existing `collab_lane_collect` or `collab_lane_drop` retirement removes it with
+owner-decision waits. Existing `collab_lane` retirement (`collect` or `drop`) removes it with
 the lane; no separate runtime cleanup operation is introduced.
 
 Follow this canonical positive path without speculative guards or negative probes. If a concrete
@@ -305,17 +305,10 @@ heads.
   into it — `collab_integration_create`.
 - The Collection boundary's adoption step: makes an existing branch, passed as `source_branch`, the
   complete managed integration state — `collab_integration_adopt`.
-- Choose the execution shape: creates the one writable branch, checkout, worktree, and lane-owned
-  state a dispatched writer needs — `collab_lane_create`.
+- Manage the task lane — `collab_lane` with `action` `create` (branch and worktree at integration tip, optional `comment` only for create), `reconcile` (merge integration into lane), `collect` (fast-forward integration to lane tip and force-retire the lane worktree — untracked or ignored files there are lost, tracked dirt or merge conflict keeps the lane with a warning), `drop` (force-retire without collecting, discarding uncollected work and warning if dirty, conflicted or incomplete). Stale-lane handling is via `collect` or explicit `reconcile`; creation is the execution shape for a dispatched writer.
 - Compose a reviewed lane: launches the configured implementer and acceptor asynchronously in one
   exact managed lane with bounded corrections — `collab_run_reviewed_lane`.
-- Optional lane-side synchronization: brings a stale lane up to current integration when the
-  Orchestrator explicitly chooses the separate pre-step. Collection normally relies on
-  `collab_lane_collect`'s stale-lane handling instead — `collab_lane_reconcile`.
-- Collect: moves an Orchestrator-accepted lane into the integration branch and force-retires the lane
-  after successful collection — `collab_lane_collect`.
-- Retire the lane: force-removes a lane's managed branch and worktree without collecting it, for a
-  lane whose work is not going into integration — `collab_lane_drop`. It emits a custody warning when
+- The lane tool distinguishes collection (advances integration and retires the lane) from discarding uncollected work (drop without advancing), and both retire the lane worktree via force removal. It emits a custody warning when
   removal discards tracked or staged changes or active merge/conflict state. Unclassifiable Git state
   remains warning-worthy. This classification changes reporting only: best-effort removal and custody
   of unrecognized resources remain unchanged.

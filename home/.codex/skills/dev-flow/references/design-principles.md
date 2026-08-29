@@ -34,3 +34,15 @@ without duplicating either skill's checks.
     rests on it, satisfy it by copying the test rather than pointing at whichever skill first wrote
     it down. A shared test is not a dependency, and a criterion reachable only through a skill the
     reader never invoked is one they may never reach.
+15. A rule needs one owner **and** a pointer at every point a reader must obey it; ownership alone
+    leaves rules that are correct and unread. Own the text where a miss costs most — not where reads
+    are most frequent — and move it to wherever the rule is observed being broken. Elsewhere put a
+    one-line obligation carrying a verb, plus a pointer worded in that site's own vocabulary rather
+    than the taxonomy's. Prefer the pointer to a second copy: duplication fails silently, a broken
+    pointer fails loudly. Two limits bind the choice. A carrier consumed by authoring holds nothing —
+    a ticket's template comments survive publication in 7 of this repository's 85 tickets, against
+    23 of 41 for an `INDEX.md`, which is edited section by section instead of written out once. So
+    `keep this in the published ticket` is a request and not a mechanism, and which carrier the
+    rule sits in is what decides that. And readers who cannot reach each other's
+    documents each need their own copy, which obliges a test that keeps the copies consistent.
+    Principle 14 is this rule's instance for definitions.

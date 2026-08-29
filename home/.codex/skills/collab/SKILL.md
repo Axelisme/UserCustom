@@ -129,8 +129,11 @@ receiver's own workflow.
    worktree registrations, temporary files or directories, sessions or processes, and agent-created
    branches that no longer carry required evidence. Preserve pre-existing user state and evidence
    still needed for Acceptance or landing; give every deliberate retention an owner and discharge
-   condition. This step is complete when no orphaned lane-owned
-   resource remains.
+   condition. Collab's own implementation-time scaffolding is a dispatched writer's
+   `probe/<ticket-id>/`: that writer's profile puts its still-open questions there, outside the
+   review surface, and the directory comes down before the ticket closes — so a lane that retires
+   with one still standing hands the Orchestrator a directory to clear. This step is complete when
+   no orphaned lane-owned resource remains.
 
 ## Continuity is a cache
 
@@ -154,8 +157,8 @@ carries no semantic edit, so it leaves no residue and is judged on its gates.
 
 ## Worker results are semantic
 
-**Gates.** dev-flow's record rules give the ticket the ordered binary gate plan and require every
-listed gate to pass before `COMPLETED`. The implementer fixes failures within scope in the order that
+**Gates.** dev-flow's [ticket template](../dev-flow/templates/ticket/ticket.md) gives the ticket
+the ordered binary gate plan and requires every listed gate to pass before `COMPLETED`. The implementer fixes failures within scope in the order that
 ticket section states, and returns one complete `BLOCKED` result when closure exceeds
 authority. Ticket-owned gates are validated by the implementer and proved only by lane state;
 reviewed roles neither re-execute them nor reopen run artifacts to judge them.
@@ -163,7 +166,10 @@ reviewed roles neither re-execute them nor reopen run artifacts to judge them.
 **`COMPLETED` is a binary attestation** that the required gates passed. It carries no free-text
 `Validation` array and creates no durable receipt. Ordinary gate commands and raw outputs stay with
 the run artifact; durable observations for difficult claims belong only to the Orchestrator-precreated
-workflow-scoped Acceptance appendix at the exact dispatched target (see Dispatch brief). Operational
+workflow-scoped Acceptance appendix at the exact dispatched target. Precreate that target by running
+`cp` on dev-flow's `templates/ticket/evidence.md`, never by writing the section yourself, and place
+the resulting path in the brief; [record-hygiene](../dev-flow/references/record-hygiene.md) owns when
+an appendix is required and what an assigned target does and does not grant. Operational
 Git and runtime checks — status, diff, diff-check, staged state, cleanliness, ancestry, commit
 identity, and lifecycle — are operation evidence and never belong in an appendix.
 
@@ -293,3 +299,9 @@ The runtime pointer names the operation that carries out landing.
 
 Land is the authority boundary Collab owns: its guidance ends once integration has moved into the
 persistence branch. Push and later persistence-branch handling stay outside Collab.
+
+## Evolving this skill
+
+Read [dev-flow's design principles](../dev-flow/references/design-principles.md) before changing
+this document or an agent profile. They own altitude, evidence, and where a rule's text belongs
+against where its readers stand; both skills are governed by them.

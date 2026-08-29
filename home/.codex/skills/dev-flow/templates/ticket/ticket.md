@@ -39,7 +39,8 @@ state: pending
 <!-- Ordered binary gate plan owned by this ticket. Every listed gate must pass before `COMPLETED`.
      Do not duplicate repository-owned commands: use pointer or existing owner, only add ticket-specific gates and execution order.
      Implementer runs in order: focused (or explicitly failing) → affected → formatter/style (re-run affected after any mutation) → broader/full.
-     That order is this section's own rule and the implementer reads it here; keep the line in the published ticket.
+     State a different order here only when this ticket needs one. The implementer profiles carry
+     that same default, so the order holds whether or not this comment survives publication.
      Gate-mapping test (canonical definition: ~/.codex/skills/collab/SKILL.md boundary 2): an
      Acceptance claim above is mechanically provable iff some listed gate below's pass/fail is
      exactly that claim. Map each claim while drafting this list; any claim left unmapped means an

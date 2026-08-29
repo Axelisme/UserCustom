@@ -92,7 +92,9 @@ transition; a session task list or review result alone is not durable closure.
 Clear implementation-time temporary files, tests, and data before closure, and give every deliberate
 retention an owner and a discharge condition. Each skill that creates implementation-time state
 declares what its own scaffolding is and when it comes down (for example
-[tdd](../tdd/SKILL.md#durable-behavior-tests-and-probes)).
+[tdd](../tdd/SKILL.md#durable-behavior-tests-and-probes), and
+[collab](../collab/SKILL.md#responsibility-boundaries) for a dispatched writer's
+`probe/<ticket-id>/`).
 
 ## When to read what
 
@@ -100,10 +102,16 @@ declares what its own scaffolding is and when it comes down (for example
   holds** → [custody](references/custody.md).
 - **A decision falls outside the task's out-of-scope boundary** → [custody](references/custody.md),
   following the `Envelope` section's pointer to its frozen artifact.
-- **You are the one writing `INDEX.md`, or you are about to write durable evidence anywhere** →
+- **You are about to create a ticket, an Acceptance appendix, a research note, a spec, or a
+  scripts container, or you are the one writing `INDEX.md`** →
   [record-hygiene](references/record-hygiene.md), which holds what stays in INDEX, the container
   shape every task already has, where each content kind lives, and the workflow-scoped Acceptance
   appendix for a difficult claim a read-only acceptor cannot reproduce.
+- **You are writing or publishing a ticket's `Seam contract`, or a dispatched role returns
+  `BLOCKED` against one** → [ticket-seam-contract](references/ticket-seam-contract.md), which owns
+  the three modes, `S#` coverage and its `A#` observers, graduation, and the publication
+  preconditions that stop a dispatch. Every ticket discloses this path in its own `Seam contract`
+  section, because that is where the roles you dispatch look for it.
 - **The user opens a ticket to record a decision whose force outlives its task** →
   [adr-graduation](references/adr-graduation.md).
 - **The planning owner or destination for a Slice, spec, ticket publication, artifact, dispatch

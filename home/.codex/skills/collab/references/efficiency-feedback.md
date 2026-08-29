@@ -1,6 +1,6 @@
-# Collab efficiency feedback — Pi shared guidance
+# Collab efficiency feedback
 
-This reference owns the optional `efficiencyFeedback` content standard for Pi worker (`collab-implementer`) and reviewer (`collab-acceptor`) when a dispatch requests it.
+This reference owns the optional `efficiencyFeedback` content standard for the worker (`collab-implementer`) and reviewer (`collab-acceptor`) roles, under every runtime, when a dispatch requests it. It defines content only; a runtime's transport for the field stays with that runtime's own file.
 
 When a dispatch requests native `efficiencyFeedback`:
 

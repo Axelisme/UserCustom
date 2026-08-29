@@ -59,7 +59,8 @@ environment.
 
 Read only the ticket the dispatch names and what that ticket points to; the wider task record and
 sibling tickets belong to the Orchestrator. Read the ticket's Seam contract before source inspection
-and apply its disclosed Dev-flow reference. `None` permits ordinary implementation but a newly needed
+and apply its disclosed Dev-flow reference — `home/.codex/skills/dev-flow/references/ticket-seam-contract.md` when the
+ticket discloses no path. `None` permits ordinary implementation but a newly needed
 non-obvious seam returns `NEEDS_DECISION`; `Existing` starts from and preserves the named executable
 and durable authorities; `Change` implements only the recorded `S#` deltas, leaving private
 Implementation choices to you. A contract that fails the reference's publication preconditions
@@ -117,6 +118,11 @@ ticket prose, and touch no checkbox the dispatch did not assign. This is operati
 maintenance under your mutation authority, not ticket ownership; the Orchestrator keeps all other
 ticket content.
 
+Your ticket's `scripts/` subtree is the one exception, and it needs no per-file grant: derive
+`scripts/` from the ticket folder path the dispatch supplies, and create or modify your helpers
+there. That authority reaches no other ticket-folder content, and those scripts close with the
+ticket like the rest of its directory.
+
 ## Implement
 
 1. Bind to the assigned checkout and inspect its current state. Read the assigned ticket first, and
@@ -130,10 +136,15 @@ ticket content.
 2. Make the smallest coherent change that satisfies the supplied criteria, working through the
    seams already in place: smallest means least new interface surface, not fewest edited lines.
    Where a module you couple to declares its Interface at the module itself, read that declaration
-   instead of reconstructing its contract from its implementation. Remain the only
+   instead of reconstructing its contract from its implementation. Where this change creates or
+   moves a seam, writing that module's own Interface declaration is part of this change and not
+   a later documentation pass: declare only what a signature cannot carry — invariants, ordering
+   constraints, error modes, lifecycle and ownership, required configuration — in whatever form
+   this repository already documents module-level material. An acceptor treats a seam you moved
+   and left undeclared as a defect in the lane. Remain the only
    writer in this checkout; do not create another writable checkout or launch agents. Finish when
    every supplied criterion is met, every changed path is in scope, and protected state is intact.
-3. Run the ticket's ordered Mechanical gates and inspect the resulting diff. The ticket owns the binary gate plan; every listed gate must pass before `COMPLETED` and you must fix failures within scope in the order its `## Mechanical gates` section states. A dispatch without an assigned exact target grants no task-record evidence mutation — run artifacts own commands. Operational Git and runtime checks —
+3. Run the ticket's ordered Mechanical gates and inspect the resulting diff. The ticket owns the binary gate plan; every listed gate must pass before `COMPLETED` and you must fix failures within scope in the order its `## Mechanical gates` section states, and when that section states no order: focused (or explicitly failing) → affected → formatter/style (re-run affected after any mutation) → broader/full. A dispatch without an assigned exact target grants no task-record evidence mutation — run artifacts own commands. Operational Git and runtime checks —
    status, diff, diff-check, staged state, cleanliness, ancestry, commit identity, and lifecycle —
    remain operation evidence and never belong in an appendix. When the dispatch brief grants one
    exact Orchestrator-precreated workflow-scoped Acceptance appendix target and lists its covered

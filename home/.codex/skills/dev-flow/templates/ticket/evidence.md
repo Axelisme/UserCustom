@@ -1,10 +1,11 @@
 # Acceptance appendix
 
 <!-- Workflow-scoped Acceptance appendix for named difficult claims.
-     Orchestrator precreates one exact target per workflow by copying this
-     template to a fresh collision-free path under tickets/<ticket-id>/ and
-     places that exact path plus covered claim IDs in both worker and review
-     briefs. No assignment grants no task-record evidence mutation.
+     Orchestrator precreates one exact target per workflow: `cp` this file to
+     a fresh collision-free path under tickets/<ticket-id>/ — hand-writing the
+     section instead is the failure this line exists to stop — and places that
+     exact path plus covered claim IDs in both worker and review briefs. No
+     assignment grants no task-record evidence mutation.
      One Dev-flow template owns the Subject/Evidence/Residuals spine. Do not
      duplicate this format elsewhere. The appendix binds the fixed candidate
      without judging Acceptance; the Orchestrator owns wording, state, and

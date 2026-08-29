@@ -102,6 +102,7 @@ If evidence shows that placement, authority, graduation, or the recorded Interfa
 ## Role guidance ownership
 
 This reference owns the contract's mode, content, coverage, graduation, change-control, and ADR rules.
-Lightweight retrieval and role-specific application are owned by
-`home/.pi/agent/agents/collab-implementer.md` and
-`home/.pi/agent/agents/collab-acceptor.md`; do not copy that workflow guidance into tickets.
+Lightweight retrieval and role-specific application are owned by the `collab-implementer` and
+`collab-acceptor` agent profiles — every runtime copy of them, under `home/.pi/agent/agents/`,
+`home/.claude/agents/` and `home/.codex/agents/`, not the Pi pair alone. Do not copy that workflow
+guidance into tickets.

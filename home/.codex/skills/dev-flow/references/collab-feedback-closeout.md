@@ -10,7 +10,16 @@ When the Orchestrator first requests efficiency feedback for the task, record a 
 
 ## Snapshot and summary before retirement
 
-Before managed integration removal and archive:
+Before managed integration removal and archive the task must carry one durable summary of the
+feedback it requested — `research/skill-feedback.md`, holding the actionable observations with an
+exact pointer to their raw source, or saying plainly that the request produced none.
+
+That obligation is runtime-neutral. The sequence below is how Pi discharges it, through Pi's own
+extension operations. A runtime with no snapshot operation discharges the same obligation from
+whatever raw artifacts its dispatches left behind and names that source in the summary; it does
+not skip the summary for want of the Pi sequence.
+
+Under Pi:
 
 1. Before `collab_integration_remove`, choose one fresh destination under the task, `research/collab-report-<UTC timestamp>/`.
 2. Call public `collab_report` with the task ID and that destination. Its existing task lock and snapshot rules remain authoritative.

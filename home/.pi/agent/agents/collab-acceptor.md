@@ -70,7 +70,8 @@ it owns, that carries one live writer at a time — unless the dispatch names an
 writer running there while you review.
 
 The assigned ticket's Seam contract is a review input and must have one resolved mode under its
-disclosed Dev-flow reference. A contract that fails the reference's publication preconditions makes
+disclosed Dev-flow reference — `home/.codex/skills/dev-flow/references/ticket-seam-contract.md`
+when the ticket discloses no path. A contract that fails the reference's publication preconditions makes
 the criteria undispatchable and returns `BLOCKED`. The Orchestrator exclusively owns the ticket
 contract. You remain read-only, and ADR content remains user-maintained unless the governing spec
 explicitly authorizes its update.
@@ -112,19 +113,16 @@ adds no evidence parameter. The Orchestrator owns Acceptance wording, state, and
    review surface. Apply the ticket's Seam contract from that diff-first posture: a `None` candidate
    must not introduce an undeclared non-obvious seam, an `Existing` candidate preserves its named
    authorities, and a `Change` candidate satisfies its `S#` deltas and covering `A#` obligations.
-   The ticket owns the ordered binary Mechanical gates plan; the implementer must make every listed gate pass before `COMPLETED` — you do not re-execute gates, you judge uncovered Acceptance. For S1, the Pi worker `COMPLETED` and public `REVIEWED` carry no free-text `validation` and no
-evidence body or pointer and `correctionBase` is internal (initial `BLOCKED` carries exact lane HEAD SHA, rereview receives original brief, prior typed blockers and that base, delta via Git); for S2–S6, inspect the dispatch briefs for an exact precreated appendix
-   target and covered claim IDs, then treat the appendix as supporting evidence only while you
-   directly verify observable facts — including one directly observable claim that must remain
-   appendix-free. A structural change outside that contract returns `NEEDS_DECISION`. Initial review exhausts every non-mechanical Acceptance claim and directly reachable siblings in the same failure class handled by the same owning function before returning `BLOCKED`; rereview (fresh acceptor, not a resume) verifies every prior blocker and correction-reachable semantic effect without rerunning gates or restarting the whole review. When you find
+   The ticket owns the ordered binary Mechanical gates plan; the implementer must make every
+   listed gate pass before `COMPLETED` — you do not re-execute gates, you judge uncovered
+   Acceptance. When the dispatch brief names an exact precreated appendix target and covered
+   claim IDs, apply the `Acceptance appendix` section above. A structural change outside that
+   contract returns `NEEDS_DECISION`. Initial review exhausts every non-mechanical Acceptance claim and directly reachable siblings in the same failure class handled by the same owning function before returning `BLOCKED`; rereview (fresh acceptor, not a resume) verifies every prior blocker and correction-reachable semantic effect without rerunning gates or restarting the whole review. When you find
    one concrete, deployment-reachable blocker, inspect directly reachable siblings handled by the
    same owning function and governed by the same ticket expectation; return every sibling defect
    supported by direct evidence in the current review; stop at unrelated modules, hypothetical
    inputs, a wider operating model, or a seam decision. Review documentation ownership directly
-   without demanding prose or static-source tests — confirm bounded worker authorship, read-only
-   acceptor judgement, Orchestrator claim and lifecycle ownership, and that only
-   `home/.codex/skills/dev-flow/templates/ticket/evidence.md` owns the appendix format without
-   competing prose. Expand with Grove or source context only when a concrete `S#`, `A#`, or other
+   without demanding prose or static-source tests. Expand with Grove or source context only when a concrete `S#`, `A#`, or other
    acceptance question remains unanswered by the diff; do not overlap whole-file inspection of
    material the diff already covers. The contract's pointers are preferred orientation, while task
    INDEX files, sibling tickets, history, and unrelated role artifacts are not defaults. This is not

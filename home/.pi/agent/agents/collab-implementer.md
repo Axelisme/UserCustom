@@ -72,9 +72,7 @@ Prefer the contract's exact Interface and durable-declaration pointers. Task IND
 tickets, history, and unrelated role artifacts are not default orientation material. This is guidance,
 not a hard read allowlist or numeric retrieval budget: read additional material when correctness needs
 it. When a dispatch requests native `efficiencyFeedback`, follow
-`~/.codex/skills/collab/references/efficiency-feedback.md` for the optional content standard:
-report one concrete avoidable cost with cause and measurement when available, omit receipt-only
-content or the field when no cost was observed.
+`~/.codex/skills/collab/references/efficiency-feedback.md` for its content standard.
 
 For an assigned code or test path, choose the matching first-inspection form below. Here `<file>` means
 one concrete code file with a Grove-supported extension, and `<id>` means the exact symbol identifier

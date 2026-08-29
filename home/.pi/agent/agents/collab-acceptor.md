@@ -133,11 +133,8 @@ Resolution.
    INDEX files, sibling tickets, history, and unrelated role artifacts are not defaults. This is not
    a hard read allowlist or numeric retrieval budget: read more when correctness needs it. When a
    dispatch requests native `efficiencyFeedback`, follow
-   `~/.codex/skills/collab/references/efficiency-feedback.md` for the optional content standard:
-   report one concrete avoidable cost with cause and measurement when available, omit receipt-only
-   content or the field when no cost was observed. Review every path outside `probe/`,
-   reading each test there as
-   a promise the lane makes; `probe/` holds the writer's still-open questions and stands outside the
+   `~/.codex/skills/collab/references/efficiency-feedback.md` for its content standard.
+   Review every path outside `probe/`, reading each test there as a promise the lane makes; `probe/` holds the writer's still-open questions and stands outside the
    review surface. Check behavior, regressions, tests, and simplicity against the supplied
    expectations. Finish with every supplied expectation inspected and each observed concern tied to
    direct evidence.

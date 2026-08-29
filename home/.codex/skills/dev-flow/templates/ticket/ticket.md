@@ -7,7 +7,7 @@ state: pending
 <!-- Copy this to tickets/<ticket-id>/ticket.md. The frontmatter `id` must equal that directory name.
      This ticket's durable evidence lives beside this file in the same directory — copy
      the evidence.md beside this template for each piece — and the whole directory is what closure
-     discharges. Guiding script location: `<ticket>/scripts/` for the assigned writer's helpers (Orchestrator owns `<task>/scripts/`, acceptor read-only; no cleanup/graduation/dedup policy). The Orchestrator owns this ticket. Keep state pending until the Orchestrator resolves the ticket;
+     discharges. Guiding script location: `<ticket>/scripts/` for the assigned writer's helpers; the Orchestrator owns `<task>/scripts/` and the acceptor is read-only. The Orchestrator owns this ticket. Keep state pending until the Orchestrator resolves the ticket;
      only the Orchestrator sets state closed or writes Resolution. -->
 
 | Ticket field | Value |

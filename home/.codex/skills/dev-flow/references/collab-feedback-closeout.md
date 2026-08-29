@@ -20,5 +20,3 @@ Before managed integration removal and archive:
 6. Continue with managed integration removal and Dev-flow archive.
 
 If the managed state was removed before the snapshot, the Orchestrator records the missing source and does not fabricate a task-local copy from memory. Existing raw session artifacts may be cited when available, but they do not make the missed closeout successful.
-
-No automatic summarizer, feedback parser, `plan.py` hook, `collab_integration_remove` parameter, or new public tool is introduced. Receipt-only or empty results are preserved without fabricated findings. The research file and its raw snapshot do not enter `INDEX` history.

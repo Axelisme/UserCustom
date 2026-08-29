@@ -21,16 +21,9 @@ producer artifact when one exists. A lifecycle ticket is a `tickets/<ticket-id>/
 producer-format file kept anywhere else never occupies the path `locate` parses. If an external
 repository tracker is explicitly in use, link those issues from the record instead.
 
-A handoff routes and guides rather than transferring factual authority or forming a route stage. The
-record continues to own implementation work after it. For a handed-off Dev-flow task, start from the
-active guidance, `INDEX.md`, and handed-off ticket, then follow only current-work pointers. If those
-sources cannot name the next action, maintain them rather than inferring focus from a broad scan.
-
-**Collab derives no task narrative.** It consumes bounded intent and Acceptance criteria, then
-coordinates Implement and Acceptance; follow its guidance when writer placement is in question.
-Review evidence identifies its fixed subject separately. Handoffs and collaboration evidence never
-say what the task means, what durable stage it reached, or why; point back to this record instead of
-creating a second status store.
+A handoff routes and guides rather than transferring factual authority or forming a route stage; the
+record continues to own implementation work after it. Handoffs and collaboration evidence never say
+what the task means, what durable stage it reached, or why.
 
 `archive` is a neutral directory move and never implies completion. Orchestrator reconciles the evidence and
 close-out in the task record before moving it, whether work completed or was abandoned.

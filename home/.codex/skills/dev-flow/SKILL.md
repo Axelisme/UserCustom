@@ -105,8 +105,7 @@ declares what its own scaffolding is and when it comes down (for example
   [record-hygiene](references/record-hygiene.md), which holds what stays in INDEX, the container
   shape every task already has, where each content kind lives, and the workflow-scoped Acceptance
   appendix for a difficult claim a read-only acceptor cannot reproduce.
-- **The user opens a ticket to record a decision whose force outlives its task**, which needs a home
-  outside the task container and is not tracked where this workflow runs →
+- **The user opens a ticket to record a decision whose force outlives its task** →
   [adr-graduation](references/adr-graduation.md).
 - **The planning owner or destination for a Slice, spec, ticket publication, artifact, dispatch
   decision, or archive is unresolved** → [conditional-route](references/conditional-route.md), which

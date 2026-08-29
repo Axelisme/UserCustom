@@ -68,8 +68,7 @@ container move, and narrative sections remain human-authored rather than script-
 whose `ticket.md` frontmatter owns ticket identity and lifecycle state; Outcome and Acceptance own
 the bounded contract; state and Resolution own closure. Files beside `ticket.md` own that ticket's
 durable evidence, and only when the evidence must persist. The ticket owns the ordered binary
-Mechanical gates plan (see `templates/ticket/ticket.md`); every listed gate must pass before
-`COMPLETED`, and repository-owned commands are referenced by pointer rather than duplicated.
+Mechanical gates plan; `templates/ticket/ticket.md` holds its rules.
 
 **Who may write what.** The Orchestrator owns all ticket content and exclusively changes lifecycle
 state and Resolution. A delegated writer may toggle only the Acceptance claims its dispatch

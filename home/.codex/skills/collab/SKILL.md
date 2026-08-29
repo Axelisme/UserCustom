@@ -45,17 +45,11 @@ Define each at its first use:
 A dispatch names the ticket and carries only the operational deltas — placement, authority,
 validation, stop conditions, and role-specific deltas — without copying the ticket's prose. Carry a
 needed conclusion inline; point to supporting material with the condition for opening it. Before
-sending the brief, inspect the selected receiver profile's `Preconditions` and `Result` sections and
-close every required value, path, mutation authority, evidence owner, and stop condition in it, with
-explicit values rather than repository guesses.
-
-For a writer, include these compact blocks:
-
-- `Orientation`: the owning Module or class, plus each named seam that deserves attention; use `none`
-  when no seam is relevant. Do not supply a symbol inventory or predicted call chain.
-- `Execution parameters`: the exact authorized command runtime or interpreter (or `none`), exact
-  environment variables (or `none`), lane-local pytest basetemp (or `not-applicable`), ticket-specific
-  test budgets or exceptions (or `none`), and cleanup or retention exceptions (or `none`).
+sending the brief, inspect the selected receiver profile's `Dispatch contract` and `Result` sections
+and close every required value, path, mutation authority, evidence owner, and stop condition in it,
+with explicit values rather than repository guesses. Those two sections are the Orchestrator's share
+of a profile and carry that role's authoritative field list; the rest of the profile is the
+receiver's own workflow.
 
 ## Responsibility boundaries
 

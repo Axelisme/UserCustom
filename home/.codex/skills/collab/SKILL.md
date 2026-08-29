@@ -133,9 +133,9 @@ For a writer, include these compact blocks:
    owner.
 5. **Collect.** Move the Orchestrator-accepted current lane into the integration branch one lane at
    a time. A stale lane is synchronized with current integration first and stops at the reconciled
-   lane or a conflict; the reconciled lane needs its own review and Orchestrator judgement before
-   collection (see Reconciliation). This step is complete when the accepted lane is the integration
-   head and its lane is retired or its retention is reported.
+   lane or a conflict; the reconciled lane returns to boundary 2 for review placement and needs the
+   Orchestrator's judgement again before collection (see Reconciliation). This step is complete when
+   the accepted lane is the integration head and its lane is retired or its retention is reported.
 6. **Retire the lane.** When a writer or reviewer lane reaches its terminal handoff and will not
    continue, inventory and remove lane-owned
    worktree registrations, temporary files or directories, sessions or processes, and agent-created
@@ -191,7 +191,7 @@ Every safety or non-happy-path blocker must be production-reachable under the st
 A `PASS` ends after Verdict and any residual risks; it needs no empty filler. The verdict
 is a review result, not ticket Acceptance: the Orchestrator owns the final judgement and closure.
 `NEEDS_DECISION` returns a contract contradiction or new-scope question to the Orchestrator instead
-of routing rework. A correction or reconciliation changes the lane, so review runs again against its
+of routing rework. A correction or reconciliation (see Reconciliation for lane versus integration) changes the lane, so review runs again against its
 new current state (distinct responsibilities — see Review placement, not a full restart). Generic Acceptance carries no fixed-subject result fields and no `correctionBase` projection; public terminal results never expose the internal base. Specialized
 procedures such as [code-review](../code-review/SKILL.md) keep their own identity contracts.
 
@@ -265,9 +265,9 @@ carry these out and tells you when their absence means your runtime needs none.
 The runtime verifies the exact lane tip, that current integration is contained in the judged lane,
 and that managed refs and worktrees are clean and identity-exact, then advances integration to the
 accepted lane and retires it when it is clean. A stale lane is reconciled first; the reconciled
-current lane is reviewed and judged again before collection (see Reconciliation for lane versus
-integration reconciliation). Dirt or ambiguity in the lane is preserved and reported rather than
-deleted or inferred away.
+current lane returns to boundary 2 for review placement and is judged again before collection (see
+Reconciliation for lane versus integration reconciliation). Dirt or ambiguity in the lane is
+preserved and reported rather than deleted or inferred away.
 
 This task-local collection is not landing and requires no separate landing grant.
 

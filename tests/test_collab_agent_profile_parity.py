@@ -49,9 +49,12 @@ SHARED_CLAUSES = {
         "## Assigned ticket checkboxes",
     ),
     "collab-acceptor": (
-        # Without this section the writer fills an appendix no reviewer knows how to judge.
+        # Without these the writer fills an appendix no reviewer knows how to judge.
         "## Acceptance appendix",
-        "A directly observable claim must remain appendix-free",
+        "blocks Acceptance rather than being trusted on presence",
+        "describes a reasonable process",
+        "grants no task-record mutation",
+        "remain appendix-free and is judged from the lane itself",
         "references/ticket-seam-contract.md",
         # Dropping the qualifier turns an out-of-envelope finding back into a blocker.
         "whether inside or outside the envelope",
@@ -79,6 +82,26 @@ class CollabAgentProfileParityTests(unittest.TestCase):
                             clause in prompt,
                             f"{name}/{runtime} is missing the shared clause {clause!r}",
                         )
+
+    def test_gate_repair_order_matches_the_ticket_template(self) -> None:
+        # The order is copied because its two readers cannot reach each other: the Orchestrator
+        # drafting a ticket reads the template, the dispatched writer reads only its own profile.
+        # Nothing else keeps the two statements of it in step.
+        order = (
+            "focused (or explicitly failing) → affected → formatter/style "
+            "(re-run affected after any mutation) → broader/full."
+        )
+        template = (HOME / ".codex/skills/dev-flow/templates/ticket/ticket.md").read_text("utf-8")
+        self.assertTrue(
+            order in template, "the ticket template no longer states the gate repair order"
+        )
+        profile = support.load_runtime_profile(HOME, "collab-implementer")
+        for runtime, prompt in support.runtime_prompts(profile).items():
+            with self.subTest(runtime=runtime):
+                self.assertTrue(
+                    order in prompt,
+                    f"collab-implementer/{runtime} states a gate repair order the template does not",
+                )
 
     def test_orchestrator_readable_sections_exist_in_every_runtime_copy(self) -> None:
         # collab/SKILL.md bounds the Orchestrator's read of a receiver profile to that profile's

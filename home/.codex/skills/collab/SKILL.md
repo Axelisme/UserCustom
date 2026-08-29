@@ -159,8 +159,8 @@ carries no semantic edit, so it leaves no residue and is judged on its gates.
 
 **Gates.** dev-flow's [ticket template](../dev-flow/templates/ticket/ticket.md) gives the ticket
 the ordered binary gate plan and requires every listed gate to pass before `COMPLETED`. The implementer fixes failures within scope in the order that
-ticket section states, and returns one complete `BLOCKED` result when closure exceeds
-authority. Ticket-owned gates are validated by the implementer and proved only by lane state;
+ticket section states, or the default its own profile carries when the section states none, and
+returns one complete `BLOCKED` result when closure exceeds authority. Ticket-owned gates are validated by the implementer and proved only by lane state;
 reviewed roles neither re-execute them nor reopen run artifacts to judge them.
 
 **`COMPLETED` is a binary attestation** that the required gates passed. It carries no free-text

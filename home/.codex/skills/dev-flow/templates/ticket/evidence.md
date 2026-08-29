@@ -2,8 +2,7 @@
 
 <!-- Workflow-scoped Acceptance appendix for named difficult claims.
      Orchestrator precreates one exact target per workflow: `cp` this file to
-     a fresh collision-free path under tickets/<ticket-id>/ — hand-writing the
-     section instead is the failure this line exists to stop — and places that
+     a fresh collision-free path under tickets/<ticket-id>/, then places that
      exact path plus covered claim IDs in both worker and review briefs. No
      assignment grants no task-record evidence mutation.
      One Dev-flow template owns the Subject/Evidence/Residuals spine. Do not

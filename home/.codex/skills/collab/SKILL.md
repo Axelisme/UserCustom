@@ -5,8 +5,7 @@ description: "Orchestrator coordination for one bounded change: use when the Orc
 
 # Collab
 
-Collab coordinates one bounded change without owning a durable lifecycle. The Orchestrator retains task
-intent, acceptance criteria, final Acceptance judgement, and every scope or authority decision.
+Collab coordinates one bounded change without owning a durable lifecycle.
 
 **This is the Orchestrator's document; the agent profiles are the workers'.** Execution shape, writer
 placement, review placement, collection, and landing are decided here, by the Orchestrator. A
@@ -26,17 +25,13 @@ Define each at its first use:
   to one live writer at a time. A lane is an execution resource, not durable narrative.
 - **Protected current lane** — the lane's current clean checkout state while its one writer is
   stopped; the ordinary object under review.
-- **Collect** — movement of the Orchestrator-accepted current lane into integration.
-- **Land** — movement from task integration into a persistence branch.
 - **Runtime pointer** — this skill directory's `runtime-<name>.md` for the runtime in use. Boundary 2
   states when to read it and what its absence means.
 
 ## Core guardrails
 
-1. **One writer at a time per checkout.** This is concurrent exclusivity, not a lifetime binding:
-   a checkout carries one live writer, and reassigning it once that writer's run is over is not a
-   second writer. That checkout is the lane. Parallelize read-only work; give each concurrent
-   writer a separate writable checkout.
+1. **One writer at a time per checkout.** That checkout is the lane. Parallelize read-only work;
+   give each concurrent writer a separate writable checkout.
 2. **Review reads the protected current lane.** Where a review is placed, a reviewer inspects the
    lane's current clean state while its writer is stopped. A correction or reconciliation changes
    that lane, so review runs again against its new current state (see Reconciliation for lane versus
@@ -69,8 +64,8 @@ For a writer, include these compact blocks:
    above owns what the brief itself then carries.
    The ticket contract also closes **operating assumptions** beside the existing envelope pointer:
    what a reviewer may assume about concurrency, caller trust, input provenance, and adversary
-   presence. The two terms stay distinct — the envelope says which changes belong to the task,
-   operating assumptions say which world the code runs in — and neither stands in for the other.
+   presence. The envelope says which changes belong to the task; operating assumptions say which
+   world the code runs in.
    Delegated ticket-checkbox authority belongs to dev-flow's record rules, and each child role
    profile carries it directly, so a dispatched child needs only its profile and its assigned ticket
    inputs — never a dev-flow read to learn its checkbox authority.
@@ -94,9 +89,8 @@ For a writer, include these compact blocks:
    When implementation is delegated and its brief, delegated Acceptance
    criteria, placement, mutation authority, and escalation boundary are closed, prefer runtime
    composition of a worker → reviewer → bounded correction loop; coordinate a transition separately
-   when it depends on Orchestrator judgement. This is a preference, not a restriction on
-   Orchestrator placement. Preserve one live writer per writable checkout and account for
-   pre-existing state; isolate when another writer is active or existing work needs protection.
+   when it depends on Orchestrator judgement. Account for pre-existing state; isolate when another
+   writer is active or existing work needs protection.
    **Runtime pointer:** before dispatching a writer, before collecting (boundary 5), or before
    landing, read this skill directory's `runtime-<name>.md` for your runtime when one exists; its
    Routing section names the section each step reads, and general mechanics stay behind conditional
@@ -121,8 +115,7 @@ For a writer, include these compact blocks:
 3. **Implement and review.** Execute the chosen shape; for delegated closed work that places a
    reviewer, prefer runtime composition of worker, reviewer, and bounded correction under a finite Orchestrator-supplied
    correction budget. The runtime pointer carries the registered composition path
-   and its terminal outcomes. Generic Acceptance below reviews the protected current lane; specialized
-   procedures (such as code-review) remain alternatives with their own identity contracts. This
+   and its terminal outcomes. Generic Acceptance below reviews the protected current lane. This
    step is complete when the lane carries a worker result and, where boundary 2 placed a reviewer, an
    independent review result — or a terminal blocker or decision request.
 4. **Judge the result.** The Orchestrator makes the final Acceptance judgement and chooses what
@@ -158,8 +151,7 @@ what each of those two briefs carries.
 **A replacement reads its ticket, not the task.** Its context is that ticket and whatever the ticket
 points to; the task record and sibling tickets belong to the Orchestrator, and handing them over invites
 scope creep. The ticket therefore names the next single step and the unverified boundary — which
-edits are validated, which are not, and what must not be redone or widened. A ticket that leaves the
-replacement to re-derive those is an unfinished brief, not a terse one.
+edits are validated, which are not, and what must not be redone or widened.
 
 **Mechanical finish.** When a run ends after its semantic work is validated but before the checkout
 is clean and committed, dispatch a fresh writer for that close-out alone: no semantic edits, lane-owned
@@ -168,9 +160,9 @@ carries no semantic edit, so it leaves no residue and is judged on its gates.
 
 ## Worker results are semantic
 
-**Gates.** The ticket owns the ordered binary Mechanical gates plan; every listed gate must pass
-before the implementer may return `COMPLETED`. The implementer fixes failures within scope in the
-required order — focused failures first, then affected, then formatter/style, re-running affected
+**Gates.** dev-flow's record rules give the ticket the ordered binary gate plan and require every
+listed gate to pass before `COMPLETED`. The implementer fixes failures within scope in the required
+order — focused failures first, then affected, then formatter/style, re-running affected
 after any mutation, then broader — and returns one complete `BLOCKED` result when closure exceeds
 authority. Ticket-owned gates are validated by the implementer and proved only by lane state;
 reviewed roles neither re-execute them nor reopen run artifacts to judge them.
@@ -213,8 +205,8 @@ Every safety or non-happy-path blocker must be production-reachable under the st
 A `PASS` ends after Verdict and any residual risks; it needs no empty filler. The verdict
 is a review result, not ticket Acceptance: the Orchestrator owns the final judgement and closure.
 `NEEDS_DECISION` returns a contract contradiction or new-scope question to the Orchestrator instead
-of routing rework. Generic Acceptance carries no fixed-subject result fields and no `correctionBase` projection; public terminal results never expose the internal base. Specialized
-procedures such as [code-review](../code-review/SKILL.md) keep their own identity contracts.
+of routing rework. Generic Acceptance carries no fixed-subject result fields and no `correctionBase` projection; public terminal results never expose the internal base. Specialized procedures such as [code-review](../code-review/SKILL.md) keep their own identity
+contracts and produce separate Standards/Spec findings rather than a PASS/BLOCKED Acceptance verdict.
 
 When delegated red/green validation needs several commands, a fixed working directory, or owned
 temporary state, use [TDD Gate mode](../tdd/gate.md). Keep a one-command loop direct.
@@ -248,10 +240,7 @@ correction budget slot like any other correction and never resets the budget —
 what measures the cost this ticket has accumulated, and resetting it erases the evidence that the
 design, not the implementation, is what keeps failing.
 
-Collab does not require a particular workflow engine, retry count, steering mechanism, merge
-strategy, first-parent shape, review procedure, or independent reviewer. Specialized code-review
-remains an alternative source of separate Standards/Spec findings rather than a PASS/BLOCKED
-Acceptance verdict. The terminal handoff carries the reviewed lane's outcome, the decision that is
+The terminal handoff carries the reviewed lane's outcome, the decision that is
 needed, applicable direct observations, and residual risk. Orchestrator- and user-observed
 Acceptance items are reported there rather than mislabelled as blockers.
 
@@ -268,8 +257,7 @@ it; the runtime pointer names the operation that carries it out.
 What it brings in was covered by no ticket's Acceptance, so the Orchestrator re-evaluates the task's
 Acceptance, not only the current ticket's. Boundary 2 places an acceptor for residue — an Acceptance
 claim no listed gate proves — and content no ticket ever claimed has no gate to prove it, so residue
-is never empty for integration reconciliation: an acceptor is always placed there, a consequence of
-boundary 2's test rather than a rule of its own.
+is never empty for integration reconciliation: an acceptor is always placed there.
 
 Either reconciliation's review brief names the parent provenance it introduced, so a reviewer reports
 inherited history as inherited rather than judging it as current-task scope creep.

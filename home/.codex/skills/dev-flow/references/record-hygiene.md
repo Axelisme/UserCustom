@@ -69,7 +69,7 @@ Reserve `validation.md` for a single durable scenario and `validation-<scenario>
 
 It must record 5W1H and be authored by its execution owner:
 
-- **Who:** execution operator and evidence writer; Orchestrator writes itself/user/external-owner validation, delegated worker writes only the exact assigned difficult-claim appendix, acceptor is read-only.
+- **Who:** execution operator and evidence writer; the Orchestrator writes its own, the user's and an external owner's validation, and a delegated worker writes only the exact assigned difficult-claim appendix.
 - **What:** covered Acceptance IDs, scenario, expected/actual observations, PASSED/FAILED, bounded artifact pointers and residual limitations.
 - **When:** after the exact clean candidate is formed and before final Acceptance and closure, with timezone; candidate change invalidates prior evidence.
 - **Where:** exact candidate identity (commit/tree, lane) and execution environment/backend/device/MCP host identity.

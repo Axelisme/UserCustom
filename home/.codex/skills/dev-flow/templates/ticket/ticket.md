@@ -31,8 +31,7 @@ state: pending
 <!-- The Orchestrator owns this whole checklist and may revise it. Start every claim unchecked: unchecked
      means unproven, not necessarily that an executable test is red. Name an Orchestrator, user, manual,
      external, or production-path observer when it is not obvious. Stable labels are encouraged but
-     optional. A delegated writer may only toggle claims explicitly assigned to it; a reviewer is
-     read-only. A worker-reviewer loop is complete when every delegated claim is verified; its
+     optional. A worker-reviewer loop is complete when every delegated claim is verified; its
      handoff reports remaining Orchestrator or user observations without treating them as blockers. -->
 - [ ] **A1** — <observable criterion>
 

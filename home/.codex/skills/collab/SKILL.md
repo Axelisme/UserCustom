@@ -293,10 +293,8 @@ owns how the record holds user authority. Landing requires a clean persistence c
 no unstaged tracked, and no ordinary untracked state before mutation (ignored files are allowed);
 path conflicts and ignored-file collisions follow native `git merge` behavior. Hooks run natively;
 merge or hook failure is reported as an actionable Git error exposing Git's resulting state, without
-synthetic publication or dirt-preservation rollback. Legacy `refs/orchestrate/<task-id>/landed` is
-no longer created; an existing instance is tolerated as migration state and is deleted by the next
-authorized adopt, land, or remove operation. Freshness and continued landing eligibility are
-determined by ordinary branch ancestry and shared heads; no landed-identity exception participates.
+synthetic publication or dirt-preservation rollback. Freshness and continued landing eligibility are
+determined by ordinary branch ancestry and shared heads.
 Landing evidence applies only to the reviewed lane; a changed lane first needs a new review result.
 The runtime pointer names the operation that carries out landing.
 

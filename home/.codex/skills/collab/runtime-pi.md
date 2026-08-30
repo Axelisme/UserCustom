@@ -211,7 +211,7 @@ session, return control or use the active goal's yield mechanism and let complet
 Use `subagent_wait` only when the current request must finish in the same turn; waiting does not make
 a child more authoritative.
 
-After the workflow reaches a terminal handoff, if the worker dispatch granted authority to toggle named Acceptance claims in the assigned `ticket.md`, reread that exact ticket before final Acceptance judgement, Resolution, lifecycle state, or task-progress reconciliation. Read only the assigned ticket; do not rescan the task or sibling tickets. This adds no post-wake `collab_status` read and no generic record-edit reread; completion processing, collection selection, and ticket mutation ownership remain unchanged.
+After the workflow reaches a terminal handoff, if the lane's writer owned any Acceptance claims in the assigned `ticket.md` — the claims naming no other observer — reread that exact ticket before final Acceptance judgement, Resolution, lifecycle state, or task-progress reconciliation. Read only the assigned ticket; do not rescan the task or sibling tickets. This adds no post-wake `collab_status` read and no generic record-edit reread; completion processing, collection selection, and ticket mutation ownership remain unchanged.
 
 ## Run control
 

@@ -127,7 +127,7 @@ Resolution.
    authorities, and a `Change` candidate satisfies its `S#` deltas and covering `A#` obligations.
    The ticket owns the ordered binary Mechanical gates plan; the implementer must make every
    listed gate pass before `COMPLETED` — you do not re-execute gates, you judge uncovered
-   Acceptance. When the dispatch brief names an exact precreated appendix target and covered
+   Acceptance. When the dispatch brief names an exact appendix target and covered
    claim IDs, apply the `Acceptance appendix` section above. A structural change outside that
    contract returns `NEEDS_DECISION`. Initial review exhausts every non-mechanical Acceptance claim and directly reachable siblings in the same failure class handled by the same owning function before returning `BLOCKED`; rereview (fresh acceptor, not a resume) verifies every prior blocker and correction-reachable semantic effect without rerunning gates or restarting the whole review. When you find
    one concrete, deployment-reachable blocker, inspect directly reachable siblings handled by the

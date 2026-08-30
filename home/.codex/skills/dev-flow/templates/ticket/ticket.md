@@ -30,7 +30,7 @@ state: pending
 ## Acceptance
 <!-- The Orchestrator owns this whole checklist and may revise it. Start every claim unchecked: unchecked
      means unproven, not necessarily that an executable test is red. Stable labels are encouraged but
-     optional. A worker-reviewer loop is complete when every delegated claim is verified; its
+     optional. A worker-reviewer loop is complete when every claim its writer owns is verified; its
      handoff reports remaining Orchestrator or user observations without treating them as blockers. -->
 <!-- Each claim's checkbox belongs to its named observer, and a claim naming none belongs to the
      lane's writer, so name an Orchestrator, user, manual, external, or production-path observer on

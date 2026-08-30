@@ -64,8 +64,9 @@ receiver's own workflow.
    ticket rather than in the brief: a claim naming no observer belongs to whoever holds the lane's
    write token, and that is you when you write the change yourself. The ticket is the single source
    both dispatched roles already read, so a brief needs no separate checkbox grant and none can drift
-   from it across correction rounds. Both child profiles carry this rule, and
-   [lane-authority](../dev-flow/references/lane-authority.md) owns it.
+   from it across correction rounds.
+   [lane-authority](../dev-flow/references/lane-authority.md) owns the writer position and which
+   observer owns which checkbox.
    This step is complete when the writer can distinguish in-scope implementation from an Orchestrator
    decision and every receiver field is supplied.
 2. **Choose the execution shape.** The Orchestrator selects direct writing, separate dispatches,
@@ -168,8 +169,8 @@ reviewed roles neither re-execute them nor reopen run artifacts to judge them.
 
 **`COMPLETED` is a binary attestation** that the required gates passed. It carries no free-text
 `Validation` array and creates no durable receipt. Ordinary gate commands and raw outputs stay with
-the run artifact; durable observations for difficult claims belong only to the Orchestrator-precreated
-workflow-scoped Acceptance appendix at the exact dispatched target. Name that target in the brief;
+the run artifact; durable observations for difficult claims belong only to the workflow-scoped
+Acceptance appendix at the exact dispatched target. Name that target in the brief;
 its writer creates the file from dev-flow's `templates/ticket/evidence.md` and fills it with targeted
 edits, so the grant you issue is a path and never a file you precreate.
 [record-hygiene](../dev-flow/references/record-hygiene.md) owns when an appendix is required and what

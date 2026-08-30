@@ -317,7 +317,7 @@ function requireCorrectionBudget(value: unknown, error: ReviewedLaneErrorFactory
  * carries no free-text validation, no outOfEnvelopeFindings and no evidence body or pointer; correctionBase is internal
  * to the reviewed loop (initial BLOCKED carries exact lane HEAD SHA, rereview receives original brief, prior blockers and that base,
  * reviewer obtains delta via Git) and never appears in public terminal results. Commands remain with run artifacts; durable
- * observations for difficult claims belong to the Orchestrator-precreated workflow-scoped Acceptance appendix at the
+ * observations for difficult claims belong to the workflow-scoped Acceptance appendix at the
  * exact dispatched target. The runtime adds no evidence parameter, does not validate assignment, and carries only original
  * review brief, prior typed blockers and correctionBase for rereview with no ancestry, reconciliation, scope or
  * incremental-eligibility policy.

@@ -256,7 +256,7 @@ class SL04LeanTerminalTests(unittest.TestCase):
             tickets = base / "tickets" / "SL04"
             tickets.mkdir(parents=True)
             template = EVIDENCE_TEMPLATE.read_text(encoding="utf-8")
-            # Orchestrator precreates exact target for workflow 1
+            # Writer creates the exact target the Orchestrator named for workflow 1
             target1 = tickets / "reviewed-workflow-evidence.md"
             target1.write_text(template, encoding="utf-8")
             # Worker writes initial evidence for candidate1
@@ -277,7 +277,7 @@ class SL04LeanTerminalTests(unittest.TestCase):
             self.assertIn(candidate2, updated)
             self.assertNotIn(candidate1, updated)
             # Later separate workflow receives fresh target, earlier preserved
-            # Simulate Orchestrator precreating fresh target for workflow 2
+            # Simulate the writer creating the fresh target named for workflow 2
             target2 = tickets / "reviewed-workflow-evidence-w2.md"
             target2.write_text(template, encoding="utf-8")
             candidate3 = "c" * 40

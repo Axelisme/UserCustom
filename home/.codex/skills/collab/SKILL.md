@@ -174,9 +174,9 @@ Acceptance appendix at the exact dispatched target. Name that target in the brie
 its writer creates the file from dev-flow's `templates/ticket/evidence.md` and fills it with targeted
 edits, so the grant you issue is a path and never a file you precreate.
 [record-hygiene](../dev-flow/references/record-hygiene.md) owns when an appendix is required and what
-an assigned target does and does not grant. Operational
-Git and runtime checks — status, diff, diff-check, staged state, cleanliness, ancestry, commit
-identity, and lifecycle — are operation evidence and never belong in an appendix.
+an assigned target does and does not grant. Operational Git and runtime checks — status, diff,
+diff-check, staged state, cleanliness, ancestry, commit identity, and lifecycle — are operation
+evidence and never belong in an appendix.
 
 **`residualRisks: string[]`** is optional and carries every non-blocking codebase finding, from any
 worker or reviewer outcome branch, whether inside or outside the task envelope. Every terminal branch

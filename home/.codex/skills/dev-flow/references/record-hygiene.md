@@ -89,11 +89,11 @@ Durable script/MCP/production validation binds exact candidate, environment, cov
 
 For named difficult claims that a read-only acceptor cannot adequately reproduce, the Orchestrator
 names one fresh exact target under the ticket directory and places that path plus covered claim IDs
-in both role briefs; the writer creates that file from `templates/ticket/evidence.md` and refuses to
-create over an existing path. That writer may mutate only that exact target, binding the fixed candidate and covered claims to method, observations,
-artifact pointers when needed, and explicit limitations without judging Acceptance; if a required
-appendix cannot be completed, `COMPLETED` is unavailable. A dispatch without an assigned target
-grants no task-record evidence mutation. Automatic corrections update the same target sequentially
-for the latest candidate; a later separately dispatched workflow receives a fresh target and leaves
-earlier workflow evidence unchanged. The acceptor stays read-only, directly checks observable claims,
+in both role briefs; [lane-authority](lane-authority.md) owns who then creates that file and how it
+is filled. That writer may mutate only that exact target, binding the fixed candidate and covered
+claims to method, observations, artifact pointers when needed, and explicit limitations without
+judging Acceptance; if a required appendix cannot be completed, `COMPLETED` is unavailable. A
+dispatch without an assigned target grants no task-record evidence mutation. Automatic corrections
+update the same target sequentially for the latest candidate; a later separately dispatched workflow
+receives a fresh target and leaves earlier workflow evidence unchanged. The acceptor stays read-only, directly checks observable claims,
 and judges only whether the appendix describes a reasonable process for the covered difficult claims.

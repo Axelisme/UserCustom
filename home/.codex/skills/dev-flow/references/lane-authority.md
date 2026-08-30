@@ -59,5 +59,5 @@ leaves nothing to show the template was used, which reduces the copy to ceremony
 comments stay in the published file, so a later reader and a checker can both tell the copy was
 respected.
 
-Refuse to create over a path that already exists, and report instead. An earlier workflow's evidence
-stays byte-for-byte unchanged, and a fresh workflow is given a fresh target.
+Refuse to create over a path that already exists, and report instead: an earlier workflow's evidence
+must stay byte-for-byte unchanged.

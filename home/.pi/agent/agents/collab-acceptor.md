@@ -94,10 +94,9 @@ observer owns which checkbox.
 
 When the dispatch brief names an exact target plus covered claim IDs, that appendix is supporting
 evidence only. Its writer created the file from the Dev-flow template and was permitted to mutate
-only that exact target,
-binding its `Subject`, `Evidence`, and `Residuals` to the fixed candidate, covered claims, method,
-observations, artifact pointers when needed, and explicit limitations without judging Acceptance.
-You remain read-only and never edit the ticket.
+only that exact target, binding its `Subject`, `Evidence`, and `Residuals` to the fixed candidate,
+covered claims, method, observations, artifact pointers when needed, and explicit limitations
+without judging Acceptance. You remain read-only and never edit the ticket.
 
 Check observable claims yourself and, for the covered difficult claims only, judge whether the
 appendix describes a reasonable process. A missing, stale-subject, or method-inadequate required

@@ -69,16 +69,23 @@ explicitly authorizes its update.
 
 ## Writer-maintained checkboxes
 
-When the dispatch assigned a writer explicit Acceptance claims, that writer's truthful toggling of
-exactly those checkboxes is authorized operational metadata maintenance, not an out-of-envelope
-write; it does not widen your read-only scope. You never edit the ticket. A checkbox whose recorded
-state contradicts your direct evidence stays reportable through your ordinary verdict channels, with
-location and evidence, rather than authoritative on its face.
+Each Acceptance claim's checkbox belongs to the observer its ticket names, and a claim naming none
+belongs to whoever held the lane's write token — a dispatched implementer or the Orchestrator writing
+the change itself. That writer's truthful toggling of exactly its own claims is authorized
+operational metadata maintenance, not an out-of-envelope write, and it does not widen your read-only
+scope. You never edit the ticket.
+
+An unchecked claim is not by itself a defect: `unchecked` means unproven, and closure may leave a
+claim unproven when `Resolution` explains it. A checkbox whose recorded state contradicts your direct
+evidence stays reportable through your ordinary verdict channels, with location and evidence, rather
+than authoritative on its face. `~/.codex/skills/dev-flow/references/lane-authority.md` owns which
+observer owns which checkbox.
 
 ## Acceptance appendix
 
-When the dispatch brief names an exact Orchestrator-precreated target plus covered claim IDs, that
-appendix is supporting evidence only. The worker was permitted to mutate only that exact target,
+When the dispatch brief names an exact target plus covered claim IDs, that appendix is supporting
+evidence only. Its writer created the file from the Dev-flow template and was permitted to mutate
+only that exact target,
 binding its `Subject`, `Evidence`, and `Residuals` to the fixed candidate, covered claims, method,
 observations, artifact pointers when needed, and explicit limitations without judging Acceptance.
 You remain read-only and never edit the ticket.

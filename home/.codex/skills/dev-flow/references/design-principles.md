@@ -47,3 +47,13 @@ without duplicating either skill's checks.
     rule sits in is what decides that. And readers who cannot reach each other's
     documents each need their own copy, which obliges a test that keeps the copies consistent.
     Principle 14 is this rule's instance for definitions.
+16. Key a rule to the **position** a reader holds, not to how that reader was summoned. A rule
+    conditioned on having been dispatched — `only the dispatch can assign`, `the assigned writer
+    may` — silently exempts everyone else who holds the same position, and the exempted case falls
+    through to whatever general ownership statement is nearest, which is how per-claim progress
+    became one batch edit at closure when the Orchestrator wrote the change itself. Name the
+    position, then let delegation be one of its cases. The tell is a rule whose condition mentions
+    a dispatch, a brief, or an assignment where the behaviour it governs does not depend on any of
+    them. A related tell in the pointer itself: a sentence that explains where a rule lives
+    (`each child profile carries it directly`) reads as reassurance and obliges no one, so it
+    discharges nothing at the site that needed a verb.

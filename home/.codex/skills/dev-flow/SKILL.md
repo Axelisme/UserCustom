@@ -71,9 +71,12 @@ durable evidence, and only when the evidence must persist. The ticket owns the o
 Mechanical gates plan; `templates/ticket/ticket.md` holds its rules.
 
 **Who may write what.** The Orchestrator owns all ticket content and exclusively changes lifecycle
-state and Resolution. A delegated writer may toggle only the Acceptance claims its dispatch
-explicitly assigns, and may use its ticket's `scripts/` subtree. A reviewer or acceptor reads and
+state and Resolution. The lane's **writer** — whoever holds its single write token, a dispatched
+implementer or the Orchestrator writing the change itself — toggles the Acceptance claims whose
+observer is itself, and may use its ticket's `scripts/` subtree. A reviewer or acceptor reads and
 verifies without editing the ticket. A dispatched writer or reviewer never writes `INDEX.md`.
+[lane-authority](references/lane-authority.md) owns the writer position, the three mutation classes
+that are never inferred from one another, and which observer owns which checkbox.
 
 Use one **single-store**: durable ticket state comes from this record. Session task lists are
 temporary projections and never overwrite durable state merely because their UI differs. A
@@ -122,4 +125,8 @@ declares what its own scaffolding is and when it comes down (for example
   managed integration removal and archive →
   [collab-feedback-closeout](references/collab-feedback-closeout.md), which holds the pending
   closeout obligation and the snapshot-before-retirement sequence.
+- **You are about to toggle an Acceptance checkbox, hold a lane's write token, or judge whether
+  someone else's mutation was authorized** → [lane-authority](references/lane-authority.md), which
+  owns the writer position, the three mutation classes, the observer that owns each checkbox, and
+  how an evidence file is created from its template.
 - **You are evolving dev-flow itself** → [design-principles](references/design-principles.md).

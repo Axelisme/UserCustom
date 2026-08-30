@@ -52,7 +52,10 @@ cp ~/.codex/skills/dev-flow/templates/ticket/evidence.md <task>/tickets/<ticket-
 
 That template carries the Subject / Evidence / Residuals spine every evidence kind shares, and the
 situational sections are yours to add. Copy an evidence file when you are ready to write it: an empty `validation.md` sitting
-in a ticket directory reads as validation that exists, so let absence stay honest.
+in a ticket directory reads as validation that exists, so let absence stay honest. Then fill it with
+targeted edits and never with a whole-file write, which would destroy the copied skeleton and leave
+nothing to show the template was used — [lane-authority](lane-authority.md) owns that rule and why
+the template's comments stay in the published file.
 
 The filesystem is the inventory; a second inventory drifts. That holds only while every file is
 reachable from the scope that owns it, so a flat pile beside these directories is a defect, not a
@@ -66,7 +69,7 @@ closure means that obligation went unpaid.
 
 ## Guiding script locations (S5)
 
-`templates/task/` provides `<task>/scripts/` and `templates/ticket/` provides `<ticket>/scripts/` as guiding locations. The Orchestrator owns task-level scripts; the assigned writer may create or modify its ticket's `scripts/` subtree without gaining wider record mutation authority (no per-file grant needed, but no extension to other ticket-folder content). The acceptor remains read-only. Dispatch provides the ticket folder path; roles derive the needed container from it. Ticket closure retains scripts with the same lifecycle as other ticket content.
+`templates/task/` provides `<task>/scripts/` and `templates/ticket/` provides `<ticket>/scripts/` as guiding locations. The Orchestrator owns task-level scripts; the lane's writer may create or modify its ticket's `scripts/` subtree without gaining wider record mutation authority (no per-file grant needed, but no extension to other ticket-folder content). The acceptor remains read-only. A dispatched writer derives the container from the ticket folder path its dispatch supplies. [lane-authority](lane-authority.md) owns who the writer is and what each mutation class does not grant. Ticket closure retains scripts with the same lifecycle as other ticket content.
 
 ## Durable validation that must persist (A14–A15)
 
@@ -74,7 +77,7 @@ Reserve `validation.md` for a single durable scenario and `validation-<scenario>
 
 It must record 5W1H and be authored by its execution owner:
 
-- **Who:** execution operator and evidence writer; the Orchestrator writes its own, the user's and an external owner's validation, and a delegated worker writes only the exact assigned difficult-claim appendix.
+- **Who:** execution operator and evidence writer; the Orchestrator writes its own, the user's and an external owner's validation, and the lane's writer writes only the exact assigned difficult-claim appendix.
 - **What:** covered Acceptance IDs, scenario, expected/actual observations, PASSED/FAILED, bounded artifact pointers and residual limitations.
 - **When:** after the exact clean candidate is formed and before final Acceptance and closure, with timezone; candidate change invalidates prior evidence.
 - **Where:** exact candidate identity (commit/tree, lane) and execution environment/backend/device/MCP host identity.
@@ -86,9 +89,9 @@ Durable script/MCP/production validation binds exact candidate, environment, cov
 ## Workflow-scoped Acceptance appendix
 
 For named difficult claims that a read-only acceptor cannot adequately reproduce, the Orchestrator
-copies `templates/ticket/evidence.md` to one fresh exact target under the ticket directory before
-dispatch and places that exact path plus covered claim IDs in both role briefs. The worker may mutate
-only that exact target, binding the fixed candidate and covered claims to method, observations,
+names one fresh exact target under the ticket directory and places that path plus covered claim IDs
+in both role briefs; the writer creates that file from `templates/ticket/evidence.md` and refuses to
+create over an existing path. The worker may mutate only that exact target, binding the fixed candidate and covered claims to method, observations,
 artifact pointers when needed, and explicit limitations without judging Acceptance; if a required
 appendix cannot be completed, `COMPLETED` is unavailable. A dispatch without an assigned target
 grants no task-record evidence mutation. Automatic corrections update the same target sequentially

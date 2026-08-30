@@ -60,9 +60,12 @@ receiver's own workflow.
    what a reviewer may assume about concurrency, caller trust, input provenance, and adversary
    presence. The envelope says which changes belong to the task; operating assumptions say which
    world the code runs in.
-   Delegated ticket-checkbox authority belongs to dev-flow's record rules, and each child role
-   profile carries it directly, so a dispatched child needs only its profile and its assigned ticket
-   inputs — never a dev-flow read to learn its checkbox authority.
+   Name the observer of every Acceptance claim you do not want the lane's writer to toggle, in the
+   ticket rather than in the brief: a claim naming no observer belongs to whoever holds the lane's
+   write token, and that is you when you write the change yourself. The ticket is the single source
+   both dispatched roles already read, so a brief needs no separate checkbox grant and none can drift
+   from it across correction rounds. Both child profiles carry this rule, and
+   [lane-authority](../dev-flow/references/lane-authority.md) owns it.
    This step is complete when the writer can distinguish in-scope implementation from an Orchestrator
    decision and every receiver field is supplied.
 2. **Choose the execution shape.** The Orchestrator selects direct writing, separate dispatches,
@@ -166,10 +169,11 @@ reviewed roles neither re-execute them nor reopen run artifacts to judge them.
 **`COMPLETED` is a binary attestation** that the required gates passed. It carries no free-text
 `Validation` array and creates no durable receipt. Ordinary gate commands and raw outputs stay with
 the run artifact; durable observations for difficult claims belong only to the Orchestrator-precreated
-workflow-scoped Acceptance appendix at the exact dispatched target. Precreate that target by running
-`cp` on dev-flow's `templates/ticket/evidence.md`, never by writing the section yourself, and place
-the resulting path in the brief; [record-hygiene](../dev-flow/references/record-hygiene.md) owns when
-an appendix is required and what an assigned target does and does not grant. Operational
+workflow-scoped Acceptance appendix at the exact dispatched target. Name that target in the brief;
+its writer creates the file from dev-flow's `templates/ticket/evidence.md` and fills it with targeted
+edits, so the grant you issue is a path and never a file you precreate.
+[record-hygiene](../dev-flow/references/record-hygiene.md) owns when an appendix is required and what
+an assigned target does and does not grant. Operational
 Git and runtime checks — status, diff, diff-check, staged state, cleanliness, ancestry, commit
 identity, and lifecycle — are operation evidence and never belong in an appendix.
 

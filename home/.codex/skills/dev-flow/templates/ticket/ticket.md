@@ -7,7 +7,7 @@ state: pending
 <!-- Copy this to tickets/<ticket-id>/ticket.md. The frontmatter `id` must equal that directory name.
      This ticket's durable evidence lives beside this file in the same directory — copy
      the evidence.md beside this template for each piece — and the whole directory is what closure
-     discharges. Guiding script location: `<ticket>/scripts/` for the assigned writer's helpers; the Orchestrator owns `<task>/scripts/` and the acceptor is read-only. The Orchestrator owns this ticket. Keep state pending until the Orchestrator resolves the ticket;
+     discharges. Guiding script location: `<ticket>/scripts/` for the lane writer's helpers; the Orchestrator owns `<task>/scripts/` and the acceptor is read-only. The Orchestrator owns this ticket. Keep state pending until the Orchestrator resolves the ticket;
      only the Orchestrator sets state closed or writes Resolution. -->
 
 | Ticket field | Value |
@@ -29,10 +29,14 @@ state: pending
 
 ## Acceptance
 <!-- The Orchestrator owns this whole checklist and may revise it. Start every claim unchecked: unchecked
-     means unproven, not necessarily that an executable test is red. Name an Orchestrator, user, manual,
-     external, or production-path observer when it is not obvious. Stable labels are encouraged but
+     means unproven, not necessarily that an executable test is red. Stable labels are encouraged but
      optional. A worker-reviewer loop is complete when every delegated claim is verified; its
      handoff reports remaining Orchestrator or user observations without treating them as blockers. -->
+<!-- Each claim's checkbox belongs to its named observer, and a claim naming none belongs to the
+     lane's writer, so name an Orchestrator, user, manual, external, or production-path observer on
+     every claim you do not want the writer to toggle. Checkbox ownership rules:
+     ~/.codex/skills/dev-flow/references/lane-authority.md. Both role profiles carry the same rule,
+     so it holds whether or not this comment survives publication. -->
 - [ ] **A1** — <observable criterion>
 
 ## Mechanical gates

@@ -37,7 +37,12 @@ SHARED_CLAUSES = {
         "when closure requires wider scope",
         "completed the exact assigned appendix",
         "references/efficiency-feedback.md",
-        "## Assigned ticket checkboxes",
+        # The writer position, not the dispatch, decides which boxes are this role's to toggle.
+        "## Acceptance checkboxes you own",
+        "the Acceptance claims that name no observer are yours",
+        "references/lane-authority.md",
+        # The copy is ceremony unless the rule reaches the moment the file is filled.
+        "never a whole-file write",
     ),
     "collab-acceptor": (
         # Without these the writer fills an appendix no reviewer knows how to judge.
@@ -52,6 +57,10 @@ SHARED_CLAUSES = {
         "whether inside or outside the envelope",
         "references/efficiency-feedback.md",
         "## Writer-maintained checkboxes",
+        # Without these the acceptor reports a legitimate toggle, or an unproven claim, as a defect.
+        "belongs to whoever held the lane's write token",
+        "An unchecked claim is not by itself a defect",
+        "references/lane-authority.md",
     ),
 }
 

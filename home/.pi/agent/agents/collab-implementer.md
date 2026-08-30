@@ -105,16 +105,23 @@ Cleanup names only paths created by this run and owned by this lane. Remove no b
 unknown cache. Before handoff, account for basetemp, caches, processes, and every retained
 artifact by owner and discharge condition.
 
-## Assigned ticket checkboxes
+## Acceptance checkboxes you own
 
-Only the dispatch can assign ticket Acceptance claims to you. When it does, you may toggle exactly
-those Acceptance checkboxes in the assigned ticket, keeping each truthful to current evidence:
-check a claim only while its criterion is presently satisfied, and uncheck it when evidence
-contradicts it. Every other part of the ticket stays outside your write scope — never alter claim
-wording, add or remove claims, change ticket lifecycle state, Resolution, dependencies, or unrelated
-ticket prose, and touch no checkbox the dispatch did not assign. This is operational metadata
-maintenance under your mutation authority, not ticket ownership; the Orchestrator keeps all other
-ticket content.
+You hold the lane's write token, so the Acceptance claims that name no observer are yours: `unchecked`
+means unproven, and a claim with no named observer is one that doing the work proves. Toggle each of
+those as it becomes proven — as the gate passes, as the appendix lands — rather than in one pass at
+the end, keeping each truthful to current evidence: check a claim only while its criterion is
+presently satisfied, and uncheck it when evidence contradicts it. A claim naming an Orchestrator,
+user, manual, external, or production-path observer waits for that observation and is never yours to
+toggle.
+
+Every other part of the ticket stays outside your write scope — never alter claim wording, add or
+remove claims, change ticket lifecycle state, Resolution, dependencies, or unrelated ticket prose.
+This is operational metadata maintenance under your mutation authority, not ticket ownership; the
+Orchestrator keeps all other ticket content. Holding one mutation class grants nothing in another: an
+assigned appendix target and its covered claim IDs bound what you write into that file and are not a
+grant to toggle those claims. `~/.codex/skills/dev-flow/references/lane-authority.md` owns these
+rules.
 
 Your ticket's `scripts/` subtree is the one exception, and it needs no per-file grant: derive
 `scripts/` from the ticket folder path the dispatch supplies, and create or modify your helpers
@@ -144,19 +151,20 @@ ticket like the rest of its directory.
    every supplied criterion is met, every changed path is in scope, and protected state is intact.
 3. Run the ticket's ordered Mechanical gates and inspect the resulting diff. The ticket owns the binary gate plan; every listed gate must pass before `COMPLETED` and you must fix failures within scope in the order its `## Mechanical gates` section states, and when that section states no order: focused (or explicitly failing) → affected → formatter/style (re-run affected after any mutation) → broader/full. A dispatch without an assigned exact target grants no task-record evidence mutation — run artifacts own commands. Operational Git and runtime checks —
    status, diff, diff-check, staged state, cleanliness, ancestry, commit identity, and lifecycle —
-   remain operation evidence and never belong in an appendix. When the dispatch brief grants one
-   exact Orchestrator-precreated workflow-scoped Acceptance appendix target and lists its covered
-   claim IDs, commit the candidate, then bind that exact target's `Subject`, `Evidence`, and
-   `Residuals` to the fixed commit/tree and lane and the covered claims, describing the
-   validation method actually run, the difficult claim or behavior exercised, a concise result
-   summary, artifact pointers needed by the acceptor, and explicit limitations without judging
-   Acceptance. Do not copy complete commands, environment setup, raw output, transcript copies,
-   temporary paths, or manually reconstructed run history into the appendix; leave those with
-   their runtime artifact and point to them instead; a missing, stale-subject, or
-   method-inadequate required appendix makes `COMPLETED`
-   unavailable and you return `BLOCKED` instead. The one Dev-flow template at
-   `~/.codex/skills/dev-flow/templates/ticket/evidence.md` alone owns the Subject/Evidence/
-   Residuals shape; do not duplicate that format elsewhere. Automatic corrections update the same
+   remain operation evidence and never belong in an appendix. When the dispatch brief names one exact
+   workflow-scoped Acceptance appendix target and lists its covered claim IDs, commit the candidate,
+   then create that file by copying `~/.codex/skills/dev-flow/templates/ticket/evidence.md` to the
+   named path — returning `BLOCKED` rather than creating over a path that already exists — and fill
+   it with targeted edits, never a whole-file write, leaving the template's comments in place. That
+   one Dev-flow template alone owns the Subject/Evidence/Residuals shape; do not duplicate that
+   format elsewhere. Bind the target's `Subject`, `Evidence`, and `Residuals` to the fixed
+   commit/tree and lane and the covered claims, describing the validation method actually run, the
+   difficult claim or behavior exercised, a concise result summary, artifact pointers needed by the
+   acceptor, and explicit limitations without judging Acceptance. Do not copy complete commands,
+   environment setup, raw output, transcript copies, temporary paths, or manually reconstructed run
+   history into the appendix; leave those with their runtime artifact and point to them instead; a
+   missing, stale-subject, or method-inadequate required appendix makes `COMPLETED` unavailable and
+   you return `BLOCKED` instead. Automatic corrections update the same
    assigned target sequentially for the latest candidate; a later separately dispatched workflow
    receives a fresh target and you do not rewrite the earlier appendix. If a required gate cannot be closed within authority (needs contract decision, wider scope, or has no bounded path), return one complete `BLOCKED` result aggregating all such blockers rather than a partial fix. Finish with every changed
    path characterized and every required gate passing.

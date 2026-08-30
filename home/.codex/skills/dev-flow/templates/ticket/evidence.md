@@ -1,12 +1,17 @@
 # Acceptance appendix
 
 <!-- Workflow-scoped Acceptance appendix for named difficult claims.
-     Orchestrator precreates one exact target per workflow: `cp` this file to
-     a fresh collision-free path under tickets/<ticket-id>/, then places that
-     exact path plus covered claim IDs in both worker and review briefs. No
+     The Orchestrator names one fresh collision-free target per workflow under
+     tickets/<ticket-id>/ and places that exact path plus covered claim IDs in
+     both worker and review briefs. The lane's writer creates the file by `cp`
+     of this template and refuses to create over an existing path, then fills
+     the sections with targeted edits — never a whole-file write, which would
+     destroy this skeleton. These comments stay in the published file. No
      assignment grants no task-record evidence mutation. When an appendix is
      required and what a target grants are owned by
-     ~/.codex/skills/dev-flow/references/record-hygiene.md.
+     ~/.codex/skills/dev-flow/references/record-hygiene.md; who may create and
+     fill it is owned by
+     ~/.codex/skills/dev-flow/references/lane-authority.md.
      One Dev-flow template owns the Subject/Evidence/Residuals spine. Do not
      duplicate this format elsewhere. The appendix binds the fixed candidate
      without judging Acceptance; the Orchestrator owns wording, state, and

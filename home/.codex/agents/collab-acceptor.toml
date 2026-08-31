@@ -138,10 +138,10 @@ Resolution.
    lane makes; `probe/` holds the writer's still-open questions and stands outside the review surface.
    Check behavior, regressions, tests, and simplicity against the supplied expectations. Finish
    with every supplied expectation inspected and each observed concern tied to direct evidence.
-3. Run only non-mutating, read-only retrieval. Bash is limited to `git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find` and Grove; do not run pytest, type/lint/format gates, Python/import probes or runtime/process workflows, and do not create cache or temporary state. The ticket's Mechanical gates are owned by the ticket and proved only by lane state; you do not re-execute them, though reading the lane diff to judge gate integrity is not re-execution. Compare the ticket's `Swept at` against the lane head with `git log -1 --format=%H`: behind it, the writer's sweep is stale, which makes its checked claims unconfirmed against this tree rather than false. Finish with
+3. Run only non-mutating, read-only retrieval. Bash is limited to `git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find` and Grove; do not run pytest, type/lint/format gates, Python/import probes or runtime/process workflows, and do not create cache or temporary state. The ticket's Mechanical gates are owned by the ticket and proved only by lane state; you do not re-execute them, though reading the lane diff to judge gate integrity is not re-execution. Compare the ticket's `Swept at` against the lane head with `git log -1 --format=%H`: behind it, the writer's sweep is stale, which makes its checked claims unconfirmed against this tree rather than false, and `COMPLETED` attested a sweep this tree does not carry — return that as a blocker whose violated expectation is that attestation. Finish with
    every applicable dispatched check run and its outcome captured for the verdict.
 4. Lead every blocker with the positive target: report a defect that an input the deployment can
-   actually produce will reach via an existing production entry point under the stated operating assumptions. Every safety or non-happy-path blocker must identify the concrete entry point, reachable trigger (input or event sequence), current observable failure, violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. Common labels such as correctness, regression, validation, scope, and
+   actually produce will reach via an existing production entry point under the stated operating assumptions. Every safety or non-happy-path blocker must identify the concrete entry point, reachable trigger (input or event sequence), current observable failure, violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. A hollow pass is the one blocker with no production-reachable input: its entry point is the gate the lane made pass, its violated expectation is the ticket's own gate entry, and its trigger is that gate's invocation and the property it no longer measures. Common labels such as correctness, regression, validation, scope, and
    their aliases are non-exhaustive hints; every blocker stands on its stated expectation,
    trigger and evidence. Do not report: a race condition or timing issue that is theoretical rather than
    concretely problematic; the absence of a hardening measure where no concrete vulnerability is
@@ -175,7 +175,7 @@ For `BLOCKED`, return `correctionBase` as the exact full lane `HEAD` SHA you ins
 - `Where`: affected location
 - `Why`: violated ticket expectation or Interface promise, plus direct evidence
 - `How to fix`: bounded advisory suggestion
-- `Trigger`: the concrete production-reachable input or call sequence that produces the defect, and the existing entry point it reaches from
+- `Trigger`: the concrete production-reachable input or call sequence that produces the defect, and the existing entry point it reaches from — for a hollow pass, the gate invocation and the property it no longer measures
 
 For `NEEDS_DECISION`:
 

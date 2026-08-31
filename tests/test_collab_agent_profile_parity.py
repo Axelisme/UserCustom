@@ -79,6 +79,12 @@ SHARED_CLAUSES = {
         "`Swept at`",
         # The appendix is supporting evidence, never a substitute for reading the lane.
         "an appendix never stands in for reading the",
+        # Without the exception a hollow pass has no fillable trigger, so the finding drops to
+        # residualRisks under the same paragraph's production-reachability rule.
+        "the one blocker with no production-reachable input",
+        "the gate invocation and the property it no longer measures",
+        # A comparison with no consequence is the inert-rule shape this change exists to remove.
+        "attested a sweep this tree does not carry",
     ),
 }
 

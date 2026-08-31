@@ -37,16 +37,20 @@ state: pending
      every claim you do not want the writer to toggle. Checkbox ownership, the closing sweep, and
      `Swept at`: ~/.codex/skills/dev-flow/references/lane-authority.md. Both role profiles carry the
      same rules, so they hold whether or not this comment survives publication.
-     Every claim also states the observation that decides it and the surface it is observed on. A
-     claim whose promise is about the shipped path is mis-stated when a static assertion or a
-     test-only composition satisfies it; ~/.codex/skills/dev-flow/references/s0-design-admission.md
+     Every claim also states the observation that decides it, on the surface it is observed on, in
+     its own `Decided by` slot. Keep that separate from `Observed by`: `Observed by` names the party
+     whose checkbox it is and is omitted when that party is the writer, while `Decided by` is always
+     present. A claim whose promise is about the shipped path is mis-stated when a static assertion
+     or a test-only composition satisfies it; ~/.codex/skills/dev-flow/references/s0-design-admission.md
      owns what makes a surface adequate. A claim that names no deciding observation stops
-     publication — see that reference's publication preconditions in
+     publication under the preconditions in
      ~/.codex/skills/dev-flow/references/ticket-seam-contract.md. -->
 **Swept at:** <the commit every writer-owned claim was last re-confirmed against, or `not yet`>
+<!-- Checked after handoff, by the acceptor when one is placed and otherwise by the Orchestrator at
+     boundary 4. Never a Mechanical gate: the gate list runs before the writer commits. -->
 
-- [ ] **A1** — <observable criterion>. *Observed by:* <the observation that decides it, on its
-  surface; name a non-writer observer here when the claim is not the writer's to toggle>
+- [ ] **A1** — <observable criterion>. *Decided by:* <the observation that decides it, on its
+  surface> *Observed by:* <the non-writer party this checkbox belongs to; omit when it is the writer>
 
 ## Mechanical gates
 <!-- Ordered binary gate plan owned by this ticket. Every listed gate must pass before `COMPLETED`.
@@ -54,11 +58,10 @@ state: pending
      Implementer runs in order: focused (or explicitly failing) → affected → formatter/style (re-run affected after any mutation) → broader/full.
      State a different order here only when this ticket needs one. The implementer profiles carry
      that same default, so the order holds whether or not this comment survives publication.
-     Gate-mapping test (canonical definition: ~/.codex/skills/collab/SKILL.md boundary 2): draft
-     this list by walking every Acceptance claim above and writing the gate that decides it. A claim
-     is mechanically decidable when one command's exit status is that claim, with nothing in its
-     output left to read. A claim becomes residue — what the dispatched acceptor judges — only once
-     you have established that no command can decide it.
+     Gate-mapping test: draft this list by walking every Acceptance claim above and writing the
+     gate that decides it. A claim becomes residue — what the dispatched acceptor judges — only once
+     you have established that no command can decide it. `mechanically decidable` and `residue` are
+     defined at ~/.codex/skills/collab/SKILL.md boundary 2; read it when a claim is borderline.
      Example gates (replace with ticket-specific ones): -->
 - [ ] Focused behavior gates for changed reviewed-workflow schema and prompt composition
 - [ ] Affected TypeScript/JavaScript static checks and profile/configuration format checks
@@ -68,7 +71,6 @@ state: pending
 - [ ] Inventory equality: the generated catalog's count equals the number this ticket declares
 - [ ] Reachability: the shipped entrypoint, not a test-only composition, exercises the path
 - [ ] Vacuous assertion: no test body asserts a constant or asserts nothing
-- [ ] Acceptance sweep is current: `Swept at` equals the lane head
 
 ## Resolution
 <!-- The Orchestrator writes this once when closing the ticket. Normal closure follows completion of all

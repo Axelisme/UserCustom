@@ -25,9 +25,9 @@ its escalation are [Collab's](SKILL.md#review-placement-and-the-correction-loop)
 
 Each dispatch is a fresh child of the exact profile — `collab-implementer` to write, `collab-acceptor`
 to review the protected current lane once mutation has stopped, a fresh compatible implementer to
-correct under the original authority contract, and a fresh acceptor to rereview. Those correction
-dispatches are this binding's own, so Collab's boundary-2 re-entry applies to a correction the
-Orchestrator dispatches after the loop hands back, never to one issued inside it. Project the results
+correct under the original authority contract, and a fresh acceptor to rereview. Every one of those
+is an Orchestrator dispatch, so each re-enters boundary 2 and has its placement decided again.
+Project the results
 through Collab's [worker-result](SKILL.md#worker-results-are-semantic) and [Generic
 Acceptance](SKILL.md#generic-acceptance) rules, and return blockers or decisions to the Orchestrator;
 final Acceptance, collection, landing, and escalation happen outside this binding.
@@ -37,6 +37,10 @@ final Acceptance, collection, landing, and escalation happen outside this bindin
 `collab-reviewed-lane` is an optional saved Claude Workflow composing those same two profiles. It is
 an Orchestrator execution-shape selection over the same composition, not a new lifecycle, authority,
 or Result contract, and it owns its own Result schemas and terminal projection.
+
+Its correction is the Workflow's own: placement was fixed when the Workflow was launched, so
+Collab's boundary-2 re-entry reaches a correction the Orchestrator dispatches after the Workflow
+hands back, never one issued inside it.
 
 Select it only after current implementation authority is closed, one pre-provisioned lane exists, and
 the complete bounded input is closed; discussion, planning, and unbounded requests close none of

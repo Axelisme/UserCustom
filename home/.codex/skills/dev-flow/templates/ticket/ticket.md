@@ -50,7 +50,9 @@ state: pending
      boundary 4. Never a Mechanical gate: the gate list runs before the writer commits. -->
 
 - [ ] **A1** — <observable criterion>. *Decided by:* <the observation that decides it, on its
-  surface> *Observed by:* <the non-writer party this checkbox belongs to; omit when it is the writer>
+  surface>
+  *Observed by:* <the non-writer party this checkbox belongs to; omit the whole slot when it is the
+  writer>
 
 ## Mechanical gates
 <!-- Ordered binary gate plan owned by this ticket. Every listed gate must pass before `COMPLETED`.

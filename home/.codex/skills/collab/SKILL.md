@@ -137,7 +137,8 @@ receiver's own workflow.
    independent review result — or a terminal blocker or decision request.
 4. **Judge the result.** The Orchestrator makes the final Acceptance judgement. Compare the ticket's
    `Swept at` against the lane head first when no acceptor was placed to do it: behind the head, the
-   writer's sweep is stale and its checked claims are unconfirmed against the delivered tree. Then
+   writer's sweep is stale and its checked claims are unconfirmed against the delivered tree, so
+   confirm them yourself or return the lane for a fresh sweep before accepting it. Then
    choose what follows: accept the judged lane, return a bounded defect for correction, return a decision
    request or exhausted correction budget to its owner, or select another shape. A correction the
    Orchestrator itself dispatches returns to boundary 2, so placement is decided once per dispatch

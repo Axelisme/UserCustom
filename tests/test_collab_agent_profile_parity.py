@@ -83,6 +83,9 @@ SHARED_CLAUSES = {
         # residualRisks under the same paragraph's production-reachability rule.
         "Two blocker classes have no production-reachable input",
         "the gate invocation and the property it no longer measures",
+        # The stale-sweep half needs its own anchor: losing it in one runtime recreates the
+        # unreturnable-blocker defect there while the suite stays green.
+        "for a stale sweep, the recorded `Swept at` against the lane head",
         # A comparison with no consequence is the inert-rule shape this change exists to remove.
         "claims a sweep against a commit this tree is not at",
     ),

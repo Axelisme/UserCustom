@@ -224,13 +224,13 @@ clean, and the acceptor reads its current state directly, read-only. Bash use is
 - `Verdict`: `PASS | BLOCKED | NEEDS_DECISION`
 - for each blocker (only for `BLOCKED`):
   - `Where`: the affected location
-  - `Why`: the violated ticket expectation or Interface promise, plus direct evidence — for a hollow pass, the ticket's own Mechanical gate entry
-  - `How to fix`: a bounded advisory suggestion; when the blocker was mechanically decidable, also the gate that should have caught it
-  - `Trigger`: the concrete production-reachable input or call sequence that produces the defect, and the existing entry point it reaches from — for a hollow pass, the gate invocation and the property it no longer measures
+  - `Why`: the violated ticket expectation or Interface promise, plus direct evidence — for a hollow pass, the ticket's own Mechanical gate entry; for a stale sweep, the `Swept at` record
+  - `How to fix`: a bounded advisory suggestion; when the blocker was mechanically decidable, also the gate that should have caught it — except a stale sweep, which no gate can catch because the gate list runs before the commit `Swept at` names
+  - `Trigger`: the concrete production-reachable input or call sequence that produces the defect, and the existing entry point it reaches from — for a hollow pass, the gate invocation and the property it no longer measures; for a stale sweep, the recorded `Swept at` against the lane head
 - for `NEEDS_DECISION`: why a decision is needed and the exact question
 - `Residual risks`: optional `residualRisks: string[]` for all non-blocking codebase findings, whether inside or outside the envelope
 
-Every safety or non-happy-path blocker must be production-reachable under the stated operating assumptions: identify the existing production entry point, a concrete reachable input or event sequence, the current observable failure, the violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named promise, using only bounded advisory fixes that do not expand scope via robustness or future-proofing. A finding that depends on a wider operating model than the dispatch declared is reported via residual risks, not as a blocker.
+A hollow pass and a stale sweep are the only two blocker classes that may omit a production-reachable input; each substitutes the entry point and trigger named above. Every other safety or non-happy-path blocker must be production-reachable under the stated operating assumptions: identify the existing production entry point, a concrete reachable input or event sequence, the current observable failure, the violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named promise, using only bounded advisory fixes that do not expand scope via robustness or future-proofing. A finding that depends on a wider operating model than the dispatch declared is reported via residual risks, not as a blocker.
 
 A `PASS` ends after Verdict and any residual risks; it needs no empty filler. The verdict
 is a review result, not ticket Acceptance: the Orchestrator owns the final judgement and closure.

@@ -90,8 +90,10 @@ Acceptance wording. A correction blocker does not authorize a writer or a review
 contract.
 
 Stop publication or dispatch when the mode is missing, unresolved, or a placeholder; an authority
-pointer does not resolve; a Change `S#` lacks an `A# covers S#` observer; graduation has an empty
-executable or durable owner; or an ADR target lacks explicit governing-spec authority. This is a
+pointer does not resolve; a Change `S#` lacks an `A# covers S#` observer; an Acceptance claim names
+no observation that decides it, or names an observation whose surface cannot carry the promise it
+makes; graduation has an empty executable or durable owner; or an ADR target lacks explicit
+governing-spec authority. This is a
 narrative Orchestrator check: do not add parser or schema validation until repeated evidence supports
 a separately accepted stable schema.
 
@@ -101,7 +103,9 @@ If evidence shows that placement, authority, graduation, or the recorded Interfa
 
 ## Role guidance ownership
 
-This reference owns the contract's mode, content, coverage, graduation, change-control, and ADR rules.
+This reference owns the contract's mode, content, coverage, graduation, change-control, and ADR
+rules, and the preconditions that stop a ticket's publication or dispatch — including the Acceptance
+drafting preconditions above, which are not seam facts but stop the same dispatch.
 Lightweight retrieval and role-specific application are owned by the `collab-implementer` and
 `collab-acceptor` agent profiles — every runtime copy of them, not the Pi pair alone. Their
 source paths in this repository are `home/.pi/agent/agents/`, `home/.claude/agents/` and

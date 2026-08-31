@@ -42,6 +42,8 @@ control-strength decision before adding enforcement.
 
 ## Composed delegation
 
+A correction inside this composition is the composition's own: its placement was fixed when the workflow was launched, so Collab's boundary-2 re-entry applies to a correction the Orchestrator dispatches after a terminal handoff, never to one this loop issues.
+
 For delegated closed work — bounded brief, delegated Acceptance criteria, placement, mutation
 authority, and escalation boundary all closed — invoke the registered
 `collab_run_reviewed_lane` tool. It is the canonical and only accepted Pi composition path for a
@@ -211,7 +213,7 @@ session, return control or use the active goal's yield mechanism and let complet
 Use `subagent_wait` only when the current request must finish in the same turn; waiting does not make
 a child more authoritative.
 
-After the workflow reaches a terminal handoff, if the lane's writer owned any Acceptance claims in the assigned `ticket.md` — the claims naming no other observer — reread that exact ticket before final Acceptance judgement, Resolution, lifecycle state, or task-progress reconciliation. Read only the assigned ticket; do not rescan the task or sibling tickets. This adds no post-wake `collab_status` read and no generic record-edit reread; completion processing, collection selection, and ticket mutation ownership remain unchanged.
+After the workflow reaches a terminal handoff, if the lane's writer owned any Acceptance claims in the assigned `ticket.md` — the claims naming no other observer — reread that exact ticket before final Acceptance judgement, Resolution, lifecycle state, or task-progress reconciliation. Read only the assigned ticket; do not rescan the task or sibling tickets. That reread is where the ticket's `Swept at` is compared against the lane head: behind it, the writer's sweep is stale and its checked claims are unconfirmed against the delivered tree. This adds no post-wake `collab_status` read and no generic record-edit reread; completion processing, collection selection, and ticket mutation ownership remain unchanged.
 
 ## Run control
 

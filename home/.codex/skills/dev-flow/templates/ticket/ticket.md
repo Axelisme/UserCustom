@@ -34,10 +34,19 @@ state: pending
      handoff reports remaining Orchestrator or user observations without treating them as blockers. -->
 <!-- Each claim's checkbox belongs to its named observer, and a claim naming none belongs to the
      lane's writer, so name an Orchestrator, user, manual, external, or production-path observer on
-     every claim you do not want the writer to toggle. Checkbox ownership rules:
-     ~/.codex/skills/dev-flow/references/lane-authority.md. Both role profiles carry the same rule,
-     so it holds whether or not this comment survives publication. -->
-- [ ] **A1** — <observable criterion>
+     every claim you do not want the writer to toggle. Checkbox ownership, the closing sweep, and
+     `Swept at`: ~/.codex/skills/dev-flow/references/lane-authority.md. Both role profiles carry the
+     same rules, so they hold whether or not this comment survives publication.
+     Every claim also states the observation that decides it and the surface it is observed on. A
+     claim whose promise is about the shipped path is mis-stated when a static assertion or a
+     test-only composition satisfies it; ~/.codex/skills/dev-flow/references/s0-design-admission.md
+     owns what makes a surface adequate. A claim that names no deciding observation stops
+     publication — see that reference's publication preconditions in
+     ~/.codex/skills/dev-flow/references/ticket-seam-contract.md. -->
+**Swept at:** <the commit every writer-owned claim was last re-confirmed against, or `not yet`>
+
+- [ ] **A1** — <observable criterion>. *Observed by:* <the observation that decides it, on its
+  surface; name a non-writer observer here when the claim is not the writer's to toggle>
 
 ## Mechanical gates
 <!-- Ordered binary gate plan owned by this ticket. Every listed gate must pass before `COMPLETED`.
@@ -45,15 +54,21 @@ state: pending
      Implementer runs in order: focused (or explicitly failing) → affected → formatter/style (re-run affected after any mutation) → broader/full.
      State a different order here only when this ticket needs one. The implementer profiles carry
      that same default, so the order holds whether or not this comment survives publication.
-     Gate-mapping test (canonical definition: ~/.codex/skills/collab/SKILL.md boundary 2): an
-     Acceptance claim above is mechanically provable iff some listed gate below's pass/fail is
-     exactly that claim. Map each claim while drafting this list; any claim left unmapped means an
-     acceptor is dispatched for this ticket.
+     Gate-mapping test (canonical definition: ~/.codex/skills/collab/SKILL.md boundary 2): draft
+     this list by walking every Acceptance claim above and writing the gate that decides it. A claim
+     is mechanically decidable when one command's exit status is that claim, with nothing in its
+     output left to read. A claim becomes residue — what the dispatched acceptor judges — only once
+     you have established that no command can decide it.
      Example gates (replace with ticket-specific ones): -->
 - [ ] Focused behavior gates for changed reviewed-workflow schema and prompt composition
 - [ ] Affected TypeScript/JavaScript static checks and profile/configuration format checks
 - [ ] Formatter and import/style checks (re-run affected gates if files were mutated)
 - [ ] Broader reviewed-lane and Dev-flow template selections after focused gates pass
+- [ ] Absence scan: a retired symbol, path, or alias returns no hit across the tracked tree
+- [ ] Inventory equality: the generated catalog's count equals the number this ticket declares
+- [ ] Reachability: the shipped entrypoint, not a test-only composition, exercises the path
+- [ ] Vacuous assertion: no test body asserts a constant or asserts nothing
+- [ ] Acceptance sweep is current: `Swept at` equals the lane head
 
 ## Resolution
 <!-- The Orchestrator writes this once when closing the ticket. Normal closure follows completion of all

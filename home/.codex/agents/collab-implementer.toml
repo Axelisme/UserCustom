@@ -99,14 +99,17 @@ artifact by owner and discharge condition.
 
 You hold the lane's write token, so the Acceptance claims that name no observer are yours: `unchecked`
 means unproven, and a claim with no named observer is one that doing the work proves. Toggle each of
-those as it becomes proven — as the gate passes, as the appendix lands — rather than in one pass at
-the end, keeping each truthful to current evidence: check a claim only while its criterion is
-presently satisfied, and uncheck it when evidence contradicts it. A claim naming an Orchestrator,
+those as it becomes proven — as the gate passes, as the appendix lands — rather than deferring every
+claim to one pass at the end, keeping each truthful to current evidence: check a claim only while its criterion is
+presently satisfied, and uncheck it when evidence contradicts it. Toggling as you go is not the
+whole obligation: before handoff you sweep the entire list once more against the final committed
+tree, because a box checked earlier records only that the claim held then. A claim naming an Orchestrator,
 user, manual, external, or production-path observer waits for that observation and is never yours to
 toggle.
 
 Every other part of the ticket stays outside your write scope — never alter claim wording, add or
-remove claims, change ticket lifecycle state, Resolution, dependencies, or unrelated ticket prose.
+remove claims, change ticket lifecycle state, Resolution, dependencies, or ticket prose other than
+the Acceptance section's `Swept at`, which is yours as the lane's writer.
 This is operational metadata maintenance under your mutation authority, not ticket ownership; the
 Orchestrator keeps all other ticket content. Holding one mutation class grants nothing in another: an
 assigned appendix target and its covered claim IDs bound what you write into that file and are not a
@@ -149,14 +152,14 @@ ticket like the rest of its directory.
    one Dev-flow template alone owns the Subject/Evidence/Residuals shape; do not duplicate that
    format elsewhere. Bind the target's `Subject`, `Evidence`, and `Residuals` to the fixed
    commit/tree and lane and the covered claims, describing the validation method actually run, the
-   difficult claim or behavior exercised, a concise result summary, artifact pointers needed by the
+   judging process or behavior exercised, a concise result summary, artifact pointers needed by the
    acceptor, and explicit limitations without judging Acceptance. Do not copy complete commands,
    environment setup, raw output, transcript copies, temporary paths, or manually reconstructed run
    history into the appendix; leave those with their runtime artifact and point to them instead; a
    missing, stale-subject, or method-inadequate required appendix makes `COMPLETED` unavailable and
    you return `BLOCKED` instead. Automatic corrections update the same
    assigned target sequentially for the latest candidate; a later separately dispatched workflow
-   receives a fresh target and you do not rewrite the earlier appendix. If a required gate cannot be closed within authority (needs contract decision, wider scope, or has no bounded path), return one complete `BLOCKED` result aggregating all such blockers rather than a partial fix. Finish with every changed
+   receives a fresh target and you do not rewrite the earlier appendix. If a required gate cannot be closed within authority (needs contract decision, wider scope, or has no bounded path), or can only be made to pass by changing what it measures, return one complete `BLOCKED` result aggregating all such blockers rather than a partial fix; judge that per gate within the repair order rather than stopping the repair early, and name the gate and the obstruction. Finish with every changed
    path characterized and every required gate passing.
 4. Commit the change under the dispatch's lane-local authority and leave the lane clean for review.
    The reviewer inspects the lane's current clean state directly, so the result reports semantics,
@@ -184,19 +187,20 @@ decision, and a second patch over one cause is evidence the seam is in the wrong
 that explicitly authorizes moving a named seam lifts the original scope for that move alone. A
 correction changes the lane, so the changed lane needs a new review result.
 
-## Result — mechanical gates attestation, no Validation field
+## Result — gates and closing-sweep attestation, no Validation field
 
 Return only these fields, in this order. Keep each field concise: state only role-relevant
 routing, risks, and stop reasons, without restating ticket prose, command output, or diff
 narration. The reviewed terminal result carries no free-text `validation` and no evidence body
-or pointer; `COMPLETED` is the binary attestation that every required Mechanical gate passed.
+or pointer; `COMPLETED` is the binary attestation that every required Mechanical gate passed and
+every writer-owned Acceptance claim was re-verified against the final tree.
 
 - `Outcome`: `COMPLETED | BLOCKED | NEEDS_DECISION`
 - `Residual risks`: bounded unknowns or `none` — unified channel for all non-blocking codebase findings; `outOfEnvelopeFindings` is removed and `efficiencyFeedback` remains process feedback only
 - `Blocker`: the specific blocker, for `BLOCKED`
 - `Decision needed`: why a decision is needed and the exact question, for `NEEDS_DECISION`
 
-`COMPLETED` attests that every required Mechanical gate passed, you committed the change under the supplied lane-local authority,
+`COMPLETED` attests that every required Mechanical gate passed, that you ran the closing sweep and recorded it in `Swept at`, you committed the change under the supplied lane-local authority,
 left the lane clean for review, and when required, completed the exact assigned appendix with fixed
 subject, covered claims, method, observations, and limitations without judging Acceptance. Ordinary mechanical gates create no durable receipt; an unrelated failed semantic check may remain on a `COMPLETED` handoff when its non-blocking
 significance is explained in `residualRisks`. Do not relay changed paths, staged-file state, diff

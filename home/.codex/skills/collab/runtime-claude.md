@@ -25,7 +25,9 @@ its escalation are [Collab's](SKILL.md#review-placement-and-the-correction-loop)
 
 Each dispatch is a fresh child of the exact profile — `collab-implementer` to write, `collab-acceptor`
 to review the protected current lane once mutation has stopped, a fresh compatible implementer to
-correct under the original authority contract, and a fresh acceptor to rereview. Project the results
+correct under the original authority contract, and a fresh acceptor to rereview. Those correction
+dispatches are this binding's own, so Collab's boundary-2 re-entry applies to a correction the
+Orchestrator dispatches after the loop hands back, never to one issued inside it. Project the results
 through Collab's [worker-result](SKILL.md#worker-results-are-semantic) and [Generic
 Acceptance](SKILL.md#generic-acceptance) rules, and return blockers or decisions to the Orchestrator;
 final Acceptance, collection, landing, and escalation happen outside this binding.

@@ -76,7 +76,7 @@ Reserve `validation.md` for a single durable scenario and `validation-<scenario>
 
 It must record 5W1H and be authored by its execution owner:
 
-- **Who:** execution operator and evidence writer; the Orchestrator writes its own, the user's and an external owner's validation, and the lane's writer writes only the exact assigned difficult-claim appendix.
+- **Who:** execution operator and evidence writer; the Orchestrator writes its own, the user's and an external owner's validation, and the lane's writer writes only the exact assigned Acceptance appendix.
 - **What:** covered Acceptance IDs, scenario, expected/actual observations, PASSED/FAILED, bounded artifact pointers and residual limitations.
 - **When:** after the exact clean candidate is formed and before final Acceptance and closure, with timezone; candidate change invalidates prior evidence.
 - **Where:** exact candidate identity (commit/tree, lane) and execution environment/backend/device/MCP host identity.
@@ -87,8 +87,10 @@ Durable script/MCP/production validation binds exact candidate, environment, cov
 
 ## Workflow-scoped Acceptance appendix
 
-For named difficult claims that a read-only acceptor cannot adequately reproduce, the Orchestrator
-names one fresh exact target under the ticket directory and places that path plus covered claim IDs
+The appendix holds the judging process when that process is worth keeping — most often because a
+read-only acceptor cannot reproduce it. The Orchestrator names a target when it wants that process
+kept, and names none otherwise: for the claims it names, it places one fresh exact target under the
+ticket directory and places that path plus covered claim IDs
 in both role briefs; [lane-authority](lane-authority.md) owns who then creates that file and how it
 is filled. That writer may mutate only that exact target, binding the fixed candidate and covered
 claims to method, observations, artifact pointers when needed, and explicit limitations without
@@ -96,4 +98,10 @@ judging Acceptance; if a required appendix cannot be completed, `COMPLETED` is u
 dispatch without an assigned target grants no task-record evidence mutation. Automatic corrections
 update the same target sequentially for the latest candidate; a later separately dispatched workflow
 receives a fresh target and leaves earlier workflow evidence unchanged. The acceptor stays read-only, directly checks observable claims,
-and judges only whether the appendix describes a reasonable process for the covered difficult claims.
+and judges only whether the appendix describes a reasonable process for the covered claims.
+
+An appendix is never mandatory. Requiring one everywhere would make `COMPLETED` hostage to a file
+with no claim behind it, and an empty container beside a ticket reads as a process that exists. When
+a writer's own work produces a process worth keeping and no target was assigned, it reports that in
+`residualRisks` rather than creating a file; the Orchestrator names a target for the next round if it
+wants it kept.

@@ -73,10 +73,12 @@ Mechanical gates plan; `templates/ticket/ticket.md` holds its rules.
 **Who may write what.** The Orchestrator owns all ticket content and exclusively changes lifecycle
 state and Resolution. The lane's **writer** — whoever holds its single write token, a dispatched
 implementer or the Orchestrator writing the change itself — toggles the Acceptance claims whose
-observer is itself, and may use its ticket's `scripts/` subtree. A reviewer or acceptor reads and
+observer is itself, writes the Acceptance section's `Swept at`, and may use its ticket's `scripts/`
+subtree. A reviewer or acceptor reads and
 verifies without editing the ticket. A dispatched writer or reviewer never writes `INDEX.md`.
 [lane-authority](references/lane-authority.md) owns the writer position, the three mutation classes
-that are never inferred from one another, and which observer owns which checkbox.
+that are never inferred from one another, which observer owns which checkbox, and the closing sweep
+every writer runs before declaring its lane finished.
 
 Use one **single-store**: durable ticket state comes from this record. Session task lists are
 temporary projections and never overwrite durable state merely because their UI differs. A
@@ -110,7 +112,7 @@ declares what its own scaffolding is and when it comes down (for example
   evidence of any other kind** →
   [record-hygiene](references/record-hygiene.md), which holds what stays in INDEX, the container
   shape every task already has, where each content kind lives, and the workflow-scoped Acceptance
-  appendix for a difficult claim a read-only acceptor cannot reproduce.
+  appendix that keeps a judging process worth keeping.
 - **You are writing or publishing a ticket's `Seam contract`, or a dispatched role returns
   `BLOCKED` against one** → [ticket-seam-contract](references/ticket-seam-contract.md), which owns
   the three modes, `S#` coverage and its `A#` observers, graduation, and the publication
@@ -127,6 +129,6 @@ declares what its own scaffolding is and when it comes down (for example
   closeout obligation and the snapshot-before-retirement sequence.
 - **You are about to toggle an Acceptance checkbox, hold a lane's write token, or judge whether
   someone else's mutation was authorized** → [lane-authority](references/lane-authority.md), which
-  owns the writer position, the three mutation classes, the observer that owns each checkbox, and
-  how an evidence file is created from its template.
+  owns the writer position, the three mutation classes, the observer that owns each checkbox, the
+  closing sweep and its `Swept at` record, and how an evidence file is created from its template.
 - **You are evolving dev-flow itself** → [design-principles](references/design-principles.md).

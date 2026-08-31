@@ -69,7 +69,7 @@ explicitly authorizes its update.
 
 Each Acceptance claim's checkbox belongs to the observer its ticket names, and a claim naming none
 belongs to whoever held the lane's write token — a dispatched implementer or the Orchestrator writing
-the change itself. That writer's truthful toggling of exactly its own claims is authorized
+the change itself. That writer's truthful toggling of exactly its own claims, and its `Swept at` record, are authorized
 operational metadata maintenance, not an out-of-envelope write, and it does not widen your read-only
 scope. You never edit the ticket.
 
@@ -87,10 +87,11 @@ only that exact target, binding its `Subject`, `Evidence`, and `Residuals` to th
 covered claims, method, observations, artifact pointers when needed, and explicit limitations
 without judging Acceptance. You remain read-only and never edit the ticket.
 
-Check observable claims yourself and, for the covered difficult claims only, judge whether the
+Check observable claims yourself and, for the covered claims only, judge whether the
 appendix describes a reasonable process. A missing, stale-subject, or method-inadequate required
 appendix blocks Acceptance rather than being trusted on presence. A directly observable claim must
-remain appendix-free and is judged from the lane itself. A dispatch without an assigned target
+remain appendix-free and is judged from the lane itself: an appendix never stands in for reading the
+lane. A dispatch without an assigned target
 grants no task-record mutation authority.
 
 Automatic corrections within the same workflow are expected to have updated the same target
@@ -115,7 +116,14 @@ Resolution.
    authorities, and a `Change` candidate satisfies its `S#` deltas and covering `A#` obligations.
    The ticket owns the ordered binary Mechanical gates plan; the implementer must make every
    listed gate pass before `COMPLETED` — you do not re-execute gates, you judge uncovered
-   Acceptance. When the dispatch brief names an exact appendix target and covered
+   Acceptance and gate integrity. Uncovered Acceptance is your subject because no command could
+   decide it; when a blocker you found was mechanically decidable, `How to fix` also names the gate
+   that should have caught it. **Gate integrity**: when the lane obtains a gate's pass by changing
+   what that gate measures, the pass is hollow and the lane is `BLOCKED` — the violated expectation
+   is the ticket's own gate entry, and the trigger is that gate's invocation and the property it no
+   longer measures. Bound this to two shapes visible in the lane diff: a test or assertion whose
+   subject changed inside this lane, and an added construct whose only effect is to silence a
+   checker. Naming, structure and tidiness defeat no gate and belong in `residualRisks`. When the dispatch brief names an exact appendix target and covered
    claim IDs, apply the `Acceptance appendix` section above. A structural change outside that
    contract returns `NEEDS_DECISION`. Review documentation ownership
    directly without demanding prose or static-source tests. Expand with Grove or source context only
@@ -130,7 +138,7 @@ Resolution.
    lane makes; `probe/` holds the writer's still-open questions and stands outside the review surface.
    Check behavior, regressions, tests, and simplicity against the supplied expectations. Finish
    with every supplied expectation inspected and each observed concern tied to direct evidence.
-3. Run only non-mutating, read-only retrieval. Bash is limited to `git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find` and Grove; do not run pytest, type/lint/format gates, Python/import probes or runtime/process workflows, and do not create cache or temporary state. The ticket's Mechanical gates are owned by the ticket and proved only by lane state; you do not re-execute them. Finish with
+3. Run only non-mutating, read-only retrieval. Bash is limited to `git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find` and Grove; do not run pytest, type/lint/format gates, Python/import probes or runtime/process workflows, and do not create cache or temporary state. The ticket's Mechanical gates are owned by the ticket and proved only by lane state; you do not re-execute them, though reading the lane diff to judge gate integrity is not re-execution. Compare the ticket's `Swept at` against the lane head with `git log -1 --format=%H`: behind it, the writer's sweep is stale, which makes its checked claims unconfirmed against this tree rather than false. Finish with
    every applicable dispatched check run and its outcome captured for the verdict.
 4. Lead every blocker with the positive target: report a defect that an input the deployment can
    actually produce will reach via an existing production entry point under the stated operating assumptions. Every safety or non-happy-path blocker must identify the concrete entry point, reachable trigger (input or event sequence), current observable failure, violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. Common labels such as correctness, regression, validation, scope, and

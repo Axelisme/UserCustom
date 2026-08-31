@@ -43,6 +43,15 @@ SHARED_CLAUSES = {
         "references/lane-authority.md",
         # The copy is ceremony unless the rule reaches the moment the file is filled.
         "never a whole-file write",
+        # Without the sweep the terminal condition is gates alone, which is what let a checkbox
+        # proved in hour one ride out to handoff unexamined.
+        "closing sweep",
+        "re-verified against the final tree",
+        # The writer cannot legally record the sweep unless its own prose exception says so.
+        "`Swept at`",
+        # A gate routed around is not a gate closed; without this the writer's only visible option
+        # is the workaround.
+        "can only be made to pass by changing what it measures",
     ),
     "collab-acceptor": (
         # Without these the writer fills an appendix no reviewer knows how to judge.
@@ -61,6 +70,15 @@ SHARED_CLAUSES = {
         "belongs to whoever held the lane's write token",
         "An unchecked claim is not by itself a defect",
         "references/lane-authority.md",
+        # A hollow pass violates no claim, so a claim-scoped subject cannot reach it.
+        "gate integrity",
+        "the pass is hollow",
+        # Reading the diff for it must not read as re-executing a gate the role may not run.
+        "is not re-execution",
+        # Without this the acceptor reports the writer's own sweep record as an unauthorized write.
+        "`Swept at`",
+        # The appendix is supporting evidence, never a substitute for reading the lane.
+        "an appendix never stands in for reading the",
     ),
 }
 

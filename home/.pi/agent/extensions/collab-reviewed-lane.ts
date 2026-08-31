@@ -317,11 +317,11 @@ function requireCorrectionBudget(value: unknown, error: ReviewedLaneErrorFactory
  * carries no free-text validation, no outOfEnvelopeFindings and no evidence body or pointer; correctionBase is internal
  * to the reviewed loop (initial BLOCKED carries exact lane HEAD SHA, rereview receives original brief, prior blockers and that base,
  * reviewer obtains delta via Git) and never appears in public terminal results. Commands remain with run artifacts; durable
- * observations for difficult claims belong to the workflow-scoped Acceptance appendix at the
+ * a judging process worth keeping belongs to the workflow-scoped Acceptance appendix at the
  * exact dispatched target. The runtime adds no evidence parameter, does not validate assignment, and carries only original
  * review brief, prior typed blockers and correctionBase for rereview with no ancestry, reconciliation, scope or
  * incremental-eligibility policy.
- * Initial review exhausts every non-mechanical Acceptance claim and directly reachable siblings in the same failure class
+ * Initial review exhausts every Acceptance claim no gate decided and directly reachable siblings in the same failure class
  * before returning BLOCKED; rereview verifies every prior blocker and correction-reachable semantic effect without rerunning
  * mechanical gates or restarting the whole review.
  */
@@ -340,7 +340,7 @@ export function reviewedLaneWorkflowScript(input: {
 const budget = ${input.correctionBudget};
 const lane = ${JSON.stringify(input.lane)};
 const integrationTip = ${JSON.stringify(input.integrationTip)};
-const initialReviewerBaseline = "Initial review — runtime-owned integration tip " + integrationTip + ". Exhaust every non-mechanical Acceptance claim and directly reachable siblings before returning BLOCKED. Use this read-only canonical command for the complete candidate lane diff: git diff --find-renames " + integrationTip + "...HEAD --";
+const initialReviewerBaseline = "Initial review — runtime-owned integration tip " + integrationTip + ". Exhaust every Acceptance claim no gate decided and directly reachable siblings before returning BLOCKED. Use this read-only canonical command for the complete candidate lane diff: git diff --find-renames " + integrationTip + "...HEAD --";
 const rereviewBaselineFor = (base) => "Rereview — fresh reviewer receives original brief, prior typed blockers and internal correctionBase " + base + ". Verify every prior blocker and correction-reachable semantic effect without rerunning mechanical gates or restarting the whole review. Obtain delta from Git with this read-only canonical command: git diff --find-renames " + base + "...HEAD --";
 const workerSchema = ${workerSchema};
 const reviewerSchema = ${reviewerSchema};

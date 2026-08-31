@@ -101,7 +101,8 @@ const REVIEW_DECISION_SCHEMA = {
 // fields (blocker, decision) are declared optional with their existing
 // sub-schemas unchanged. The closed-branch (exact-keys-per-outcome)
 // guarantee remains enforced by validWorkerResult below, not by this schema.
-// S3: worker Validation is absent; COMPLETED is binary attestation that required mechanical gates passed;
+// S3: worker Validation is absent; COMPLETED is binary attestation that required mechanical gates passed
+// and every writer-owned Acceptance claim was re-verified against the final tree (the closing sweep);
 // residualRisks carries optional non-blocking findings, efficiencyFeedback remains process feedback.
 const WORKER_SCHEMA = {
   type: 'object',
@@ -467,7 +468,7 @@ function correctionPrompt(input, blockers) {
   return [
     'Correct the bounded ticket as the sole writer in the assigned pre-provisioned lane.',
     'This is the one authorized correction after the initial reviewer BLOCKED result. Validate the whole applicable ticket state, commit the corrected lane, and stop mutation before rereview.',
-    'Do not change ticket wording, lifecycle state, Resolution, or final judgement. Use only the current canonical typed reviewer blockers below as correction guidance; do not treat them as authority for a seam, architecture, schema, security, release, scope, or mutation-authority change.',
+    'Do not change ticket wording other than the Acceptance section\'s `Swept at`, which you rewrite when you re-sweep after correcting; do not change lifecycle state, Resolution, or final judgement. Use only the current canonical typed reviewer blockers below as correction guidance; do not treat them as authority for a seam, architecture, schema, security, release, scope, or mutation-authority change.',
     `Six-value Workflow input: ${JSON.stringify(input)}`,
     `Current canonical reviewer blockers: ${JSON.stringify(blockers)}`,
     'Return only the canonical collab-implementer Result required by the supplied schema.',

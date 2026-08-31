@@ -1,6 +1,7 @@
 # Acceptance appendix
 
-<!-- Workflow-scoped Acceptance appendix for named difficult claims.
+<!-- Workflow-scoped Acceptance appendix: the judging process for the named
+     claims, kept because that process is worth keeping.
      The Orchestrator names one fresh collision-free target per workflow under
      tickets/<ticket-id>/ and places that exact path plus covered claim IDs in
      both worker and review briefs. The lane's writer creates the file by `cp`
@@ -29,9 +30,9 @@
      Describe the validation method actually run, what was observed, and
      pointers to owned raw artifacts when needed. Do not judge Acceptance,
      create or rewrite claims, or mark satisfaction. Raw logs remain with
-     their runtime owner. The acceptor will directly check observable claims
-     and judge only whether this method reasonably supports the difficult
-     claim. -->
+     their runtime owner. The acceptor will directly check what the lane itself
+     shows and judge only whether this method reasonably supports the covered
+     claims. -->
 
 ## Residuals
 <!-- Limitations, unreproduced conditions, and what remains unproved.

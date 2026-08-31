@@ -54,6 +54,10 @@ without duplicating either skill's checks.
     became one batch edit at closure when the Orchestrator wrote the change itself. Name the
     position, then let delegation be one of its cases. The tell is a rule whose condition mentions
     a dispatch, a brief, or an assignment where the behaviour it governs does not depend on any of
-    them. A related tell in the pointer itself: a sentence that explains where a rule lives
+    them. The same failure arrives through vocabulary: a rule correctly keyed to a position but
+    written with a profile's name — `the acceptor must`, `the implementer owns` — reads as keyed to
+    that dispatch, and the reader who holds the position without carrying the profile does not see
+    itself addressed. Name the position; name a profile only where the dispatched agent is what the
+    rule actually turns on. A related tell in the pointer itself: a sentence that explains where a rule lives
     (`each child profile carries it directly`) reads as reassurance and obliges no one, so it
     discharges nothing at the site that needed a verb.

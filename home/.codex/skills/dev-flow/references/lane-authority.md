@@ -1,15 +1,19 @@
 # Dev-flow — lane authority
 
 Three parties touch a ticket: the Orchestrator that owns it, the **writer** that holds its lane, and
-a read-only acceptor. This file owns which of them may mutate what.
+the read-only **reviewer** that judges it. This file owns which of them may mutate what.
 
-## The writer is a position, not a role
+## Writer and reviewer are positions, not roles
 
 The **writer** is whoever currently holds the lane's single write token. A dispatched implementer is
 one case; the Orchestrator writing a bounded change itself is another, and while it holds the
 position it works under these rules rather than under its own ownership of the ticket. The position
 is scoped to one lane and released when that lane stops, so it is never an identity carried between
-lanes and never a permission a past writer keeps. An acceptor is read-only and is never the writer.
+lanes and never a permission a past writer keeps.
+
+The **reviewer** is the same kind of object: whoever reads the stopped lane read-only and judges it.
+A dispatched `collab-acceptor` is one specialization of that position, and a `code-review` dispatch
+is another; both hold the position, and neither is it. A reviewer never holds the write token.
 
 Every rule below that names the writer applies to whoever holds the position. A rule that fires only
 when a dispatch assigned something leaves the Orchestrator-as-writer case unruled, and the fallback
@@ -47,7 +51,7 @@ Toggle only your own claims. A claim naming an Orchestrator, user, manual, exter
 production-path observer waits for that observation no matter who is writing. Closure never requires
 every box checked: `Resolution` may explain what stayed unproven.
 
-For an acceptor: a truthful toggle by the writer is authorized metadata maintenance, not an
+For a reviewer: a truthful toggle by the writer is authorized metadata maintenance, not an
 out-of-envelope write, and an unchecked claim is not by itself a defect. A checkbox whose state
 contradicts your direct evidence is reportable through your ordinary verdict channels with location
 and evidence, rather than authoritative on its face.

@@ -7,7 +7,7 @@ state: pending
 <!-- Copy this to tickets/<ticket-id>/ticket.md. The frontmatter `id` must equal that directory name.
      This ticket's durable evidence lives beside this file in the same directory — copy
      the evidence.md beside this template for each piece — and the whole directory is what closure
-     discharges. Guiding script location: `<ticket>/scripts/` for the lane writer's helpers; the Orchestrator owns `<task>/scripts/` and the acceptor is read-only. The Orchestrator owns this ticket. Keep state pending until the Orchestrator resolves the ticket;
+     discharges. Guiding script location: `<ticket>/scripts/` for the lane writer's helpers; the Orchestrator owns `<task>/scripts/` and the reviewer is read-only. The Orchestrator owns this ticket. Keep state pending until the Orchestrator resolves the ticket;
      only the Orchestrator sets state closed or writes Resolution. -->
 
 | Ticket field | Value |
@@ -46,7 +46,7 @@ state: pending
      publication under the preconditions in
      ~/.codex/skills/dev-flow/references/ticket-seam-contract.md. -->
 **Swept at:** <the commit every writer-owned claim was last re-confirmed against, or `not yet`>
-<!-- Checked after handoff, by the acceptor when one is placed and otherwise by the Orchestrator at
+<!-- Checked after handoff, by the reviewer when one is placed and otherwise by the Orchestrator at
      boundary 4. Never a Mechanical gate: the gate list runs before the writer commits. -->
 
 - [ ] **A1** — <observable criterion>. *Decided by:* <the observation that decides it, on its
@@ -61,7 +61,7 @@ state: pending
      State a different order here only when this ticket needs one. The implementer profiles carry
      that same default, so the order holds whether or not this comment survives publication.
      Gate-mapping test: draft this list by walking every Acceptance claim above and writing the
-     gate that decides it. A claim becomes residue — what the dispatched acceptor judges — only once
+     gate that decides it. A claim becomes residue — what a dispatched reviewer judges — only once
      you have established that no command can decide it. `mechanically decidable` and `residue` are
      defined at ~/.codex/skills/collab/SKILL.md boundary 2; read it when a claim is borderline.
      Example gates (replace with ticket-specific ones): -->

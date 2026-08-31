@@ -74,7 +74,7 @@ Mechanical gates plan; `templates/ticket/ticket.md` holds its rules.
 state and Resolution. The lane's **writer** — whoever holds its single write token, a dispatched
 implementer or the Orchestrator writing the change itself — toggles the Acceptance claims whose
 observer is itself, writes the Acceptance section's `Swept at`, and may use its ticket's `scripts/`
-subtree. A reviewer or acceptor reads and
+subtree. A reviewer reads and
 verifies without editing the ticket. A dispatched writer or reviewer never writes `INDEX.md`.
 [lane-authority](references/lane-authority.md) owns the writer position, the three mutation classes
 that are never inferred from one another, which observer owns which checkbox, and the closing sweep

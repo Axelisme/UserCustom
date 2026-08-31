@@ -30,7 +30,7 @@
      Describe the validation method actually run, what was observed, and
      pointers to owned raw artifacts when needed. Do not judge Acceptance,
      create or rewrite claims, or mark satisfaction. Raw logs remain with
-     their runtime owner. The acceptor will directly check what the lane itself
+     their runtime owner. The reviewer will directly check what the lane itself
      shows and judge only whether this method reasonably supports the covered
      claims. -->
 

@@ -23,6 +23,12 @@ Define each at its first use:
   the only meaning `accepted` needs here.
 - **Lane** — one writable branch, checkout, worktree, and its lane-owned temporary state, assigned
   to one live writer at a time. A lane is an execution resource, not durable narrative.
+- **Writer** — whoever holds the lane's single write token: a dispatched `collab-implementer`, or
+  the Orchestrator writing the change itself.
+- **Reviewer** — whoever reads the stopped lane read-only and judges it: a dispatched
+  `collab-acceptor`, a specialized procedure such as [code-review](../code-review/SKILL.md), or the
+  Orchestrator when it places no separate reader. Both are positions; the profiles specialize them
+  and are never the positions themselves.
 - **Protected current lane** — the lane's current clean checkout state while its one writer is
   stopped; the ordinary object under review.
 - **Runtime pointer** — this skill directory's `runtime-<name>.md` for the runtime in use. Boundary 2
@@ -90,7 +96,7 @@ receiver's own workflow.
    **mechanically decidable** when one command's exit status *is* that claim — the same answer for
    anyone who runs it, with nothing in its output left to read. Every such claim gets that command
    listed as a Mechanical gate, and is then **proved**. **Residue is what remains after that
-   subtraction**: the claims no command can decide, and what an acceptor exists to judge. Residue
+   subtraction**: the claims no command can decide, and what a reviewer exists to judge. Residue
    places one and its absence does not. All four combinations are ordinary.
 
    With no residue no independent reader is placed, and the judgement does not move: the Orchestrator
@@ -100,7 +106,7 @@ receiver's own workflow.
    around it.
 
    A check that only becomes decidable after the gate phase cannot be a lane gate — the gate list
-   runs before the writer commits. Assign it to the first reader that exists after it: the acceptor
+   runs before the writer commits. Assign it to the first reader that exists after it: the reviewer
    when one is placed, and otherwise you at boundary 4.
 
    When implementation is delegated and its brief, delegated Acceptance
@@ -136,7 +142,7 @@ receiver's own workflow.
    step is complete when the lane carries a worker result and, where boundary 2 placed a reviewer, an
    independent review result — or a terminal blocker or decision request.
 4. **Judge the result.** The Orchestrator makes the final Acceptance judgement. Compare the ticket's
-   `Swept at` against the lane head first when no acceptor was placed to do it: behind the head, the
+   `Swept at` against the lane head first when no reviewer was placed to do it: behind the head, the
    writer's sweep is stale and its checked claims are unconfirmed against the delivered tree, so
    confirm them yourself or return the lane for a fresh sweep before accepting it. Then
    choose what follows: accept the judged lane, return a bounded defect for correction, return a decision
@@ -219,7 +225,7 @@ command output, or evidence the ticket, Git, or the run artifact already own.
 ## Generic Acceptance
 
 Ordinary Generic Acceptance reviews the protected current lane: the writer is stopped, the lane is
-clean, and the acceptor reads its current state directly, read-only. Bash use is limited to read-only retrieval (`git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find`, Grove); it excludes pytest, type/lint/format gates, Python/import probes and runtime/process workflows. The acceptor does not execute mechanical gates; it judges ticket gate coverage, the Acceptance claims no gate proved, and gate integrity. **Gate integrity**: a gate's pass is part of the lane under review, and when the lane obtains that pass by changing what the gate measures, the pass is hollow and the lane is `BLOCKED` — no Acceptance claim need have been violated, because the violated expectation is the ticket's own gate entry. Reading the lane diff for the two shapes this is bounded to — a test or assertion whose subject changed inside this lane, and an added construct whose only effect is to silence a checker — is not re-executing a gate. Beyond those two shapes a hollow pass is unobservable to a read-only role, so it is not pursued. It returns only, in this order:
+clean, and the reviewer reads its current state directly, read-only. Bash use is limited to read-only retrieval (`git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find`, Grove); it excludes pytest, type/lint/format gates, Python/import probes and runtime/process workflows. The reviewer does not execute mechanical gates; it judges ticket gate coverage, the Acceptance claims no gate proved, and gate integrity. **Gate integrity**: a gate's pass is part of the lane under review, and when the lane obtains that pass by changing what the gate measures, the pass is hollow and the lane is `BLOCKED` — no Acceptance claim need have been violated, because the violated expectation is the ticket's own gate entry. Reading the lane diff for the two shapes this is bounded to — a test or assertion whose subject changed inside this lane, and an added construct whose only effect is to silence a checker — is not re-executing a gate. Beyond those two shapes a hollow pass is unobservable to a read-only role, so it is not pursued. It returns only, in this order:
 
 - `Verdict`: `PASS | BLOCKED | NEEDS_DECISION`
 - for each blocker (only for `BLOCKED`):
@@ -262,9 +268,9 @@ Scope, architecture, authority, or contract decisions terminate the loop at the 
 Intermediate rounds stay in workflow context unless an observation independently justifies a durable
 record.
 
-**Initial review** (fresh acceptor, protected current lane, runtime-owned `integrationTip` baseline, `git diff --find-renames <integrationTip>...HEAD --`) exhausts every Acceptance claim no gate decided and directly reachable siblings in the same failure class handled by the same owning function and governed by the same ticket expectation, before returning one complete `BLOCKED` set with `correctionBase` set to the exact reviewed lane HEAD. It does not equate a new fixed subject with a full review restart.
+**Initial review** (fresh reviewer, protected current lane, runtime-owned `integrationTip` baseline, `git diff --find-renames <integrationTip>...HEAD --`) exhausts every Acceptance claim no gate decided and directly reachable siblings in the same failure class handled by the same owning function and governed by the same ticket expectation, before returning one complete `BLOCKED` set with `correctionBase` set to the exact reviewed lane HEAD. It does not equate a new fixed subject with a full review restart.
 
-**Rereview** is performed by a fresh acceptor — not a resume of the prior reviewer — against the changed protected lane. Its brief carries the original review brief, the prior typed blockers, and that internal `correctionBase` SHA, and nothing else: no ancestry, reconciliation, scope or incremental-eligibility policy, and no diff content or changed-path cache. Git is the delta authority (`git diff --find-renames <correctionBase>...HEAD --`). A correction brief is the same shape, carrying the original bounded worker contract plus the current typed blockers. Rereview verifies every prior blocker is closed, and checks correction-reachable semantic effects. It does not rerun mechanical gates and does not restart the whole review: a new fixed subject after correction is not a full review restart, because initial review and rereview carry distinct responsibilities. A correction that leaves the lane unchanged still consumes one budget slot; the single count is never reset.
+**Rereview** is performed by a fresh reviewer — not a resume of the prior one — against the changed protected lane. Its brief carries the original review brief, the prior typed blockers, and that internal `correctionBase` SHA, and nothing else: no ancestry, reconciliation, scope or incremental-eligibility policy, and no diff content or changed-path cache. Git is the delta authority (`git diff --find-renames <correctionBase>...HEAD --`). A correction brief is the same shape, carrying the original bounded worker contract plus the current typed blockers. Rereview verifies every prior blocker is closed, and checks correction-reachable semantic effects. It does not rerun mechanical gates and does not restart the whole review: a new fixed subject after correction is not a full review restart, because initial review and rereview carry distinct responsibilities. A correction that leaves the lane unchanged still consumes one budget slot; the single count is never reset.
 
 Public terminal projections of `BLOCKED`, `CORRECTION_BUDGET_EXHAUSTED` and `REVIEWED` carry blockers (with `trigger`), `residualRisks` and `efficiencyFeedback`, and nothing else; `correctionBase` is internal and never projected.
 
@@ -291,8 +297,8 @@ applies to any other lane state.
 **Integration reconciliation** brings persistence into integration when persistence has moved ahead of
 it; the runtime pointer names the operation that carries it out.
 What it brings in was covered by no ticket's Acceptance, so the Orchestrator re-evaluates the task's
-Acceptance, not only the current ticket's. Boundary 2 places an acceptor for residue, and content no
-ticket ever claimed has no gate to prove it, so residue is never empty for integration reconciliation: an acceptor is always placed there.
+Acceptance, not only the current ticket's. Boundary 2 places a reviewer for residue, and content no
+ticket ever claimed has no gate to prove it, so residue is never empty for integration reconciliation: a reviewer is always placed there.
 
 Either reconciliation's review brief names the parent provenance it introduced, so a reviewer reports
 inherited history as inherited rather than judging it as current-task scope creep.

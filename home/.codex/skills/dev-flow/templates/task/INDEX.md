@@ -30,7 +30,7 @@ Write or select the first ticket.
 Not yet recorded.
 
 ## Scripts
-<!-- Guiding locations: `<task>/scripts/` for Orchestrator-owned task helpers; `<ticket>/scripts/` for the lane writer's ticket-scripts subtree (acceptor read-only). Ticket scripts remain with closed ticket content. Dispatch provides the ticket folder path; roles derive needed container from it. -->
+<!-- Guiding locations: `<task>/scripts/` for Orchestrator-owned task helpers; `<ticket>/scripts/` for the lane writer's ticket-scripts subtree (reviewer read-only). Ticket scripts remain with closed ticket content. Dispatch provides the ticket folder path; roles derive needed container from it. -->
 None yet — see `scripts/` and `tickets/<id>/scripts/`.
 
 ## Standing orders

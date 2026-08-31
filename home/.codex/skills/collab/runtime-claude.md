@@ -24,8 +24,8 @@ one lane it selected. That is the entire binding: the loop's shape, its finite c
 its escalation are [Collab's](SKILL.md#review-placement-and-the-correction-loop), unchanged.
 
 Each dispatch is a fresh child of the exact profile — `collab-implementer` to write, `collab-acceptor`
-to review the protected current lane once mutation has stopped, a fresh compatible implementer to
-correct under the original authority contract, and a fresh acceptor to rereview. Every one of those
+to review the protected current lane once mutation has stopped, a fresh compatible `collab-implementer` to
+correct under the original authority contract, and a fresh `collab-acceptor` to rereview. Every one of those
 is an Orchestrator dispatch, so a correction here has its placement decided at boundary 2 again
 rather than inheriting the previous round's. Project the results through
 Collab's [worker-result](SKILL.md#worker-results-are-semantic) and [Generic

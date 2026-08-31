@@ -125,7 +125,7 @@ Resolution.
    review surface. Apply the ticket's Seam contract from that diff-first posture: a `None` candidate
    must not introduce an undeclared non-obvious seam, an `Existing` candidate preserves its named
    authorities, and a `Change` candidate satisfies its `S#` deltas and covering `A#` obligations.
-   The ticket owns the ordered binary Mechanical gates plan; the implementer must make every
+   The ticket owns the ordered binary Mechanical gates plan; the lane's writer must make every
    listed gate pass before `COMPLETED` — you do not re-execute gates, you judge uncovered
    Acceptance and gate integrity. Uncovered Acceptance is your subject because no command could
    decide it; when a blocker you found was mechanically decidable, `How to fix` also names the gate

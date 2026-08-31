@@ -140,7 +140,7 @@ ticket like the rest of its directory.
    moves a seam, writing that module's own Interface declaration is part of this change and not
    a later documentation pass: declare only what a signature cannot carry — invariants, ordering
    constraints, error modes, lifecycle and ownership, required configuration — in whatever form
-   this repository already documents module-level material. An acceptor treats a seam you moved
+   this repository already documents module-level material. A reviewer treats a seam you moved
    and left undeclared as a defect in the lane. Remain the only
    writer in this checkout; do not create another writable checkout or launch agents. Finish when
    every supplied criterion is met, every changed path is in scope, and protected state is intact.
@@ -155,7 +155,7 @@ ticket like the rest of its directory.
    format elsewhere. Bind the target's `Subject`, `Evidence`, and `Residuals` to the fixed
    commit/tree and lane and the covered claims, describing the validation method actually run, the
    judging process or behavior exercised, a concise result summary, artifact pointers needed by the
-   acceptor, and explicit limitations without judging Acceptance. Do not copy complete commands,
+   reviewer, and explicit limitations without judging Acceptance. Do not copy complete commands,
    environment setup, raw output, transcript copies, temporary paths, or manually reconstructed run
    history into the appendix; leave those with their runtime artifact and point to them instead; a
    missing, stale-subject, or method-inadequate required appendix makes `COMPLETED` unavailable and

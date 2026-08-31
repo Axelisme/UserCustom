@@ -68,7 +68,7 @@ closure means that obligation went unpaid.
 
 ## Guiding script locations (S5)
 
-`templates/task/` provides `<task>/scripts/` and `templates/ticket/` provides `<ticket>/scripts/` as guiding locations. The Orchestrator owns task-level scripts; the lane's writer may create or modify its ticket's `scripts/` subtree without gaining wider record mutation authority (no per-file grant needed, but no extension to other ticket-folder content). The acceptor remains read-only. A dispatched writer derives the container from the ticket folder path its dispatch supplies. [lane-authority](lane-authority.md) owns who the writer is and what each mutation class does not grant. Ticket closure retains scripts with the same lifecycle as other ticket content.
+`templates/task/` provides `<task>/scripts/` and `templates/ticket/` provides `<ticket>/scripts/` as guiding locations. The Orchestrator owns task-level scripts; the lane's writer may create or modify its ticket's `scripts/` subtree without gaining wider record mutation authority (no per-file grant needed, but no extension to other ticket-folder content). The reviewer remains read-only. A dispatched writer derives the container from the ticket folder path its dispatch supplies. [lane-authority](lane-authority.md) owns who the writer is and what each mutation class does not grant. Ticket closure retains scripts with the same lifecycle as other ticket content.
 
 ## Durable validation that must persist (A14–A15)
 
@@ -88,7 +88,7 @@ Durable script/MCP/production validation binds exact candidate, environment, cov
 ## Workflow-scoped Acceptance appendix
 
 The appendix holds the judging process when that process is worth keeping — most often because a
-read-only acceptor cannot reproduce it. The Orchestrator names a target when it wants that process
+read-only reviewer cannot reproduce it. The Orchestrator names a target when it wants that process
 kept, and names none otherwise: for the claims it names, it places one fresh exact target under the
 ticket directory and places that path plus covered claim IDs
 in both role briefs; [lane-authority](lane-authority.md) owns who then creates that file and how it
@@ -97,7 +97,7 @@ claims to method, observations, artifact pointers when needed, and explicit limi
 judging Acceptance; if a required appendix cannot be completed, `COMPLETED` is unavailable. A
 dispatch without an assigned target grants no task-record evidence mutation. Automatic corrections
 update the same target sequentially for the latest candidate; a later separately dispatched workflow
-receives a fresh target and leaves earlier workflow evidence unchanged. The acceptor stays read-only, directly checks observable claims,
+receives a fresh target and leaves earlier workflow evidence unchanged. The reviewer stays read-only, directly checks observable claims,
 and judges only whether the appendix describes a reasonable process for the covered claims.
 
 An appendix is never mandatory. Requiring one everywhere would make `COMPLETED` hostage to a file

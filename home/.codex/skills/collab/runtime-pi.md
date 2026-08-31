@@ -116,7 +116,7 @@ description in its input schema, which Pi surfaces to the calling Orchestrator; 
 fields, not their bounds.
 
 Both briefs follow Collab's Dispatch brief Interface. `review_brief` additionally names the delegated
-Acceptance identifiers and the acceptor's read-only scope, and may carry the optional task-boundary
+Acceptance identifiers and the `collab-acceptor`'s read-only scope, and may carry the optional task-boundary
 pointer. The tool rejects extra fields and unbounded or empty briefs.
 
 Terminal outcomes:
@@ -308,7 +308,7 @@ heads.
 - The Collection boundary's adoption step: makes an existing branch, passed as `source_branch`, the
   complete managed integration state — `collab_integration_adopt`.
 - Manage the task lane — `collab_lane` with `action` `create` (branch and worktree at integration tip, optional `comment` only for create), `reconcile` (merge integration into lane), `collect` (fast-forward integration to lane tip and force-retire the lane worktree — untracked or ignored files there are lost, tracked dirt or merge conflict keeps the lane with a warning), `drop` (force-retire without collecting, discarding uncollected work and warning if dirty, conflicted or incomplete). Stale-lane handling is via `collect` or explicit `reconcile`; creation is the execution shape for a dispatched writer.
-- Compose a reviewed lane: launches the configured implementer and acceptor asynchronously in one
+- Compose a reviewed lane: launches the configured `collab-implementer` and `collab-acceptor` asynchronously in one
   exact managed lane with bounded corrections — `collab_run_reviewed_lane`.
 - The lane tool distinguishes collection (advances integration and retires the lane) from discarding uncollected work (drop without advancing), and both retire the lane worktree via force removal. It emits a custody warning when
   removal discards tracked or staged changes or active merge/conflict state. Unclassifiable Git state

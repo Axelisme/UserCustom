@@ -44,11 +44,15 @@ import { isValidStructuredOutput } from "./result-schema.ts";
  * S5 — Best-effort boundary: report and coverage publication remain task-owned
  * telemetry that cannot change public workflow results; qualitative feedback
  * stays separate and cannot alter numeric counts; telemetry failure never
- * rewrites the public workflow outcome.
+ * rewrites the public workflow outcome. Feedback publication is also independent
+ * of the session transcript: every settlement branch publishes each known step's
+ * feedback before its telemetry path, so a step the report cannot derive still
+ * publishes what its child observed.
  *
  * Settlement states: permanent structural vs retryable incomplete.
  * Permanent structural correlation failures are fixed value contradictions that cannot become valid through session-file readiness waiting:
  *   - lane/workflow identity contradictions (runId mismatch, lane identity mismatch, missing cwd, duplicate/missing trace/step entries, non-terminal trace state, missing sessionFile field)
+ *     A missing sessionFile field stays a permanent structural classification for the telemetry report, but no longer settles readiness: readiness skips capturing that step's transcript and continues, so its siblings and its own feedback still publish.
  *   - structurally invalid session identity/path (relative sessionFile, path lacking correlated childRunId segment, unsafe ancestry, symlink)
  * These route immediately through permanent settlement publishing exact manifest with durable warning for the affected step in one task-lock phase; each step is classified on its own derivation outcome and a permanent failure on one step does not determine siblings' classification — siblings that derive are published.
  * Retryable is genuinely missing/incomplete material that may appear within deadline: missing status file, temporarily unreadable/partial JSON, nonterminal state, incomplete trace extraction (no readable unique trace), missing or unreadable session file content.
@@ -389,9 +393,8 @@ async function readEfficiencyFeedbackValue(statusObj: Record<string, unknown>, w
 // publication needs only the correlated step's identity and its structured output, so it passes
 // false and a step carrying no sessionFile still yields its feedback instead of being discarded.
 // A sessionFile that is present stays fully validated under either setting.
-function correlateArtifacts(input: { statusObj: Record<string, unknown>; workflowId: string; workflowKey: string; childRunId: string; lanePath: string; requireSessionFile?: boolean; }): { agentDurationMs: number | null; turnCount: number | null; sessionFile: string; terminalState: string } {
-  const { statusObj, workflowId, workflowKey, childRunId, lanePath } = input;
-  const requireSessionFile = input.requireSessionFile !== false;
+function correlateArtifacts(input: { statusObj: Record<string, unknown>; workflowId: string; workflowKey: string; childRunId: string; lanePath: string; requireSessionFile?: boolean; }): { agentDurationMs: number | null; turnCount: number | null; sessionFile: string | null; terminalState: string } {
+  const { statusObj, workflowId, workflowKey, childRunId, lanePath, requireSessionFile = true } = input;
   const status = statusObj as { runId?: unknown; cwd?: unknown; workflow?: unknown; steps?: unknown };
   if (status.runId !== workflowId) throw new Error(`status runId ${String(status.runId)} does not match workflowId ${workflowId}`);
   const cwdRaw = (statusObj as { cwd?: unknown }).cwd;
@@ -421,7 +424,7 @@ function correlateArtifacts(input: { statusObj: Record<string, unknown>; workflo
   const sessionFileRaw = step["sessionFile"];
   const sessionFileAbsent = typeof sessionFileRaw !== "string" || sessionFileRaw.length === 0;
   if (requireSessionFile && sessionFileAbsent) throw new Error("step missing sessionFile");
-  let sessionFile = "";
+  let sessionFile: string | null = null;
   if (!sessionFileAbsent) {
     sessionFile = sessionFileRaw as string;
     if (!path.isAbsolute(sessionFile)) throw new Error(`sessionFile is not absolute: ${sessionFile}`);
@@ -775,6 +778,32 @@ export async function publishCoverageManifest(params: { repoControlRoot: string;
 export async function handleReviewedLaneCompletion(input: { repoControlRoot: string; taskId: string; ticketId: string; laneId: string; lanePath: string; workflowId: string; asyncDir: string; eventWorkflowId: string; eventAsyncDir: string; withTaskLock?: <T>(body: () => Promise<T>) => Promise<T>; }): Promise<{ handled: boolean; published: string[]; warnings: string[]; ignoredReason?: string }> {
   const { repoControlRoot, taskId, ticketId, laneId, lanePath, workflowId, asyncDir, eventWorkflowId, eventAsyncDir } = input as any;
   const withTaskLock = (input as any).withTaskLock as (<T>(body: () => Promise<T>) => Promise<T>) | undefined;
+  // Qualitative feedback has its own owner, its own warnings sink and no dependence on the session
+  // transcript. Every settlement branch runs this first for each known step, so a step whose report
+  // cannot be derived still publishes what its child observed. It touches only `warnings`, never the
+  // coverage classifications.
+  const publishStepFeedback = async (args: { statusObj: Record<string, unknown>; workflowKey: string; childRunId: string; warnings: string[] }): Promise<void> => {
+    const { statusObj: sObj, workflowKey, childRunId, warnings } = args;
+    try {
+      const fb = await readEfficiencyFeedbackValue(sObj, workflowId, workflowKey, childRunId, lanePath);
+      if (fb.warning) {
+        warnings.push(await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: fb.warning }));
+      }
+      if (!fb.found) return;
+      if (typeof fb.value !== "string") {
+        warnings.push(await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `efficiencyFeedback is not a string for ${workflowKey}/${childRunId}` }));
+        return;
+      }
+      if (unicodeLength(fb.value as string) > 10000) {
+        warnings.push(await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `efficiencyFeedback exceeds maxLength 10000 for ${workflowKey}/${childRunId}` }));
+        return;
+      }
+      const fbResult = await publishFeedback({ repoControlRoot, taskId, ticketId, laneId, workflowId, workflowKey, childRunId, lanePath, efficiencyFeedback: fb.value as string });
+      if (!fbResult.isDuplicate && fbResult.warning) warnings.push(fbResult.warning);
+    } catch (e) {
+      warnings.push(await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `feedback handling failed for ${workflowKey}/${childRunId}: ${boundedMessage(e)}` }));
+    }
+  };
   if (eventWorkflowId !== workflowId || eventAsyncDir !== asyncDir) return { handled: false, published: [], warnings: [], ignoredReason: "partial or unrelated completion event" };
   const statusPath = path.join(asyncDir, "status.json");
   // Permanent ancestry check outside readiness loop: unsafe path is immediate terminal warning (no retry)
@@ -868,7 +897,7 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
     }
     const sessionTexts = new Map<string, string>();
     for (const { workflowKey, childRunId } of seen.values()) {
-      let sessionFile: string;
+      let sessionFile: string | null;
       try {
         const corr = correlateArtifacts({ statusObj, workflowId, workflowKey, childRunId, lanePath, requireSessionFile: false });
         sessionFile = corr.sessionFile;
@@ -880,7 +909,7 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
       // A step without sessionFile captures no session text. Readiness continues so the other
       // children still publish and this child's feedback still reaches its own owner; the missing
       // transcript costs it only its telemetry report.
-      if (sessionFile === "") continue;
+      if (sessionFile === null) continue;
       if (!(await isAncestrySafe(repoControlRoot, sessionFile))) {
         return { state: "permanent", message: `session file ancestry is unsafe for ${workflowKey} at ${sessionFile}`, workflowKey, childRunId, ignoredReason: "unsafe session ancestry", seen, sessionTexts, statusObj };
       }
@@ -926,12 +955,14 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
               classifications.push({ workflowKey, childRunId, classification: "unavailable" });
               continue;
             }
+            await publishStepFeedback({ statusObj: sObj, workflowKey, childRunId, warnings });
             let sessionText: string | null = texts.get(`${workflowKey}\0${childRunId}`) ?? null;
             let sessionFile: string | null = null;
             if (sessionText === null) {
               try {
                 const corr = correlateArtifacts({ statusObj: sObj, workflowId, workflowKey, childRunId, lanePath });
-                sessionFile = corr.sessionFile;
+                // Telemetry here still requires sessionFile, so correlateArtifacts threw if it was absent.
+                sessionFile = corr.sessionFile!;
               } catch (e) {
                 const w = await appendWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `derivation failed for ${workflowKey}/${childRunId}: ${boundedMessage(e)}` });
                 warnings.push(w);
@@ -992,25 +1023,6 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
             } else {
               classifications.push({ workflowKey, childRunId, classification: "unavailable" });
             }
-            try {
-              const fb = await readEfficiencyFeedbackValue(sObj, workflowId, workflowKey, childRunId, lanePath);
-              if (fb.warning) {
-                const w = await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: fb.warning });
-                warnings.push(w);
-              }
-              if (fb.found) {
-                if (typeof fb.value !== "string") {
-                  const w = await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `efficiencyFeedback is not a string for ${workflowKey}/${childRunId}` });
-                  warnings.push(w);
-                } else if (unicodeLength(fb.value as string) > 10000) {
-                  const w = await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `efficiencyFeedback exceeds maxLength 10000 for ${workflowKey}/${childRunId}` });
-                  warnings.push(w);
-                } else {
-                  const fbResult = await publishFeedback({ repoControlRoot, taskId, ticketId, laneId, workflowId, workflowKey, childRunId, lanePath, efficiencyFeedback: fb.value as string });
-                  if (fbResult.warning) warnings.push(fbResult.warning);
-                }
-              }
-            } catch {}
           }
           classifications.sort((a, b) => a.workflowKey.localeCompare(b.workflowKey) || a.childRunId.localeCompare(b.childRunId));
           const knownSteps = classifications.length;
@@ -1084,25 +1096,7 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
         const fbWarnings: string[] = [];
         if (lastStatusObj && lastSeen) {
           for (const { workflowKey, childRunId } of lastSeen.values()) {
-            try {
-              const fb = await readEfficiencyFeedbackValue(lastStatusObj, workflowId, workflowKey, childRunId, lanePath);
-              if (fb.warning) {
-                const w = await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: fb.warning });
-                fbWarnings.push(w);
-              }
-              if (fb.found) {
-                if (typeof fb.value !== "string") {
-                  const w = await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `efficiencyFeedback is not a string for ${workflowKey}/${childRunId}` });
-                  fbWarnings.push(w);
-                } else if (unicodeLength(fb.value as string) > 10000) {
-                  const w = await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `efficiencyFeedback exceeds maxLength 10000 for ${workflowKey}/${childRunId}` });
-                  fbWarnings.push(w);
-                } else {
-                  const fbResult = await publishFeedback({ repoControlRoot, taskId, ticketId, laneId, workflowId, workflowKey, childRunId, lanePath, efficiencyFeedback: fb.value as string });
-                  if (fbResult.warning) fbWarnings.push(fbResult.warning);
-                }
-              }
-            } catch {}
+            await publishStepFeedback({ statusObj: lastStatusObj, workflowKey, childRunId, warnings: fbWarnings });
           }
           // Coverage manifest for deadline: readable trace but incomplete sessions => warning-only for each known step
           try {
@@ -1148,30 +1142,6 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
 
   // Captured ready inputs: publish under short lock if provided
   const { statusObj, seen, sessionTexts } = captured!;
-  // Qualitative feedback has its own owner and does not depend on the session transcript, so it
-  // publishes before the telemetry path and survives a step the report cannot derive.
-  const publishStepFeedback = async (args: { statusObj: Record<string, unknown>; workflowKey: string; childRunId: string; warnings: string[] }): Promise<void> => {
-    const { statusObj: sObj, workflowKey, childRunId, warnings } = args;
-    try {
-      const fb = await readEfficiencyFeedbackValue(sObj, workflowId, workflowKey, childRunId, lanePath);
-      if (fb.warning) {
-        warnings.push(await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: fb.warning }));
-      }
-      if (!fb.found) return;
-      if (typeof fb.value !== "string") {
-        warnings.push(await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `efficiencyFeedback is not a string for ${workflowKey}/${childRunId}` }));
-        return;
-      }
-      if (unicodeLength(fb.value as string) > 10000) {
-        warnings.push(await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `efficiencyFeedback exceeds maxLength 10000 for ${workflowKey}/${childRunId}` }));
-        return;
-      }
-      const fbResult = await publishFeedback({ repoControlRoot, taskId, ticketId, laneId, workflowId, workflowKey, childRunId, lanePath, efficiencyFeedback: fb.value as string });
-      if (!fbResult.isDuplicate && fbResult.warning) warnings.push(fbResult.warning);
-    } catch (e) {
-      warnings.push(await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `feedback handling failed for ${workflowKey}/${childRunId}: ${boundedMessage(e)}` }));
-    }
-  };
   const doPublish = async (): Promise<{ published: string[]; warnings: string[] }> => {
     const published: string[] = [];
     const warnings: string[] = [];

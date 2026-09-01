@@ -1071,8 +1071,14 @@ class SL03S4SnapshotReconciliationTests(unittest.TestCase):
             self.assertEqual(record["efficiencyFeedback"], "correction feedback")
             self.assertEqual(record["workflowKey"], "impl-1")
             # The telemetry report still requires sessionFile and stays unpublished for this step.
-            report_path = repo / ".agent_state/plans/demo/.collab_op/lane_loop_report/T001" / f"{child}.json"
-            self.assertFalse(report_path.is_file())
+            # publishReport writes under the lane id, so this is the path that could actually exist.
+            report_path = repo / ".agent_state/plans/demo/.collab_op/lane_loop_report/writer-1" / f"{child}.json"
+            self.assertFalse(report_path.is_file(), "telemetry must not publish without a session transcript")
+            # Coverage still accounts for the step, and feedback did not change the counts.
+            manifest = json.loads((repo / ".agent_state/plans/demo/.collab_op/lane_loop_report/coverage" / f"{workflow_id}.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["knownSteps"], 1)
+            self.assertEqual(manifest["publishedReports"], 0)
+            self.assertEqual(manifest["knownSteps"], manifest["publishedReports"] + manifest["warningOnlySteps"] + manifest["unavailableSteps"])
 
 
 class SL03S5BestEffortBoundaryTests(unittest.TestCase):

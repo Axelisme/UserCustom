@@ -1,18 +1,26 @@
 ---
 id: {{TICKET_ID}}
-state: pending
+state: {{STATE}}
 ---
 # {{TICKET_ID}} — {{TITLE}}
 
 <!-- Copy this to tickets/<ticket-id>/ticket.md. The frontmatter `id` must equal that directory name.
      This ticket's durable evidence lives beside this file in the same directory — copy
      the evidence.md beside this template for each piece — and the whole directory is what closure
-     discharges. Guiding script location: `<ticket>/scripts/` for the lane writer's helpers; the Orchestrator owns `<task>/scripts/` and the reviewer is read-only. The Orchestrator owns this ticket. Keep state pending until the Orchestrator resolves the ticket;
-     only the Orchestrator sets state closed or writes Resolution. -->
+     discharges. Guiding script location: `<ticket>/scripts/` for the lane writer's helpers; the Orchestrator owns `<task>/scripts/` and the reviewer is read-only. The Orchestrator owns this ticket.
+     Lifecycle is `drafted` -> `pending` -> `closed`, and only the Orchestrator moves it. Create the
+     ticket in whichever of the first two states fits, and replace `{{STATE}}` with that choice:
+     `pending` when its contract can already be written from the code, `drafted` when writing it now
+     would mean guessing, in which case fill only what is known and leave the rest. Neither is a
+     default; an unreplaced `{{STATE}}` is an unreadable ticket, which is the point.
+     A ticket is `pending` before its implementation starts; what it must satisfy to get there is
+     the publication precondition list at
+     ~/.codex/skills/dev-flow/references/ticket-seam-contract.md#publication-and-change-control. -->
 
 | Ticket field | Value |
 |---|---|
-| depends_on | <the ticket ids that must close before this one starts, or `none`> |
+| depends_on | <the ticket ids that must close before this one starts, or `none`. A `drafted` ticket cannot close, so naming one here blocks this ticket until that one graduates and closes.> |
+| completes | <when this ticket only partly delivers its user-visible sentence, the ticket id that completes that sentence — which may itself still be `drafted`. `none` when this ticket delivers its whole sentence.> |
 | envelope | <pointer to the frozen file holding this task's out-of-scope boundary — what belongs to this task at all, as against this ticket's own scope, which Outcome and Acceptance below already carry — or `none` if the task has no boundary> |
 
 ## Outcome

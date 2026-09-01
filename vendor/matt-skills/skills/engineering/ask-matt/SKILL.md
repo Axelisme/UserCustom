@@ -35,7 +35,7 @@ The route most work travels. You have an idea and want it built.
 
    Either way, **`/implement`** builds each ticket with validation that exercises the shipped entrypoint. Select **`/tdd`** when that check can be written before the behavior exists. For a specialized Standards + Spec report on a fixed point in history, reach for **`/code-review`** directly. Commit or landing remains subject to applicable user authority. Reach for `/tdd` or `/code-review` directly when only that procedure is needed.
 
-   **Which of `/implement` or `/collab` fits this work?** It's a task-level decision made once, not a per-ticket judgement; the full criterion lives in [`/dev-flow`](../dev-flow/SKILL.md#jurisdiction), which owns it. The agent recommends; the user decides. If the two ever disagree, dev-flow wins.
+   **Every ticket goes through `/collab`.** There is no task-level choice to make: `/dev-flow`'s lifecycle routes each ticket to collab at its dispatch stage, and collab's own placement decides who writes and who reviews, the Orchestrator writing the change itself being one of those placements. The routing is owned by [`/dev-flow`](../dev-flow/SKILL.md#the-lifecycle); who then writes is collab's.
 
 ### Context hygiene
 

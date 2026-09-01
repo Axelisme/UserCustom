@@ -16,7 +16,7 @@ from typing import NoReturn
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 INDEX_FIELDS = ("task_id", "spec")
 TICKET_FIELDS = ("id", "state")
-TICKET_STATES = frozenset({"pending", "closed"})
+TICKET_STATES = frozenset({"drafted", "pending", "closed"})
 FRONTMATTER_MAX_BYTES = 16 * 1024
 TICKET_FILE = "ticket.md"
 
@@ -499,7 +499,13 @@ def _unavailable_ticket_counts(
     error: dict[str, object] = {"code": code}
     if unreadable is not None:
         error["count"] = unreadable
-    return {"pending": None, "closed": None, "total": None, "unreadable": unreadable}, error
+    return {
+        "drafted": None,
+        "pending": None,
+        "closed": None,
+        "total": None,
+        "unreadable": unreadable,
+    }, error
 
 
 def _ticket_counts(directory: Path) -> tuple[dict[str, int | None], dict[str, object] | None]:
@@ -507,7 +513,7 @@ def _ticket_counts(directory: Path) -> tuple[dict[str, int | None], dict[str, ob
     try:
         metadata = tickets.lstat()
     except FileNotFoundError:
-        return {"pending": 0, "closed": 0, "total": 0, "unreadable": 0}, None
+        return {"drafted": 0, "pending": 0, "closed": 0, "total": 0, "unreadable": 0}, None
     except OSError:
         return _unavailable_ticket_counts("ticket_directory_unreadable", None)
     if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
@@ -522,7 +528,7 @@ def _ticket_counts(directory: Path) -> tuple[dict[str, int | None], dict[str, ob
     except OSError:
         return _unavailable_ticket_counts("ticket_directory_unreadable", None)
 
-    pending = closed = unreadable = 0
+    drafted = pending = closed = unreadable = 0
     for owner in directories:
         path = owner / TICKET_FILE
         try:
@@ -536,17 +542,25 @@ def _ticket_counts(directory: Path) -> tuple[dict[str, int | None], dict[str, ob
             if values["id"] != owner.name:
                 raise ValueError("ticket id does not match its directory")
             if values["state"] not in TICKET_STATES:
-                raise ValueError("ticket state is not pending or closed")
+                raise ValueError("ticket state is not drafted, pending, or closed")
         except (OSError, UnicodeError, ValueError):
             unreadable += 1
             continue
-        if values["state"] == "pending":
+        if values["state"] == "drafted":
+            drafted += 1
+        elif values["state"] == "pending":
             pending += 1
         else:
             closed += 1
     if unreadable:
         return _unavailable_ticket_counts("ticket_headers_unreadable", unreadable)
-    return {"pending": pending, "closed": closed, "total": pending + closed, "unreadable": 0}, None
+    return {
+        "drafted": drafted,
+        "pending": pending,
+        "closed": closed,
+        "total": drafted + pending + closed,
+        "unreadable": 0,
+    }, None
 
 
 def command_list(root: Path, _arguments: argparse.Namespace, *, control_root: str) -> None:
@@ -622,7 +636,13 @@ def command_locate(root: Path, arguments: argparse.Namespace, *, control_root: s
             index=relative(root, expected / "INDEX.md"),
             task_id=None,
             spec=None,
-            tickets={"pending": None, "closed": None, "total": None, "unreadable": 0},
+            tickets={
+                "drafted": None,
+                "pending": None,
+                "closed": None,
+                "total": None,
+                "unreadable": 0,
+            },
             orientation="unavailable",
             parse_errors=[],
         )
@@ -646,7 +666,13 @@ def command_locate(root: Path, arguments: argparse.Namespace, *, control_root: s
             candidates=candidates,
             task_id=None,
             spec=None,
-            tickets={"pending": None, "closed": None, "total": None, "unreadable": 0},
+            tickets={
+                "drafted": None,
+                "pending": None,
+                "closed": None,
+                "total": None,
+                "unreadable": 0,
+            },
             orientation="unavailable",
             parse_errors=[],
         )

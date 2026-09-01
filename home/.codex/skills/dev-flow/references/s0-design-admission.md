@@ -3,7 +3,33 @@
 S0 runs as a four-stage sequence — Need, Design, Slicing, Triage — in that order; each stage's
 output is what the next stage designs, slices or triages. Read the stage you are starting, before
 spec or ticket admission. Whether a task may skip the sequence is decided in
-[SKILL.md](../SKILL.md#s0--design-admission-need--design--slicing--triage), not here.
+[SKILL.md](../SKILL.md#the-lifecycle), not here.
+
+## Carrying an item to a `drafted` ticket
+
+A stage that cannot determine an item does not invent one. It **carries** the item: opens a
+`drafted` ticket holding what is known now, and re-enters for that one item at the ticket's
+graduation, against the code as it stands then. Each stage's completion criterion below admits the
+carry-over as an outcome beside the answers it already accepts.
+
+The licence is uncertainty, not preference. Carry an item when determining it now would mean
+guessing at the state of code that earlier Slices will change. A seam whose placement the design
+already shows is decided here and written; a seam whose shape depends on what three Slices from now
+leave behind is carried. An item that could be determined and was carried anyway is deferred work,
+not an admitted carry-over.
+
+A carried item stays unwritten. A `drafted` ticket carries its `Outcome` and the user-visible
+sentence it delivers or partly delivers, and nothing it would have to guess — a dependency edge, a
+Module write scope, a production-path validation and a seam's Interface content are all carryable. A
+ticket whose uncertainty has not resolved when its batch runs stays `drafted` for the next one; that
+is the fog not having lifted, not a failed graduation.
+
+Graduation runs as a **batch over the frontier**: every `drafted` ticket whose dependencies have
+closed graduates in one pass, before any of them is dispatched, so one reading of the current tree
+serves them all. The batch may exceed the antichain; the dispatch drawn from it may not. `../SKILL.md`
+owns where that batch sits in the lifecycle; the preconditions a ticket satisfies to leave `drafted`
+are owned by
+[ticket-seam-contract](ticket-seam-contract.md#publication-and-change-control).
 
 ## Need
 
@@ -63,7 +89,8 @@ An unrecorded check counts as not performed, because there is nothing later stag
 
 Design is complete when the end-to-end design identifies the Modules, Interfaces, seams, production
 reachability, each applicable infrastructure package's adoption or need-grounded rejection, and the
-module each real seam's Interface declaration is owed at.
+module each real seam's Interface declaration is owed at — each of them determined here, or carried
+to a `drafted` ticket that Design re-enters at its graduation.
 
 ## Slicing
 
@@ -81,10 +108,15 @@ completes it. What that rules out is the Slice naming no sentence at all — a l
 phase of construction is scaffolding for a sentence nobody has written yet. A named sentence no
 Slice ever completes is the same defect, found later and more expensively.
 
-**Concurrency is decided here, once, so the downstream steps stay decision-free.** Read the
-candidates off the ticket DAG: a set may run together when it forms an antichain — no member
-reachable from another. Declare each ticket's write scope as the Modules the Design stage produced,
-in [`codebase-design`](../../codebase-design/SKILL.md)'s sense of the term, rather than as paths,
+**Concurrency is decided once per dispatch, so the downstream steps stay decision-free.** The
+candidates are the tickets that are `pending`, because only those are dispatchable; a set may run
+together when it forms an antichain — no member reachable from another. **Reachability is computed
+over the whole ticket DAG, `drafted` tickets included as opaque blocking nodes.** An edge is an edge
+whatever state its endpoint is in, and a graph restricted to `pending` tickets makes A and B look
+mutually unreachable when A reaches B only through a D that is still `drafted`.
+
+Declare each ticket's write scope as the Modules the Design stage produced, in
+[`codebase-design`](../../codebase-design/SKILL.md)'s sense of the term, rather than as paths,
 functions, or the lines a diff touches: two tickets that change different functions of one Module
 share that Module's scope. Overlapping Module scope between two tickets with no edge between them is
 a missing edge: add the edge or split the tickets. Grant concurrency where assembled evidence would
@@ -95,10 +127,14 @@ outside Module scope and counts as no intersection. An edit that reorders entrie
 surface, or rewrites an existing entry is Module scope. Judge that on the shape of the actual diff:
 a regenerated lockfile grows by one logical entry and rewrites the file.
 
+A Slice that partly delivers a sentence names the ticket completing it, so the sentence has one
+owner rather than a copy on each partial ticket. That completer may itself be `drafted`.
+
 Slicing is complete when every admitted implementation requirement belongs to a bounded Slice that
-states its own sentence or names the one it partly delivers, every named sentence has a Slice that
-completes it, and each Slice's dependency edge, Module write scope, applicable production-path
-validation, and concurrency disposition are explicit.
+states its own sentence or names the one it partly delivers together with the ticket completing it,
+and each Slice's dependency edge, Module write scope and applicable production-path validation are
+explicit or carried to a `drafted` ticket that Slicing re-enters at its graduation. Concurrency
+disposition is no longer settled here: it is decided per dispatch, above.
 
 ## Triage
 
@@ -122,5 +158,10 @@ Candidate-backlog's hard gates are the sole authority for backlog eligibility, r
 lifecycle; S0 does not restate them. An edge returns from backlog only through explicit planning,
 after frequency, impact or a real resumed scenario makes it part of a current minimum need.
 
+A requirement first observed after S0 — which just-in-time ticket creation makes ordinary — is
+triaged when it arrives, at the graduation of the ticket that surfaces it, by these same two
+questions.
+
 Triage is complete when every observed requirement is in the current Contract, has a safe simple
-handling, or has passed Candidate-backlog admission, and no speculative case was admitted.
+handling, has passed Candidate-backlog admission, or is carried to a `drafted` ticket that Triage
+re-enters at its graduation, and no speculative case was admitted.

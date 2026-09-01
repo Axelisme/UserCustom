@@ -61,3 +61,13 @@ without duplicating either skill's checks.
     rule actually turns on. A related tell in the pointer itself: a sentence that explains where a rule lives
     (`each child profile carries it directly`) reads as reassurance and obliges no one, so it
     discharges nothing at the site that needed a verb.
+17. A pointer into a sectioned reference carries that section's anchor, and its reader opens it
+    there with `scripts/section.py <pointer>` rather than reading the document whole. Anchors make
+    headings addresses, so a heading is a stable name and never a summary: a descriptive tail
+    (`## Result — no Validation field`) restates the body, moves whenever the body moves, and takes
+    every pointer into it down silently. Leave a pointer unanchored where the whole document is the
+    referent, which a sentence naming three of that document's sections already tells you. What
+    makes this safe is the loud failure: a stale anchor exits non-zero with the file's real anchor
+    list, and `section.py --check` finds every broken pointer at authoring time. A stored line range
+    buys the same bounded read and destroys exactly that property — it still resolves after the
+    target moves, and hands the reader the wrong section without a word.

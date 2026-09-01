@@ -98,7 +98,7 @@ Stop publication or dispatch when the mode is missing, unresolved, or a placehol
 pointer does not resolve; a Change `S#` lacks an `A# covers S#` observer; an Acceptance claim names
 no observation that decides it, or names an observation whose surface cannot carry the promise it
 makes; the ticket declares no Module write scope, in
-[codebase-design](../../codebase-design/SKILL.md)'s sense of Module rather than as paths;
+[codebase-design](../../codebase-design/SKILL.md#glossary)'s sense of Module rather than as paths;
 graduation has an empty executable or durable owner; or an ADR target lacks explicit
 governing-spec authority. This is a
 narrative Orchestrator check: do not add parser or schema validation until repeated evidence supports
@@ -110,7 +110,7 @@ through [custody](custody.md) instead. Every ticket naming this one as the compl
 user-visible sentence is fixed in the same edit — a dangling completer edge is worse than none,
 because it still reads as agreed. Investigation may be dispatched read-only; the Orchestrator writes
 the contract, because a writer that authors the Acceptance it will be measured against leaves
-[lane-authority](lane-authority.md)'s checkbox ownership empty.
+[lane-authority](lane-authority.md#acceptance-checkboxes-belong-to-their-observer)'s checkbox ownership empty.
 
 If evidence shows that placement, authority, graduation, or the recorded Interface must change, return
 `NEEDS_DECISION` with the contradiction and exact question. The Orchestrator coordinates the owning

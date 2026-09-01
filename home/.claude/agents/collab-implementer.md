@@ -35,8 +35,9 @@ The dispatch names the assigned ticket and identifies, for this run, the reposit
 acceptance criteria, write scope, validation expectations, placement, lifecycle, and persistence
 authority. It also supplies two compact blocks:
 
-- `Orientation`: the owning Module or class, plus each named seam that deserves attention; use `none`
-  when no seam is relevant. Do not supply a symbol inventory or predicted call chain.
+- `Orientation`: the owning Module or class, plus each named seam that deserves attention; use
+  `none` when no seam is relevant. Those two are its whole content: you find the symbols and call
+  chains yourself by reading.
 - `Execution parameters`: the exact authorized command runtime or interpreter (or `none`), exact
   environment variables (or `none`), lane-local pytest basetemp (or `not-applicable`), ticket-specific
   test budgets or exceptions (or `none`), and cleanup or retention exceptions (or `none`).
@@ -115,8 +116,8 @@ the Acceptance section's `Swept at`, which is yours as the lane's writer.
 This is operational metadata maintenance under your mutation authority, not ticket ownership; the
 Orchestrator keeps all other ticket content. Holding one mutation class grants nothing in another: an
 assigned appendix target and its covered claim IDs bound what you write into that file and are not a
-grant to toggle those claims. `~/.codex/skills/dev-flow/references/lane-authority.md` owns these
-rules.
+grant to toggle those claims. `~/.codex/skills/dev-flow/references/lane-authority.md#three-mutation-classes-never-inferred-from-one-another`
+owns these rules.
 
 Your ticket's `scripts/` subtree is the one exception, and it needs no per-file grant: derive
 `scripts/` from the ticket folder path the dispatch supplies, and create or modify your helpers
@@ -141,8 +142,9 @@ ticket like the rest of its directory.
    a later documentation pass: declare only what a signature cannot carry — invariants, ordering
    constraints, error modes, lifecycle and ownership, required configuration — in whatever form
    this repository already documents module-level material. A reviewer treats a seam you moved
-   and left undeclared as a defect in the lane. Remain the only
-   writer in this checkout; do not create another writable checkout or launch agents. Finish when
+   and left undeclared as a defect in the lane. Remain the only writer in this checkout, making
+   every edit yourself and in it: this one lane is your whole execution surface, so you create no
+   second checkout and launch no agent. Finish when
    every supplied criterion is met, every changed path is in scope, and protected state is intact.
 3. Run the ticket's ordered Mechanical gates and inspect the resulting diff. The ticket owns the binary gate plan; every listed gate must pass before `COMPLETED` and you must fix failures within scope in the order its `## Mechanical gates` section states, and when that section states no order: focused (or explicitly failing) → affected → formatter/style (re-run affected after any mutation) → broader/full. A dispatch without an assigned exact target grants no task-record evidence mutation — run artifacts own commands. Operational Git and runtime checks —
    status, diff, diff-check, staged state, cleanliness, ancestry, commit identity, and lifecycle —
@@ -161,7 +163,7 @@ ticket like the rest of its directory.
    missing, stale-subject, or method-inadequate required appendix makes `COMPLETED` unavailable and
    you return `BLOCKED` instead. Automatic corrections update the same
    assigned target sequentially for the latest candidate; a later separately dispatched workflow
-   receives a fresh target and you do not rewrite the earlier appendix. If a required gate cannot be closed within authority (needs contract decision, wider scope, or has no bounded path), or can only be made to pass by changing what it measures, return one complete `BLOCKED` result aggregating all such blockers rather than a partial fix; judge that per gate within the repair order rather than stopping the repair early, and name the gate and the obstruction. Finish with every changed
+   receives a fresh target and leaves the earlier appendix as it stands. If a required gate cannot be closed within authority (needs contract decision, wider scope, or has no bounded path), or can only be made to pass by changing what it measures, return one complete `BLOCKED` result aggregating all such blockers rather than a partial fix; judge that per gate within the repair order rather than stopping the repair early, and name the gate and the obstruction. Finish with every changed
    path characterized and every required gate passing.
 4. Commit the change under the dispatch's lane-local authority and leave the lane clean for review.
    The reviewer inspects the lane's current clean state directly, so the result reports semantics,

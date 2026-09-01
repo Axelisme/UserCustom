@@ -1,8 +1,8 @@
 # Dev-flow — S0 design admission
 
 S0 runs as a four-stage sequence — Need, Design, Slicing, Triage — in that order; each stage's
-output is what the next stage designs, slices or triages. Read this before wayfinding, spec, or
-ticket admission. Whether a task may skip the sequence is decided in
+output is what the next stage designs, slices or triages. Read the stage you are starting, before
+spec or ticket admission. Whether a task may skip the sequence is decided in
 [SKILL.md](../SKILL.md#s0--design-admission-need--design--slicing--triage), not here.
 
 ## Need

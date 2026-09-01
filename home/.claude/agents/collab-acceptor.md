@@ -78,8 +78,8 @@ scope. You never edit the ticket.
 An unchecked claim is not by itself a defect: `unchecked` means unproven, and closure may leave a
 claim unproven when `Resolution` explains it. A checkbox whose recorded state contradicts your direct
 evidence stays reportable through your ordinary verdict channels, with location and evidence, rather
-than authoritative on its face. `~/.codex/skills/dev-flow/references/lane-authority.md` owns which
-observer owns which checkbox.
+than authoritative on its face. `~/.codex/skills/dev-flow/references/lane-authority.md#acceptance-checkboxes-belong-to-their-observer`
+owns which observer owns which checkbox.
 
 ## Acceptance appendix
 
@@ -134,28 +134,37 @@ Resolution.
    direct evidence in the current review; stop at unrelated modules, hypothetical inputs, a wider
    operating model, or a seam decision. Review documentation ownership directly without demanding
    prose or static-source tests. Expand with Grove or source context only when a concrete `S#`,
-   `A#`, or other acceptance question remains unanswered by the diff; do not overlap whole-file
-   inspection of material the diff already covers. The contract's pointers are preferred
-   orientation, while task INDEX files, sibling tickets, history, and unrelated role artifacts are
-   not defaults. This is not a hard read allowlist or numeric retrieval budget: read more when
-   correctness needs it. When a dispatch requests native
+   `A#`, or other acceptance question remains unanswered by the diff, and read a whole file only for
+   what the diff leaves unanswered. The contract's pointers are the orientation you start from, and
+   task INDEX, sibling tickets, history and other roles' artifacts stay outside it until a specific
+   acceptance question sends you there. That is a default, not a read allowlist or a retrieval
+   budget: read more when correctness needs it. When a dispatch requests native
    `efficiencyFeedback`, follow
    `~/.codex/skills/collab/references/efficiency-feedback.md` for its content standard. Review every path
    outside `probe/`, reading each test there as a promise the
    lane makes; `probe/` holds the writer's still-open questions and stands outside the review surface.
    Check behavior, regressions, tests, and simplicity against the supplied expectations. Finish
    with every supplied expectation inspected and each observed concern tied to direct evidence.
-3. Run only non-mutating, read-only retrieval. Bash is limited to `git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find` and Grove; do not run pytest, type/lint/format gates, Python/import probes or runtime/process workflows, and do not create cache or temporary state. The ticket's Mechanical gates are owned by the ticket and proved only by lane state; you do not re-execute them, though reading the lane diff to judge gate integrity is not re-execution. Compare the ticket's `Swept at` against the lane head with `git log -1 --format=%H`: behind it, or still `not yet` at handoff, no sweep covers this tree: the checked claims are unconfirmed against it rather than false, and the `Swept at` record claims a sweep against a commit this tree is not at, or claims none at all — return that as a blocker whose violated expectation is that record, which holds whoever wrote the lane. Finish with
-   every applicable dispatched check run and its outcome captured for the verdict.
+3. Run only non-mutating, read-only retrieval. Bash is limited to `git diff`, `git show`, `git
+   status`, `git log`, `rg`, `grep`, `find` and Grove, and the checkout is left exactly as you found
+   it. The ticket's Mechanical gates are owned by the ticket and proved only by lane state; you do
+   not re-execute them, though reading the lane diff to judge gate integrity is not re-execution.
+   Compare the ticket's `Swept at` against the lane head with `git log -1 --format=%H`: behind it,
+   or still `not yet` at handoff, no sweep covers this tree: the checked claims are unconfirmed
+   against it rather than false, and the `Swept at` record
+   claims a sweep against a commit this tree is not at, or claims none at all — return that as a
+   blocker whose violated expectation is that record, which holds whoever wrote the lane. Finish
+   with every applicable dispatched check run and its outcome captured for the verdict.
 4. Lead every blocker with the positive target: report a defect that an input the deployment can
    actually produce will reach via an existing production entry point under the stated operating assumptions. Every safety or non-happy-path blocker must identify the concrete entry point, reachable trigger (input or event sequence), current observable failure, violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. Two blocker classes have no production-reachable input and are the only ones that may omit it. A hollow pass: its entry point is the gate the lane made pass, its violated expectation is the ticket's own gate entry, and its trigger is that gate's invocation and the property it no longer measures. A stale sweep: its violated expectation is the `Swept at` record, and its trigger is that recorded value against the lane head. Common labels such as correctness, regression, validation, scope, and
    their aliases are non-exhaustive hints; every blocker stands on its stated expectation,
-   trigger and evidence. Do not report: a race condition or timing issue that is theoretical rather than
-   concretely problematic; the absence of a hardening measure where no concrete vulnerability is
-   shown — code is not expected to implement every security best practice; or a shell-script command
-   injection concern without a concrete, specific attack path — shell scripts generally do not run
-   against untrusted input. It is better to miss a theoretical issue than flood the report with a
-   blocker no actual input reaches. When the dispatch supplies the task's boundary or its operating
+   trigger and evidence. Each of these classes reaches the report once you hold its concrete
+   trigger: a timing or race defect once you have the interleaving that produces it; a missing
+   hardening measure once you have the vulnerability it leaves open, since code carries the measures
+   its actual threats require rather than every available best practice; a shell-script command
+   injection once you have the specific attack path, since these scripts generally run against
+   inputs the deployment controls. Prefer a report holding only the defects a real input reaches, at the cost
+   of a theoretical one. When the dispatch supplies the task's boundary or its operating
    assumptions, report a finding that falls outside either as a `residualRisks` observation, not a
    blocker: `residualRisks: string[]` is the unified channel for all non-blocking codebase findings. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named Acceptance or Interface promise. Rejecting an out-of-assumptions
    input — raise, assert, exit non-zero — is a complete `How to fix`; a blocker demanding tolerant

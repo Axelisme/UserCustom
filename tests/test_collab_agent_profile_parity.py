@@ -52,6 +52,9 @@ SHARED_CLAUSES = {
         # A gate routed around is not a gate closed; without this the writer's only visible option
         # is the workaround.
         "can only be made to pass by changing what it measures",
+        # One lane, one writer: without this the positive rule reads as covering only the edits,
+        # and a writer that fans work out to a child breaks lane exclusivity from inside.
+        "second checkout and launch no agent",
     ),
     "collab-acceptor": (
         # Without these the writer fills an appendix no reviewer knows how to judge.
@@ -88,6 +91,9 @@ SHARED_CLAUSES = {
         "for a stale sweep, the recorded `Swept at` against the lane head",
         # A comparison with no consequence is the inert-rule shape this change exists to remove.
         "claims a sweep against a commit this tree is not at",
+        # The read default is what keeps review bounded to the diff; losing it turns the permission
+        # to read further into an invitation to start wide.
+        "sends you there",
     ),
 }
 

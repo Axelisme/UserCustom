@@ -13,7 +13,7 @@ Typed results states its own enabling condition.
   a worktree bootstrap: establish its dispatch precondition and lane-lifetime ownership.
 - **Composed delegation** — the canonical branch: invoke `collab_run_reviewed_lane` for one
   shared lane, including bounded corrections.
-- **Typed results** — the typed terminal outcomes returned by the reviewed-lane workflow.
+- **Typed results** — how the runtime encodes a child result, beyond what its schema states.
 - **Post-launch** — after launching an asynchronous workflow: the ordinary return-or-yield step
   that lets completion wake the session.
 - **Run control** — only when a run is interrupted or needs status, steering, or stopping.
@@ -26,8 +26,8 @@ Typed results states its own enabling condition.
 Read this section after `collab_lane` with `action: create` succeeds when the repository declares a worktree
 bootstrap. Apply that repository-owned contract to the exact managed lane before invoking
 `collab_run_reviewed_lane`. Successful bootstrap and presence of the ordinary-path environment are
-preconditions for reviewed dispatch; if either is observed to fail, report `BLOCKED`, do not invoke
-the reviewed-lane tool, and do not discover or create a fallback environment.
+preconditions for reviewed dispatch; if either is observed to fail, report `BLOCKED` and stop there;
+the Orchestrator decides what follows.
 
 After the precondition succeeds, roles consume the provisioned environment through their exact
 dispatched execution parameters without syncing or provisioning it. The reviewed-lane tool retains
@@ -165,43 +165,38 @@ pi-subagents Extension RPC v1 `spawn`/`asyncSpawn` capability is missing or inco
 
 ## Typed results
 
-The reviewed-lane tool owns concrete JSON Schema objects for its worker and reviewer results; core
-Collab and the profiles express the same semantics without repeating the schema. Each child finishes
-through Pi's structured-output protocol instead of free-form Markdown, so formatting cannot change
-control flow. The parsed child result is `structuredOutput`; free-form output never drives control
-flow. Implementer launches retain Pi's v1 effects projection as optional runtime diagnostics, but
-Collab never branches on mutation effects. Every schema-valid `COMPLETED` result proceeds to a fresh
-reviewer even when effects are absent, empty, missing, or `not-applicable`; a schema-valid `BLOCKED`
-or `NEEDS_DECISION` result can still stop without mutation. Use
-one structured result per child and do not combine it with Pi's generic acceptance report:
-both default Collab profiles set `acceptance: { level: none, ... }` with a reason, and a launch needing
-another acceptance policy selects it explicitly.
-
-Collab's core owns what these fields mean. This section owns how the runtime encodes them, and each
-child's own `outputSchema` is authoritative for the exact shape.
+Collab's core owns what these fields mean, and each child's own `outputSchema` — delivered to it at
+launch — is authoritative for the exact shape it must return. This section owns the shape you branch
+on, and the runtime rejects a child result that departs from it.
 
 **Worker (`collab-implementer`).** `outcome` discriminates `COMPLETED`, `BLOCKED` and
-`NEEDS_DECISION`. `COMPLETED` carries no `validation` field, rejected via
-`additionalProperties: false`; `BLOCKED` carries `blocker`; `NEEDS_DECISION` carries
-`decision: { why, question }`. Each branch is closed to its own fields plus the shared `outcome`,
-optional `residualRisks: string[]`, and optional `efficiencyFeedback`.
+`NEEDS_DECISION`. `COMPLETED` carries no validation field; `BLOCKED` carries `blocker`;
+`NEEDS_DECISION` carries `decision: { why, question }`. Every branch may add `residualRisks` and
+`efficiencyFeedback`, and carries nothing else.
 
 **Reviewer (`collab-acceptor`).** `verdict` discriminates `PASS`, `BLOCKED` and `NEEDS_DECISION`.
-`BLOCKED` carries `blockers`, each with `where`, `why`, bounded `howToFix`, and a required `trigger`;
-it may also carry the internal `correctionBase`, the exact lane HEAD SHA at `BLOCKED`, which is
-runtime-owned and never reaches a public terminal projection. `NEEDS_DECISION` carries
-`decision: { why, question }`. Each branch is closed to its own fields plus the shared `verdict`,
-optional `residualRisks`, and optional `efficiencyFeedback`, plus `correctionBase` on `BLOCKED`.
+`BLOCKED` requires `blockers` — each with `where`, `why`, bounded `howToFix` and `trigger` — and
+`correctionBase`, the exact lane HEAD SHA it inspected, which stays internal to the loop.
+`NEEDS_DECISION` carries `decision: { why, question }`. Every branch may add `residualRisks` and
+`efficiencyFeedback`, and carries nothing else.
 
-**`efficiencyFeedback` encoding.** A plain string on every worker outcome and every reviewer verdict:
-`maxLength: 10000`, no `minLength`, no nested format, taxonomy or score. An explicitly present empty
-string is valid and produces an artifact; omitting the field produces none. The Orchestrator requests
-it in ordinary dispatch content whenever efficiency diagnosis is useful, not as a runtime parameter
-and not only on a user reminder. A request never makes it mandatory, and omission is never a runtime
-or acceptance failure.
+What no schema states:
 
-**Acceptor child `PASS` is not the workflow's `REVIEWED`.** The child's verdict is its own; the
-composed terminal is the workflow's.
+- Each child finishes through Pi's structured-output protocol, so the parsed `structuredOutput` is
+  what drives every branch and terminal projection, and free-form output text stays diagnostic.
+- Implementer launches retain Pi's v1 effects projection as optional runtime diagnostics only. Every
+  schema-valid `COMPLETED` proceeds to a fresh reviewer on its own, whatever the effects say —
+  absent, empty, missing, or `not-applicable` — and a schema-valid `BLOCKED` or `NEEDS_DECISION`
+  stands on its own without mutation.
+- Give each child one structured result: both default Collab profiles set
+  `acceptance: { level: none, ... }` with a reason, so a launch wanting Pi's generic acceptance
+  report alongside it selects that policy explicitly.
+- An explicitly present empty `efficiencyFeedback` string is valid and produces an artifact, while
+  omitting the field produces none. The Orchestrator requests it in ordinary dispatch content
+  whenever efficiency diagnosis is useful; a request leaves it optional, and omission stays a clean
+  result.
+- **An acceptor child's `PASS` is not the workflow's `REVIEWED`.** The child's verdict is its own;
+  the composed terminal is the workflow's.
 
 ## Post-launch
 
@@ -213,7 +208,8 @@ session, return control or use the active goal's yield mechanism and let complet
 Use `subagent_wait` only when the current request must finish in the same turn; waiting does not make
 a child more authoritative.
 
-After the workflow reaches a terminal handoff, if the lane's writer owned any Acceptance claims in the assigned `ticket.md` — the claims naming no other observer — reread that exact ticket before final Acceptance judgement, Resolution, lifecycle state, or task-progress reconciliation. Read only the assigned ticket; do not rescan the task or sibling tickets. That reread is where the ticket's `Swept at` is compared against the lane head: behind it, the writer's sweep is stale and its checked claims are unconfirmed against the delivered tree. This adds no post-wake `collab_status` read and no generic record-edit reread; completion processing, collection selection, and ticket mutation ownership remain unchanged.
+After the workflow reaches a terminal handoff, if the lane's writer owned any Acceptance claims in the assigned `ticket.md` — the claims naming no other observer — reread that exact ticket before final Acceptance judgement, Resolution, lifecycle state, or task-progress reconciliation. Read
+only the assigned ticket. That reread is where the ticket's `Swept at` is compared against the lane head: behind it, the writer's sweep is stale and its checked claims are unconfirmed against the delivered tree. This adds no post-wake `collab_status` read and no generic record-edit reread; completion processing, collection selection, and ticket mutation ownership remain unchanged.
 
 ## Run control
 
@@ -321,7 +317,10 @@ heads.
   the commit's tree equals the accepted integration tree, then advances both the persistence and
   integration branches to that commit — `collab_integration_land`.
 - Retire the lane, at task scope: force-removes the managed integration and its remaining lanes once
-  the task's collab-owned state is no longer needed — `collab_integration_remove`. When a Dev-flow task requested `efficiencyFeedback`, follow [dev-flow's feedback closeout](../dev-flow/references/collab-feedback-closeout.md) before `collab_integration_remove`; do not duplicate the procedure or change any public tool parameter.
+  the task's collab-owned state is no longer needed — `collab_integration_remove`. When a Dev-flow task requested `efficiencyFeedback`, follow
+  [dev-flow's feedback closeout](../dev-flow/references/collab-feedback-closeout.md) before
+  `collab_integration_remove`. That reference owns the procedure; run it as written, on the public
+  tool parameters as they stand.
 - Read-only inspection of a task's integration and lane state; supports every step above without
   mutating anything — `collab_status`.
 - Snapshot task state and telemetry to fixed report artifacts, with no cleanup or readiness

@@ -199,14 +199,14 @@ reviewed roles neither re-execute them nor reopen run artifacts to judge them. J
 
 **`COMPLETED` is a binary attestation** that the required gates passed and that every writer-owned
 Acceptance claim was re-verified against the final tree — dev-flow's
-[lane-authority](../dev-flow/references/lane-authority.md) owns that closing sweep and its `Swept at`
-record. It carries no free-text `Validation` array and creates no durable receipt. Ordinary gate
+[lane-authority](../dev-flow/references/lane-authority.md#the-closing-sweep) owns that closing sweep
+and its `Swept at` record. It carries no free-text `Validation` array and creates no durable receipt. Ordinary gate
 commands and raw outputs stay with the run artifact; a judging process worth keeping belongs only to
 the workflow-scoped Acceptance appendix at the exact dispatched target. Name that target in the brief;
 its writer creates the file from dev-flow's `templates/ticket/evidence.md` and fills it with targeted
 edits, so the grant you issue is a path and never a file you precreate.
-[record-hygiene](../dev-flow/references/record-hygiene.md) owns when an appendix is required and what
-an assigned target does and does not grant. Operational Git and runtime checks — status, diff,
+[record-hygiene](../dev-flow/references/record-hygiene.md#workflow-scoped-acceptance-appendix) owns
+when an appendix is required and what an assigned target does and does not grant. Operational Git and runtime checks — status, diff,
 diff-check, staged state, cleanliness, ancestry, commit identity, and lifecycle — are operation
 evidence and never belong in an appendix.
 
@@ -236,7 +236,9 @@ clean, and the reviewer reads its current state directly, read-only. Bash use is
 - for `NEEDS_DECISION`: why a decision is needed and the exact question
 - `Residual risks`: optional `residualRisks: string[]` for all non-blocking codebase findings, whether inside or outside the envelope
 
-A hollow pass and a stale sweep are the only two blocker classes that may omit a production-reachable input; each substitutes the entry point and trigger named above. Every other safety or non-happy-path blocker must be production-reachable under the stated operating assumptions: identify the existing production entry point, a concrete reachable input or event sequence, the current observable failure, the violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named promise, using only bounded advisory fixes that do not expand scope via robustness or future-proofing. A finding that depends on a wider operating model than the dispatch declared is reported via residual risks, not as a blocker.
+A hollow pass and a stale sweep are the only two blocker classes that may omit a production-reachable input; each substitutes the entry point and trigger named above. Every other safety or non-happy-path blocker must be production-reachable under the stated operating assumptions: identify the existing production entry point, a concrete reachable input or event sequence, the current observable failure, the violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named promise, using
+bounded advisory fixes that stay inside the ticket's stated outcome rather than expanding scope via
+robustness or future-proofing. A finding that depends on a wider operating model than the dispatch declared is reported via residual risks, not as a blocker.
 
 A `PASS` ends after Verdict and any residual risks; it needs no empty filler. The verdict
 is a review result, not ticket Acceptance: the Orchestrator owns the final judgement and closure.

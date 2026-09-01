@@ -9,16 +9,14 @@ spec: none
 Not yet recorded.
 
 ## Current
-<!-- This section exists so a session that knows nothing can understand where the task stands.
-     Write only what serves that: present focus and current judgement. Anything that does not
-     change a new reader's understanding stays out — which writer or agent is working, commands
-     already run, intermediate attempts, and progress that leaves the next action unchanged.
-     Keep long review history, command logs, SHAs, trees, and receipts beside the ticket that
-     produced them. -->
+<!-- Replace this section, never edit it: remove the text below, keeping this comment, decide each
+     removed fact's fate, then write fresh. What belongs here, the three fates, and why:
+     ~/.codex/skills/dev-flow/references/record-hygiene.md#current-and-next-are-replaced-not-edited -->
 Task created.
 
 ## Next
-<!-- Name the next bounded action and its owner. Keep suggestions and unapproved work distinct from instructions. -->
+<!-- Replace this section, never edit it, under the same rule as `Current`:
+     ~/.codex/skills/dev-flow/references/record-hygiene.md#current-and-next-are-replaced-not-edited -->
 Write or select the first ticket.
 
 ## Envelope

@@ -4,6 +4,45 @@
 Keep current judgement separate from long review history, command logs, SHAs, trees, and receipts;
 those belong to the evidence file or gate that produced them.
 
+## `Current` and `Next` are replaced, not edited
+
+These two sections carry no archival duty — `Current` says where the task stands, `Next` names the
+next bounded action and its owner, keeping suggestions and unapproved work distinct from
+instructions — so writing them **replaces** them. `Standing orders` may not be replaced at all:
+[custody](custody.md) requires its grants verbatim.
+
+Do it in this order, because leaving the old text in place while composing anchors the writer to it:
+
+1. **Remove** the section's existing text, keeping the heading and its comment.
+2. **Filter** each removed fact into one of three outcomes — **keep** it, because it changes the next
+   action; **move** it to the file that owns it, when that file does not already carry it; or
+   **drop** it, which is available only once the fact has an owner that carries it or is genuinely no
+   longer true. A fact whose only copy sits here and whose owner does not exist yet is moved by
+   creating that owner first, the way a standing order's custody source is created below. Two
+   outcomes is the trap: without **move**, a fact whose only copy sat here gets summarized away, and
+   a summarized pointer is a destroyed one.
+3. **Write** the section fresh from the present situation.
+
+`Current` holds three things nothing else owns: **which ticket is in focus** — not derivable, since
+several may be `pending` and choosing one is a judgement; **what lifecycle stage it is at**, which a
+ticket's state gives only coarsely; and **the judgement still in flight**, which moves to the ticket
+or to `decisions/` and leaves here the moment it settles. Before the first ticket exists, and after
+the last one closes, only the third applies and the section says which S0 stage or which disposition
+the task is waiting on.
+
+Three things are therefore defects in `Current`, each with a named owner elsewhere: a closed ticket's
+narrative, owned by that ticket's `Resolution`; a settled judgement, owned by the ticket or by
+`decisions/`; and a commit SHA that `git` or an existing `Resolution` already recovers. The SHA is
+the conditional one: a fixed candidate under review has no `Resolution` yet, and its identity is part
+of the judgement in flight, so it belongs here until the ticket closes.
+
+The failure this prevents is gradual: an edit appends and removes nothing, so no single edit ever
+looks wrong and the section is visibly broken only long after it stopped being readable. That is why
+the rule is a procedure rather than a size limit — the procedure fires on every write, while a limit
+is only consulted once someone suspects a problem.
+
+## Compacting every other section
+
 Everything else already has a home, so compaction is a **move**, never a rewrite:
 
 - A standing order's scope stays in its frozen owning file. If none exists, dev-flow creates the

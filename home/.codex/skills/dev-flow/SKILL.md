@@ -13,8 +13,8 @@ pointers current work needs.
 
 If those sources cannot name the next action, repair `INDEX.md`'s `Current` and `Next` — with the
 user when the answer is not yours to write — rather than scanning tickets, artifacts, or the task DAG
-to infer one. What belongs in `INDEX.md` at all, and where everything else lives, is owned by
-[record-hygiene](references/record-hygiene.md).
+to infer one. Replace those two sections rather than editing them, and read what belongs in each:
+[Current and Next](references/record-hygiene.md#current-and-next-are-replaced-not-edited).
 
 Orientation is complete when you can state the task and its next action from the authoritative
 sources, and can place that action in the lifecycle below.
@@ -164,14 +164,19 @@ mutation classes that are never inferred from one another, and which observer ow
 Use one **single-store**: durable ticket state comes from this record. Session task lists are
 temporary projections and never overwrite durable state merely because their UI differs. A competing
 phase, progress, or acceptance store leaves the next reader choosing authority by accident.
-Compaction is a **move** to the owning document rather than a rewrite.
+Compaction is a **move** to the owning document rather than a rewrite; where each kind of content
+moves to is owned by [compacting every other
+section](references/record-hygiene.md#compacting-every-other-section). `Current` and `Next` are the
+exception, replaced whole under [Current and
+Next](references/record-hygiene.md#current-and-next-are-replaced-not-edited).
 
 ## Closing a ticket
 
 Treat closure as one Orchestrator-owned coordinated record transition. Confirm the applicable
 Acceptance state, write Resolution once, set the ticket frontmatter to `state: closed`, then
-reconcile `INDEX.md`'s `Current` and `Next` with the task's remaining work, keeping it to what
-changes the next action under [record-hygiene](references/record-hygiene.md). Normal closure follows
+replace — never edit — `INDEX.md`'s `Current` and `Next`, deciding each removed fact's fate under
+[Current and
+Next](references/record-hygiene.md#current-and-next-are-replaced-not-edited). Normal closure follows
 completion of all applicable Acceptance claims. Abandoned, superseded, or rejected closure may retain
 unchecked claims when Resolution explains why. A ticket closed while still `drafted` has no claims to
 retain, and its Resolution says in one line that the question never became current. Closure is

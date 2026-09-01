@@ -345,7 +345,7 @@ async function appendFeedbackWarning(repoControlRoot: string, sink: { taskId: st
 async function readEfficiencyFeedbackValue(statusObj: Record<string, unknown>, workflowId: string, workflowKey: string, childRunId: string, lanePath: string): Promise<{ found: boolean; value?: unknown; warning?: string }> {
   // Single correlated step resolution owns workflowId, workflowKey, childRunId, terminal status and lane/session identity.
   try {
-    correlateArtifacts({ statusObj, workflowId, workflowKey, childRunId, lanePath });
+    correlateArtifacts({ statusObj, workflowId, workflowKey, childRunId, lanePath, requireSessionFile: false });
   } catch (e) {
     return { found: false, warning: `derivation failed for ${workflowKey}/${childRunId}: ${boundedMessage(e)}` };
   }
@@ -363,24 +363,35 @@ async function readEfficiencyFeedbackValue(statusObj: Record<string, unknown>, w
     }
     return true;
   });
-  if (matching.length !== 1) return { found: false };
+  // A correlated step that yields no feedback is reported, not dropped silently: only an absent
+  // `efficiencyFeedback` field is ordinary, because a child that observed no avoidable cost omits it.
+  if (matching.length !== 1) return { found: false, warning: `no single correlated step for ${workflowKey}/${childRunId}: matched ${matching.length}` };
   const step = matching[0];
-  if (step["structuredOutput"] !== undefined && step["structuredOutput"] !== null && typeof step["structuredOutput"] === "object" && !Array.isArray(step["structuredOutput"])) {
-    const out = step["structuredOutput"] as Record<string, unknown>;
-    if (!("efficiencyFeedback" in out)) return { found: false };
-    if (!isValidStructuredOutput(workflowKey, out)) {
-      const fbVal = out["efficiencyFeedback"];
-      if (typeof fbVal !== "string") return { found: false, warning: `efficiencyFeedback is not a string for ${workflowKey}/${childRunId}` };
-      if (unicodeLength(fbVal as string) > 10000) return { found: false, warning: `efficiencyFeedback exceeds maxLength 10000 for ${workflowKey}/${childRunId}` };
-      return { found: false, warning: `structured output validation failed for ${workflowKey}/${childRunId}` };
-    }
-    return { found: true, value: out["efficiencyFeedback"] };
+  const structured = step["structuredOutput"];
+  // A step carrying no structured output is ordinary: a failed, stopped or paused child never
+  // produced one, and a step record may omit it. Only a correlation that resolves no single step
+  // is anomalous enough to report.
+  if (structured === undefined || structured === null || typeof structured !== "object" || Array.isArray(structured)) {
+    return { found: false };
   }
-  return { found: false };
+  const out = structured as Record<string, unknown>;
+  if (!("efficiencyFeedback" in out)) return { found: false };
+  if (!isValidStructuredOutput(workflowKey, out)) {
+    const fbVal = out["efficiencyFeedback"];
+    if (typeof fbVal !== "string") return { found: false, warning: `efficiencyFeedback is not a string for ${workflowKey}/${childRunId}` };
+    if (unicodeLength(fbVal as string) > 10000) return { found: false, warning: `efficiencyFeedback exceeds maxLength 10000 for ${workflowKey}/${childRunId}` };
+    return { found: false, warning: `structured output validation failed for ${workflowKey}/${childRunId}` };
+  }
+  return { found: true, value: out["efficiencyFeedback"] };
 }
 
-function correlateArtifacts(input: { statusObj: Record<string, unknown>; workflowId: string; workflowKey: string; childRunId: string; lanePath: string; }): { agentDurationMs: number | null; turnCount: number | null; sessionFile: string; terminalState: string } {
+// `requireSessionFile` is true for telemetry, which then reads that session transcript. Feedback
+// publication needs only the correlated step's identity and its structured output, so it passes
+// false and a step carrying no sessionFile still yields its feedback instead of being discarded.
+// A sessionFile that is present stays fully validated under either setting.
+function correlateArtifacts(input: { statusObj: Record<string, unknown>; workflowId: string; workflowKey: string; childRunId: string; lanePath: string; requireSessionFile?: boolean; }): { agentDurationMs: number | null; turnCount: number | null; sessionFile: string; terminalState: string } {
   const { statusObj, workflowId, workflowKey, childRunId, lanePath } = input;
+  const requireSessionFile = input.requireSessionFile !== false;
   const status = statusObj as { runId?: unknown; cwd?: unknown; workflow?: unknown; steps?: unknown };
   if (status.runId !== workflowId) throw new Error(`status runId ${String(status.runId)} does not match workflowId ${workflowId}`);
   const cwdRaw = (statusObj as { cwd?: unknown }).cwd;
@@ -407,11 +418,16 @@ function correlateArtifacts(input: { statusObj: Record<string, unknown>; workflo
   if (matchingSteps.length === 0) throw new Error(`status step not found for workflowKey ${workflowKey} parent ${workflowId}`);
   if (matchingSteps.length > 1) throw new Error(`duplicate terminal steps for workflowKey ${workflowKey} parent ${workflowId}`);
   const step = matchingSteps[0];
-  const sessionFile = step["sessionFile"];
-  if (typeof sessionFile !== "string" || sessionFile.length === 0) throw new Error("step missing sessionFile");
-  if (!path.isAbsolute(sessionFile)) throw new Error(`sessionFile is not absolute: ${sessionFile}`);
-  const segs = path.resolve(sessionFile).split(path.sep);
-  if (!segs.includes(childRunId)) throw new Error(`sessionFile does not contain childRunId segment ${childRunId}: ${sessionFile}`);
+  const sessionFileRaw = step["sessionFile"];
+  const sessionFileAbsent = typeof sessionFileRaw !== "string" || sessionFileRaw.length === 0;
+  if (requireSessionFile && sessionFileAbsent) throw new Error("step missing sessionFile");
+  let sessionFile = "";
+  if (!sessionFileAbsent) {
+    sessionFile = sessionFileRaw as string;
+    if (!path.isAbsolute(sessionFile)) throw new Error(`sessionFile is not absolute: ${sessionFile}`);
+    const segs = path.resolve(sessionFile).split(path.sep);
+    if (!segs.includes(childRunId)) throw new Error(`sessionFile does not contain childRunId segment ${childRunId}: ${sessionFile}`);
+  }
   let turnCount: number | null = null;
   const tc = step["turnCount"];
   if (typeof tc === "number" && Number.isFinite(tc)) turnCount = tc;
@@ -420,7 +436,7 @@ function correlateArtifacts(input: { statusObj: Record<string, unknown>; workflo
   if (statusStr === "failed") terminalState = "failed";
   else if (statusStr === "stopped" || statusStr === "paused") terminalState = "stopped";
   else terminalState = "completed";
-  return { agentDurationMs, turnCount, sessionFile: sessionFile as string, terminalState };
+  return { agentDurationMs, turnCount, sessionFile, terminalState };
 }
 
 export function deriveReportFromArtifacts(input: { taskId: string; ticketId: string; laneId: string; workflowId: string; workflowKey: string; childRunId: string; lanePath: string; statusObj: Record<string, unknown>; sessionText: string; }): Record<string, unknown> {
@@ -854,13 +870,17 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
     for (const { workflowKey, childRunId } of seen.values()) {
       let sessionFile: string;
       try {
-        const corr = correlateArtifacts({ statusObj, workflowId, workflowKey, childRunId, lanePath });
+        const corr = correlateArtifacts({ statusObj, workflowId, workflowKey, childRunId, lanePath, requireSessionFile: false });
         sessionFile = corr.sessionFile;
       } catch (e) {
         const msg = `derivation failed for ${workflowKey}/${childRunId}: ${boundedMessage(e)}`;
         if (isPermanentMessage(msg)) return { state: "permanent", message: msg, workflowKey, childRunId, ignoredReason: "permanent derivation failure", seen, sessionTexts, statusObj };
         return { state: "retryable", reason: msg, statusObj, seen, sessionTexts };
       }
+      // A step without sessionFile captures no session text. Readiness continues so the other
+      // children still publish and this child's feedback still reaches its own owner; the missing
+      // transcript costs it only its telemetry report.
+      if (sessionFile === "") continue;
       if (!(await isAncestrySafe(repoControlRoot, sessionFile))) {
         return { state: "permanent", message: `session file ancestry is unsafe for ${workflowKey} at ${sessionFile}`, workflowKey, childRunId, ignoredReason: "unsafe session ancestry", seen, sessionTexts, statusObj };
       }
@@ -1128,11 +1148,36 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
 
   // Captured ready inputs: publish under short lock if provided
   const { statusObj, seen, sessionTexts } = captured!;
+  // Qualitative feedback has its own owner and does not depend on the session transcript, so it
+  // publishes before the telemetry path and survives a step the report cannot derive.
+  const publishStepFeedback = async (args: { statusObj: Record<string, unknown>; workflowKey: string; childRunId: string; warnings: string[] }): Promise<void> => {
+    const { statusObj: sObj, workflowKey, childRunId, warnings } = args;
+    try {
+      const fb = await readEfficiencyFeedbackValue(sObj, workflowId, workflowKey, childRunId, lanePath);
+      if (fb.warning) {
+        warnings.push(await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: fb.warning }));
+      }
+      if (!fb.found) return;
+      if (typeof fb.value !== "string") {
+        warnings.push(await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `efficiencyFeedback is not a string for ${workflowKey}/${childRunId}` }));
+        return;
+      }
+      if (unicodeLength(fb.value as string) > 10000) {
+        warnings.push(await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `efficiencyFeedback exceeds maxLength 10000 for ${workflowKey}/${childRunId}` }));
+        return;
+      }
+      const fbResult = await publishFeedback({ repoControlRoot, taskId, ticketId, laneId, workflowId, workflowKey, childRunId, lanePath, efficiencyFeedback: fb.value as string });
+      if (!fbResult.isDuplicate && fbResult.warning) warnings.push(fbResult.warning);
+    } catch (e) {
+      warnings.push(await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `feedback handling failed for ${workflowKey}/${childRunId}: ${boundedMessage(e)}` }));
+    }
+  };
   const doPublish = async (): Promise<{ published: string[]; warnings: string[] }> => {
     const published: string[] = [];
     const warnings: string[] = [];
     const classifications: Array<{ workflowKey: string; childRunId: string; classification: string }> = [];
     for (const { workflowKey, childRunId } of seen.values()) {
+      await publishStepFeedback({ statusObj, workflowKey, childRunId, warnings });
       const sessionText = sessionTexts.get(`${workflowKey}\0${childRunId}`) ?? null;
       if (sessionText === null) {
         const w = await appendWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `missing captured session for ${workflowKey}/${childRunId}` });
@@ -1165,28 +1210,6 @@ export async function handleReviewedLaneCompletion(input: { repoControlRoot: str
         } else {
           classifications.push({ workflowKey, childRunId, classification: "unavailable" });
         }
-      }
-      try {
-        const fb = await readEfficiencyFeedbackValue(statusObj, workflowId, workflowKey, childRunId, lanePath);
-        if (fb.warning) {
-          const w = await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: fb.warning });
-          warnings.push(w);
-        }
-        if (fb.found) {
-          if (typeof fb.value !== "string") {
-            const w = await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `efficiencyFeedback is not a string for ${workflowKey}/${childRunId}` });
-            warnings.push(w);
-          } else if (unicodeLength(fb.value as string) > 10000) {
-            const w = await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `efficiencyFeedback exceeds maxLength 10000 for ${workflowKey}/${childRunId}` });
-            warnings.push(w);
-          } else {
-            const fbResult = await publishFeedback({ repoControlRoot, taskId, ticketId, laneId, workflowId, workflowKey, childRunId, lanePath, efficiencyFeedback: fb.value as string });
-            if (fbResult.isDuplicate) { } else if (fbResult.warning) warnings.push(fbResult.warning);
-          }
-        }
-      } catch (e) {
-        const w = await appendFeedbackWarning(repoControlRoot, { taskId, laneId, workflowId, workflowKey, childRunId, message: `feedback handling failed for ${workflowKey}/${childRunId}: ${boundedMessage(e)}` });
-        warnings.push(w);
       }
     }
     // Coverage manifest: one idempotent manifest per readable terminal trace, with unique known steps and equation known_steps = published + warning-only + unavailable

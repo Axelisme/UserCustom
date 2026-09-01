@@ -1040,6 +1040,41 @@ class SL03S4SnapshotReconciliationTests(unittest.TestCase):
             self.assertEqual(coverage["known_steps"], 1)
             self.assertEqual(coverage["published_reports"], 1)
 
+    def test_feedback_publishes_when_the_step_carries_no_session_file(self):
+        # Telemetry reads the session transcript and still needs sessionFile, but feedback only
+        # needs the correlated step's structured output. A step without sessionFile must publish
+        # its feedback instead of being discarded with the telemetry derivation.
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repo, _ = seed_repository(base)
+            seed_task_container(repo)
+            managed = seed_managed_task(repo, "demo")
+            lane_path = managed["lane"]
+            control_root = str(repo.resolve())
+            workflow_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+            child = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+            async_dir = base / "async"
+            async_dir.mkdir()
+            status = {
+                "runId": workflow_id,
+                "cwd": lane_path,
+                "state": "complete",
+                "workflow": {"trace": [{"key": "impl-1", "runId": child, "durationMs": 100, "state": "completed"}], "emits": [], "console": []},
+                "steps": [{"workflowKey": "impl-1", "parentWorkflowRunId": workflow_id, "status": "completed", "turnCount": 1, "runId": child, "structuredOutput": {"outcome": "COMPLETED", "efficiencyFeedback": "correction feedback"}}]
+            }
+            (async_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+            result = run_report_node({"action":"handleCompletion","repoControlRoot":control_root,"taskId":"demo","ticketId":"T001","laneId":"writer-1","lanePath":lane_path,"workflowId":workflow_id,"asyncDir":str(async_dir),"eventWorkflowId":workflow_id,"eventAsyncDir":str(async_dir)})
+            self.assertTrue(result["ok"])
+            feedback_path = repo / ".agent_state/plans/demo/.collab_op/lane_loop_feedback/writer-1" / f"{child}.json"
+            self.assertTrue(feedback_path.is_file(), "feedback must survive a step without sessionFile")
+            record = json.loads(feedback_path.read_text(encoding="utf-8"))
+            self.assertEqual(record["efficiencyFeedback"], "correction feedback")
+            self.assertEqual(record["workflowKey"], "impl-1")
+            # The telemetry report still requires sessionFile and stays unpublished for this step.
+            report_path = repo / ".agent_state/plans/demo/.collab_op/lane_loop_report/T001" / f"{child}.json"
+            self.assertFalse(report_path.is_file())
+
+
 class SL03S5BestEffortBoundaryTests(unittest.TestCase):
     def test_A6_feedback_cannot_change_counts_and_report_failure_not_change_workflow_result(self):
         with tempfile.TemporaryDirectory() as tmp:

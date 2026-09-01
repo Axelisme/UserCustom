@@ -56,15 +56,11 @@ def die(message: str) -> None:
     raise SystemExit(1)
 
 
-def resolve(target: str, base: Path | None = None) -> Path:
+def resolve(target: str) -> Path:
     """A pointer is written relative to the document that carries it; find it from anywhere."""
     direct = Path(target).expanduser()
     if direct.is_file():
         return direct
-    if base is not None:
-        near = (base.parent / target).resolve()
-        if near.is_file():
-            return near
     suffix = Path(*[p for p in Path(target).parts if p not in ("..", ".")])
     hits = sorted({p for root in SEARCH_ROOTS for p in walk(Path(root).expanduser())
                    if p.name == suffix.name and p.as_posix().endswith(suffix.as_posix())})
@@ -92,6 +88,16 @@ def read_section(path: Path, anchor: str) -> None:
     print("\n".join(lines[start - 1 : end]).rstrip())
 
 
+def is_bare_pointer(target: str, anchor: str | None) -> bool:
+    """Backticks mean two things, and only one of them is checkable.
+
+    A backticked path is a pointer when it carries an anchor or is rooted at `~/`, and prose naming
+    a per-task artifact otherwise — `INDEX.md`, `validation.md`, `research/skill-feedback.md` name
+    files a ticket creates at runtime, so demanding they exist would report correct prose as broken.
+    """
+    return bool(anchor) or target.startswith("~/")
+
+
 def check(roots: list[Path]) -> None:
     files = sorted({p for r in roots for p in ([r] if r.is_file() else walk(r, follow=False)) if p.suffix in (".md", ".toml")})
     broken = 0
@@ -99,7 +105,7 @@ def check(roots: list[Path]) -> None:
         text = f.read_text()
         for pattern in (MD_LINK, BARE_LINK):
             for m in pattern.finditer(text):
-                if not m.group(2) and pattern is BARE_LINK:
+                if pattern is BARE_LINK and not is_bare_pointer(m.group(1), m.group(2)):
                     continue
                 if set("<{") & set(m.group(1)):  # a template's placeholder path
                     continue

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -35,6 +36,32 @@ class SkillPointerTest(unittest.TestCase):
         result = run(f"{lane_authority}#the-closing-swep")
         self.assertEqual(result.returncode, 1)
         self.assertIn("#the-closing-sweep", result.stderr)
+
+    def test_check_catches_a_broken_pointer_of_every_kind_it_claims(self) -> None:
+        # The corpus being green proves nothing about detection, so plant one break of each kind.
+        pointers = {
+            "link": "[x](missing-doc.md)",
+            "link anchor": "[x](real.md#no-such-heading)",
+            "bare rooted": "`~/.codex/skills/dev-flow/references/no-such-doc.md`",
+            "bare anchor": "`real.md#no-such-heading`",
+        }
+        for kind, pointer in pointers.items():
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "real.md").write_text("# Real\n")
+                (root / "doc.md").write_text(f"See {pointer} for details.\n")
+                result = run("--check", str(root))
+                self.assertEqual(result.returncode, 1, f"{kind} went undetected: {result.stdout}")
+
+    def test_check_leaves_runtime_artifact_prose_alone(self) -> None:
+        # `INDEX.md` and friends name a file a ticket creates, not a document to open.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "doc.md").write_text(
+                "Repair `INDEX.md`, then write `research/skill-feedback.md`.\n"
+            )
+            result = run("--check", str(root))
+            self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_a_pointer_is_read_at_its_section(self) -> None:
         result = run("../dev-flow/references/lane-authority.md#the-closing-sweep")

@@ -68,6 +68,9 @@ without duplicating either skill's checks.
     every pointer into it down silently. Leave a pointer unanchored where the whole document is the
     referent, which a sentence naming three of that document's sections already tells you. What
     makes this safe is the loud failure: a stale anchor exits non-zero with the file's real anchor
-    list, and `section.py --check` finds every broken pointer at authoring time. A stored line range
+    list, and `section.py --check` fails on a broken pointer at authoring time. It reads a Markdown
+    link, and a backticked path that carries an anchor or is rooted at `~/`. A bare `` `INDEX.md` ``
+    in prose names a file a ticket creates at runtime rather than a document to open, and the two
+    share one syntax, so write a pointer you want checked as a link or root it at `~/`. A stored line range
     buys the same bounded read and destroys exactly that property — it still resolves after the
     target moves, and hands the reader the wrong section without a word.

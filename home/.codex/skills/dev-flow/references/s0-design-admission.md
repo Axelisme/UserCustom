@@ -116,7 +116,7 @@ whatever state its endpoint is in, and a graph restricted to `pending` tickets m
 mutually unreachable when A reaches B only through a D that is still `drafted`.
 
 Declare each ticket's write scope as the Modules the Design stage produced, in
-[`codebase-design`](../../codebase-design/SKILL.md)'s sense of the term, rather than as paths,
+[`codebase-design`](../../codebase-design/SKILL.md#glossary)'s sense of the term, rather than as paths,
 functions, or the lines a diff touches: two tickets that change different functions of one Module
 share that Module's scope. Overlapping Module scope between two tickets with no edge between them is
 a missing edge: add the edge or split the tickets. Grant concurrency where assembled evidence would

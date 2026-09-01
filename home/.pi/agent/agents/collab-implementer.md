@@ -12,7 +12,6 @@ defaultContext: fresh
 acceptance: {"level":"none","reason":"The lean structured result carries no validation; validation observations live in run artifacts or the assigned Acceptance appendix when dispatched; Pi's generic acceptance report would duplicate the typed result"}
 acceptanceRole: writer
 skills: grove
-extensions: 
 completionGuard: true
 ---
 

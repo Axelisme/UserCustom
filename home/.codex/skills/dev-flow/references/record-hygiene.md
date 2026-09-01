@@ -92,7 +92,7 @@ cp ~/.codex/skills/dev-flow/templates/ticket/evidence.md <task>/tickets/<ticket-
 That template carries the Subject / Evidence / Residuals spine every evidence kind shares, and the
 situational sections are yours to add. Copy an evidence file when you are ready to write it: an empty `validation.md` sitting
 in a ticket directory reads as validation that exists, so let absence stay honest. Then fill it with
-targeted edits and never with a whole-file write — [lane-authority](lane-authority.md) owns that rule
+targeted edits and never with a whole-file write — [lane-authority](lane-authority.md#creating-an-evidence-file) owns that rule
 and why the template's comments stay in the published file.
 
 The filesystem is the inventory; a second inventory drifts. That holds only while every file is
@@ -107,7 +107,7 @@ closure means that obligation went unpaid.
 
 ## Guiding script locations (S5)
 
-`templates/task/` provides `<task>/scripts/` and `templates/ticket/` provides `<ticket>/scripts/` as guiding locations. The Orchestrator owns task-level scripts; the lane's writer may create or modify its ticket's `scripts/` subtree without gaining wider record mutation authority (no per-file grant needed, but no extension to other ticket-folder content). The reviewer remains read-only. A dispatched writer derives the container from the ticket folder path its dispatch supplies. [lane-authority](lane-authority.md) owns who the writer is and what each mutation class does not grant. Ticket closure retains scripts with the same lifecycle as other ticket content.
+`templates/task/` provides `<task>/scripts/` and `templates/ticket/` provides `<ticket>/scripts/` as guiding locations. The Orchestrator owns task-level scripts; the lane's writer may create or modify its ticket's `scripts/` subtree without gaining wider record mutation authority (no per-file grant needed, but no extension to other ticket-folder content). The reviewer remains read-only. A dispatched writer derives the container from the ticket folder path its dispatch supplies. [lane-authority](lane-authority.md#writer-and-reviewer-are-positions-not-roles) owns who the writer is, and [what each mutation class does not grant](lane-authority.md#three-mutation-classes-never-inferred-from-one-another). Ticket closure retains scripts with the same lifecycle as other ticket content.
 
 ## Durable validation that must persist (A14–A15)
 
@@ -130,7 +130,7 @@ The appendix holds the judging process when that process is worth keeping — mo
 read-only reviewer cannot reproduce it. The Orchestrator names a target when it wants that process
 kept, and names none otherwise: for the claims it names, it places one fresh exact target under the
 ticket directory and places that path plus covered claim IDs
-in both role briefs; [lane-authority](lane-authority.md) owns who then creates that file and how it
+in both role briefs; [lane-authority](lane-authority.md#creating-an-evidence-file) owns who then creates that file and how it
 is filled. That writer may mutate only that exact target, binding the fixed candidate and covered
 claims to method, observations, artifact pointers when needed, and explicit limitations without
 judging Acceptance; if a required appendix cannot be completed, `COMPLETED` is unavailable. A

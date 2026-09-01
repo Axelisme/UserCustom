@@ -192,7 +192,7 @@ decision, and a second patch over one cause is evidence the seam is in the wrong
 that explicitly authorizes moving a named seam lifts the original scope for that move alone. A
 correction changes the lane, so the changed lane needs a new review result.
 
-## Result — gates and closing-sweep attestation, no Validation field
+## Result
 
 Return only these fields, in this order. Keep each field concise: state only role-relevant
 routing, risks, and stop reasons, without restating ticket prose, command output, or diff

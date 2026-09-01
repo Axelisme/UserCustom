@@ -33,6 +33,9 @@ Define each at its first use:
   stopped; the ordinary object under review.
 - **Runtime pointer** — this skill directory's `runtime-<name>.md` for the runtime in use. Boundary 2
   states when to read it and what its absence means.
+- **Anchored pointer** — a reference ending in `#<anchor>`, which addresses one section rather than a
+  document. Open it there with `python3 ~/.codex/skills/dev-flow/scripts/section.py <pointer>`, copying the
+  pointer verbatim; read a document whole when its pointer carries no anchor.
 
 ## Core guardrails
 
@@ -51,7 +54,7 @@ Define each at its first use:
 A dispatch names the ticket and carries only the operational deltas — placement, authority,
 validation, stop conditions, and role-specific deltas — without copying the ticket's prose. Carry a
 needed conclusion inline; point to supporting material with the condition for opening it. Before
-sending the brief, inspect the selected receiver profile's `Dispatch contract` and `Result` sections
+sending the brief, read the selected receiver profile's `#dispatch-contract` and `#result` sections
 and close every required value, path, mutation authority, evidence owner, and stop condition in it,
 with explicit values rather than repository guesses. Those two sections are the Orchestrator's share
 of a profile and carry that role's authoritative field list; the rest of the profile is the
@@ -191,7 +194,7 @@ carries no semantic edit, so it leaves no residue and is judged on its gates.
 
 ## Worker results are semantic
 
-**Gates.** dev-flow's [ticket template](../dev-flow/templates/ticket/ticket.md) gives the ticket
+**Gates.** dev-flow's [ticket template](../dev-flow/templates/ticket/ticket.md#mechanical-gates) gives the ticket
 the ordered binary gate plan and requires every listed gate to pass before `COMPLETED`. The implementer fixes failures within scope in the order that
 ticket section states, or the default its own profile carries when the section states none, and
 returns one complete `BLOCKED` result when closure exceeds authority. Ticket-owned gates are validated by the implementer and proved only by lane state;

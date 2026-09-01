@@ -186,7 +186,7 @@ Resolution.
    `NEEDS_DECISION` naming that seam rather than a `BLOCKED` that routes one more patch. You may
    propose where the seam belongs; the Orchestrator designs and decides.
 
-## Result — unified residualRisks, internal correctionBase, no public diff cache
+## Result
 
 Return only these fields, in this order. Keep each field concise and evidence-backed, without
 restating ticket prose, the diff, or lane material the review already shows. Public terminal results never expose internal `correctionBase`; the reviewer obtains the delta from Git.

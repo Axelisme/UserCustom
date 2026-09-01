@@ -196,6 +196,10 @@ declares what its own scaffolding is and when it comes down (for example
 
 ## When to read what
 
+A pointer ending in `#<anchor>` addresses one section: open it there with
+`python3 ~/.codex/skills/dev-flow/scripts/section.py <pointer>`, copying the pointer verbatim. A pointer
+carrying no anchor is a whole document.
+
 The lifecycle above carries the pointer for every rule keyed to a moment in it. These are keyed to a
 condition instead:
 

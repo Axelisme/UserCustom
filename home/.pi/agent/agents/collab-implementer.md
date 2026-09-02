@@ -3,6 +3,7 @@ name: collab-implementer
 description: Implement one bounded change as the sole writer, validate it, and return a semantic handoff without owning orchestration or lifecycle.
 tools: read, write, edit, bash
 model: openai-codex/gpt-5.6-luna
+fallbackModels: openai-codex/gpt-5.6-luna:max
 thinking: max
 timeoutMs: 3600000
 systemPromptMode: replace

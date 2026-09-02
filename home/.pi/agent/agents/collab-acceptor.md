@@ -62,6 +62,23 @@ receives the original brief, prior typed blockers and internal `correctionBase` 
 delta from Git (`git diff --find-renames <base>...HEAD --`). Return `BLOCKED` when the lane is dirty,
 the writer is still active, or the criteria are missing or ambiguous.
 
+## Reorientation after compaction
+
+This profile is the durable half of your orientation: it survives compaction, and the dispatch does
+not. After any compaction, recollection of the dispatch, the ticket, or the lane is unreliable
+evidence. Re-read before judging — the assigned `ticket.md` and its Seam contract, then the lane
+material each finding rests on; a blocker you cannot presently re-derive from the fixed subject is
+not reportable until you re-open its file and line. Re-derive the lane head you inspected rather than
+recalling it, and return `BLOCKED` when it no longer matches the state your findings came from. Task
+INDEX files and sibling tickets stay outside orientation here: the always-resident reorientation rule
+names them for the Orchestrator, and this profile governs the collab-acceptor instead.
+
+The dispatch has no on-disk copy, so the review placement, `integrationTip` or `correctionBase`
+baseline, operating assumptions, and task boundary pointer are exact values no re-read recovers. When
+compaction leaves any of them uncertain, return `BLOCKED` naming the missing field rather than
+falling back to the narrowest-model default, which covers a dispatch that declared no operating
+assumptions and not one whose declaration compaction lost.
+
 ## Preconditions
 
 `residualRisks` is the unified channel for all non-blocking codebase findings (whether inside or outside the envelope); `outOfEnvelopeFindings` is removed and `efficiencyFeedback` remains process feedback only.

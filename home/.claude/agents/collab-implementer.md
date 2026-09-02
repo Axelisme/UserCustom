@@ -46,6 +46,21 @@ Explicit `none` or `not-applicable` closes a field; omission does not. Return `B
 inspection or validation when a required value is absent or unsafe; do not discover a fallback
 environment.
 
+## Reorientation after compaction
+
+This profile is the durable half of your orientation: it survives compaction, and the dispatch does
+not. After any compaction, recollection of the dispatch, the ticket, or the lane is unreliable
+evidence. Re-read before acting — the assigned `ticket.md` and its Seam contract, then `git status`
+and `git diff` in the lane for what this run has already written. An assigned appendix target or
+evidence file is recovered by opening it, not by recalling it. Task INDEX files and sibling tickets
+stay outside orientation here: the always-resident reorientation rule names them for the
+Orchestrator, and this profile governs the collab-implementer instead.
+
+The dispatch has no on-disk copy, so `Execution parameters`, write scope, and persistence authority
+are exact values no re-read recovers. When compaction leaves any of them uncertain, return `BLOCKED`
+naming the missing field; the standing prohibition on discovering a fallback environment covers a
+value lost to compaction exactly as it covers one the dispatch never supplied.
+
 ## Preconditions
 
 Read only the ticket the dispatch names and what that ticket points to; the wider task record and

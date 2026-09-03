@@ -310,17 +310,13 @@ temporary state, use [TDD Gate mode](../tdd/gate.md). Keep a one-command loop di
 
 Boundary 2 decides whether a reviewer is placed, at every dispatch the Orchestrator issues. This section governs the review once one is.
 
-**The loop is drafted to close in one correction.** Gates carry the mechanical mass, so the first
-candidate arrives nearly complete and the first review returns few, small blockers. A first review
-that returns several independent blocker classes is evidence that the gate list or the ticket's width
-was drafted wrong — repair the ticket before spending another correction against it. Budget
-consumption is a diagnostic signal, not progress.
-
-**Whether the design is implementable is yours to judge, never the reviewer's.** A reviewer measures
-one candidate against a fixed contract; it has no standing to say that contract was a good one, and
-it will not tell you that the thing it keeps blocking should never have been asked for. Repeated
-blocks against one ticket are that signal and they arrive addressed to no one, so read them
-yourself.
+**Blocks are a signal addressed to no one, so read them yourself.** A reviewer measures one candidate
+against a fixed contract and has no standing to say the contract was a good one, so it will never
+tell you that what it keeps blocking should not have been asked for. That leaves the diagnosis to
+you: gates carry the mechanical mass, so a first review should return few small blockers, and one
+returning several independent blocker classes says the gate list or the ticket's width was drafted
+wrong. Repair the ticket rather than spending another correction against it. The cap below bounds
+what this costs when you miss it.
 
 **A reviewer request the contract does not carry is sized by surface, not by lines.** When a
 finding names neither an Acceptance claim nor something the user asked for, ask what satisfying it
@@ -338,10 +334,10 @@ boundary all closed — prefer a runtime-composed worker → reviewer → bounde
 consumes one terminal handoff: a reviewed lane, a worker blocker, a decision request, or an
 exhausted correction budget. The Orchestrator supplies a finite correction budget per composed
 workflow, `2` by default and overridable by a task's own standing order; initial implementation does not consume it, each `BLOCKED → writer correction` transition
-consumes one, and exhausting it returns the ticket to the Orchestrator, which becomes its writer
-under boundary 2's three-run test rather than choosing a redesign procedure. A budget with no
-defined exit is what lets a loop keep spending: the count bounds the dispatch, and boundary 2 names
-what happens once it is spent.
+consumes one, and exhausting it returns the ticket to the Orchestrator under [cutting a ticket
+off](../dev-flow/SKILL.md#cutting-a-ticket-off). A budget with no defined exit is what lets a loop
+keep spending: the count bounds the dispatch, and that reference owns what happens once it is
+spent.
 
 **Three blocks is where a ticket stops buying review.** At the default budget the third block already
 ends a loop: initial implementation consumes nothing, the first two `BLOCKED` verdicts each buy a
@@ -354,9 +350,6 @@ ledger](../dev-flow/references/record-hygiene.md#the-reviewer-block-ledger) is w
 survives the run, and [cutting a ticket
 off](../dev-flow/SKILL.md#cutting-a-ticket-off) owns the terminal state it produces.
 
-The cap is what the three sections above are for. Repeated blocks against one ticket say the contract
-was drafted wrong, and a reviewer will never say so itself; three is the point past which continuing
-to ask costs more than the answer is worth.
 Scope, architecture, authority, or contract decisions terminate the loop at the Orchestrator.
 Intermediate rounds stay in workflow context unless an observation independently justifies a durable
 record.

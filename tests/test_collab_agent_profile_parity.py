@@ -24,7 +24,9 @@ PARITY_NAMES = (
 # Every explicitly allowed divergence between a Collab role's three runtime copies. A copy not
 # named here must match the other two, whitespace aside; an undeclared difference fails the parity
 # assertion and prints the offending diff. Each entry records profile, runtime, location and reason,
-# never the diverging wording — see `DeclaredDelta`.
+# never the diverging wording — see `DeclaredDelta`. Dead registry entries deliberately have no
+# dedicated diagnostic: unknown profiles are never selected, and absent locations remove no compared
+# body. Add registry coverage only after dead declarations become an observed cost.
 COLLAB_ROLE_NAMES = ("collab-implementer", "collab-acceptor")
 COLLAB_ROLE_DELTAS: tuple[support.DeclaredDelta, ...] = (
     support.DeclaredDelta(

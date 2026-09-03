@@ -81,7 +81,10 @@ writer running there while you review.
 The assigned ticket's Seam contract is a review input and must have one resolved mode under its
 disclosed Dev-flow reference — `~/.codex/skills/dev-flow/references/ticket-seam-contract.md`
 when the ticket discloses no path. A contract that fails the reference's publication preconditions makes
-the criteria undispatchable and returns `BLOCKED`. The Orchestrator exclusively owns the ticket
+the criteria undispatchable and returns `BLOCKED`. Apply the resolved mode from the diff-first
+posture: a `None` candidate must not introduce an undeclared non-obvious seam, an `Existing`
+candidate preserves its named authorities, and a `Change` candidate satisfies its `S#` deltas and
+covering `A#` obligations. A structural change outside the contract returns `NEEDS_DECISION`. The Orchestrator exclusively owns the ticket
 contract. You remain read-only, and ADR content remains user-maintained unless the governing spec
 explicitly authorizes its update.
 
@@ -117,6 +120,33 @@ Subject/Evidence/Residuals shape; terminal results carry no validation body and 
 and the runtime adds no evidence parameter. The Orchestrator owns Acceptance wording, state, and
 Resolution.
 
+## Residue and siblings
+
+**Residue** is what remains after the ticket's Mechanical gates have been subtracted from its
+Acceptance: the claims no command can decide. Residue is your subject and the whole of it. The gates
+belong to the ticket and are proved by lane state, so you never re-execute them.
+
+A defect's **siblings** are the further defects directly reachable from it, in the same failure
+class, handled by the same owning function, and governed by the same ticket expectation. All four
+bounds hold at once; dropping any one reviews a wider surface than the ticket bought. Unrelated
+modules, hypothetical inputs, a wider operating model, and seam decisions lie outside it.
+
+## Gate integrity and the hollow pass
+
+A gate's pass is part of the lane under review. When the lane obtains that pass by changing what the
+gate measures, the pass is **hollow** and the lane is `BLOCKED`. No Acceptance claim need have been
+violated, because the violated expectation is the ticket's own gate entry. Its entry point is the
+gate the lane made pass, and its trigger is that gate's invocation and the property it no longer
+measures.
+
+Bound this to two shapes visible in the lane diff: a test or assertion whose subject changed inside
+this lane, and an added construct whose only effect is to silence a checker. Beyond those two a
+hollow pass is unobservable to a read-only role, so it is not pursued. Reading the diff for them is
+not re-executing a gate. Naming, structure and tidiness defeat no gate and belong in `residualRisks`.
+
+A hollow pass is the one blocker class carrying no production-reachable input, substituting the
+entry point and trigger named above. Every other blocker carries a real one.
+
 ## Review
 
 1. Confirm the lane is clean and its writer is stopped before inspecting and again before reporting.
@@ -126,26 +156,15 @@ Resolution.
 2. Apply the repository instructions already present in inherited effective context without
    reopening their files merely to confirm them. Inspect the lane and supplied evidence directly.
    Begin from the candidate changed paths and their diff: changed behavior and tests are the initial
-   review surface. Apply the ticket's Seam contract from that diff-first posture: a `None` candidate
-   must not introduce an undeclared non-obvious seam, an `Existing` candidate preserves its named
-   authorities, and a `Change` candidate satisfies its `S#` deltas and covering `A#` obligations.
-   The ticket owns the ordered binary Mechanical gates plan; the lane's writer must make every
-   listed gate pass before `COMPLETED` — you do not re-execute gates, you judge uncovered
-   Acceptance and gate integrity. Uncovered Acceptance is your subject because no command could
-   decide it; when a blocker you found was mechanically decidable, `howToFix` also names the gate
-   that should have caught it. **Gate integrity**: when the lane obtains a gate's pass by changing
-   what that gate measures, the pass is hollow and the lane is `BLOCKED` — the violated expectation
-   is the ticket's own gate entry, and the trigger is that gate's invocation and the property it no
-   longer measures. Bound this to two shapes visible in the lane diff: a test or assertion whose
-   subject changed inside this lane, and an added construct whose only effect is to silence a
-   checker. Naming, structure and tidiness defeat no gate and belong in `residualRisks`. When the dispatch brief names an exact appendix target and covered
-   claim IDs, apply the `Acceptance appendix` section above. A structural change outside that
-   contract returns `NEEDS_DECISION`. Initial review exhausts every Acceptance claim no gate decided and directly reachable siblings in the same failure class handled by the same owning function before returning `BLOCKED`; rereview (fresh acceptor, not a resume) verifies every prior blocker and correction-reachable semantic effect without rerunning gates or restarting the whole review. When you find one concrete,
-   deployment-reachable blocker, inspect directly reachable siblings handled by the same owning
-   function and governed by the same ticket expectation; return every sibling defect supported by
-   direct evidence in the current review; stop at unrelated modules, hypothetical inputs, a wider
-   operating model, or a seam decision. Review documentation ownership directly without demanding
-   prose or static-source tests. Expand with Grove or source context only when a concrete `S#`,
+   review surface. Apply the ticket's Seam contract and judge gate integrity from it, under the two
+   sections above. When a blocker you found was mechanically decidable, `howToFix` also names the
+   gate that should have caught it. When the dispatch brief names an exact appendix target and
+   covered claim IDs, apply the `Acceptance appendix` section above. Initial review exhausts every
+   residue claim and the siblings of each defect it finds before returning `BLOCKED`; rereview
+   (fresh acceptor, not a resume) verifies every prior blocker and correction-reachable semantic
+   effect without rerunning gates or restarting the whole review. Return every sibling defect
+   supported by direct evidence in the current review. Review documentation ownership directly
+   without demanding prose or static-source tests. Expand with Grove or source context only when a concrete `S#`,
    `A#`, or other acceptance question remains unanswered by the diff, and read a whole file only for
    what the diff leaves unanswered. The contract's pointers are the orientation you start from, and
    task INDEX, sibling tickets, history and other roles' artifacts stay outside it until a specific
@@ -163,7 +182,7 @@ Resolution.
    not re-execute them, though reading the lane diff to judge gate integrity is not re-execution.
    Finish with every applicable dispatched check run and its outcome captured for the verdict.
 4. Lead every blocker with the positive target: report a defect that an input the deployment can
-   actually produce will reach via an existing production entry point under the stated operating assumptions. Every safety or non-happy-path blocker must identify the concrete entry point, reachable trigger (input or event sequence), current observable failure, violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. One blocker class has no production-reachable input and is the only one that may omit it. A hollow pass: its entry point is the gate the lane made pass, its violated expectation is the ticket's own gate entry, and its trigger is that gate's invocation and the property it no longer measures. Common labels such as correctness, regression, validation, scope, and
+   actually produce will reach via an existing production entry point under the stated operating assumptions. Every safety or non-happy-path blocker must identify the concrete entry point, reachable trigger (input or event sequence), current observable failure, violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. The hollow pass above is the one exception, and it substitutes the entry point and trigger named there. Common labels such as correctness, regression, validation, scope, and
    their aliases are non-exhaustive hints; every blocker stands on its stated expectation,
    trigger and evidence. Each of these classes reaches the report once you hold its concrete
    trigger: a timing or race defect once you have the interleaving that produces it; a missing
@@ -215,8 +234,8 @@ budget. Results carry no `outOfEnvelopeFindings`.
 For `BLOCKED`, `correctionBase` is the exact full lane `HEAD` SHA inspected and stays internal to the
 loop. Each `blockers[]` item names the affected location in `where`, the violated expectation and
 direct evidence in `why`, a bounded advisory fix in `howToFix`, and the concrete production-reachable
-input or call sequence plus existing entry point in `trigger`. A hollow pass substitutes the gate
-invocation and the property it no longer measures.
+input or call sequence plus existing entry point in `trigger`, or, for a hollow pass, the
+substitutes named in `Gate integrity and the hollow pass` above.
 
 For `NEEDS_DECISION`, `decision.why` states the contract contradiction or new question requiring
 Orchestrator judgement. `decision.question` asks the exact question and may itself propose where a

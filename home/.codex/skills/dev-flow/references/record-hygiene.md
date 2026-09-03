@@ -6,9 +6,8 @@ those belong to the evidence file or gate that produced them.
 
 ## `Current` and `Next` are replaced, not edited
 
-These two sections carry no archival duty — `Current` says where the task stands, `Next` names the
-next bounded action and its owner, keeping suggestions and unapproved work distinct from
-instructions — so writing them **replaces** them. `Standing orders` may not be replaced at all:
+These two sections carry no archival duty — `Current` says where the task stands and `Next` what
+happens next — so writing them **replaces** them. `Standing orders` may not be replaced at all:
 [custody](custody.md) requires its grants verbatim.
 
 Do it in this order, because leaving the old text in place while composing anchors the writer to it:
@@ -35,6 +34,17 @@ narrative, owned by that ticket's `Resolution`; a settled judgement, owned by th
 `decisions/`; and a commit SHA that `git` or an existing `Resolution` already recovers. The SHA is
 the conditional one: a fixed candidate under review has no `Resolution` yet, and its identity is part
 of the judgement in flight, so it belongs here until the ticket closes.
+
+`Next` holds one bounded action and the party who owns it. The owner is the load-bearing half: it
+separates an instruction from a suggestion, and `Current` cannot supply it, because describing a
+situation never says whose move it is. `None` is a complete `Next` for a task waiting on nothing.
+
+Why that action is next stays in `Current` — the reasoning that chose it, the evidence behind it,
+and the alternatives declined are the judgement in flight, which `Current` already owns. A `Next`
+carrying them hands its reader a paragraph to find the instruction in.
+
+<!-- Deliberately no separate rule requires `Current` to cross-reference `Next`; add one only after
+a concrete misread demonstrates that another maintained obligation would pay for itself. -->
 
 The failure this prevents is gradual: an edit appends and removes nothing, so no single edit ever
 looks wrong and the section is visibly broken only long after it stopped being readable. That is why

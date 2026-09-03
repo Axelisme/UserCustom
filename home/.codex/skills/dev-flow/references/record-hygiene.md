@@ -150,7 +150,7 @@ one of its `S#` deltas. Record the reset with the prior count and the reason. An
 make the cap buyable — a cosmetic rewrite of a ticket would purchase three more blocks, and the
 ledger would then measure editing rather than cost.
 
-`Swept at`, Acceptance state, and the ledger are separate records with separate owners; holding one
+Acceptance progress and the ledger are separate records with separate owners; holding one
 grants nothing in another, under
 [lane-authority](lane-authority.md#three-mutation-classes-never-inferred-from-one-another).
 

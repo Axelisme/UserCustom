@@ -209,7 +209,7 @@ Use `subagent_wait` only when the current request must finish in the same turn; 
 a child more authoritative.
 
 After the workflow reaches a terminal handoff, if the lane's writer owned any Acceptance claims in the assigned `ticket.md` — the claims naming no other observer — reread that exact ticket before final Acceptance judgement, Resolution, lifecycle state, or task-progress reconciliation. Read
-only the assigned ticket. That reread is where the ticket's `Swept at` is compared against the lane head: behind it, the writer's sweep is stale and its checked claims are unconfirmed against the delivered tree. This adds no post-wake `collab_status` read and no generic record-edit reread; completion processing, collection selection, and ticket mutation ownership remain unchanged.
+only the assigned ticket. That reread is where the Orchestrator rebuilds the Acceptance list from what each claim's deciding observer reported, rather than from the writer's checkboxes. This adds no post-wake `collab_status` read and no generic record-edit reread; completion processing, collection selection, and ticket mutation ownership remain unchanged.
 
 ## Run control
 

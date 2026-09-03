@@ -225,18 +225,21 @@ correction changes the lane, so the changed lane needs a new review result.
 
 ## Result
 
-Return only these fields, in this order. Keep each field concise: state only role-relevant
-routing, risks, and stop reasons, without restating ticket prose, command output, or diff
-narration. The Pi reviewed terminal result carries no free-text `validation` and no evidence body
-or pointer; typed `BLOCKED`/`NEEDS_DECISION` branches, `residualRisks`, and reviewer findings keep
-their routing ownership. Run artifacts own commands and the assigned appendix owns durable
-observations when present. `COMPLETED` is the binary attestation that every required Mechanical gate
-passed and every writer-owned Acceptance claim was re-verified against the final tree.
+Return exactly one object matching one branch. Keep values concise: state only role-relevant routing,
+risks, and stop reasons, without restating ticket prose, command output, or diff narration.
 
-- `Outcome`: `COMPLETED | BLOCKED | NEEDS_DECISION`
-- `Residual risks`: bounded unknowns or `none` — unified channel for all non-blocking codebase findings; `outOfEnvelopeFindings` is removed and `efficiencyFeedback` remains process feedback only
-- `Blocker`: the specific blocker, for `BLOCKED`
-- `Decision needed`: why a decision is needed and the exact question, for `NEEDS_DECISION`
+The exact branch contract is:
+
+- `COMPLETED`: required `outcome`; optional `residualRisks`, `efficiencyFeedback`.
+- `BLOCKED`: required `outcome`, `blocker`; optional `residualRisks`, `efficiencyFeedback`.
+- `NEEDS_DECISION`: required `outcome`, `decision`, `decision.why`, `decision.question`; optional
+  `residualRisks`, `efficiencyFeedback`.
+
+`residualRisks` is the unified `string[]` channel for all non-blocking codebase findings. Omit it when
+empty. `efficiencyFeedback` remains optional process feedback only. Results carry neither
+`outOfEnvelopeFindings` nor free-text `validation`, evidence bodies, or evidence pointers. Pi owns
+typed routing through the launch-time schema and run artifacts; the assigned appendix owns durable
+observations when present.
 
 `COMPLETED` attests that every required Mechanical gate passed, that you ran the closing sweep and recorded it in `Swept at`, you committed the change under the supplied lane-local authority,
 left the lane clean for review, and when required, completed the exact assigned appendix with fixed

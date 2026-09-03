@@ -215,6 +215,13 @@ ticket section states, or the default its own profile carries when the section s
 returns one complete `BLOCKED` result when closure exceeds authority. Ticket-owned gates are validated by the implementer and proved only by lane state;
 reviewed roles neither re-execute them nor reopen run artifacts to judge them. Judging gate integrity from the lane diff alone is not re-execution.
 
+A worker result uses one exact branch contract:
+
+- `COMPLETED`: required `outcome`; optional `residualRisks`, `efficiencyFeedback`.
+- `BLOCKED`: required `outcome`, `blocker`; optional `residualRisks`, `efficiencyFeedback`.
+- `NEEDS_DECISION`: required `outcome`, `decision`, `decision.why`, `decision.question`; optional
+  `residualRisks`, `efficiencyFeedback`.
+
 **`COMPLETED` is a binary attestation** that the required gates passed and that every writer-owned
 Acceptance claim was re-verified against the final tree — dev-flow's
 [lane-authority](../dev-flow/references/lane-authority.md#the-closing-sweep) owns that closing sweep
@@ -243,23 +250,36 @@ command output, or evidence the ticket, Git, or the run artifact already own.
 ## Generic Acceptance
 
 Ordinary Generic Acceptance reviews the protected current lane: the writer is stopped, the lane is
-clean, and the reviewer reads its current state directly, read-only. Bash use is limited to read-only retrieval (`git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find`, Grove); it excludes pytest, type/lint/format gates, Python/import probes and runtime/process workflows. The reviewer does not execute mechanical gates; it judges ticket gate coverage, the Acceptance claims no gate proved, and gate integrity. **Gate integrity**: a gate's pass is part of the lane under review, and when the lane obtains that pass by changing what the gate measures, the pass is hollow and the lane is `BLOCKED` — no Acceptance claim need have been violated, because the violated expectation is the ticket's own gate entry. Reading the lane diff for the two shapes this is bounded to — a test or assertion whose subject changed inside this lane, and an added construct whose only effect is to silence a checker — is not re-executing a gate. Beyond those two shapes a hollow pass is unobservable to a read-only role, so it is not pursued. It returns only, in this order:
+clean, and the reviewer reads its current state directly, read-only. Bash use is limited to read-only retrieval (`git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find`, Grove); it excludes pytest, type/lint/format gates, Python/import probes and runtime/process workflows. The reviewer does not execute mechanical gates; it judges ticket gate coverage, the Acceptance claims no gate proved, and gate integrity. **Gate integrity**: a gate's pass is part of the lane under review, and when the lane obtains that pass by changing what the gate measures, the pass is hollow and the lane is `BLOCKED` — no Acceptance claim need have been violated, because the violated expectation is the ticket's own gate entry. Reading the lane diff for the two shapes this is bounded to — a test or assertion whose subject changed inside this lane, and an added construct whose only effect is to silence a checker — is not re-executing a gate. Beyond those two shapes a hollow pass is unobservable to a read-only role, so it is not pursued.
 
-- `Verdict`: `PASS | BLOCKED | NEEDS_DECISION`
-- for each blocker (only for `BLOCKED`):
-  - `Where`: the affected location
-  - `Why`: the violated ticket expectation or Interface promise, plus direct evidence — for a hollow pass, the ticket's own Mechanical gate entry; for a stale sweep, the `Swept at` record
-  - `How to fix`: a bounded advisory suggestion; when the blocker was mechanically decidable, also the gate that should have caught it — except a stale sweep, which no gate can catch because the gate list runs before the commit `Swept at` names
-  - `Trigger`: the concrete production-reachable input or call sequence that produces the defect, and the existing entry point it reaches from — for a hollow pass, the gate invocation and the property it no longer measures; for a stale sweep, the recorded `Swept at` against the lane head
-- for `NEEDS_DECISION`: why a decision is needed and the exact question
-- `Residual risks`: optional `residualRisks: string[]` for all non-blocking codebase findings, whether inside or outside the envelope
+A reviewer result uses one exact branch contract:
+
+- `PASS`: required `verdict`; optional `residualRisks`, `efficiencyFeedback`.
+- `BLOCKED`: required `verdict`, `blockers`, `blockers[].where`, `blockers[].why`,
+  `blockers[].howToFix`, `blockers[].trigger`, `correctionBase`; optional `residualRisks`,
+  `efficiencyFeedback`.
+- `NEEDS_DECISION`: required `verdict`, `decision`, `decision.why`, `decision.question`; optional
+  `residualRisks`, `efficiencyFeedback`.
+
+Each `blockers[]` item carries the affected location in `where`, the violated ticket expectation or
+Interface promise plus direct evidence in `why`, a bounded advisory suggestion in `howToFix`, and the
+concrete production-reachable input or call sequence plus existing entry point in `trigger`. For a
+hollow pass these fields name the ticket's Mechanical gate, its invocation, and the property it no
+longer measures. For a stale sweep they name the `Swept at` record and the lane head. A mechanically
+decidable blocker also names the gate that should have caught it, except a stale sweep because gates
+run before the commit `Swept at` names.
+
+For `NEEDS_DECISION`, `decision.why` states why a decision is needed and `decision.question` asks the
+exact question. The question may itself propose where a seam belongs and what it would carry; the
+Orchestrator designs and decides. `residualRisks` is optional and carries all non-blocking codebase
+findings, whether inside or outside the envelope; omit it when empty.
 
 A hollow pass and a stale sweep are the only two blocker classes that may omit a production-reachable input; each substitutes the entry point and trigger named above. Every other safety or non-happy-path blocker must be production-reachable under the stated operating assumptions: identify the existing production entry point, a concrete reachable input or event sequence, the current observable failure, the violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named promise, using
 bounded advisory fixes that stay inside the ticket's stated outcome rather than expanding scope via
 robustness or future-proofing. A finding that depends on a wider operating model than the dispatch declared is reported via residual risks, not as a blocker.
 
-A `PASS` ends after Verdict and any residual risks; it needs no empty filler. The verdict
-is a review result, not ticket Acceptance: the Orchestrator owns the final judgement and closure.
+A `PASS` ends after `verdict` and any `residualRisks`; it needs no empty filler. The verdict is a
+review result, not ticket Acceptance: the Orchestrator owns the final judgement and closure.
 `NEEDS_DECISION` returns a contract contradiction or new-scope question to the Orchestrator instead
 of routing rework. Generic Acceptance carries no fixed-subject result fields and no `correctionBase` projection; public terminal results never expose the internal base. Specialized procedures such as [code-review](../code-review/SKILL.md) keep their own identity
 contracts and produce separate Standards/Spec findings rather than a PASS/BLOCKED Acceptance verdict.

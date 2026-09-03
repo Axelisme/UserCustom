@@ -147,7 +147,7 @@ Resolution.
    The ticket owns the ordered binary Mechanical gates plan; the lane's writer must make every
    listed gate pass before `COMPLETED` — you do not re-execute gates, you judge uncovered
    Acceptance and gate integrity. Uncovered Acceptance is your subject because no command could
-   decide it; when a blocker you found was mechanically decidable, `How to fix` also names the gate
+   decide it; when a blocker you found was mechanically decidable, `howToFix` also names the gate
    that should have caught it — except a stale sweep, which no gate can catch because the gate list
    runs before the commit `Swept at` names. **Gate integrity**: when the lane obtains a gate's pass by changing
    what that gate measures, the pass is hollow and the lane is `BLOCKED` — the violated expectation
@@ -204,7 +204,7 @@ Resolution.
    When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful
    degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must
    prove why Fast Fail violates a named Acceptance or Interface promise. Rejecting an out-of-assumptions
-   input — raise, assert, exit non-zero — is a complete `How to fix`; a blocker demanding tolerant
+   input — raise, assert, exit non-zero — is a complete `howToFix`; a blocker demanding tolerant
    handling of such an input instead states why rejection is insufficient for the ticket's stated
    outcome. Finish with every blocker supported by its location, violated expectation, trigger, evidence, and
    bounded fix, or return `PASS` when no acceptance blocker remains. When the review finds a question that
@@ -216,25 +216,32 @@ Resolution.
 
 ## Result
 
-Return only these fields, in this order. Keep each field concise and evidence-backed, without
-restating ticket prose, the diff, or lane material the review already shows. Public terminal results never expose internal `correctionBase`; the reviewer obtains the delta from Git.
+Return exactly one object matching one branch. Keep values concise and evidence-backed, without
+restating ticket prose, the diff, or lane material the review already shows.
 
-- `Verdict`: `PASS | BLOCKED | NEEDS_DECISION`
-- `Residual risks`: optional `residualRisks: string[]` for all non-blocking codebase findings (unified, whether inside or outside the envelope or operating assumptions), or `none`; `outOfEnvelopeFindings` is removed
-- `Efficiency feedback`: optional `efficiencyFeedback` process feedback only; never place codebase findings here or use it to affect verdict or budget
+The exact branch contract is:
 
-For `BLOCKED`, return `correctionBase` as the exact full lane `HEAD` SHA you inspected, then repeat for each blocker:
+- `PASS`: required `verdict`; optional `residualRisks`, `efficiencyFeedback`.
+- `BLOCKED`: required `verdict`, `blockers`, `blockers[].where`, `blockers[].why`,
+  `blockers[].howToFix`, `blockers[].trigger`, `correctionBase`; optional `residualRisks`,
+  `efficiencyFeedback`.
+- `NEEDS_DECISION`: required `verdict`, `decision`, `decision.why`, `decision.question`; optional
+  `residualRisks`, `efficiencyFeedback`.
 
-- `Where`: affected location
-- `Why`: violated ticket expectation or Interface promise, plus direct evidence
-- `How to fix`: bounded advisory suggestion
-- `Trigger`: the concrete production-reachable input or call sequence that produces the defect, and the existing entry point it reaches from — for a hollow pass, the gate invocation and the property it no longer measures; for a stale sweep, the recorded `Swept at` against the lane head
+`residualRisks` is the optional `string[]` channel for all non-blocking codebase findings, whether
+inside or outside the envelope or operating assumptions. Omit it when empty. `efficiencyFeedback`
+remains optional process feedback only; it never carries codebase findings or affects verdict or
+budget. Results carry no `outOfEnvelopeFindings`.
 
-For `NEEDS_DECISION`:
+For `BLOCKED`, `correctionBase` is the exact full lane `HEAD` SHA inspected and stays internal to the
+loop. Each `blockers[]` item names the affected location in `where`, the violated expectation and
+direct evidence in `why`, a bounded advisory fix in `howToFix`, and the concrete production-reachable
+input or call sequence plus existing entry point in `trigger`. A hollow pass substitutes the gate
+invocation and the property it no longer measures; a stale sweep substitutes the recorded `Swept at`
+and lane head.
 
-- `Why`: the contract contradiction or new question that needs Orchestrator judgement
-- `Question`: the exact question
-- `Suggestion`: an optional bounded proposal — for a seam question, where the seam might go and what
-  it would carry — or `none`; the Orchestrator designs and decides
+For `NEEDS_DECISION`, `decision.why` states the contract contradiction or new question requiring
+Orchestrator judgement. `decision.question` asks the exact question and may itself propose where a
+seam belongs and what it would carry. The Orchestrator designs and decides.
 
-For `PASS`, stop after Verdict and Residual risks.
+For `PASS`, stop after `verdict` and any `residualRisks`.

@@ -66,7 +66,10 @@ them: **a ticket is `pending` before its implementation starts.**
 - **`antichain`** — Compute it before granting concurrency;
   [Slicing](references/s0-design-admission.md#slicing) owns candidacy, reachability, write scope and
   the missing-edge check.
-- **`dispatch`** — Route every ticket through [collab](../collab/SKILL.md), entering at its
+- **`dispatch`** — Align the ticket with the user before placing any writer for it, following
+  [ticket-alignment](references/ticket-alignment.md), which owns the five steps and runs at every
+  ticket's start rather than once at graduation. Then route every ticket through
+  [collab](../collab/SKILL.md), entering at its
   `Responsibility boundaries` boundary 1, which decides the writer and the reviewer and finds each
   Acceptance claim's deciding observation already settled at graduation. Collab consumes bounded task
   intent and returns evidence without creating another task lifecycle. When a dispatched role

@@ -27,6 +27,20 @@ state: {{STATE}}
 <!-- State the bounded goal and expected usable result. The Orchestrator owns this contract. -->
 {{OUTCOME}}
 
+## Alignment
+<!-- The five steps, when they run, and what a world fact is:
+     ~/.codex/skills/dev-flow/references/ticket-alignment.md. Step 4's confirmed result lands here;
+     steps 1-3 settle seam facts `## Seam contract` owns. The Orchestrator writes this section fresh
+     at every start of this ticket, replacing both placeholders below. -->
+
+**World facts:** {{WORLD_FACTS}}
+<!-- One line per fact this ticket rests on that no frozen record states, each marked `confirmed` or
+     `unconfirmed`; `none` when the frozen records settle what this ticket needs. -->
+
+**Not doing:** {{NON_GOALS}}
+<!-- The nearby work a reader could reasonably expect this ticket to include and that it
+     deliberately leaves out. -->
+
 ## Seam contract
 <!-- Contract rules: ~/.codex/skills/dev-flow/references/ticket-seam-contract.md. The reference owns
      mode fields, S# coverage, graduation, decision stops, and ADR authority. The Orchestrator owns

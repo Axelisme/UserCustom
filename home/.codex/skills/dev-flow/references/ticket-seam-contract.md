@@ -99,8 +99,11 @@ pointer does not resolve; a Change `S#` lacks an `A# covers S#` observer; an Acc
 no observation that decides it, or names an observation whose surface cannot carry the promise it
 makes; the ticket declares no Module write scope, in
 [codebase-design](../../codebase-design/SKILL.md#glossary)'s sense of Module rather than as paths;
-graduation has an empty executable or durable owner; or an ADR target lacks explicit
-governing-spec authority. This is a
+graduation has an empty executable or durable owner; the `## Alignment` section is absent, unfilled,
+or still a placeholder, which
+[ticket-alignment](ticket-alignment.md) owns and which stops a dispatch as well as a publication,
+because that section is settled at every ticket's start rather than once at graduation; or an ADR
+target lacks explicit governing-spec authority. This is a
 narrative Orchestrator check: do not add parser or schema validation until repeated evidence supports
 a separately accepted stable schema.
 

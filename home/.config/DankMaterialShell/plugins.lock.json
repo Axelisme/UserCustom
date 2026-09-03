@@ -1,18 +1,18 @@
 {
   "lockfileVersion": 1,
   "plugins": {
+    "aiQuotas": {
+      "repo": "https://github.com/agneswd/dms-ai-quotas",
+      "commit": "1cf9f9565420fe4c54a8fb4aca1ffca28594f267"
+    },
     "calculator": {
       "repo": "https://github.com/rochacbruno/DankCalculator",
       "commit": "1db5865419a40a33171a475855a59e0b8bf7187f"
     },
-    "codexBar": {
-      "repo": "https://github.com/zakstam/dms-codexbar",
-      "commit": "e6bde0e4ebfa38fedf26038314353e666eb286af"
-    },
     "dankKDEConnect": {
       "repo": "https://github.com/AvengeMedia/dms-plugins",
       "path": "DankKDEConnect",
-      "commit": "e8c36175a1a8ee4718df5d8ef60d105add94f33e"
+      "commit": "cb66135b0af01eacb25f3a656dc86fb727fa02cf"
     },
     "dankscale": {
       "repo": "https://github.com/dwright134/dms-dankscale",

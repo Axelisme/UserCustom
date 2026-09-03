@@ -23,5 +23,9 @@
   "dankscale": {
     "enabled": true,
     "lastAccount": "jary33333@gmail.com"
+  },
+  "aiQuotas": {
+    "enabled": true,
+    "pinnedLimits": "{\"claude\":[\"5h\"],\"codex\":[\"5h\",\"Weekly\"],\"opencode\":[\"Rolling\"],\"deepseek\":[\"balance\"],\"openrouter\":[\"balance\"],\"grok\":[\"Billing\"],\"antigravity\":[\"Gemini Models - Five Hour Limit Remaining\"]}"
   }
 }

@@ -23,7 +23,7 @@
   },
   "dankLauncherV2UnloadOnClose": true,
   "useAutoLocation": true,
-  "networkPreference": "wifi",
+  "networkPreference": "ethernet",
   "cursorSettings": {
     "theme": "System Default",
     "size": 24,
@@ -115,6 +115,10 @@
         },
         {
           "id": "codexBar",
+          "enabled": true
+        },
+        {
+          "id": "aiQuotas",
           "enabled": true
         },
         {
@@ -253,6 +257,12 @@
     },
     "dms_clipboard_search": {
       "trigger": "cb"
+    },
+    "dms_power": {
+      "trigger": "pw"
+    },
+    "dms_qr_generator": {
+      "trigger": "qrg"
     }
   },
   "launcherPluginVisibility": {

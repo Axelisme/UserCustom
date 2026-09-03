@@ -95,6 +95,15 @@ receiver's own workflow.
    as much as making it, because the brief would have to state the change itself to be intelligible,
    and the change hard enough that no closed brief would carry it. Otherwise dispatch a writer.
 
+   Both shapes are usually predicted. Two arrive already observed. **Three of one ticket's
+   implementer runs ending anywhere but an accepted lane** — a `COMPLETED` the reviewer then
+   blocked, or a run that timed out — is the second shape measured rather than guessed: the brief
+   has failed to carry that work three times, so the ticket's remaining work is yours to write. A
+   timeout counts because it is the same failure wearing a different result. Three is sufficient,
+   not necessary; a ticket can be too hard on its first return. **Deferred work** is the first
+   shape: a path the writer rejected and the user later asks for is small by construction and
+   arrives while the user is watching, so describing it costs about what making it costs.
+
    **Who verifies.** Walk every Acceptance claim and write the gate that decides it. A claim is
    **mechanically decidable** when one command's exit status *is* that claim — the same answer for
    anyone who runs it, with nothing in its output left to read. Every such claim gets that command
@@ -156,7 +165,13 @@ receiver's own workflow.
    accepted lane goes to the collection boundary below before its lane retires. This step is
    complete when the Orchestrator accepts the result or identifies the unresolved decision and its
    owner.
-5. **Collect.** Move the Orchestrator-accepted current lane into the integration branch one lane at
+5. **Collect.** Before moving anything, assemble the ticket's **deferred paths** — the rejections
+   its writer left a comment beside, and the reviewer's `residualRisks` — into `<ticket>/deferred.md`,
+   which sits in the ticket directory the way its `scripts/` subtree does and needs no separate
+   grant. Put the entries named by neither the ticket's `World facts` nor its `Not doing` in front of
+   the user: those are the ones no alignment covered, so this is the first moment the user could see
+   them, and what they ask for becomes deferred work you write under boundary 2. Then move the
+   Orchestrator-accepted current lane into the integration branch one lane at
    a time. A stale lane is synchronized with current integration first and stops at the reconciled
    lane or a conflict; the reconciled lane returns to boundary 2 for review placement and needs the
    Orchestrator's judgement again before collection (see Reconciliation). This step is complete when
@@ -262,13 +277,32 @@ that returns several independent blocker classes is evidence that the gate list 
 was drafted wrong — repair the ticket before spending another correction against it. Budget
 consumption is a diagnostic signal, not progress.
 
+**Whether the design is implementable is yours to judge, never the reviewer's.** A reviewer measures
+one candidate against a fixed contract; it has no standing to say that contract was a good one, and
+it will not tell you that the thing it keeps blocking should never have been asked for. Repeated
+blocks against one ticket are that signal and they arrive addressed to no one, so read them
+yourself.
+
+**A reviewer request the contract does not carry is sized by surface, not by lines.** When a
+finding names neither an Acceptance claim nor something the user asked for, ask what satisfying it
+would take: staying inside the seams already in place, adding no public item, and touching no `S#`,
+`A#` or write scope makes it ordinary work — do it, or defer it under the writer's own rejection
+rule. Needing any one of those makes it a design question, and the ticket stops at the user rather
+than absorbing another round. Count only newly public surface — a new module, seam, public method,
+parameter, or cross-module call; changing the inside of an existing one is not that. Line count is a
+weak proxy that misses the case this rule exists for: a forty-line function spread across six
+modules is the expensive one, and it passes any threshold you would set.
+
 Reviewer placement may be composed by the runtime or an external workflow. For delegated closed work
 — bounded brief, delegated Acceptance criteria, placement, mutation authority, and escalation
 boundary all closed — prefer a runtime-composed worker → reviewer → bounded correction loop that
 consumes one terminal handoff: a reviewed lane, a worker blocker, a decision request, or an
 exhausted correction budget. The Orchestrator supplies a finite correction budget per composed
-workflow, `1` by default; initial implementation does not consume it, each `BLOCKED → writer correction` transition
-consumes one, and exhausting it returns to the Orchestrator without selecting a redesign procedure.
+workflow, `2` by default and overridable by a task's own standing order; initial implementation does not consume it, each `BLOCKED → writer correction` transition
+consumes one, and exhausting it returns the ticket to the Orchestrator, which becomes its writer
+under boundary 2's three-run test rather than choosing a redesign procedure. A budget with no
+defined exit is what lets a loop keep spending: the count bounds the dispatch, and boundary 2 names
+what happens once it is spent.
 Scope, architecture, authority, or contract decisions terminate the loop at the Orchestrator.
 Intermediate rounds stay in workflow context unless an observation independently justifies a durable
 record.

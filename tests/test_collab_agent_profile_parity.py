@@ -55,6 +55,19 @@ SHARED_CLAUSES = {
         # One lane, one writer: without this the positive rule reads as covering only the edits,
         # and a writer that fans work out to a child breaks lane exclusivity from inside.
         "second checkout and launch no agent",
+        # The ticket carries the alignment's result, so a runtime that loses the pointer to it
+        # leaves the writer reading two lists it has no obligation toward.
+        "`## Alignment` section is a job input",
+        # The whole point of the alignment step: a world fact the user has not answered is not
+        # answerable by reading code, and inference is exactly how a ticket grows a branch nobody
+        # asked for.
+        "not yours to settle by inference",
+        # Without the guard the rule fires on every ticket published before the section existed,
+        # which turns their next dispatch into happy-path-only work nobody requested.
+        "leaves this rule inert",
+        # The identifiers leak into the tree through test names most often, and a comment rule that
+        # names only comments reads as permission for the rest.
+        "identifier enters the tracked tree",
     ),
     "collab-acceptor": (
         # Without these the writer fills an appendix no reviewer knows how to judge.
@@ -94,6 +107,16 @@ SHARED_CLAUSES = {
         # The read default is what keeps review bounded to the diff; losing it turns the permission
         # to read further into an invitation to start wide.
         "sends you there",
+        # The ticket-scale bound on what may block. Losing it returns the reviewer to blocking on
+        # work the ticket already declared it would not do, which is the loop this rule exists to
+        # stop.
+        "falls inside its `Not doing` list",
+        # The narrowing must not reach the four classes that judge the lane's own integrity rather
+        # than how much robustness it carries; losing this sentence disarms all four at once.
+        "stay blockers whatever that list says",
+        # Same guard as the writer's: tickets published before the section existed keep their
+        # current review, instead of silently losing every blocker class the narrowing touches.
+        "leaves this narrowing inert",
     ),
 }
 

@@ -182,7 +182,10 @@ replace — never edit — `INDEX.md`'s `Current` and `Next`, deciding each remo
 Next](references/record-hygiene.md#current-and-next-are-replaced-not-edited). Normal closure follows
 completion of all applicable Acceptance claims. Abandoned, superseded, or rejected closure may retain
 unchecked claims when Resolution explains why. A ticket closed while still `drafted` has no claims to
-retain, and its Resolution says in one line that the question never became current. Closure is
+retain, and its Resolution says in one line that the question never became current. A deferred path
+the user did not ask you to build is recorded in Resolution with where its comment sits in the code,
+because the ticket directory goes when the ticket closes and the comment is what outlives it; sending
+it to candidate-backlog instead is the user's call, not an automatic one. Closure is
 complete when both files reflect the transition; a session task list or review result alone is not
 durable closure.
 

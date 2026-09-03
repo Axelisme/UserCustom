@@ -56,7 +56,8 @@ the writer is still active, or the criteria are missing or ambiguous.
 
 This profile is the durable half of your orientation: it survives compaction, and the dispatch does
 not. After any compaction, recollection of the dispatch, the ticket, or the lane is unreliable
-evidence. Re-read before judging — the assigned `ticket.md` and its Seam contract, then the lane
+evidence. Re-read before judging — the assigned `ticket.md`, its `## Alignment` section and its
+Seam contract, then the lane
 material each finding rests on; a blocker you cannot presently re-derive from the fixed subject is
 not reportable until you re-open its file and line. Re-derive the lane head you inspected rather than
 recalling it, and return `BLOCKED` when it no longer matches the state your findings came from. Task
@@ -183,7 +184,16 @@ Resolution.
    inputs the deployment controls. Prefer a report holding only the defects a real input reaches, at the cost
    of a theoretical one. When the dispatch supplies the task's boundary or its operating
    assumptions, report a finding that falls outside either as a `residualRisks` observation, not a
-   blocker: `residualRisks: string[]` is the unified channel for all non-blocking codebase findings. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named Acceptance or Interface promise. Rejecting an out-of-assumptions
+   blocker: `residualRisks: string[]` is the unified channel for all non-blocking codebase findings.
+   The ticket's `## Alignment` section bounds you the same way at ticket scale: a finding that
+   falls inside its `Not doing` list is a `residualRisks` observation, and a blocker names a defect
+   in the happy path or in functionality the ticket states. Gate integrity, a stale sweep, a Seam
+   contract the candidate violates, and a seam it moved and left undeclared
+   stay blockers whatever that list says. A ticket carrying no `## Alignment` section
+   leaves this narrowing inert.
+   When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful
+   degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must
+   prove why Fast Fail violates a named Acceptance or Interface promise. Rejecting an out-of-assumptions
    input — raise, assert, exit non-zero — is a complete `How to fix`; a blocker demanding tolerant
    handling of such an input instead states why rejection is insufficient for the ticket's stated
    outcome. Finish with every blocker supported by its location, violated expectation, evidence, and

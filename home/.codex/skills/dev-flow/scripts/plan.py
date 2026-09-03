@@ -16,7 +16,7 @@ from typing import NoReturn
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 INDEX_FIELDS = ("task_id", "spec")
 TICKET_FIELDS = ("id", "state")
-TICKET_STATES = frozenset({"drafted", "pending", "closed"})
+TICKET_STATES = ("drafted", "pending", "cutoff", "closed")
 FRONTMATTER_MAX_BYTES = 16 * 1024
 TICKET_FILE = "ticket.md"
 
@@ -493,19 +493,24 @@ def _read_index(directory: Path) -> tuple[str | None, str | None, dict[str, obje
     return values["task_id"], values["spec"], None
 
 
+def _empty_ticket_counts(*, unknown: bool = False) -> dict[str, int | None]:
+    value = None if unknown else 0
+    counts: dict[str, int | None] = dict.fromkeys(TICKET_STATES, value)
+    counts["total"] = value
+    counts["unreadable"] = 0
+    return counts
+
+
 def _unavailable_ticket_counts(
     code: str, unreadable: int | None
 ) -> tuple[dict[str, int | None], dict[str, object]]:
     error: dict[str, object] = {"code": code}
     if unreadable is not None:
         error["count"] = unreadable
-    return {
-        "drafted": None,
-        "pending": None,
-        "closed": None,
-        "total": None,
-        "unreadable": unreadable,
-    }, error
+    counts: dict[str, int | None] = dict.fromkeys(TICKET_STATES, None)
+    counts["total"] = None
+    counts["unreadable"] = unreadable
+    return counts, error
 
 
 def _ticket_counts(directory: Path) -> tuple[dict[str, int | None], dict[str, object] | None]:
@@ -513,7 +518,7 @@ def _ticket_counts(directory: Path) -> tuple[dict[str, int | None], dict[str, ob
     try:
         metadata = tickets.lstat()
     except FileNotFoundError:
-        return {"drafted": 0, "pending": 0, "closed": 0, "total": 0, "unreadable": 0}, None
+        return _empty_ticket_counts(), None
     except OSError:
         return _unavailable_ticket_counts("ticket_directory_unreadable", None)
     if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
@@ -528,7 +533,8 @@ def _ticket_counts(directory: Path) -> tuple[dict[str, int | None], dict[str, ob
     except OSError:
         return _unavailable_ticket_counts("ticket_directory_unreadable", None)
 
-    drafted = pending = closed = unreadable = 0
+    counted = dict.fromkeys(TICKET_STATES, 0)
+    unreadable = 0
     for owner in directories:
         path = owner / TICKET_FILE
         try:
@@ -542,25 +548,17 @@ def _ticket_counts(directory: Path) -> tuple[dict[str, int | None], dict[str, ob
             if values["id"] != owner.name:
                 raise ValueError("ticket id does not match its directory")
             if values["state"] not in TICKET_STATES:
-                raise ValueError("ticket state is not drafted, pending, or closed")
+                raise ValueError(f"ticket state is not one of {', '.join(TICKET_STATES)}")
         except (OSError, UnicodeError, ValueError):
             unreadable += 1
             continue
-        if values["state"] == "drafted":
-            drafted += 1
-        elif values["state"] == "pending":
-            pending += 1
-        else:
-            closed += 1
+        counted[values["state"]] += 1
     if unreadable:
         return _unavailable_ticket_counts("ticket_headers_unreadable", unreadable)
-    return {
-        "drafted": drafted,
-        "pending": pending,
-        "closed": closed,
-        "total": drafted + pending + closed,
-        "unreadable": 0,
-    }, None
+    counts: dict[str, int | None] = dict(counted)
+    counts["total"] = sum(counted.values())
+    counts["unreadable"] = 0
+    return counts, None
 
 
 def command_list(root: Path, _arguments: argparse.Namespace, *, control_root: str) -> None:
@@ -636,13 +634,7 @@ def command_locate(root: Path, arguments: argparse.Namespace, *, control_root: s
             index=relative(root, expected / "INDEX.md"),
             task_id=None,
             spec=None,
-            tickets={
-                "drafted": None,
-                "pending": None,
-                "closed": None,
-                "total": None,
-                "unreadable": 0,
-            },
+            tickets=_empty_ticket_counts(unknown=True),
             orientation="unavailable",
             parse_errors=[],
         )
@@ -666,13 +658,7 @@ def command_locate(root: Path, arguments: argparse.Namespace, *, control_root: s
             candidates=candidates,
             task_id=None,
             spec=None,
-            tickets={
-                "drafted": None,
-                "pending": None,
-                "closed": None,
-                "total": None,
-                "unreadable": 0,
-            },
+            tickets=_empty_ticket_counts(unknown=True),
             orientation="unavailable",
             parse_errors=[],
         )

@@ -134,6 +134,36 @@ It must record 5W1H and be authored by its execution owner:
 
 Durable script/MCP/production validation binds exact candidate, environment, covered claims, method, observations, limitations and cleanup; referenced task-record scripts include path and SHA-256. Evidence uses the `Subject / Evidence / Residuals` shape from `templates/ticket/evidence.md`; large logs and transcripts remain outside the evidence body with bounded pointers. Only `evidence.md` owns that Subject/Evidence/Residuals spine; do not duplicate it.
 
+## The reviewer block ledger
+
+A ticket carries a `## Reviewer block ledger` section holding two things: the number of reviewer
+`BLOCKED` verdicts accumulated since the ticket's design was last fixed, and the reset history. The
+Orchestrator writes it when a review returns, in the same transition that decides what follows.
+
+It lives in the ticket rather than with the run because it has to outlive the run. A composed loop's
+correction budget is the runtime's and starts over at the next dispatch, so three dispatches of two
+blocks each leave no record that anything cost more than two. The point of the ledger is that the
+third block is reachable at all.
+
+**One condition resets it:** a re-alignment the user approved that changed the ticket's `Outcome` or
+one of its `S#` deltas. Record the reset with the prior count and the reason. Anything weaker would
+make the cap buyable — a cosmetic rewrite of a ticket would purchase three more blocks, and the
+ledger would then measure editing rather than cost.
+
+`Swept at`, Acceptance state, and the ledger are separate records with separate owners; holding one
+grants nothing in another, under
+[lane-authority](lane-authority.md#three-mutation-classes-never-inferred-from-one-another).
+
+## A cutoff ticket's Resolution
+
+A `cutoff` ticket's Resolution answers one question its `closed` sibling never has to: which claims
+nobody independent checked. Write two groups, not one list — the claims a gate or an independent
+reader proved, and the claims that were declared, each with who declared it and the note that no
+independent reader confirmed it. A single undifferentiated list is what makes a cut-off ticket read
+like a finished one six weeks later, which is the failure the separate state exists to prevent.
+
+Everything else in [Closing a ticket](../SKILL.md#closing-a-ticket) applies unchanged.
+
 ## Workflow-scoped Acceptance appendix
 
 The appendix holds the judging process when that process is worth keeping — most often because a

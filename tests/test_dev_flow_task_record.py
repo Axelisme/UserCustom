@@ -113,6 +113,31 @@ def write_ticket(tickets: Path, ticket_id: str, state: str, body: str = "") -> P
     return path
 
 
+def counts(**states: int) -> dict[str, int | None]:
+    """Expected `locate` ticket counts, keyed from the script's own state list.
+
+    Keying off `plan.TICKET_STATES` rather than a literal is what makes these
+    assertions notice a new state instead of ignoring it.
+    """
+    unreadable = states.pop("unreadable", 0)
+    unknown = sorted(set(states) - set(plan.TICKET_STATES))
+    assert not unknown, unknown
+    expected: dict[str, int | None] = {
+        state: states.get(state, 0) for state in plan.TICKET_STATES
+    }
+    expected["total"] = sum(expected.values())
+    expected["unreadable"] = unreadable
+    return expected
+
+
+def collapsed_counts(unreadable: int | None) -> dict[str, int | None]:
+    """The shape `locate` reports when one unreadable header collapses every count."""
+    expected: dict[str, int | None] = dict.fromkeys(plan.TICKET_STATES, None)
+    expected["total"] = None
+    expected["unreadable"] = unreadable
+    return expected
+
+
 def snapshot(directory: Path) -> dict[str, tuple[str, bytes | str | None]]:
     result: dict[str, tuple[str, bytes | str | None]] = {}
     for path in sorted(directory.rglob("*")):
@@ -478,7 +503,7 @@ class TaskRecordTests(unittest.TestCase):
             located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
             self.assertEqual(
                 located["tickets"],
-                {"drafted": 0, "pending": 1, "closed": 0, "total": 1, "unreadable": 0},
+                counts(pending=1),
                 "evidence sharing the ticket directory is not itself a ticket",
             )
 
@@ -498,13 +523,7 @@ class TaskRecordTests(unittest.TestCase):
                 located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
                 self.assertEqual(
                     located["tickets"],
-                    {
-                        "drafted": None,
-                        "pending": None,
-                        "closed": None,
-                        "total": None,
-                        "unreadable": 1,
-                    },
+                    collapsed_counts(1),
                 )
                 self.assertEqual(located["orientation"], "partial")
 
@@ -540,7 +559,7 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(located["spec"], "none")
             self.assertEqual(
                 located["tickets"],
-                {"drafted": 0, "pending": 1, "closed": 1, "total": 2, "unreadable": 0},
+                counts(pending=1, closed=1),
             )
             self.assertEqual(located["orientation"], "available")
             self.assertEqual(located["parse_errors"], [])
@@ -565,10 +584,50 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(snapshot(task), before, "locate must not write")
             self.assertEqual(
                 located["tickets"],
-                {"drafted": 1, "pending": 1, "closed": 1, "total": 3, "unreadable": 0},
+                counts(drafted=1, pending=1, closed=1),
             )
             self.assertEqual(located["orientation"], "available")
             self.assertEqual(located["parse_errors"], [])
+
+    def test_locate_counts_a_cutoff_ticket_apart_from_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
+            task = record(root)
+            write_ticket(task / "tickets", "T001-fog", "drafted")
+            write_ticket(task / "tickets", "T002-ready", "pending")
+            write_ticket(task / "tickets", "T003-capped", "cutoff")
+            write_ticket(task / "tickets", "T004-done", "closed")
+
+            located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+
+            self.assertEqual(
+                located["tickets"],
+                counts(drafted=1, pending=1, cutoff=1, closed=1),
+            )
+            self.assertEqual(located["tickets"]["cutoff"], 1)
+            self.assertEqual(located["tickets"]["closed"], 1)
+            self.assertEqual(located["tickets"]["unreadable"], 0)
+            self.assertEqual(located["orientation"], "available")
+
+    def test_locate_totals_every_declared_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
+            task = record(root)
+            for index, state in enumerate(plan.TICKET_STATES):
+                write_ticket(task / "tickets", f"T{index:03d}-{state}", state)
+
+            located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+
+            tickets = located["tickets"]
+            for state in plan.TICKET_STATES:
+                self.assertEqual(tickets[state], 1, state)
+            self.assertEqual(tickets["total"], len(plan.TICKET_STATES))
+            self.assertEqual(
+                sorted(tickets),
+                sorted([*plan.TICKET_STATES, "total", "unreadable"]),
+            )
 
     def test_locate_still_collapses_counts_for_an_unrecognised_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -582,13 +641,7 @@ class TaskRecordTests(unittest.TestCase):
 
             self.assertEqual(
                 located["tickets"],
-                {
-                    "drafted": None,
-                    "pending": None,
-                    "closed": None,
-                    "total": None,
-                    "unreadable": 1,
-                },
+                collapsed_counts(1),
             )
 
     def test_locate_reads_comments_and_hashes_in_flat_scalar_frontmatter(self) -> None:
@@ -672,7 +725,7 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(located["spec"], "artifacts/spec.md")
             self.assertEqual(
                 located["tickets"],
-                {"drafted": 0, "pending": 1, "closed": 0, "total": 1, "unreadable": 0},
+                counts(pending=1),
             )
             self.assertEqual(located["parse_errors"], [])
 
@@ -699,7 +752,7 @@ class TaskRecordTests(unittest.TestCase):
                 self.assertIsNone(located["spec"])
                 self.assertEqual(
                     located["tickets"],
-                    {"drafted": 0, "pending": 1, "closed": 0, "total": 1, "unreadable": 0},
+                    counts(pending=1),
                 )
                 self.assertEqual(len(located["parse_errors"]), 1)
                 self.assertEqual(
@@ -722,13 +775,7 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(located["orientation"], "partial")
             self.assertEqual(
                 located["tickets"],
-                {
-                    "drafted": None,
-                    "pending": None,
-                    "closed": None,
-                    "total": None,
-                    "unreadable": 1,
-                },
+                collapsed_counts(1),
             )
             self.assertEqual(
                 located["parse_errors"], [{"code": "ticket_headers_unreadable", "count": 1}]
@@ -756,13 +803,7 @@ class TaskRecordTests(unittest.TestCase):
                 self.assertEqual(located["orientation"], "partial")
                 self.assertEqual(
                     located["tickets"],
-                    {
-                        "drafted": None,
-                        "pending": None,
-                        "closed": None,
-                        "total": None,
-                        "unreadable": None,
-                    },
+                    collapsed_counts(None),
                 )
                 self.assertEqual(
                     located["parse_errors"], [{"code": "ticket_directory_unreadable"}]
@@ -787,13 +828,7 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(missing["orientation"], "unavailable")
             self.assertEqual(
                 missing["tickets"],
-                {
-                    "drafted": None,
-                    "pending": None,
-                    "closed": None,
-                    "total": None,
-                    "unreadable": 0,
-                },
+                collapsed_counts(0),
             )
 
             active_collision = root / ".agent_state" / "plans" / "DEMO"
@@ -803,13 +838,7 @@ class TaskRecordTests(unittest.TestCase):
             self.assertIsNone(ambiguous["container"])
             self.assertEqual(
                 ambiguous["tickets"],
-                {
-                    "drafted": None,
-                    "pending": None,
-                    "closed": None,
-                    "total": None,
-                    "unreadable": 0,
-                },
+                collapsed_counts(0),
             )
             self.assertEqual(
                 ambiguous["candidates"],

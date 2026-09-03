@@ -8,7 +8,8 @@ state: {{STATE}}
      This ticket's durable evidence lives beside this file in the same directory — copy
      the evidence.md beside this template for each piece — and the whole directory is what closure
      discharges. Guiding script location: `<ticket>/scripts/` for the lane writer's helpers; the Orchestrator owns `<task>/scripts/` and the reviewer is read-only. The Orchestrator owns this ticket.
-     Lifecycle is `drafted` -> `pending` -> `closed`, and only the Orchestrator moves it. Create the
+     Lifecycle is `drafted` -> `pending` -> `closed`, or `pending` -> `cutoff` when the review that
+     would settle the rest is no longer bought, and only the Orchestrator moves it. Create the
      ticket in whichever of the first two states fits, and replace `{{STATE}}` with that choice:
      `pending` when its contract can already be written from the code, `drafted` when writing it now
      would mean guessing, in which case fill only what is known and leave the rest. Neither is a
@@ -19,7 +20,7 @@ state: {{STATE}}
 
 | Ticket field | Value |
 |---|---|
-| depends_on | <the ticket ids that must close before this one starts, or `none`. A `drafted` ticket cannot close, so naming one here blocks this ticket until that one graduates and closes.> |
+| depends_on | <the ticket ids that must reach a terminal state — `closed` or `cutoff` — before this one starts, or `none`. A `drafted` ticket reaches neither, so naming one here blocks this ticket until that one graduates and terminates.> |
 | completes | <when this ticket only partly delivers its user-visible sentence, the ticket id that completes that sentence — which may itself still be `drafted`. `none` when this ticket delivers its whole sentence.> |
 | envelope | <pointer to the frozen file holding this task's out-of-scope boundary — what belongs to this task at all, as against this ticket's own scope, which Outcome and Acceptance below already carry — or `none` if the task has no boundary> |
 
@@ -96,8 +97,20 @@ state: {{STATE}}
 - [ ] Reachability: the shipped entrypoint, not a test-only composition, exercises the path
 - [ ] Vacuous assertion: no test body asserts a constant or asserts nothing
 
+## Reviewer block ledger
+<!-- The Orchestrator writes this when a review returns. It counts the reviewer `BLOCKED` verdicts
+     this ticket has accumulated since its design was last fixed; the third one is where review stops
+     being placed. It lives here rather than with the run because a composed loop's correction budget
+     starts over at the next dispatch. Only a user-approved re-alignment that changed `Outcome` or an
+     `S#` resets it, and the reset records the prior count and the reason:
+     ~/.codex/skills/dev-flow/references/record-hygiene.md#the-reviewer-block-ledger -->
+Reviewer blocks: 0. Resets: none.
+
 ## Resolution
-<!-- The Orchestrator writes this once when closing the ticket. Normal closure follows completion of all
-     applicable Acceptance claims. An abandoned, superseded, or rejected closure may leave claims
-     unchecked when this conclusion explains why. Keep only pointers needed to understand it. -->
+<!-- The Orchestrator writes this once at the ticket's terminal transition. Normal closure follows
+     completion of all applicable Acceptance claims. An abandoned, superseded, or rejected closure may
+     leave claims unchecked when this conclusion explains why. A `cutoff` ticket separates the proved
+     claims from the declared ones and names who declared each:
+     ~/.codex/skills/dev-flow/references/record-hygiene.md#a-cutoff-tickets-resolution
+     Keep only pointers needed to understand it. -->
 Pending.

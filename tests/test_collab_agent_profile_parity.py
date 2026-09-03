@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 try:
     from tests import _profile_test_support as support
@@ -78,6 +79,81 @@ class CollabAgentProfileParityTests(unittest.TestCase):
                     profile_name=name,
                     deltas=deltas,
                 )
+
+    @staticmethod
+    def _result_delta(runtime: str = "pi") -> support.DeclaredDelta:
+        return support.DeclaredDelta(
+            profile="collab-implementer",
+            runtime=runtime,
+            location="## Result",
+            reason="synthetic runtime-specific result behavior",
+        )
+
+    def _assert_synthetic_parity_failure(
+        self,
+        prompts: dict[str, str],
+        deltas: tuple[support.DeclaredDelta, ...],
+    ) -> str:
+        profile = support.RuntimeProfile(
+            pi_path=Path("pi.md"),
+            claude_path=Path("claude.md"),
+            codex_path=Path("codex.toml"),
+            prompt=prompts["pi"],
+        )
+        with patch.object(support, "runtime_prompts", return_value=prompts):
+            with self.assertRaises(AssertionError) as raised:
+                support.assert_prompt_parity(
+                    self,
+                    profile,
+                    profile_name="collab-implementer",
+                    deltas=deltas,
+                )
+        return str(raised.exception)
+
+    def test_non_exempt_duplicate_section_fails_with_occurrence_diagnostic(self) -> None:
+        prompts = {
+            "pi": "## Result\npi-specific",
+            "claude": "## Result\nshared",
+            "codex": "## Result\nshared\n## Result\n",
+        }
+        failure = self._assert_synthetic_parity_failure(prompts, (self._result_delta(),))
+
+        self.assertEqual(
+            support.prompt_sections(prompts["codex"])["## Result"],
+            ("shared", ""),
+        )
+        self.assertIn("occurrence", failure)
+        self.assertIn("2:", failure)
+        self.assertIn("## Result", failure)
+        self.assertIn("differs outside its declared runtime deltas", failure)
+
+    def test_absent_and_present_empty_sections_are_distinct(self) -> None:
+        prompts = {
+            "pi": "## Result\npi-specific",
+            "claude": "## Result\n",
+            "codex": "",
+        }
+        failure = self._assert_synthetic_parity_failure(prompts, (self._result_delta(),))
+
+        self.assertIn("occurrence", failure)
+        self.assertIn("''", failure)
+        self.assertIn("absent", failure)
+        self.assertIn("occurrences", failure)
+
+    def test_multiple_declarations_for_one_location_fail_explicitly(self) -> None:
+        prompts = {
+            "pi": "## Result\nshared",
+            "claude": "## Result\nshared",
+            "codex": "## Result\nshared",
+        }
+        for runtimes in (("pi", "pi"), ("pi", "claude")):
+            with self.subTest(runtimes=runtimes):
+                deltas = tuple(self._result_delta(runtime) for runtime in runtimes)
+                failure = self._assert_synthetic_parity_failure(prompts, deltas)
+                self.assertIn("multiple declared deltas", failure)
+                self.assertIn("## Result", failure)
+                for runtime in runtimes:
+                    self.assertIn(runtime, failure)
 
     def test_gate_repair_order_matches_the_ticket_template(self) -> None:
         # The order is copied because its two readers cannot reach each other: the Orchestrator

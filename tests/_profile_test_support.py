@@ -59,20 +59,26 @@ def normalize_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def prompt_sections(prompt: str) -> dict[str | None, str]:
-    """Split one runtime prompt into `## `-heading sections, each whitespace-normalized.
+def prompt_sections(prompt: str) -> dict[str | None, tuple[str, ...]]:
+    """Split a runtime prompt into ordered, whitespace-normalized section occurrences.
 
-    The `None` key holds the text preceding the first `## ` heading.
+    The `None` key holds the text preceding the first `## ` heading. Repeated headings retain every
+    occurrence, including an empty body, so a missing section and an empty section stay distinct.
     """
-    lines_by_heading: dict[str | None, list[str]] = {}
+    sections: dict[str | None, list[str]] = {}
     heading: str | None = None
+    body: list[str] = []
     for line in prompt.splitlines():
         if line.startswith("## "):
+            if body or heading is not None:
+                sections.setdefault(heading, []).append(normalize_whitespace("\n".join(body)))
             heading = line.strip()
-            lines_by_heading.setdefault(heading, [])
+            body = []
         else:
-            lines_by_heading.setdefault(heading, []).append(line)
-    return {key: normalize_whitespace("\n".join(lines)) for key, lines in lines_by_heading.items()}
+            body.append(line)
+    if body or heading is not None:
+        sections.setdefault(heading, []).append(normalize_whitespace("\n".join(body)))
+    return {key: tuple(bodies) for key, bodies in sections.items()}
 
 
 @dataclass(frozen=True)
@@ -131,6 +137,15 @@ def _assert_equal_with_diff(
     case.fail(f"{message}\n{_diff(expected, actual, expected_label, actual_label)}")
 
 
+def _format_section_occurrences(occurrences: tuple[str, ...]) -> str:
+    """Render section occurrences for a diagnostic while preserving absence and empty bodies."""
+    if not occurrences:
+        return "<absent: no occurrences>"
+    return "\n".join(
+        f"occurrence {index}: {body!r}" for index, body in enumerate(occurrences, start=1)
+    )
+
+
 def assert_prompt_parity(
     case: unittest.TestCase,
     profile: RuntimeProfile,
@@ -144,6 +159,7 @@ def assert_prompt_parity(
     Collab role, every declared location is removed from the common comparison, then the copies not
     named by that location's delta are compared with each other. Thus an undeclared change outside a
     delta, or an unexplained change in the other copies of a delta section, fails with a diff.
+    Each location may have exactly one declared exempt runtime.
     """
     name = profile_name or profile.pi_path.stem
     if not deltas:
@@ -154,6 +170,7 @@ def assert_prompt_parity(
     prompts = runtime_prompts(profile)
     runtimes = set(prompts)
 
+    declarations_by_location: dict[str, DeclaredDelta] = {}
     for delta in deltas:
         case.assertEqual(
             name,
@@ -163,8 +180,15 @@ def assert_prompt_parity(
         case.assertIn(delta.runtime, runtimes, f"unknown runtime in declared delta: {delta.runtime!r}")
         case.assertTrue(delta.location, "a declared delta must identify its location")
         case.assertTrue(delta.reason.strip(), "a declared delta must state why it is allowed")
+        previous = declarations_by_location.get(delta.location)
+        if previous is not None:
+            case.fail(
+                f"{name}: multiple declared deltas for {delta.location!r}; exactly one runtime "
+                f"may be exempt (found {previous.runtime!r} and {delta.runtime!r})"
+            )
+        declarations_by_location[delta.location] = delta
 
-    locations = {delta.location for delta in deltas}
+    locations = set(declarations_by_location)
     normalized = {
         runtime: _normalized_without_sections(prompt, locations)
         for runtime, prompt in prompts.items()
@@ -184,23 +208,26 @@ def assert_prompt_parity(
 
     sections = {runtime: prompt_sections(text) for runtime, text in prompts.items()}
     for location in locations:
-        exempt = {delta.runtime for delta in deltas if delta.location == location}
+        exempt = {declarations_by_location[location].runtime}
         checked = {
-            runtime: bodies.get(location)
+            runtime: bodies.get(location, ())
             for runtime, bodies in sections.items()
             if runtime not in exempt
         }
         if len(checked) < 2:
-            continue
+            case.fail(
+                f"{name}: {location!r} has fewer than two non-exempt runtime copies; exactly one "
+                "runtime declaration is required for each location"
+            )
         reference_runtime = next(iter(checked))
-        reference_body = checked[reference_runtime]
-        for runtime, body in checked.items():
+        reference_occurrences = checked[reference_runtime]
+        for runtime, occurrences in checked.items():
             if runtime == reference_runtime:
                 continue
             _assert_equal_with_diff(
                 case,
-                reference_body or "<missing section>",
-                body or "<missing section>",
+                _format_section_occurrences(reference_occurrences),
+                _format_section_occurrences(occurrences),
                 f"{name}/{reference_runtime}/{location}",
                 f"{name}/{runtime}/{location}",
                 f"{name}: {location!r} differs outside its declared runtime deltas",

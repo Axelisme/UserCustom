@@ -15,9 +15,10 @@ Not yet recorded.
 Task created.
 
 ## Next
-<!-- Replace this section, never edit it, under the same rule as `Current`:
+<!-- One bounded action and the party who owns it, and nothing else: why it is next belongs to
+     `Current`. Replace this section, never edit it, under the same rule as `Current`:
      ~/.codex/skills/dev-flow/references/record-hygiene.md#current-and-next-are-replaced-not-edited -->
-Write or select the first ticket.
+Write or select the first ticket. *Owner:* Orchestrator.
 
 ## Envelope
 <!-- The task's out-of-scope boundary: what belongs to this task at all, distinct from a ticket's own

@@ -60,7 +60,8 @@ environment.
 
 This profile is the durable half of your orientation: it survives compaction, and the dispatch does
 not. After any compaction, recollection of the dispatch, the ticket, or the lane is unreliable
-evidence. Re-read before acting — the assigned `ticket.md`, its `## Alignment` section and its Seam contract, then `git status`
+evidence. Re-read before acting — the assigned `ticket.md`, its `## Alignment` section and its
+Seam contract, then `git status`
 and `git diff` in the lane for what this run has already written. An assigned appendix target or
 evidence file is recovered by opening it, not by recalling it. Task INDEX files and sibling tickets
 stay outside orientation here: the always-resident reorientation rule names them for the
@@ -79,10 +80,16 @@ and apply its disclosed Dev-flow reference — `~/.codex/skills/dev-flow/referen
 ticket discloses no path. `None` permits ordinary implementation but a newly needed
 non-obvious seam returns `NEEDS_DECISION`; `Existing` starts from and preserves the named executable
 and durable authorities; `Change` implements only the recorded `S#` deltas, leaving private
-Implementation choices to you. The ticket's `## Alignment` section is a job input beside that contract: implement the happy path and the functionality the ticket states, and reject every other path explicitly — raise, assert, or return the typed error that surface carries — leaving a short comment beside the rejection instead of building the path out. A world fact the section leaves `unconfirmed` is not yours to settle by inference. A ticket carrying no `## Alignment` section leaves this rule inert. No ticket, task, or Acceptance identifier enters the tracked tree, in code, test names, or comments. A contract that fails the reference's publication preconditions
+Implementation choices to you. A contract that fails the reference's publication preconditions
 returns `BLOCKED` before business-code mutation. A required change to recorded placement, authority,
 graduation, or an ADR returns `NEEDS_DECISION`; neither the ticket contract nor ADR content is yours
 to amend without the stated authority.
+
+The ticket's `## Alignment` section is a job input beside that contract. Implement the happy
+path and the functionality the ticket states, and reject every other path explicitly — raise,
+assert, or return the typed error that surface carries — leaving a short comment beside the
+rejection instead of building the path out. A world fact the section leaves `unconfirmed` is
+not yours to settle by inference. A ticket carrying no `## Alignment` section leaves this rule inert.
 
 Prefer the contract's exact Interface and durable-declaration pointers. Task INDEX files, sibling
 tickets, history, and unrelated role artifacts are not default orientation material. This is guidance,
@@ -167,7 +174,8 @@ ticket like the rest of its directory.
    this repository already documents module-level material. A reviewer treats a seam you moved
    and left undeclared as a defect in the lane. Remain the only writer in this checkout, making
    every edit yourself and in it: this one lane is your whole execution surface, so you create no
-   second checkout and launch no agent. Finish when
+   second checkout and launch no agent. No ticket, task, or Acceptance
+   identifier enters the tracked tree — not in code, not in test names, not in comments. Finish when
    every supplied criterion is met, every changed path is in scope, and protected state is intact.
 3. Run the ticket's ordered Mechanical gates and inspect the resulting diff. The ticket owns the binary gate plan; every listed gate must pass before `COMPLETED` and you must fix failures within scope in the order its `## Mechanical gates` section states, and when that section states no order: focused (or explicitly failing) → affected → formatter/style (re-run affected after any mutation) → broader/full. A dispatch without an assigned exact target grants no task-record evidence mutation — run artifacts own commands. Operational Git and runtime checks —
    status, diff, diff-check, staged state, cleanliness, ancestry, commit identity, and lifecycle —

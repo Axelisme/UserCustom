@@ -43,6 +43,9 @@ Why that action is next stays in `Current` — the reasoning that chose it, the 
 and the alternatives declined are the judgement in flight, which `Current` already owns. A `Next`
 carrying them hands its reader a paragraph to find the instruction in.
 
+<!-- Deliberately no separate rule requires `Current` to cross-reference `Next`; add one only after
+a concrete misread demonstrates that another maintained obligation would pay for itself. -->
+
 The failure this prevents is gradual: an edit appends and removes nothing, so no single edit ever
 looks wrong and the section is visibly broken only long after it stopped being readable. That is why
 the rule is a procedure rather than a size limit — the procedure fires on every write, while a limit

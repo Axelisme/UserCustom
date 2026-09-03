@@ -102,6 +102,28 @@ receiver's own workflow.
    shape: a path the writer rejected and the user later asks for is small by construction and
    arrives while the user is watching, so describing it costs about what making it costs.
 
+   **Some work is split rather than assigned whole.** A contract-bearing ticket has a part no brief
+   carries well — the shape of the thing — and a part a brief carries perfectly, which is what goes
+   inside that shape. Write the first yourself as a **contract seed**, commit it to the lane, and
+   dispatch a writer for the rest.
+
+   The seed is four things: the minimal Interface, its result and error types, one real caller, and
+   the happy-path contract tests the ticket states. A real caller means one on the shipped path; a
+   test-only composition is what the seed exists to prevent, because it lets an Interface be shaped
+   by nothing but its own tests. The seed commit stays in the ticket's lane and is never collected
+   on its own: it is a starting position, not a deliverable, and collecting it would land an
+   Interface with no implementation behind it.
+
+   Seed a ticket when reconstructing the Interface from the implementation is the expensive part.
+   Repeated same-shape blocks against one ticket are that case arriving after the fact — the writer
+   rebuilt a boundary from the code and the reviewer could only block local symptoms.
+
+   The seed needs no protected-path list. Once it is in the lane it is what the ticket's `## Seam
+   contract` names, so the writer's existing obligation covers it: an `Existing` candidate preserves
+   the named authorities, a `Change` candidate implements only the recorded `S#` deltas, and a
+   required change to either returns `NEEDS_DECISION` rather than an edit. A second list of the same
+   boundary would read as a guarantee while enforcing nothing.
+
    **Who verifies.** Walk every Acceptance claim and write the gate that decides it. A claim is
    **mechanically decidable** when one command's exit status *is* that claim — the same answer for
    anyone who runs it, with nothing in its output left to read. Every such claim gets that command

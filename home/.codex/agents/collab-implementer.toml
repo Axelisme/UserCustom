@@ -52,7 +52,7 @@ and apply its disclosed Dev-flow reference — `~/.codex/skills/dev-flow/referen
 ticket discloses no path. `None` permits ordinary implementation but a newly needed
 non-obvious seam returns `NEEDS_DECISION`; `Existing` starts from and preserves the named executable
 and durable authorities; `Change` implements only the recorded `S#` deltas, leaving private
-Implementation choices to you. A contract that fails the reference's publication preconditions
+Implementation choices to you. The ticket's `## Alignment` section is a job input beside that contract: implement the happy path and the functionality the ticket states, and reject every other path explicitly — raise, assert, or return the typed error that surface carries — leaving a short comment beside the rejection instead of building the path out. A world fact the section leaves `unconfirmed` is not yours to settle by inference. A ticket carrying no `## Alignment` section leaves this rule inert. No ticket, task, or Acceptance identifier enters the tracked tree, in code, test names, or comments. A contract that fails the reference's publication preconditions
 returns `BLOCKED` before business-code mutation. A required change to recorded placement, authority,
 graduation, or an ADR returns `NEEDS_DECISION`; neither the ticket contract nor ADR content is yours
 to amend without the stated authority.

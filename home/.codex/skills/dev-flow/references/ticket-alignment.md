@@ -56,10 +56,10 @@ Write conclusions there, not the reasoning that produced them.
 ## An unconfirmed fact does not stop the ticket
 
 The user is not a bottleneck inside a ticket. A world fact the user has not confirmed stays listed as
-unconfirmed and the ticket proceeds: the implementation delivers the happy path and the functionality
-the ticket states, and every other path is explicitly rejected rather than built out. Nothing is
-inferred into existence to fill the gap, and the deferred paths return to the user before the ticket
-is collected.
+unconfirmed and the ticket proceeds. You need not hold it back: the writer's own profile carries the
+obligation to deliver the happy path and the functionality the ticket states and to reject every
+other path explicitly, so nothing is inferred into existence to fill the gap, and the deferred paths
+return to the user before the ticket is collected.
 
 Inference is what this step exists to stop. A ticket that reasons its way to "the code reads a v1
 file, so v1 files must exist" has answered a world fact by reading code, which is the one thing code

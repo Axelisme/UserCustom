@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 try:
     from tests import _profile_test_support as support
@@ -13,112 +14,53 @@ ROOT = Path(__file__).resolve().parents[1]
 HOME = ROOT / "home"
 
 # The two Collab roles carry runtime-specific tooling, so their three copies are not byte-identical
-# and cannot be checked the way the profiles below are.
+# and are checked below modulo COLLAB_ROLE_DELTAS instead of the byte-identity check used here.
 PARITY_NAMES = (
     "contract-reviewer",
     "repo-investigator",
     "mechanical-implementer",
 )
 
-# A dispatched child reads one profile: not the other runtimes' copies of it, and not the dev-flow
-# references that own these rules. Each clause is therefore a deliberate per-partition copy, and a
-# copy without a consistency test is how five of them silently went missing from Codex and Claude.
-# A clause earns a place here by blocking, authorizing, or obliging the role — not by being shared
-# wording, which stays each runtime's own business.
-SHARED_CLAUSES = {
-    "collab-implementer": (
-        # A mandatory `BLOCKED` keyed to that reference's publication preconditions needs its path.
-        "references/ticket-seam-contract.md",
-        # record-hygiene grants the writer this container and expects the role to derive it.
-        "`scripts/` subtree",
-        # An acceptor blocks a moved seam left undeclared; the writer is told what to declare.
-        "error modes, lifecycle and ownership, required configuration",
-        "class rather than only the named examples",
-        "when closure requires wider scope",
-        "completed the exact assigned appendix",
-        "references/efficiency-feedback.md",
-        # The writer position, not the dispatch, decides which boxes are this role's to toggle.
-        "## Acceptance checkboxes you own",
-        "the Acceptance claims that name no observer are yours",
-        "references/lane-authority.md",
-        # The copy is ceremony unless the rule reaches the moment the file is filled.
-        "never a whole-file write",
-        # Without the sweep the terminal condition is gates alone, which is what let a checkbox
-        # proved in hour one ride out to handoff unexamined.
-        "closing sweep",
-        "re-verified against the final tree",
-        # The writer cannot legally record the sweep unless its own prose exception says so.
-        "`Swept at`",
-        # A gate routed around is not a gate closed; without this the writer's only visible option
-        # is the workaround.
-        "can only be made to pass by changing what it measures",
-        # One lane, one writer: without this the positive rule reads as covering only the edits,
-        # and a writer that fans work out to a child breaks lane exclusivity from inside.
-        "second checkout and launch no agent",
-        # The ticket carries the alignment's result, so a runtime that loses the pointer to it
-        # leaves the writer reading two lists it has no obligation toward.
-        "`## Alignment` section is a job input",
-        # The whole point of the alignment step: a world fact the user has not answered is not
-        # answerable by reading code, and inference is exactly how a ticket grows a branch nobody
-        # asked for.
-        "not yours to settle by inference",
-        # Without the guard the rule fires on every ticket published before the section existed,
-        # which turns their next dispatch into happy-path-only work nobody requested.
-        "leaves this rule inert",
-        # The identifiers leak into the tree through test names most often, and a comment rule that
-        # names only comments reads as permission for the rest.
-        "identifier enters the tracked tree",
+# Every explicitly allowed divergence between a Collab role's three runtime copies. A copy not
+# named here must match the other two, whitespace aside; an undeclared difference fails the parity
+# assertion and prints the offending diff. Each entry records profile, runtime, location and reason,
+# never the diverging wording — see `DeclaredDelta`. Dead registry entries deliberately have no
+# dedicated diagnostic: unknown profiles are never selected, and absent locations remove no compared
+# body. Add registry coverage only after dead declarations become an observed cost.
+COLLAB_ROLE_NAMES = ("collab-implementer", "collab-acceptor")
+COLLAB_ROLE_DELTAS: tuple[support.DeclaredDelta, ...] = (
+    support.DeclaredDelta(
+        profile="collab-implementer",
+        runtime="codex",
+        location="## Reorientation after compaction",
+        reason=(
+            "Known pre-existing defect: Codex's copy carries no Reorientation section. The task "
+            "envelope explicitly forbids fixing this here; it is registered on candidate-backlog "
+            "instead."
+        ),
     ),
-    "collab-acceptor": (
-        # Without these the writer fills an appendix no reviewer knows how to judge.
-        "## Acceptance appendix",
-        "blocks Acceptance rather than being trusted on presence",
-        "describes a reasonable process",
-        "grants no task-record mutation",
-        "remain appendix-free and is judged from the lane itself",
-        "references/ticket-seam-contract.md",
-        "you do not re-execute gates",
-        # Dropping the qualifier turns an out-of-envelope finding back into a blocker.
-        "whether inside or outside the envelope",
-        "references/efficiency-feedback.md",
-        "## Writer-maintained checkboxes",
-        # Without these the acceptor reports a legitimate toggle, or an unproven claim, as a defect.
-        "belongs to whoever held the lane's write token",
-        "An unchecked claim is not by itself a defect",
-        "references/lane-authority.md",
-        # A hollow pass violates no claim, so a claim-scoped subject cannot reach it.
-        "gate integrity",
-        "the pass is hollow",
-        # Reading the diff for it must not read as re-executing a gate the role may not run.
-        "is not re-execution",
-        # Without this the acceptor reports the writer's own sweep record as an unauthorized write.
-        "`Swept at`",
-        # The appendix is supporting evidence, never a substitute for reading the lane.
-        "an appendix never stands in for reading the",
-        # Without the exception a hollow pass has no fillable trigger, so the finding drops to
-        # residualRisks under the same paragraph's production-reachability rule.
-        "Two blocker classes have no production-reachable input",
-        "the gate invocation and the property it no longer measures",
-        # The stale-sweep half needs its own anchor: losing it in one runtime recreates the
-        # unreturnable-blocker defect there while the suite stays green.
-        "for a stale sweep, the recorded `Swept at` against the lane head",
-        # A comparison with no consequence is the inert-rule shape this change exists to remove.
-        "claims a sweep against a commit this tree is not at",
-        # The read default is what keeps review bounded to the diff; losing it turns the permission
-        # to read further into an invitation to start wide.
-        "sends you there",
-        # The ticket-scale bound on what may block. Losing it returns the reviewer to blocking on
-        # work the ticket already declared it would not do, which is the loop this rule exists to
-        # stop.
-        "falls inside its `Not doing` list",
-        # The narrowing must not reach the four classes that judge the lane's own integrity rather
-        # than how much robustness it carries; losing this sentence disarms all four at once.
-        "stay blockers whatever that list says",
-        # Same guard as the writer's: tickets published before the section existed keep their
-        # current review, instead of silently losing every blocker class the narrowing touches.
-        "leaves this narrowing inert",
+    support.DeclaredDelta(
+        profile="collab-implementer",
+        runtime="pi",
+        location="## Result",
+        reason=(
+            "Deliberate Pi-specific terminal-result semantics: Pi's frontmatter (`acceptance`, "
+            "`acceptanceRole`, `completionGuard`) gives it a native typed result schema that Claude "
+            "and Codex lack, so only Pi's `## Result` narrates that schema's typed branches, its "
+            "run-artifact command ownership, and that it carries no repo-local validation receipt."
+        ),
     ),
-}
+    support.DeclaredDelta(
+        profile="collab-acceptor",
+        runtime="codex",
+        location="## Reorientation after compaction",
+        reason=(
+            "Known pre-existing defect: Codex's copy carries no Reorientation section. The task "
+            "envelope explicitly forbids fixing this here; it is registered on candidate-backlog "
+            "instead."
+        ),
+    ),
+)
 
 
 class CollabAgentProfileParityTests(unittest.TestCase):
@@ -128,17 +70,92 @@ class CollabAgentProfileParityTests(unittest.TestCase):
                 profile = support.load_runtime_profile(HOME, name)
                 support.assert_prompt_parity(self, profile)
 
-    def test_shared_clauses_reach_every_runtime_copy(self) -> None:
-        for name, clauses in SHARED_CLAUSES.items():
+    def test_collab_role_copies_are_identical_modulo_declared_deltas(self) -> None:
+        for name in COLLAB_ROLE_NAMES:
             profile = support.load_runtime_profile(HOME, name)
-            for runtime, prompt in support.runtime_prompts(profile).items():
-                for clause in clauses:
-                    with self.subTest(profile=name, runtime=runtime, clause=clause):
-                        # assertIn would print the whole profile body on failure.
-                        self.assertTrue(
-                            clause in prompt,
-                            f"{name}/{runtime} is missing the shared clause {clause!r}",
-                        )
+            deltas = tuple(delta for delta in COLLAB_ROLE_DELTAS if delta.profile == name)
+            with self.subTest(profile=name):
+                support.assert_prompt_parity(
+                    self,
+                    profile,
+                    profile_name=name,
+                    deltas=deltas,
+                )
+
+    @staticmethod
+    def _result_delta(runtime: str = "pi") -> support.DeclaredDelta:
+        return support.DeclaredDelta(
+            profile="collab-implementer",
+            runtime=runtime,
+            location="## Result",
+            reason="synthetic runtime-specific result behavior",
+        )
+
+    def _assert_synthetic_parity_failure(
+        self,
+        prompts: dict[str, str],
+        deltas: tuple[support.DeclaredDelta, ...],
+    ) -> str:
+        profile = support.RuntimeProfile(
+            pi_path=Path("pi.md"),
+            claude_path=Path("claude.md"),
+            codex_path=Path("codex.toml"),
+            prompt=prompts["pi"],
+        )
+        with patch.object(support, "runtime_prompts", return_value=prompts):
+            with self.assertRaises(AssertionError) as raised:
+                support.assert_prompt_parity(
+                    self,
+                    profile,
+                    profile_name="collab-implementer",
+                    deltas=deltas,
+                )
+        return str(raised.exception)
+
+    def test_non_exempt_duplicate_section_fails_with_occurrence_diagnostic(self) -> None:
+        prompts = {
+            "pi": "## Result\npi-specific",
+            "claude": "## Result\nshared",
+            "codex": "## Result\nshared\n## Result\n",
+        }
+        failure = self._assert_synthetic_parity_failure(prompts, (self._result_delta(),))
+
+        self.assertEqual(
+            support.prompt_sections(prompts["codex"])["## Result"],
+            ("shared", ""),
+        )
+        self.assertIn("occurrence", failure)
+        self.assertIn("2:", failure)
+        self.assertIn("## Result", failure)
+        self.assertIn("differs outside its declared runtime deltas", failure)
+
+    def test_absent_and_present_empty_sections_are_distinct(self) -> None:
+        prompts = {
+            "pi": "## Result\npi-specific",
+            "claude": "## Result\n",
+            "codex": "",
+        }
+        failure = self._assert_synthetic_parity_failure(prompts, (self._result_delta(),))
+
+        self.assertIn("occurrence", failure)
+        self.assertIn("''", failure)
+        self.assertIn("absent", failure)
+        self.assertIn("occurrences", failure)
+
+    def test_multiple_declarations_for_one_location_fail_explicitly(self) -> None:
+        prompts = {
+            "pi": "## Result\nshared",
+            "claude": "## Result\nshared",
+            "codex": "## Result\nshared",
+        }
+        for runtimes in (("pi", "pi"), ("pi", "claude")):
+            with self.subTest(runtimes=runtimes):
+                deltas = tuple(self._result_delta(runtime) for runtime in runtimes)
+                failure = self._assert_synthetic_parity_failure(prompts, deltas)
+                self.assertIn("multiple declared deltas", failure)
+                self.assertIn("## Result", failure)
+                for runtime in runtimes:
+                    self.assertIn(runtime, failure)
 
     def test_gate_repair_order_matches_the_ticket_template(self) -> None:
         # The order is copied because its two readers cannot reach each other: the Orchestrator
@@ -168,7 +185,7 @@ class CollabAgentProfileParityTests(unittest.TestCase):
         # installed-form path an agent is sent to must exist — in the profiles and in the two
         # skills' own documents alike.
         sources = {}
-        for name in PARITY_NAMES + tuple(SHARED_CLAUSES):
+        for name in PARITY_NAMES + COLLAB_ROLE_NAMES:
             profile = support.load_runtime_profile(HOME, name)
             for runtime, prompt in support.runtime_prompts(profile).items():
                 sources[f"{name}/{runtime}"] = prompt

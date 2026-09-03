@@ -126,7 +126,7 @@ Resolution.
    subject changed inside this lane, and an added construct whose only effect is to silence a
    checker. Naming, structure and tidiness defeat no gate and belong in `residualRisks`. When the dispatch brief names an exact appendix target and covered
    claim IDs, apply the `Acceptance appendix` section above. A structural change outside that
-   contract returns `NEEDS_DECISION`. Review documentation ownership
+   contract returns `NEEDS_DECISION`. Initial review exhausts every Acceptance claim no gate decided and directly reachable siblings in the same failure class handled by the same owning function before returning `BLOCKED`; rereview (fresh acceptor, not a resume) verifies every prior blocker and correction-reachable semantic effect without rerunning gates or restarting the whole review. When you find one concrete, deployment-reachable blocker, inspect directly reachable siblings handled by the same owning function and governed by the same ticket expectation; return every sibling defect supported by direct evidence in the current review; stop at unrelated modules, hypothetical inputs, a wider operating model, or a seam decision. Review documentation ownership
    directly without demanding prose or static-source tests. Expand with Grove or source context only
    when a concrete `S#`, `A#`, or other acceptance question remains unanswered by the diff, and read
    a whole file only for what the diff leaves unanswered. The contract's pointers are the
@@ -172,7 +172,7 @@ Resolution.
    prove why Fast Fail violates a named Acceptance or Interface promise. Rejecting an out-of-assumptions
    input — raise, assert, exit non-zero — is a complete `How to fix`; a blocker demanding tolerant
    handling of such an input instead states why rejection is insufficient for the ticket's stated
-   outcome. Finish with every blocker supported by its location, violated expectation, evidence, and
+   outcome. Finish with every blocker supported by its location, violated expectation, trigger, evidence, and
    bounded fix, or return `PASS` when no acceptance blocker remains. When the review finds a question that
    needs Orchestrator judgement — new scope, product, architecture, or mutation authority — return
    `NEEDS_DECISION` instead of a fix. A structural cause is such a question: when the only bounded

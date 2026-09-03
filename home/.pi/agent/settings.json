@@ -14,7 +14,8 @@
       "source": "npm:pi-web-access",
       "extensions": []
     },
-    "npm:pi-claude-code-ui"
+    "npm:pi-claude-code-ui",
+    "npm:pi-antigravity"
   ],
   "lastChangelogVersion": "0.84.4",
   "enabledModels": [
@@ -22,7 +23,7 @@
     "openai-codex/gpt-5.6-sol",
     "anthropic/claude-opus-5",
     "anthropic/claude-sonnet-5",
-    "google-vertex/gemini-3.7-flash"
+    "antigravity/gemini-3.8-flash"
   ],
   "subagents": {
     "defaultModel": "gpt-5.6-luna",

@@ -3,8 +3,8 @@ name: collab-acceptor
 description: Independently accept, block, or defer one reviewed lane using read-only, evidence-backed review.
 tools: read, bash
 model: openai-codex/gpt-5.6-sol
-fallbackModels: openai-codex/gpt-5.6-sol:high
 thinking: high
+fallbackModels: openai-codex/gpt-5.6-sol:high
 timeoutMs: 3600000
 systemPromptMode: replace
 inheritProjectContext: true

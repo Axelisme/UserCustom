@@ -94,6 +94,11 @@ it — that is the `drafted` state, and it is how a ticket carries a question wh
 to be guessed. Reaching `pending` is reaching the whole list, and only a `pending` ticket is
 dispatched.
 
+A `depends_on` edge is satisfied by either terminal state, `closed` or `cutoff`. A cut-off dependency
+stopped with verification unbought, so the downstream ticket inherits its unproven claims as world
+facts under [ticket-alignment](ticket-alignment.md#inheriting-an-unverified-base); what it does not do
+is block, because a task whose cap fires and then deadlocks has bought nothing.
+
 Stop publication or dispatch when the mode is missing, unresolved, or a placeholder; an authority
 pointer does not resolve; a Change `S#` lacks an `A# covers S#` observer; an Acceptance claim names
 no observation that decides it, or names an observation whose surface cannot carry the promise it

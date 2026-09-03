@@ -323,6 +323,21 @@ consumes one, and exhausting it returns the ticket to the Orchestrator, which be
 under boundary 2's three-run test rather than choosing a redesign procedure. A budget with no
 defined exit is what lets a loop keep spending: the count bounds the dispatch, and boundary 2 names
 what happens once it is spent.
+
+**Three blocks is where a ticket stops buying review.** At the default budget the third block already
+ends a loop: initial implementation consumes nothing, the first two `BLOCKED` verdicts each buy a
+correction, and the third arrives with no slot left. The cap makes that the ticket's ceiling rather
+than one dispatch's, because a fresh dispatch would otherwise hand the same ticket two more blocks
+against a count the runtime no longer holds. Past the third, place no reviewer for that ticket: the
+remaining work finishes against its gates, and the claims a reviewer would have decided stay
+unproved and are recorded as such. dev-flow's [reviewer block
+ledger](../dev-flow/references/record-hygiene.md#the-reviewer-block-ledger) is where the count
+survives the run, and [cutting a ticket
+off](../dev-flow/SKILL.md#cutting-a-ticket-off) owns the terminal state it produces.
+
+The cap is what the three sections above are for. Repeated blocks against one ticket say the contract
+was drafted wrong, and a reviewer will never say so itself; three is the point past which continuing
+to ask costs more than the answer is worth.
 Scope, architecture, authority, or contract decisions terminate the loop at the Orchestrator.
 Intermediate rounds stay in workflow context unless an observation independently justifies a durable
 record.

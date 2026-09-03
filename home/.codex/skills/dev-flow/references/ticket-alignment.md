@@ -65,6 +65,17 @@ Inference is what this step exists to stop. A ticket that reasons its way to "th
 file, so v1 files must exist" has answered a world fact by reading code, which is the one thing code
 cannot answer.
 
+## Inheriting an unverified base
+
+A dependency that ended at `cutoff` satisfies this ticket's `depends_on` edge, but it stopped before
+its remaining verification was bought. List its unproven claims among this ticket's world facts,
+marked unconfirmed, naming the ticket they came from.
+
+They qualify because they are exactly what step 4 exists to catch: reading the code cannot tell you
+whether an unchecked claim holds, only what the code is prepared for. Left off the list, a cut-off
+dependency reads to the next reader as a verified base, and the ticket built on it inherits a promise
+no one ever made.
+
 ## Stop conditions
 
 An absent, unfilled, or placeholder `## Alignment` section stops publication and dispatch. That

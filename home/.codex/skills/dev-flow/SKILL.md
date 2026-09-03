@@ -30,7 +30,7 @@ while the task is live:
   graduate(frontier)
   dispatch(antichain(pending))
   implement()
-  close(ticket)
+  close(ticket) | cut off(ticket)
 
 archive(task)
 ```
@@ -38,6 +38,11 @@ archive(task)
 The block owns the order and nothing else. Each stage below carries its obligation and the pointer to
 the file owning that stage's rules; a stage is not runnable from this page alone. One invariant spans
 them: **a ticket is `pending` before its implementation starts.**
+
+`close` and `cut off` are the two terminal transitions, and they differ in what was bought rather
+than in how much work landed. A ticket closes when its applicable Acceptance is settled. A ticket is
+**cut off** when the review it would take to settle the rest is no longer being purchased, so it
+stops with that verification unbought and says so. Both live in [Closing a ticket](#closing-a-ticket).
 
 - **S0** — Run Need, then Design, then Slicing, then Triage, each output feeding the next. Read the
   stage you are starting, and only that stage:
@@ -83,10 +88,13 @@ them: **a ticket is `pending` before its implementation starts.**
   toggling an Acceptance checkbox, holding a write token, or judging whether someone else's mutation
   was authorized. An observation that must survive the session belongs to [durable
   validation](references/record-hygiene.md#durable-validation-that-must-persist-a14a15).
-- **`close`** — See [Closing a ticket](#closing-a-ticket).
+- **`close` | `cut off`** — See [Closing a ticket](#closing-a-ticket), which owns both terminal
+  transitions and the reviewer cap that produces the second.
 - **`archive`** — The task ends when the user completes or abandons it, not when the loop runs out of
   tickets; a ticket still `drafted` then closes as abandoned under [Closing a
-  ticket](#closing-a-ticket). Reconcile the evidence and close-out in the record before moving it,
+  ticket](#closing-a-ticket). Put every `cutoff` ticket in front of the user before the move: each
+  one is a ticket whose remaining verification was never bought, and finishing it to `closed` or
+  leaving it cut off is the user's call, never an automatic one. Record which they chose. Reconcile the evidence and close-out in the record before moving it,
   whether work completed or was abandoned: the move itself is neutral and implies no completion. A
   decision whose force outlives the task takes [the ADR route](references/adr-graduation.md), which
   the user opens. If this task requested Collab `efficiencyFeedback`, discharge
@@ -141,7 +149,7 @@ read or report:
 - `list` returns narrow references for immediate active containers without reading INDEX or ticket
   content. **Active** means only that the container is placed under `.agent_state/plans/`, not that
   work or tickets remain.
-- `locate` is read-only, and its ticket counts — `drafted`, `pending`, `closed`, `total` — are exact
+- `locate` is read-only, and its ticket counts — one per state in `TICKET_STATES`, plus `total` — are exact
   only when every ticket header is readable; one unreadable header collapses all of them. It does not
   list ticket paths, inspect narrative sections, dependencies, or artifacts, select focus, infer
   completion, or claim health — read `INDEX.md` and the relevant ticket narratives for those
@@ -176,7 +184,7 @@ Next](references/record-hygiene.md#current-and-next-are-replaced-not-edited).
 ## Closing a ticket
 
 Treat closure as one Orchestrator-owned coordinated record transition. Confirm the applicable
-Acceptance state, write Resolution once, set the ticket frontmatter to `state: closed`, then
+Acceptance state, write Resolution once, set the ticket frontmatter to its terminal state, then
 replace — never edit — `INDEX.md`'s `Current` and `Next`, deciding each removed fact's fate under
 [Current and
 Next](references/record-hygiene.md#current-and-next-are-replaced-not-edited). Normal closure follows
@@ -188,6 +196,30 @@ because the ticket directory goes when the ticket closes and the comment is what
 it to candidate-backlog instead is the user's call, not an automatic one. Closure is
 complete when both files reflect the transition; a session task list or review result alone is not
 durable closure.
+
+### Cutting a ticket off
+
+Review is finite. A ticket's **reviewer block ledger** counts the reviewer `BLOCKED` verdicts it has
+accumulated since its design was last fixed, and the third one is where review stops being bought:
+place no further reviewer for that ticket, and let the remaining work finish against its gates alone.
+Collab's [review placement](../collab/SKILL.md#review-placement-and-the-correction-loop) owns the cap
+itself and why the third block is already a loop's own stopping point.
+
+The ledger lives in the ticket because nothing else survives the run that produced it: a composed
+loop's correction budget is held by the runtime and starts over at the next dispatch, so a count kept
+only there reads three separate two-block tickets as one cheap one.
+[record-hygiene](references/record-hygiene.md#the-reviewer-block-ledger) owns the ledger's shape, and
+the one condition that resets it.
+
+Such a ticket ends at `state: cutoff`, not `closed`. Its Resolution separates the claims that were
+proved from the claims that were merely declared — naming, for each of the latter, who declared it
+and that no independent reader confirmed it — because the whole point of the separate state is that a
+reader can tell a finished ticket from one that stopped paying. A `cutoff` ticket is otherwise a
+terminal ticket: its `depends_on` edge is satisfied like a `closed` one, since a downstream ticket
+that cannot start would deadlock the task the cap exists to keep moving. The downstream ticket carries
+the unproven claims into its own `## Alignment` as world facts, so that it builds on a base it knows
+is unverified; [ticket-alignment](references/ticket-alignment.md#inheriting-an-unverified-base) owns
+that inheritance.
 
 Then read the closure for what it made determinable: open `drafted` tickets for what is now visible,
 and leave what was already `drafted` to the next graduation batch. An evidence-backed finding outside

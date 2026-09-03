@@ -234,7 +234,7 @@ observations when present. `COMPLETED` is the binary attestation that every requ
 passed and every writer-owned Acceptance claim was re-verified against the final tree.
 
 - `Outcome`: `COMPLETED | BLOCKED | NEEDS_DECISION`
-- `Residual risks`: bounded unknowns or `none`
+- `Residual risks`: bounded unknowns or `none` — unified channel for all non-blocking codebase findings; `outOfEnvelopeFindings` is removed and `efficiencyFeedback` remains process feedback only
 - `Blocker`: the specific blocker, for `BLOCKED`
 - `Decision needed`: why a decision is needed and the exact question, for `NEEDS_DECISION`
 

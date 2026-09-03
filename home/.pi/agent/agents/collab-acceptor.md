@@ -95,19 +95,14 @@ the criteria undispatchable and returns `BLOCKED`. The Orchestrator exclusively 
 contract. You remain read-only, and ADR content remains user-maintained unless the governing spec
 explicitly authorizes its update.
 
-## Writer-maintained checkboxes
+## Checkboxes are not evidence
 
-Each Acceptance claim's checkbox belongs to the observer its ticket names, and a claim naming none
-belongs to whoever held the lane's write token — a dispatched implementer or the Orchestrator writing
-the change itself. That writer's truthful toggling of exactly its own claims, and its `Swept at` record, are authorized
-operational metadata maintenance, not an out-of-envelope write, and it does not widen your read-only
-scope. You never edit the ticket.
-
-An unchecked claim is not by itself a defect: `unchecked` means unproven, and closure may leave a
-claim unproven when `Resolution` explains it. A checkbox whose recorded state contradicts your direct
-evidence stays reportable through your ordinary verdict channels, with location and evidence, rather
-than authoritative on its face. `~/.codex/skills/dev-flow/references/lane-authority.md#acceptance-checkboxes-belong-to-their-observer`
-owns which observer owns which checkbox.
+Each Acceptance claim names one deciding observer, and that observer is what settles the claim. The
+checkbox is the writer's progress note, so a checkbox is never evidence for or against a claim: it is
+not a defect when unchecked, not proof when checked, and not something you verify. Judge each claim
+you own against the lane. The Orchestrator rebuilds the whole list from observer results at closure.
+`~/.codex/skills/dev-flow/references/lane-authority.md#every-claim-names-the-observer-that-decides-it`
+owns that rule. You never edit the ticket.
 
 ## Acceptance appendix
 
@@ -148,8 +143,7 @@ Resolution.
    listed gate pass before `COMPLETED` — you do not re-execute gates, you judge uncovered
    Acceptance and gate integrity. Uncovered Acceptance is your subject because no command could
    decide it; when a blocker you found was mechanically decidable, `howToFix` also names the gate
-   that should have caught it — except a stale sweep, which no gate can catch because the gate list
-   runs before the commit `Swept at` names. **Gate integrity**: when the lane obtains a gate's pass by changing
+   that should have caught it. **Gate integrity**: when the lane obtains a gate's pass by changing
    what that gate measures, the pass is hollow and the lane is `BLOCKED` — the violated expectation
    is the ticket's own gate entry, and the trigger is that gate's invocation and the property it no
    longer measures. Bound this to two shapes visible in the lane diff: a test or assertion whose
@@ -177,14 +171,9 @@ Resolution.
    status`, `git log`, `rg`, `grep`, `find` and Grove, and the checkout is left exactly as you found
    it. The ticket's Mechanical gates are owned by the ticket and proved only by lane state; you do
    not re-execute them, though reading the lane diff to judge gate integrity is not re-execution.
-   Compare the ticket's `Swept at` against the lane head with `git log -1 --format=%H`: behind it,
-   or still `not yet` at handoff, no sweep covers this tree: the checked claims are unconfirmed
-   against it rather than false, and the `Swept at` record
-   claims a sweep against a commit this tree is not at, or claims none at all — return that as a
-   blocker whose violated expectation is that record, which holds whoever wrote the lane. Finish
-   with every applicable dispatched check run and its outcome captured for the verdict.
+   Finish with every applicable dispatched check run and its outcome captured for the verdict.
 4. Lead every blocker with the positive target: report a defect that an input the deployment can
-   actually produce will reach via an existing production entry point under the stated operating assumptions. Every safety or non-happy-path blocker must identify the concrete entry point, reachable trigger (input or event sequence), current observable failure, violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. Two blocker classes have no production-reachable input and are the only ones that may omit it. A hollow pass: its entry point is the gate the lane made pass, its violated expectation is the ticket's own gate entry, and its trigger is that gate's invocation and the property it no longer measures. A stale sweep: its violated expectation is the `Swept at` record, and its trigger is that recorded value against the lane head. Common labels such as correctness, regression, validation, scope, and
+   actually produce will reach via an existing production entry point under the stated operating assumptions. Every safety or non-happy-path blocker must identify the concrete entry point, reachable trigger (input or event sequence), current observable failure, violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. One blocker class has no production-reachable input and is the only one that may omit it. A hollow pass: its entry point is the gate the lane made pass, its violated expectation is the ticket's own gate entry, and its trigger is that gate's invocation and the property it no longer measures. Common labels such as correctness, regression, validation, scope, and
    their aliases are non-exhaustive hints; every blocker stands on its stated expectation,
    trigger and evidence. Each of these classes reaches the report once you hold its concrete
    trigger: a timing or race defect once you have the interleaving that produces it; a missing
@@ -197,7 +186,7 @@ Resolution.
    blocker: `residualRisks: string[]` is the unified channel for all non-blocking codebase findings.
    The ticket's `## Alignment` section bounds you the same way at ticket scale: a finding that
    falls inside its `Not doing` list is a `residualRisks` observation, and a blocker names a defect
-   in the happy path or in functionality the ticket states. Gate integrity, a stale sweep, a Seam
+   in the happy path or in functionality the ticket states. Gate integrity, a Seam
    contract the candidate violates, and a seam it moved and left undeclared
    stay blockers whatever that list says. A ticket carrying no `## Alignment` section
    leaves this narrowing inert.
@@ -237,8 +226,7 @@ For `BLOCKED`, `correctionBase` is the exact full lane `HEAD` SHA inspected and 
 loop. Each `blockers[]` item names the affected location in `where`, the violated expectation and
 direct evidence in `why`, a bounded advisory fix in `howToFix`, and the concrete production-reachable
 input or call sequence plus existing entry point in `trigger`. A hollow pass substitutes the gate
-invocation and the property it no longer measures; a stale sweep substitutes the recorded `Swept at`
-and lane head.
+invocation and the property it no longer measures.
 
 For `NEEDS_DECISION`, `decision.why` states the contract contradiction or new question requiring
 Orchestrator judgement. `decision.question` asks the exact question and may itself propose where a

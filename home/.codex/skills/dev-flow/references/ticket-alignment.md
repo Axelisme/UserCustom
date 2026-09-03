@@ -27,28 +27,37 @@ concurrency, caller trust, input provenance, adversary presence — and which th
 the reviewer to size a blocker against. Operating assumptions describe the runtime; world facts
 describe the user's situation. A ticket can have a complete set of one and none of the other.
 
-## The five steps
+## Show the delta, not the design
 
-1. Name the Module seams this ticket creates, moves, or consumes, working from the frozen envelope,
-   the S0 Design, and the ticket's Outcome.
-2. Show the user each seam's minimal Interface, ownership and locality, invariants, errors and
-   ordering, real adapters, and what stays private or does not cross.
-3. Name the legacy seam or duplication this ticket removes when it closes. A pure scaffolding ticket
-   names the usable tracer it serves instead.
-4. List the **world facts this ticket rests on that no frozen record states**, each written as a
-   question the user can answer yes or no. Beside them, list what this ticket will **not** do — the
-   nearby work a reader could reasonably expect it to include and that it deliberately leaves out.
-5. Wait for the user's explicit agreement or correction. Place no writer before it arrives.
+Alignment shows what changed since the last one, not the whole design again. The user already agreed
+to the design at S0; replaying it costs a reading every ticket and buries the one or two facts that
+actually moved.
 
-Step 4 is where a ticket stops inheriting a fact nobody supplied. Its cost is bounded: it lists only
-the facts *this* ticket rests on, not an inventory of the world.
+1. **Seams.** Name what this ticket creates, moves, or consumes that is different from the last
+   alignment, and for each, what changed about its Interface, ownership, invariants, errors and
+   ordering, or adapters. When nothing about the seams moved, write `none` — that is a complete
+   answer, not a skipped step, and it is the common case for a ticket whose contract was settled at
+   graduation.
+2. **What this ticket retires.** The legacy seam or duplication that goes when it closes, or the
+   usable tracer a pure scaffolding ticket serves instead. `none` when it retires nothing.
+3. **World facts.** The facts this ticket rests on that no frozen record states, each written as a
+   question the user can answer yes or no.
+4. **Not doing.** The nearby work a reader could reasonably expect this ticket to include and that it
+   deliberately leaves out.
+5. **Wait** for the user's explicit agreement or correction. Place no writer before it arrives.
+
+Steps 3 and 4 are never abbreviated by the delta rule. A world fact does not become less unsupplied
+because an earlier ticket also rested on it, and a `Not doing` list is what stops silent scope, so
+both are written in full every time. Step 3 is where a ticket stops inheriting a fact nobody
+supplied; its cost is bounded, because it lists only the facts *this* ticket rests on, not an
+inventory of the world.
 
 ## What lands in the ticket
 
-The confirmed result of step 4, and only that, goes into the ticket's `## Alignment` section — the
-world-fact list with each item marked confirmed or unconfirmed, and the non-goals list. Steps 1
-through 3 are shown to the user and stay in the conversation; the seam facts they settle already have
-an owner in the `## Seam contract`, and copying them would create a second authority for the same
+The confirmed result of steps 3 and 4, and only that, goes into the ticket's `## Alignment` section —
+the world-fact list with each item marked confirmed or unconfirmed, and the non-goals list. Steps 1
+and 2 are shown to the user and stay in the conversation; the seam facts they settle already have an
+owner in the `## Seam contract`, and copying them would create a second authority for the same
 fact.
 
 Write conclusions there, not the reasoning that produced them.

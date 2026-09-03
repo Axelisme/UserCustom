@@ -29,10 +29,10 @@ state: {{STATE}}
 {{OUTCOME}}
 
 ## Alignment
-<!-- The five steps, when they run, and what a world fact is:
-     ~/.codex/skills/dev-flow/references/ticket-alignment.md. Step 4's confirmed result lands here;
-     steps 1-3 settle seam facts `## Seam contract` owns. The Orchestrator writes this section fresh
-     at every start of this ticket, replacing both placeholders below. -->
+<!-- What the user is shown, when it runs, and what a world fact is:
+     ~/.codex/skills/dev-flow/references/ticket-alignment.md. The confirmed world facts and non-goals
+     land here; the seam delta settles facts `## Seam contract` owns. The Orchestrator writes this
+     section fresh at every start of this ticket, replacing both placeholders below. -->
 
 **World facts:** {{WORLD_FACTS}}
 <!-- One line per fact this ticket rests on that no frozen record states, each marked `confirmed` or
@@ -55,27 +55,21 @@ state: {{STATE}}
      means unproven, not necessarily that an executable test is red. Stable labels are encouraged but
      optional. A worker-reviewer loop is complete when every claim its writer owns is verified; its
      handoff reports remaining Orchestrator or user observations without treating them as blockers. -->
-<!-- Each claim's checkbox belongs to its named observer, and a claim naming none belongs to the
-     lane's writer, so name an Orchestrator, user, manual, external, or production-path observer on
-     every claim you do not want the writer to toggle. Checkbox ownership, the closing sweep, and
-     `Swept at`: ~/.codex/skills/dev-flow/references/lane-authority.md. Both role profiles carry the
-     same rules, so they hold whether or not this comment survives publication.
-     Every claim also states the observation that decides it, on the surface it is observed on, in
-     its own `Decided by` slot. Keep that separate from `Observed by`: `Observed by` names the party
-     whose checkbox it is and is omitted when that party is the writer, while `Decided by` is always
-     present. A claim whose promise is about the shipped path is mis-stated when a static assertion
-     or a test-only composition satisfies it; ~/.codex/skills/dev-flow/references/s0-design-admission.md
-     owns what makes a surface adequate. A claim that names no deciding observation stops
-     publication under the preconditions in
-     ~/.codex/skills/dev-flow/references/ticket-seam-contract.md. -->
-**Swept at:** <the commit every writer-owned claim was last re-confirmed against, or `not yet`>
-<!-- Checked after handoff, by the reviewer when one is placed and otherwise by the Orchestrator at
-     boundary 4. Never a Mechanical gate: the gate list runs before the writer commits. -->
+<!-- Every claim names one deciding observer in `Observed by` — `gate`, `acceptor`, `orchestrator`,
+     `user`, or a named external observer — and a claim naming none stops publication under the
+     preconditions in ~/.codex/skills/dev-flow/references/ticket-seam-contract.md. The observer is
+     what settles the claim; the checkbox is the writer's progress note and settles nothing, so the
+     Orchestrator rebuilds this list from observer results at closure:
+     ~/.codex/skills/dev-flow/references/lane-authority.md#every-claim-names-the-observer-that-decides-it.
+     Both role profiles carry the same rules, so they hold whether or not this comment survives.
+     `Decided by` is separate and always present: it names the observation itself, on the surface it
+     is observed on, while `Observed by` names who reads that observation. A claim whose promise is
+     about the shipped path is mis-stated when a static assertion or a test-only composition
+     satisfies it; ~/.codex/skills/dev-flow/references/s0-design-admission.md owns what makes a
+     surface adequate. -->
 
 - [ ] **A1** — <observable criterion>. *Decided by:* <the observation that decides it, on its
-  surface>
-  *Observed by:* <the non-writer party this checkbox belongs to; omit the whole slot when it is the
-  writer>
+  surface> *Observed by:* <gate | acceptor | orchestrator | user | a named external observer>
 
 ## Mechanical gates
 <!-- Ordered binary gate plan owned by this ticket. Every listed gate must pass before `COMPLETED`.

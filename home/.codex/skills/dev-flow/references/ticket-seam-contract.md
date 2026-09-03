@@ -101,8 +101,8 @@ is block, because a task whose cap fires and then deadlocks has bought nothing.
 
 Stop publication or dispatch when the mode is missing, unresolved, or a placeholder; an authority
 pointer does not resolve; a Change `S#` lacks an `A# covers S#` observer; an Acceptance claim names
-no observation that decides it, or names an observation whose surface cannot carry the promise it
-makes; the ticket declares no Module write scope, in
+no observation that decides it, names no deciding observer to read that observation, or names an
+observation whose surface cannot carry the promise it makes; the ticket declares no Module write scope, in
 [codebase-design](../../codebase-design/SKILL.md#glossary)'s sense of Module rather than as paths;
 graduation has an empty executable or durable owner; the `## Alignment` section is absent, unfilled,
 or still a placeholder, which
@@ -118,7 +118,8 @@ through [custody](custody.md) instead. Every ticket naming this one as the compl
 user-visible sentence is fixed in the same edit — a dangling completer edge is worse than none,
 because it still reads as agreed. Investigation may be dispatched read-only; the Orchestrator writes
 the contract, because a writer that authors the Acceptance it will be measured against leaves
-[lane-authority](lane-authority.md#acceptance-checkboxes-belong-to-their-observer)'s checkbox ownership empty.
+[lane-authority](lane-authority.md#every-claim-names-the-observer-that-decides-it)'s deciding
+observer answering to the party it is meant to measure.
 
 If evidence shows that placement, authority, graduation, or the recorded Interface must change, return
 `NEEDS_DECISION` with the contradiction and exact question. The Orchestrator coordinates the owning

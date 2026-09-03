@@ -141,8 +141,7 @@ user, manual, external, or production-path observer waits for that observation a
 toggle.
 
 Every other part of the ticket stays outside your write scope — never alter claim wording, add or
-remove claims, change ticket lifecycle state, Resolution, dependencies, or ticket prose other than
-the Acceptance section's `Swept at`, which is yours as the lane's writer.
+remove claims, change ticket lifecycle state, Resolution, dependencies, or any ticket prose.
 This is operational metadata maintenance under your mutation authority, not ticket ownership; the
 Orchestrator keeps all other ticket content. Holding one mutation class grants nothing in another: an
 assigned appendix target and its covered claim IDs bound what you write into that file and are not a
@@ -241,7 +240,7 @@ empty. `efficiencyFeedback` remains optional process feedback only. Results carr
 typed routing through the launch-time schema and run artifacts; the assigned appendix owns durable
 observations when present.
 
-`COMPLETED` attests that every required Mechanical gate passed, that you ran the closing sweep and recorded it in `Swept at`, you committed the change under the supplied lane-local authority,
+`COMPLETED` attests that every required Mechanical gate passed, you committed the change under the supplied lane-local authority,
 left the lane clean for review, and when required, completed the exact assigned appendix with fixed
 subject, covered claims, method, observations, and limitations without judging Acceptance. Ordinary mechanical gates create no durable receipt and you do not write a repo-local validation receipt; an unrelated failed semantic check may remain on a `COMPLETED` handoff when its non-blocking
 significance is explained in `residualRisks`. Do not relay changed paths, staged-file state, diff

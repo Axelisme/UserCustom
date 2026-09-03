@@ -69,17 +69,15 @@ receiver's own workflow.
    what a reviewer may assume about concurrency, caller trust, input provenance, and adversary
    presence. The envelope says which changes belong to the task; operating assumptions say which
    world the code runs in.
-   Name the observer of every Acceptance claim you do not want the lane's writer to toggle, and the
-   observation that decides each claim, in the ticket rather than in the brief: a claim naming no
-   observer belongs to whoever holds the lane's write token, and that is you when you write the
-   change yourself. A claim no one can decide by an action is not Acceptance, it is intent, and it is
+   Name every Acceptance claim's deciding observer, and the observation that decides it, in the
+   ticket rather than in the brief: a claim naming no observer is not publishable, and the writer's
+   checkbox settles nothing either way. A claim no one can decide by an action is not Acceptance, it is intent, and it is
    rewritten before dispatch.
    A ticket whose Acceptance cannot be closed by one correction is two tickets. The ticket is the single source
    both dispatched roles already read, so a brief needs no separate checkbox grant and none can drift
    from it across correction rounds.
-   [lane-authority](../dev-flow/references/lane-authority.md) owns the writer position, which
-   observer owns which checkbox, and the closing sweep every writer runs before declaring its lane
-   finished.
+   [lane-authority](../dev-flow/references/lane-authority.md) owns the writer position and the
+   deciding observer every claim names.
    This step is complete when the writer can distinguish in-scope implementation from an Orchestrator
    decision and every receiver field is supplied.
 2. **Choose the execution shape.** The Orchestrator selects direct writing, separate dispatches,
@@ -153,11 +151,11 @@ receiver's own workflow.
    and its terminal outcomes. Generic Acceptance below reviews the protected current lane. This
    step is complete when the lane carries a worker result and, where boundary 2 placed a reviewer, an
    independent review result — or a terminal blocker or decision request.
-4. **Judge the result.** The Orchestrator makes the final Acceptance judgement. Compare the ticket's
-   `Swept at` against the lane head first when no reviewer was placed to do it: behind the head, the
-   writer's sweep is stale and its checked claims are unconfirmed against the delivered tree, so
-   confirm them yourself or return the lane for a fresh sweep before accepting it. Then
-   choose what follows: accept the judged lane, return a bounded defect for correction, return a decision
+4. **Judge the result.** The Orchestrator makes the final Acceptance judgement, and makes it by
+   rebuilding the ticket's Acceptance list from what each claim's deciding observer reported — the
+   gates that ran, the reviewer's verdict, your own reading, the user's answer. The writer's
+   checkboxes are progress notes and settle nothing, so there is no sweep to date and nothing to
+   compare against the lane head. Then choose what follows: accept the judged lane, return a bounded defect for correction, return a decision
    request or exhausted correction budget to its owner, or select another shape. A correction the
    Orchestrator itself dispatches returns to boundary 2, so placement is decided once per dispatch
    rather than once per ticket; a correction inside a composed loop is the loop's own and returns to
@@ -222,10 +220,11 @@ A worker result uses one exact branch contract:
 - `NEEDS_DECISION`: required `outcome`, `decision`, `decision.why`, `decision.question`; optional
   `residualRisks`, `efficiencyFeedback`.
 
-**`COMPLETED` is a binary attestation** that the required gates passed and that every writer-owned
-Acceptance claim was re-verified against the final tree — dev-flow's
-[lane-authority](../dev-flow/references/lane-authority.md#the-closing-sweep) owns that closing sweep
-and its `Swept at` record. It carries no free-text `Validation` array and creates no durable receipt. Ordinary gate
+**`COMPLETED` is a binary attestation** that the required gates passed. It does not attest
+Acceptance: dev-flow's
+[lane-authority](../dev-flow/references/lane-authority.md#every-claim-names-the-observer-that-decides-it)
+gives every claim a deciding observer, and the Orchestrator reads those observers at boundary 4. It
+carries no free-text `Validation` array and creates no durable receipt. Ordinary gate
 commands and raw outputs stay with the run artifact; a judging process worth keeping belongs only to
 the workflow-scoped Acceptance appendix at the exact dispatched target. Name that target in the brief;
 its writer creates the file from dev-flow's `templates/ticket/evidence.md` and fills it with targeted
@@ -265,16 +264,14 @@ Each `blockers[]` item carries the affected location in `where`, the violated ti
 Interface promise plus direct evidence in `why`, a bounded advisory suggestion in `howToFix`, and the
 concrete production-reachable input or call sequence plus existing entry point in `trigger`. For a
 hollow pass these fields name the ticket's Mechanical gate, its invocation, and the property it no
-longer measures. For a stale sweep they name the `Swept at` record and the lane head. A mechanically
-decidable blocker also names the gate that should have caught it, except a stale sweep because gates
-run before the commit `Swept at` names.
+longer measures. A mechanically decidable blocker also names the gate that should have caught it.
 
 For `NEEDS_DECISION`, `decision.why` states why a decision is needed and `decision.question` asks the
 exact question. The question may itself propose where a seam belongs and what it would carry; the
 Orchestrator designs and decides. `residualRisks` is optional and carries all non-blocking codebase
 findings, whether inside or outside the envelope; omit it when empty.
 
-A hollow pass and a stale sweep are the only two blocker classes that may omit a production-reachable input; each substitutes the entry point and trigger named above. Every other safety or non-happy-path blocker must be production-reachable under the stated operating assumptions: identify the existing production entry point, a concrete reachable input or event sequence, the current observable failure, the violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named promise, using
+A hollow pass is the only blocker class that may omit a production-reachable input; it substitutes the entry point and trigger named above. Every other safety or non-happy-path blocker must be production-reachable under the stated operating assumptions: identify the existing production entry point, a concrete reachable input or event sequence, the current observable failure, the violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named promise, using
 bounded advisory fixes that stay inside the ticket's stated outcome rather than expanding scope via
 robustness or future-proofing. A finding that depends on a wider operating model than the dispatch declared is reported via residual risks, not as a blocker.
 

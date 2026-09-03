@@ -72,8 +72,8 @@ stops with that verification unbought and says so. Both live in [Closing a ticke
   [Slicing](references/s0-design-admission.md#slicing) owns candidacy, reachability, write scope and
   the missing-edge check.
 - **`dispatch`** — Align the ticket with the user before placing any writer for it, following
-  [ticket-alignment](references/ticket-alignment.md), which owns the five steps and runs at every
-  ticket's start rather than once at graduation. Then route every ticket through
+  [ticket-alignment](references/ticket-alignment.md), which owns the delta the user is shown and
+  runs at every ticket's start rather than once at graduation. Then route every ticket through
   [collab](../collab/SKILL.md), entering at its
   `Responsibility boundaries` boundary 1, which decides the writer and the reviewer and finds each
   Acceptance claim's deciding observation already settled at graduation. Collab consumes bounded task
@@ -83,10 +83,9 @@ stops with that verification unbought and says so. Both live in [Closing a ticke
   [ticket-seam-contract](references/ticket-seam-contract.md#publication-and-change-control).
 - **`implement`** — Hold or place the lane's single write token.
   [lane-authority](references/lane-authority.md) owns the writer position, the three mutation classes
-  that are never inferred from one another, which observer owns which checkbox, the closing sweep and
-  its `Swept at` record, and how an evidence file is created from its template. Read it before
-  toggling an Acceptance checkbox, holding a write token, or judging whether someone else's mutation
-  was authorized. An observation that must survive the session belongs to [durable
+  that are never inferred from one another, the deciding observer every claim names, and how an
+  evidence file is created from its template. Read it before toggling an Acceptance checkbox, holding
+  a write token, or judging whether someone else's mutation was authorized. An observation that must survive the session belongs to [durable
   validation](references/record-hygiene.md#durable-validation-that-must-persist-a14a15).
 - **`close` | `cut off`** — See [Closing a ticket](#closing-a-ticket), which owns both terminal
   transitions and the reviewer cap that produces the second.
@@ -167,10 +166,10 @@ Mechanical gates plan; `templates/ticket/ticket.md` holds its rules.
 **Who may write what.** The Orchestrator owns all ticket content and exclusively changes lifecycle
 state and Resolution. The lane's **writer** — whoever holds its single write token, a dispatched
 implementer or the Orchestrator writing the change itself — toggles the Acceptance claims whose
-observer is itself, writes the Acceptance section's `Swept at`, and may use its ticket's `scripts/`
-subtree. A reviewer reads and verifies without editing the ticket. A dispatched writer or reviewer never
+deciding observer is itself, as a progress note that settles nothing, and may use its ticket's
+`scripts/` subtree. A reviewer reads and verifies without editing the ticket. A dispatched writer or reviewer never
 writes `INDEX.md`. [lane-authority](references/lane-authority.md) owns the writer position, the three
-mutation classes that are never inferred from one another, and which observer owns which checkbox.
+mutation classes that are never inferred from one another, and the deciding observer every claim names.
 
 Use one **single-store**: durable ticket state comes from this record. Session task lists are
 temporary projections and never overwrite durable state merely because their UI differs. A competing

@@ -33,9 +33,9 @@ class SkillPointerTest(unittest.TestCase):
 
     def test_a_stale_anchor_fails_loudly_with_the_real_anchors(self) -> None:
         lane_authority = HOME / ".codex/skills/dev-flow/references/lane-authority.md"
-        result = run(f"{lane_authority}#the-closing-swep")
+        result = run(f"{lane_authority}#creating-an-evidence-fil")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("#the-closing-sweep", result.stderr)
+        self.assertIn("#creating-an-evidence-file", result.stderr)
 
     def test_check_catches_a_broken_pointer_of_every_kind_it_claims(self) -> None:
         # The corpus being green proves nothing about detection, so plant one break of each kind.
@@ -64,9 +64,9 @@ class SkillPointerTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_a_pointer_is_read_at_its_section(self) -> None:
-        result = run("../dev-flow/references/lane-authority.md#the-closing-sweep")
+        result = run("../dev-flow/references/lane-authority.md#a-gate-you-cannot-close-honestly")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("## The closing sweep", result.stdout)
+        self.assertIn("## A gate you cannot close honestly", result.stdout)
         self.assertNotIn("## Creating an evidence file", result.stdout)
 
     def test_both_collab_profiles_carry_the_orchestrators_two_anchors(self) -> None:

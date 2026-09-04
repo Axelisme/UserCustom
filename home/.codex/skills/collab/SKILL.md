@@ -86,8 +86,10 @@ receiver's own workflow.
 
    **Step 1 — Prepare the contract.** Compare the ticket's `## Seam contract` with the lane before
    implementation placement. A ticket is **contract-bearing** when the Interface itself is part of
-   its deliverable, rather than only behavior behind an Interface already present in the lane. The
-   Orchestrator first writes a **contract seed** for such a ticket and commits it to the lane.
+   its deliverable, rather than only behavior behind a contract the lane already carries whole. The
+   Orchestrator first writes a **contract seed** for such a ticket and commits it to the lane, and
+   runs this comparison again whenever a seam changes mid-ticket, because the amended Interface is
+   as unbuilt as the original one was.
 
    The seed is four things: the minimal Interface, its result and error types, one real caller, and
    the happy-path contract tests the ticket states. A real caller means one on the shipped path; a
@@ -96,11 +98,13 @@ receiver's own workflow.
    on its own: it is a starting position, not a deliverable, and collecting it would land an
    Interface with no implementation behind it.
 
-   Contract preparation is complete when the lane contains the committed contract that the remaining
-   implementation must fill. A ticket that only fills behavior behind an Interface already present in
-   the lane needs no seed and completes this step as-is. Repeated same-shape blocks against one ticket
-   reveal a missed contract-bearing case after the fact: its writer rebuilt a boundary from the code
-   and the reviewer could only block local symptoms.
+   Contract preparation is complete when all four are in the lane for this ticket's contract. Partial
+   code is the state this step exists to finish, not evidence that it is already done: an Interface
+   with no shipped-path caller, or one whose focused tests are green without reaching the shipped
+   path, is a lane awaiting its seed. Only a contract the lane already carries whole completes this
+   step as-is. Repeated same-shape blocks against one ticket reveal a missed contract-bearing case
+   after the fact: its writer rebuilt a boundary from the code and the reviewer could only block
+   local symptoms.
 
    The seed needs no protected-path list. Once it is in the lane it is what the ticket's `## Seam
    contract` names, so the later writer's existing obligation covers it: an `Existing` candidate

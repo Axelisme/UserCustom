@@ -7,8 +7,9 @@ description: "Orchestrator durable task lifecycle and narrative record: use to s
 
 ## Orient
 
-Run `locate <task-id>`; when the task ID is unknown, run `list` first and use a returned `lookup_id`.
-Read the located `INDEX.md`, and the handed-off ticket when a handoff named one, following only the
+**`locate` points; `INDEX` directs.** Run `locate <task-id>`; when the task ID is unknown, run `list`
+first and use a returned `lookup_id`. `locate` returns the address of the record, so read the
+`INDEX.md` at that address, then the handed-off ticket when a handoff named one, following only the
 pointers current work needs.
 
 If those sources cannot name the next action, repair `INDEX.md`'s `Current` and `Next` — with the
@@ -16,8 +17,8 @@ user when the answer is not yours to write — rather than scanning tickets, art
 to infer one. Replace those two sections rather than editing them, and read what belongs in each:
 [Current and Next](references/record-hygiene.md#current-and-next-are-replaced-not-edited).
 
-Orientation is complete when you can state the task and its next action from the authoritative
-sources, and can place that action in the lifecycle below.
+Orientation is complete when the exact bounded action and owner in the current `Next` are in context,
+any ticket that action names has been read, and you can place that action in the lifecycle below.
 
 ## The lifecycle
 
@@ -71,15 +72,15 @@ stops with that verification unbought and says so. Both live in [Closing a ticke
 - **`antichain`** — Compute it before granting concurrency;
   [Slicing](references/s0-design-admission.md#slicing) owns candidacy, reachability, write scope and
   the missing-edge check.
-- **`dispatch`** — Align the ticket with the user before placing any writer for it, following
-  [ticket-alignment](references/ticket-alignment.md), which owns the delta the user is shown and
-  runs at every ticket's start rather than once at graduation. Then route every ticket through
-  [collab](../collab/SKILL.md), entering at its
-  `Responsibility boundaries` boundary 1, which decides the writer and the reviewer and finds each
-  Acceptance claim's deciding observation already settled at graduation. Collab consumes bounded task
-  intent and returns evidence without creating another task lifecycle. When a dispatched role
-  returns `BLOCKED`
-  or `NEEDS_DECISION` against a Seam contract, the coordination is owned by
+- **`dispatch`** — Begin with the ticket-start handshake in
+  [ticket-alignment](references/ticket-alignment.md). A request to start opens the handshake; the
+  Orchestrator shows its proposal, and the user's reply to that proposal accepts or corrects it and
+  completes alignment. Then route the ticket through [collab](../collab/SKILL.md), entering at its
+  `Responsibility boundaries` boundary 1, which prepares the contract, places the remaining
+  implementation and its reviewer, and finds each Acceptance claim's deciding observation already
+  settled at graduation. Collab consumes bounded task intent and returns evidence without creating
+  another task lifecycle. When a dispatched role returns `BLOCKED` or `NEEDS_DECISION` against a
+  Seam contract, the coordination is owned by
   [ticket-seam-contract](references/ticket-seam-contract.md#publication-and-change-control).
 - **`implement`** — Hold or place the lane's single write token.
   [lane-authority](references/lane-authority.md) owns the writer position, the three mutation classes

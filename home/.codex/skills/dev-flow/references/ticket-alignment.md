@@ -1,11 +1,12 @@
 # Ticket alignment
 
-Read this when a ticket starts, before placing or dispatching any writer for it.
+Read this when a ticket starts. Ticket start is an **alignment handshake**: the pair of an
+Orchestrator proposal and the user's answer to that proposal. A request to start asks the Orchestrator
+to show what this ticket is about to build and what it rests on, in the user's terms. The user closes
+the handshake by accepting or correcting that proposal.
 
-Alignment is the Orchestrator showing the user, in the user's terms, what this one ticket is about
-to build and what it rests on — then waiting. S0 fixed the whole task once; alignment fixes one
-ticket against the tree as it stands now, because the earlier Slices have since changed that tree
-and the user's world may have moved with it.
+S0 fixed the whole task once; the handshake fixes one ticket against the tree as it stands now,
+because the earlier Slices have since changed that tree and the user's world may have moved with it.
 
 ## When it runs
 
@@ -44,7 +45,8 @@ actually moved.
    question the user can answer yes or no.
 4. **Not doing.** The nearby work a reader could reasonably expect this ticket to include and that it
    deliberately leaves out.
-5. **Wait** for the user's explicit agreement or correction. Place no writer before it arrives.
+5. **Complete the handshake.** End the proposal with the user as the next speaker. The user closes
+   the handshake by accepting or correcting that proposal.
 
 Steps 3 and 4 are never abbreviated by the delta rule. A world fact does not become less unsupplied
 because an earlier ticket also rested on it, and a `Not doing` list is what stops silent scope, so

@@ -80,18 +80,44 @@ receiver's own workflow.
    deciding observer every claim names.
    This step is complete when the writer can distinguish in-scope implementation from an Orchestrator
    decision and every receiver field is supplied.
-2. **Choose the execution shape.** The Orchestrator selects direct writing, separate dispatches,
-   runtime composition, or another fitting shape, and safely places the next writer. The
-   Orchestrator may be that writer for a bounded change: one-writer lane exclusivity still applies.
+2. **Prepare the contract, then place the remaining implementation.** Boundary 2 has two steps in
+   that order. Contract preparation closes the Interface shape; placement assigns only the work left
+   inside it.
 
-   **Placement is two independent questions**, and the asymmetry of answering only one is what
-   leaves a lane overstaffed or unguarded.
+   **Step 1 — Prepare the contract.** Compare the ticket's `## Seam contract` with the lane before
+   implementation placement. A ticket is **contract-bearing** when the Interface itself is part of
+   its deliverable, rather than only behavior behind an Interface already present in the lane. The
+   Orchestrator first writes a **contract seed** for such a ticket and commits it to the lane.
 
-   **Who writes.** A dispatched implementer is cheap and literal: it succeeds where scope is closed
-   and the steps are concrete, and drifts where the work needs judgement no brief can carry. So two
-   shapes of work stay with the Orchestrator — the change small enough that describing it costs about
-   as much as making it, because the brief would have to state the change itself to be intelligible,
-   and the change hard enough that no closed brief would carry it. Otherwise dispatch a writer.
+   The seed is four things: the minimal Interface, its result and error types, one real caller, and
+   the happy-path contract tests the ticket states. A real caller means one on the shipped path; a
+   test-only composition is what the seed exists to prevent, because it lets an Interface be shaped
+   by nothing but its own tests. The seed commit stays in the ticket's lane and is never collected
+   on its own: it is a starting position, not a deliverable, and collecting it would land an
+   Interface with no implementation behind it.
+
+   Contract preparation is complete when the lane contains the committed contract that the remaining
+   implementation must fill. A ticket that only fills behavior behind an Interface already present in
+   the lane needs no seed and completes this step as-is. Repeated same-shape blocks against one ticket
+   reveal a missed contract-bearing case after the fact: its writer rebuilt a boundary from the code
+   and the reviewer could only block local symptoms.
+
+   The seed needs no protected-path list. Once it is in the lane it is what the ticket's `## Seam
+   contract` names, so the later writer's existing obligation covers it: an `Existing` candidate
+   preserves the named authorities, a `Change` candidate implements only the recorded `S#` deltas,
+   and a required change to either returns `NEEDS_DECISION` rather than an edit. A second list of the
+   same boundary would read as a guarantee while enforcing nothing.
+
+   **Step 2 — Place the remaining implementation.** Start from the committed seed, or from the lane
+   that needed none, and evaluate only the work left inside that contract. Placement now answers two
+   independent questions: who writes that remainder, and who verifies it.
+
+   **Who writes the remainder.** A dispatched implementer is cheap and literal: it succeeds where
+   scope is closed and the steps are concrete, and drifts where the work needs judgement no brief can
+   carry. So two shapes of remaining work stay with the Orchestrator — the change small enough that
+   describing it costs about as much as making it, because the brief would have to state the change
+   itself to be intelligible, and the change hard enough that no closed brief would carry it.
+   Otherwise dispatch a writer.
 
    Both shapes are usually predicted. Two arrive already observed. **Three of one ticket's
    implementer runs ending anywhere but an accepted lane** — a `COMPLETED` the reviewer then
@@ -101,28 +127,6 @@ receiver's own workflow.
    not necessary; a ticket can be too hard on its first return. **Deferred work** is the first
    shape: a path the writer rejected and the user later asks for is small by construction and
    arrives while the user is watching, so describing it costs about what making it costs.
-
-   **Some work is split rather than assigned whole.** A contract-bearing ticket has a part no brief
-   carries well — the shape of the thing — and a part a brief carries perfectly, which is what goes
-   inside that shape. Write the first yourself as a **contract seed**, commit it to the lane, and
-   dispatch a writer for the rest.
-
-   The seed is four things: the minimal Interface, its result and error types, one real caller, and
-   the happy-path contract tests the ticket states. A real caller means one on the shipped path; a
-   test-only composition is what the seed exists to prevent, because it lets an Interface be shaped
-   by nothing but its own tests. The seed commit stays in the ticket's lane and is never collected
-   on its own: it is a starting position, not a deliverable, and collecting it would land an
-   Interface with no implementation behind it.
-
-   Seed a ticket when reconstructing the Interface from the implementation is the expensive part.
-   Repeated same-shape blocks against one ticket are that case arriving after the fact — the writer
-   rebuilt a boundary from the code and the reviewer could only block local symptoms.
-
-   The seed needs no protected-path list. Once it is in the lane it is what the ticket's `## Seam
-   contract` names, so the writer's existing obligation covers it: an `Existing` candidate preserves
-   the named authorities, a `Change` candidate implements only the recorded `S#` deltas, and a
-   required change to either returns `NEEDS_DECISION` rather than an edit. A second list of the same
-   boundary would read as a guarantee while enforcing nothing.
 
    **Who verifies.** Walk every Acceptance claim and write the gate that decides it. A claim is
    **mechanically decidable** when one command's exit status *is* that claim — the same answer for
@@ -165,8 +169,9 @@ receiver's own workflow.
    strengthening controls. Pi maps this sequence to its existing operations in
    [Managed lane environment](runtime-pi.md#managed-lane-environment).
 
-   This step is complete when the writer has one bounded brief and one safe writable checkout, with
-   the repository-declared bootstrap applied when the repository requires one.
+   This boundary is complete when contract preparation is complete, the remaining implementation has
+   one writer with one bounded contract and one safe writable checkout, verification placement is
+   decided, and the repository-declared bootstrap has run when the repository requires one.
 3. **Implement and review.** Execute the chosen shape; for delegated closed work that places a
    reviewer, prefer runtime composition of worker, reviewer, and bounded correction under a finite Orchestrator-supplied
    correction budget. The runtime pointer carries the registered composition path

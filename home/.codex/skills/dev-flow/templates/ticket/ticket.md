@@ -93,7 +93,8 @@ state: {{STATE}}
 
 ## Reviewer block ledger
 <!-- The Orchestrator writes this when a review returns. It counts the reviewer `BLOCKED` verdicts
-     this ticket has accumulated since its design was last fixed; the third one is where review stops
+     that bought a correction since this ticket's design was last fixed — a block that raised a
+     question or reported an unreviewable subject bought none; the third one is where review stops
      being placed. It lives here rather than with the run because a correction budget bounds one
      dispatch and this cap bounds the ticket. Only a user-approved re-alignment that changed `Outcome` or an
      `S#` resets it, and the reset records the prior count and the reason:

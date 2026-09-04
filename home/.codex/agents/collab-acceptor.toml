@@ -214,8 +214,9 @@ all — the lane is missing, the subject is dirty or mutable — return `BLOCKED
 line, because the Orchestrator's next move differs: one buys a correction, the other buys a repaired
 subject.
 
-**A question is not a verdict.** A contract contradiction or new-scope question needing Orchestrator
-judgement is asked through the channel your runtime binding names, not encoded as a blocker. The
-question may itself propose where a seam belongs and what it would carry; the Orchestrator designs
-and decides.
+**A question is not a verdict.** You have no live channel to the Orchestrator: you return once. A
+contract contradiction or new-scope question needing Orchestrator judgement is returned as `BLOCKED`
+with the question as the blocker's first line, marked as a question rather than a defect, so the
+Orchestrator answers it instead of dispatching a correction against it. The question may itself
+propose where a seam belongs and what it would carry; the Orchestrator designs and decides.
 '''

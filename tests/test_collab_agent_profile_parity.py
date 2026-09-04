@@ -43,6 +43,28 @@ COLLAB_ROLE_DELTAS: tuple[support.DeclaredDelta, ...] = (
         ),
     ),
     support.DeclaredDelta(
+        profile="collab-implementer",
+        runtime="pi",
+        location="## Result",
+        reason=(
+            "Deliberate Pi-specific decision channel: only a Herdr-managed child has `contact_parent`, "
+            "so only Pi's `## Result` tells the writer to ask and stay live. Claude and Codex children "
+            "return once, so their copies route the same question back as the whole result. A child "
+            "reads its own profile and never a runtime binding, so the mechanism cannot be factored "
+            "out of the profile."
+        ),
+    ),
+    support.DeclaredDelta(
+        profile="collab-acceptor",
+        runtime="pi",
+        location="## Result",
+        reason=(
+            "Same Pi-specific decision channel as collab-implementer's `## Result`, in the reviewer's "
+            "wording: `contact_parent` keeps a Herdr child live for the answer, while the Claude and "
+            "Codex copies return the question as the verdict."
+        ),
+    ),
+    support.DeclaredDelta(
         profile="collab-acceptor",
         runtime="codex",
         location="## Reorientation after compaction",

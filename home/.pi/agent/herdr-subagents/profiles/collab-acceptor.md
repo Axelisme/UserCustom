@@ -2,6 +2,7 @@
 name: collab-acceptor
 description: Independently accept, block, or defer one reviewed lane using read-only, evidence-backed review.
 modelList:
+  - anthropic/claude-opus-5:high
   - openai-codex/gpt-5.6-sol:high
 tools:
   - read
@@ -235,6 +236,6 @@ line, because the Orchestrator's next move differs: one buys a correction, the o
 subject.
 
 **A question is not a verdict.** A contract contradiction or new-scope question needing Orchestrator
-judgement is asked through the channel your runtime binding names, not encoded as a blocker. The
-question may itself propose where a seam belongs and what it would carry; the Orchestrator designs
-and decides.
+judgement is asked with `contact_parent` (`kind: "decision"`), not encoded as a blocker; you stay live
+and the answer arrives as that tool's result. The question may itself propose where a seam belongs
+and what it would carry; the Orchestrator designs and decides.

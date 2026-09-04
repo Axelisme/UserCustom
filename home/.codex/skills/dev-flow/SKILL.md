@@ -203,9 +203,9 @@ place no further reviewer for that ticket, and let the remaining work finish aga
 Collab's [review placement](../collab/SKILL.md#review-placement-and-the-correction-loop) owns the cap
 itself and why the third block is already a loop's own stopping point.
 
-The ledger lives in the ticket because nothing else survives the run that produced it: a composed
-loop's correction budget is held by the runtime and starts over at the next dispatch, so a count kept
-only there reads three separate two-block tickets as one cheap one.
+The ledger lives in the ticket because nothing else survives the run that produced it: a correction
+budget bounds the dispatch it was issued for, so a count kept only there reads three separate
+two-block tickets as one cheap one.
 [record-hygiene](references/record-hygiene.md#the-reviewer-block-ledger) owns the ledger's shape, and
 the one condition that resets it.
 

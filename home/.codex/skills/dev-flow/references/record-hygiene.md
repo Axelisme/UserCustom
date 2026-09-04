@@ -137,8 +137,10 @@ Durable script/MCP/production validation binds exact candidate, environment, cov
 ## The reviewer block ledger
 
 A ticket carries a `## Reviewer block ledger` section holding two things: the number of reviewer
-`BLOCKED` verdicts accumulated since the ticket's design was last fixed, and the reset history. The
-Orchestrator writes it when a review returns, in the same transition that decides what follows.
+`BLOCKED` verdicts that bought a writer correction since the ticket's design was last fixed, and the
+reset history. A block that raised a question, or that reported an unreviewable subject, bought no
+correction and is not counted. The Orchestrator writes it when a review returns, in the same
+transition that decides what follows.
 
 It lives in the ticket rather than with the run because it has to outlive the run. A correction
 budget bounds one dispatch, so three dispatches of two blocks each leave no record that anything cost
@@ -180,6 +182,6 @@ and judges only whether the appendix describes a reasonable process for the cove
 
 An appendix is never mandatory. Requiring one everywhere would make `COMPLETED` hostage to a file
 with no claim behind it, and an empty container beside a ticket reads as a process that exists. When
-a writer's own work produces a process worth keeping and no target was assigned, it reports that in
-`residualRisks` rather than creating a file; the Orchestrator names a target for the next round if it
+a writer's own work produces a process worth keeping and no target was assigned, it reports that as a
+residual risk rather than creating a file; the Orchestrator names a target for the next round if it
 wants it kept.

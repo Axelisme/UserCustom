@@ -8,9 +8,9 @@ Claude's native binding delta, and nothing else. [Collab](SKILL.md) owns the pol
 
 At dispatch time, use the current Claude agent and tool inventory as the capability source of truth.
 Require the exact `collab-implementer` and `collab-acceptor` profiles and Claude's native child-agent
-dispatch capability. If a required role or dispatch capability is unavailable, report a runtime
-capability gap to the Orchestrator rather than selecting a generic writer, emulating a child with
-shell processes, or trusting a cached tool signature, version, or feature catalogue.
+dispatch capability. If a required role or dispatch capability is unavailable, report `BLOCKED`
+naming the missing capability rather than selecting a generic writer, emulating a child with shell
+processes, or trusting a cached tool signature, version, or feature catalogue.
 
 The profile's declared tools and Result contract are authoritative for that child. A session's
 optional task, plan, monitor, artifact, scheduling, or messaging tools imply no further capability
@@ -32,4 +32,5 @@ final Acceptance, collection, landing, and escalation happen outside this bindin
 
 A Claude child has no live parent channel: it returns once, and a question it needs answered has to
 come back as its whole result. Where Pi's `contact_parent` keeps a child waiting, here a decision
-request ends the run and its answer starts a fresh one.
+request returns as `BLOCKED` with the question first, and its answer starts a fresh dispatch. Both
+Claude profiles carry that form; do not brief a child to wait for an answer it cannot receive.

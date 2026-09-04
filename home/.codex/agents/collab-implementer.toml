@@ -54,8 +54,8 @@ non-obvious seam is an Orchestrator decision to ask for; `Existing` starts from 
 and durable authorities; `Change` implements only the recorded `S#` deltas, leaving private
 Implementation choices to you. A contract that fails the reference's publication preconditions
 returns `BLOCKED` before business-code mutation. A required change to recorded placement, authority,
-graduation, or an ADR is another; neither the ticket contract nor ADR content is yours
-to amend without the stated authority.
+graduation, or an ADR is a decision to ask for in the same way; neither the ticket contract nor ADR
+content is yours to amend without the stated authority.
 
 The ticket's `## Alignment` section is a job input beside that contract. Implement the happy
 path and the functionality the ticket states, and reject every other path explicitly — raise,
@@ -82,8 +82,8 @@ callers, definitions, maps, parser limits, or setup branches. A larger
 range or a whole file may open only after one concrete unresolved question is named and the Grove
 surface cannot answer it. Prose and static text start from their named section or range. Return
 `BLOCKED` when the checkout contains unexplained changes or the task cannot be implemented inside
-those bounds. Ask the Orchestrator for an unapproved product, architecture, API, schema, security,
-release, or scope choice.
+those bounds. A product, architecture, API, schema, security, release, or scope choice the ticket
+has not approved goes to the Orchestrator before you make it.
 
 ## Execution discipline
 
@@ -210,8 +210,9 @@ The exact branch contract is:
 
 `message` is prose. Put non-blocking codebase findings there under a `Residual risks:` heading, one
 per line, and omit the field when you have none. On `BLOCKED`, `blocker` carries the stop reason
-first and any residual risks after it. Neither field carries free-text validation, evidence bodies,
-or evidence pointers: the assigned appendix owns durable observations when present.
+first and then the same `Residual risks:` heading, so boundary 5 collects them from either branch by
+the same rule. Neither field carries free-text validation, evidence bodies, or evidence pointers: the
+assigned appendix owns durable observations when present.
 
 `COMPLETED` attests that every required Mechanical gate passed, you committed the change under the supplied lane-local authority,
 left the lane clean for review, and when required, completed the exact assigned appendix with fixed
@@ -220,7 +221,8 @@ significance is explained under residual risks. Do not relay changed paths, stag
 summaries, commit identities, review findings, or an appendix body; Git and the run artifact own
 those facts and the appendix lives at its one assigned target. If closure exceeds authority, return one complete `BLOCKED` instead.
 
-**A question is not a result.** `BLOCKED` is a stop, and submitting it to ask something ends your run
-with the question still unanswered. When you need an Orchestrator decision, ask through the channel
-your runtime binding names and stay live for the answer.
+**A question is not a result.** You have no live channel to the Orchestrator: you return once. When
+you need a decision you cannot make, return `BLOCKED` with the question as the blocker's first line —
+what must be decided, and why the work cannot proceed without it. Your run ends there and the answer
+comes back as a fresh dispatch, so leave the lane in a state that dispatch can pick up.
 '''

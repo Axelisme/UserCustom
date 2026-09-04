@@ -244,10 +244,12 @@ A worker result uses one exact branch contract:
 - `COMPLETED`: required `outcome`; optional `message`.
 - `BLOCKED`: required `outcome`, `blocker`.
 
-A decision request is not a result branch. A worker needing an Orchestrator decision asks through its
-runtime's parent channel and stays live for the answer; it submits a result only once the work
-reaches one of the two branches above. Submitting `BLOCKED` to ask a question ends the run and throws
-away the context the answer was for.
+A decision request is not a result branch, and how a worker raises one is the runtime's to say. Where
+the runtime gives the child a live parent channel, the worker asks through it and stays live for the
+answer; spending `BLOCKED` on a question there ends the run and throws away the context the answer was
+for. Where a child returns once and has no such channel, the question comes back as the whole
+`BLOCKED` result and the answer starts a fresh dispatch. Each profile carries its own runtime's form,
+because a child reads its profile and never a runtime binding.
 
 **`COMPLETED` is a binary attestation** that the required gates passed. It does not attest
 Acceptance: dev-flow's
@@ -294,7 +296,8 @@ mechanically decidable blocker also names the gate that should have caught it. A
 trigger is a residual risk that was filed in the wrong place.
 
 A decision request is not a verdict. A reviewer that finds a contract contradiction or a new-scope
-question asks the Orchestrator through the parent channel and stays live for the answer.
+question raises it the same way its runtime has the writer raise one, and never as a blocker: a
+correction dispatched against a question answers nothing.
 
 A hollow pass is the only blocker class that may omit a production-reachable input; it substitutes the entry point and trigger named above. Every other safety or non-happy-path blocker must be production-reachable under the stated operating assumptions: identify the existing production entry point, a concrete reachable input or event sequence, the current observable failure, the violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named promise, using
 bounded advisory fixes that stay inside the ticket's stated outcome rather than expanding scope via
@@ -333,11 +336,13 @@ modules is the expensive one, and it passes any threshold you would set.
 
 The Orchestrator dispatches the worker and the reviewer and holds the loop between them; no runtime
 composes it. It carries a finite correction budget, `2` by default and overridable by a task's own
-standing order. Initial implementation does not consume it, each `BLOCKED` → writer correction
-consumes one, and exhausting it returns the ticket to the Orchestrator under [cutting a ticket
-off](../dev-flow/SKILL.md#cutting-a-ticket-off). The count lives with you across dispatches, not with
-a run: a budget with no defined exit is what lets a loop keep spending, and that reference owns what
-happens once it is spent.
+standing order. What it counts is narrow: a reviewer `BLOCKED` that buys a writer correction, and
+nothing else. Initial implementation consumes none. A `BLOCKED` that turns out to be a question, or
+one saying the subject could not be reviewed at all, buys no correction and so costs nothing — those
+return a decision or a repaired subject, not rework. Exhausting the budget returns the ticket to the
+Orchestrator under [cutting a ticket off](../dev-flow/SKILL.md#cutting-a-ticket-off). The count lives
+with you across dispatches, not with a run: a budget with no defined exit is what lets a loop keep
+spending, and that reference owns what happens once it is spent.
 
 **Three blocks is where a ticket stops buying review.** At the default budget the third block already
 ends a loop: initial implementation consumes nothing, the first two `BLOCKED` verdicts each buy a

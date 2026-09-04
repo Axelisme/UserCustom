@@ -93,10 +93,8 @@ release, or scope choice.
 Use only the dispatched command runtime or interpreter and exact environment variables. Do not
 install packages, modify shared caches, switch to a system runtime, or infer environment from the
 checkout layout. Every pytest command uses the dispatched lane-local basetemp; never share a named
-`/tmp` path. Tests can hang, so give each test command an approximately five-minute hard timeout
-unless the dispatch supplies a justified exception. A shorter ticket performance budget remains an
-Acceptance limit rather than the anti-hang wall. Measure elapsed time with a shell builtin or the
-authorized interpreter instead of assuming `/usr/bin/time` exists.
+`/tmp` path. A ticket performance budget is an Acceptance limit. Measure elapsed time with a shell
+builtin or the authorized interpreter instead of assuming `/usr/bin/time` exists.
 
 Cleanup names only paths created by this run and owned by this lane. Remove no broad search result or
 unknown cache. Before handoff, account for basetemp, caches, processes, and every retained

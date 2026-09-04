@@ -119,14 +119,11 @@ receiver's own workflow.
    itself to be intelligible, and the change hard enough that no closed brief would carry it.
    Otherwise dispatch a writer.
 
-   Both shapes are usually predicted. Two arrive already observed. **Three of one ticket's
-   implementer runs ending anywhere but an accepted lane** — a `COMPLETED` the reviewer then
-   blocked, or a run that timed out — is the second shape measured rather than guessed: the brief
-   has failed to carry that work three times, so the ticket's remaining work is yours to write. A
-   timeout counts because it is the same failure wearing a different result. Three is sufficient,
-   not necessary; a ticket can be too hard on its first return. **Deferred work** is the first
-   shape: a path the writer rejected and the user later asks for is small by construction and
-   arrives while the user is watching, so describing it costs about what making it costs.
+   Both shapes are usually predicted. **Deferred work** arrives already observed: a path the writer
+   rejected and the user later asks for is small by construction and arrives while the user is
+   watching, so describing it costs about what making it costs. A ticket that keeps coming back
+   unaccepted is the hard shape showing itself late — take the remaining work yourself whenever the
+   brief has visibly failed to carry it, without waiting for the reviewer block ledger's cap.
 
    **Who verifies.** Walk every Acceptance claim and write the gate that decides it. A claim is
    **mechanically decidable** when one command's exit status *is* that claim — the same answer for

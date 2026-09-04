@@ -1,7 +1,7 @@
 .luarc.json
 .agent_state
 .codegraph
-.pi-subagents
+.pi-herdr-subagents
 .scratch/
 .mcp.json
 /.pi

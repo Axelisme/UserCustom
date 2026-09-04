@@ -140,10 +140,9 @@ A ticket carries a `## Reviewer block ledger` section holding two things: the nu
 `BLOCKED` verdicts accumulated since the ticket's design was last fixed, and the reset history. The
 Orchestrator writes it when a review returns, in the same transition that decides what follows.
 
-It lives in the ticket rather than with the run because it has to outlive the run. A composed loop's
-correction budget is the runtime's and starts over at the next dispatch, so three dispatches of two
-blocks each leave no record that anything cost more than two. The point of the ledger is that the
-third block is reachable at all.
+It lives in the ticket rather than with the run because it has to outlive the run. A correction
+budget bounds one dispatch, so three dispatches of two blocks each leave no record that anything cost
+more than two. The point of the ledger is that the third block is reachable at all.
 
 **One condition resets it:** a re-alignment the user approved that changed the ticket's `Outcome` or
 one of its `S#` deltas. Record the reset with the prior count and the reason. Anything weaker would

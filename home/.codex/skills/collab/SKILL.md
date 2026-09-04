@@ -109,7 +109,7 @@ receiver's own workflow.
    The seed needs no protected-path list. Once it is in the lane it is what the ticket's `## Seam
    contract` names, so the later writer's existing obligation covers it: an `Existing` candidate
    preserves the named authorities, a `Change` candidate implements only the recorded `S#` deltas,
-   and a required change to either returns `NEEDS_DECISION` rather than an edit. A second list of the
+   and a required change to either goes back to the Orchestrator as a decision rather than an edit. A second list of the
    same boundary would read as a guarantee while enforcing nothing.
 
    **Step 2 — Place the remaining implementation.** Start from the committed seed, or from the lane
@@ -147,10 +147,10 @@ receiver's own workflow.
    when one is placed, and otherwise you at boundary 4.
 
    When implementation is delegated and its brief, delegated Acceptance
-   criteria, placement, mutation authority, and escalation boundary are closed, prefer runtime
-   composition of a worker → reviewer → bounded correction loop; coordinate a transition separately
-   when it depends on Orchestrator judgement. Account for pre-existing state; isolate when another
-   writer is active or existing work needs protection.
+   criteria, placement, mutation authority, and escalation boundary are closed, dispatch a worker and,
+   where a reviewer is placed, run the bounded correction loop yourself; coordinate a transition
+   separately when it depends on Orchestrator judgement. Account for pre-existing state; isolate when
+   another writer is active or existing work needs protection.
    **Runtime pointer:** before dispatching a writer, before collecting (boundary 5), or before
    landing, read this skill directory's `runtime-<name>.md` for your runtime when one exists; its
    Routing section names the section each step reads, and general mechanics stay behind conditional
@@ -174,9 +174,8 @@ receiver's own workflow.
    one writer with one bounded contract and one safe writable checkout, verification placement is
    decided, and the repository-declared bootstrap has run when the repository requires one.
 3. **Implement and review.** Execute the chosen shape; for delegated closed work that places a
-   reviewer, prefer runtime composition of worker, reviewer, and bounded correction under a finite Orchestrator-supplied
-   correction budget. The runtime pointer carries the registered composition path
-   and its terminal outcomes. Generic Acceptance below reviews the protected current lane. This
+   reviewer, dispatch worker, reviewer and each correction under a finite correction budget you hold.
+   The runtime pointer carries the dispatch mechanics. Generic Acceptance below reviews the protected current lane. This
    step is complete when the lane carries a worker result and, where boundary 2 placed a reviewer, an
    independent review result — or a terminal blocker or decision request.
 4. **Judge the result.** The Orchestrator makes the final Acceptance judgement, and makes it by
@@ -186,13 +185,12 @@ receiver's own workflow.
    compare against the lane head. Then choose what follows: accept the judged lane, return a bounded defect for correction, return a decision
    request or exhausted correction budget to its owner, or select another shape. A correction the
    Orchestrator itself dispatches returns to boundary 2, so placement is decided once per dispatch
-   rather than once per ticket; a correction inside a composed loop is the loop's own and returns to
-   boundary 3, because that loop's placement was fixed when it was composed. When the task owns an integration branch, an
+   rather than once per ticket. When the task owns an integration branch, an
    accepted lane goes to the collection boundary below before its lane retires. This step is
    complete when the Orchestrator accepts the result or identifies the unresolved decision and its
    owner.
 5. **Collect.** Before moving anything, assemble the ticket's **deferred paths** — the rejections
-   its writer left a comment beside, and the reviewer's `residualRisks` — into `<ticket>/deferred.md`,
+   its writer left a comment beside, and the residual risks the worker and reviewer reported — into `<ticket>/deferred.md`,
    which sits in the ticket directory the way its `scripts/` subtree does and needs no separate
    grant. Put the entries named by neither the ticket's `World facts` nor its `Not doing` in front of
    the user: those are the ones no alignment covered, so this is the first moment the user could see
@@ -219,8 +217,8 @@ Evidence and the protected current lane carry continuity: the bounded brief, dir
 and the lane's current clean state.
 
 When a writer's run ends before its work does, dispatch a fresh compatible child carrying the original
-bounded contract, the current typed blockers, and the applicable authority and escalation boundary.
-In the composed loop every correction and rereview is such a child; Review placement below states
+bounded contract, the current blockers, and the applicable authority and escalation boundary.
+In the correction loop every correction and rereview is such a child; Review placement below states
 what each of those two briefs carries.
 
 **A replacement reads its ticket, not the task.** Its context is that ticket and whatever the ticket
@@ -243,10 +241,13 @@ reviewed roles neither re-execute them nor reopen run artifacts to judge them. J
 
 A worker result uses one exact branch contract:
 
-- `COMPLETED`: required `outcome`; optional `residualRisks`, `efficiencyFeedback`.
-- `BLOCKED`: required `outcome`, `blocker`; optional `residualRisks`, `efficiencyFeedback`.
-- `NEEDS_DECISION`: required `outcome`, `decision`, `decision.why`, `decision.question`; optional
-  `residualRisks`, `efficiencyFeedback`.
+- `COMPLETED`: required `outcome`; optional `message`.
+- `BLOCKED`: required `outcome`, `blocker`.
+
+A decision request is not a result branch. A worker needing an Orchestrator decision asks through its
+runtime's parent channel and stays live for the answer; it submits a result only once the work
+reaches one of the two branches above. Submitting `BLOCKED` to ask a question ends the run and throws
+away the context the answer was for.
 
 **`COMPLETED` is a binary attestation** that the required gates passed. It does not attest
 Acceptance: dev-flow's
@@ -262,14 +263,10 @@ when an appendix is required and what an assigned target does and does not grant
 diff-check, staged state, cleanliness, ancestry, commit identity, and lifecycle — are operation
 evidence and never belong in an appendix.
 
-**`residualRisks: string[]`** is optional and carries every non-blocking codebase finding, from any
-worker or reviewer outcome branch, whether inside or outside the task envelope. Every terminal branch
-preserves available risks; `REVIEWED` merges the latest worker's then the final reviewer's without
-changing routing.
-
-**`efficiencyFeedback`** is optional process feedback about the skill, profile, or runtime: one
-concrete avoidable cost with its cause, and its measurement when available, omitted otherwise. It
-never carries codebase findings and never affects verdicts, budgets, or routing.
+**Residual risks** are every non-blocking codebase finding, from any worker or reviewer branch,
+whether inside or outside the task envelope. They ride in `message` under a `Residual risks:` heading
+on `COMPLETED`, and after the blocking reason on `BLOCKED`. They never affect routing. Boundary 5
+reads them, so a branch that drops them loses the ticket's deferred work.
 
 Results state only role-relevant routing, risks, and stop reasons, without restating ticket prose,
 command output, or evidence the ticket, Git, or the run artifact already own.
@@ -279,35 +276,35 @@ command output, or evidence the ticket, Git, or the run artifact already own.
 Ordinary Generic Acceptance reviews the protected current lane: the writer is stopped, the lane is
 clean, and the reviewer reads its current state directly, read-only. Bash use is limited to read-only retrieval (`git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find`, Grove); it excludes pytest, type/lint/format gates, Python/import probes and runtime/process workflows. The reviewer does not execute mechanical gates; it judges ticket gate coverage, the Acceptance claims no gate proved, and gate integrity. **Gate integrity**: a gate's pass is part of the lane under review, and when the lane obtains that pass by changing what the gate measures, the pass is hollow and the lane is `BLOCKED` — no Acceptance claim need have been violated, because the violated expectation is the ticket's own gate entry. Reading the lane diff for the two shapes this is bounded to — a test or assertion whose subject changed inside this lane, and an added construct whose only effect is to silence a checker — is not re-executing a gate. Beyond those two shapes a hollow pass is unobservable to a read-only role, so it is not pursued.
 
-A reviewer result uses one exact branch contract:
+A reviewer result uses the same two branches as a worker's, read as a verdict:
 
-- `PASS`: required `verdict`; optional `residualRisks`, `efficiencyFeedback`.
-- `BLOCKED`: required `verdict`, `blockers`, `blockers[].where`, `blockers[].why`,
-  `blockers[].howToFix`, `blockers[].trigger`, `correctionBase`; optional `residualRisks`,
-  `efficiencyFeedback`.
-- `NEEDS_DECISION`: required `verdict`, `decision`, `decision.why`, `decision.question`; optional
-  `residualRisks`, `efficiencyFeedback`.
+- `COMPLETED`: the lane passes. Optional `message` carries residual risks.
+- `BLOCKED`: required `blocker`, carrying every blocker the review found.
 
-Each `blockers[]` item carries the affected location in `where`, the violated ticket expectation or
-Interface promise plus direct evidence in `why`, a bounded advisory suggestion in `howToFix`, and the
-concrete production-reachable input or call sequence plus existing entry point in `trigger`. For a
-hollow pass these fields name the ticket's Mechanical gate, its invocation, and the property it no
-longer measures. A mechanically decidable blocker also names the gate that should have caught it.
+`BLOCKED` says the lane cannot be accepted as it stands; it does not say the reviewer failed. A
+reviewer that could not review at all — the lane is missing, the subject is dirty or mutable — also
+returns `BLOCKED`, and says so in the first line, because the Orchestrator's next move differs: one
+buys a correction, the other buys a repaired subject.
 
-For `NEEDS_DECISION`, `decision.why` states why a decision is needed and `decision.question` asks the
-exact question. The question may itself propose where a seam belongs and what it would carry; the
-Orchestrator designs and decides. `residualRisks` is optional and carries all non-blocking codebase
-findings, whether inside or outside the envelope; omit it when empty.
+`blocker` is prose, and each blocker in it names four things: the affected location, the violated
+ticket expectation or Interface promise with direct evidence, a bounded advisory suggestion, and the
+concrete production-reachable input or call sequence plus its existing entry point. For a hollow pass
+those become the ticket's Mechanical gate, its invocation, and the property it no longer measures. A
+mechanically decidable blocker also names the gate that should have caught it. A blocker missing the
+trigger is a residual risk that was filed in the wrong place.
+
+A decision request is not a verdict. A reviewer that finds a contract contradiction or a new-scope
+question asks the Orchestrator through the parent channel and stays live for the answer.
 
 A hollow pass is the only blocker class that may omit a production-reachable input; it substitutes the entry point and trigger named above. Every other safety or non-happy-path blocker must be production-reachable under the stated operating assumptions: identify the existing production entry point, a concrete reachable input or event sequence, the current observable failure, the violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named promise, using
 bounded advisory fixes that stay inside the ticket's stated outcome rather than expanding scope via
 robustness or future-proofing. A finding that depends on a wider operating model than the dispatch declared is reported via residual risks, not as a blocker.
 
-A `PASS` ends after `verdict` and any `residualRisks`; it needs no empty filler. The verdict is a
-review result, not ticket Acceptance: the Orchestrator owns the final judgement and closure.
-`NEEDS_DECISION` returns a contract contradiction or new-scope question to the Orchestrator instead
-of routing rework. Generic Acceptance carries no fixed-subject result fields and no `correctionBase` projection; public terminal results never expose the internal base. Specialized procedures such as [code-review](../code-review/SKILL.md) keep their own identity
-contracts and produce separate Standards/Spec findings rather than a PASS/BLOCKED Acceptance verdict.
+A pass ends after the outcome and any residual risks; it needs no empty filler. The verdict is a
+review result, not ticket Acceptance: the Orchestrator owns the final judgement and closure. Generic
+Acceptance carries no fixed-subject result fields. Specialized procedures such as
+[code-review](../code-review/SKILL.md) keep their own identity contracts and produce separate
+Standards/Spec findings rather than an Acceptance verdict.
 
 When delegated red/green validation needs several commands, a fixed working directory, or owned
 temporary state, use [TDD Gate mode](../tdd/gate.md). Keep a one-command loop direct.
@@ -334,22 +331,19 @@ parameter, or cross-module call; changing the inside of an existing one is not t
 weak proxy that misses the case this rule exists for: a forty-line function spread across six
 modules is the expensive one, and it passes any threshold you would set.
 
-Reviewer placement may be composed by the runtime or an external workflow. For delegated closed work
-— bounded brief, delegated Acceptance criteria, placement, mutation authority, and escalation
-boundary all closed — prefer a runtime-composed worker → reviewer → bounded correction loop that
-consumes one terminal handoff: a reviewed lane, a worker blocker, a decision request, or an
-exhausted correction budget. The Orchestrator supplies a finite correction budget per composed
-workflow, `2` by default and overridable by a task's own standing order; initial implementation does not consume it, each `BLOCKED → writer correction` transition
+The Orchestrator dispatches the worker and the reviewer and holds the loop between them; no runtime
+composes it. It carries a finite correction budget, `2` by default and overridable by a task's own
+standing order. Initial implementation does not consume it, each `BLOCKED` → writer correction
 consumes one, and exhausting it returns the ticket to the Orchestrator under [cutting a ticket
-off](../dev-flow/SKILL.md#cutting-a-ticket-off). A budget with no defined exit is what lets a loop
-keep spending: the count bounds the dispatch, and that reference owns what happens once it is
-spent.
+off](../dev-flow/SKILL.md#cutting-a-ticket-off). The count lives with you across dispatches, not with
+a run: a budget with no defined exit is what lets a loop keep spending, and that reference owns what
+happens once it is spent.
 
 **Three blocks is where a ticket stops buying review.** At the default budget the third block already
 ends a loop: initial implementation consumes nothing, the first two `BLOCKED` verdicts each buy a
 correction, and the third arrives with no slot left. The cap makes that the ticket's ceiling rather
 than one dispatch's, because a fresh dispatch would otherwise hand the same ticket two more blocks
-against a count the runtime no longer holds. Past the third, place no reviewer for that ticket: the
+against a count you had already spent. Past the third, place no reviewer for that ticket: the
 remaining work finishes against its gates, and the claims a reviewer would have decided stay
 unproved and are recorded as such. dev-flow's [reviewer block
 ledger](../dev-flow/references/record-hygiene.md#the-reviewer-block-ledger) is where the count
@@ -357,14 +351,12 @@ survives the run, and [cutting a ticket
 off](../dev-flow/SKILL.md#cutting-a-ticket-off) owns the terminal state it produces.
 
 Scope, architecture, authority, or contract decisions terminate the loop at the Orchestrator.
-Intermediate rounds stay in workflow context unless an observation independently justifies a durable
+Intermediate rounds stay in the dispatch unless an observation independently justifies a durable
 record.
 
-**Initial review** (fresh reviewer, protected current lane, runtime-owned `integrationTip` baseline, `git diff --find-renames <integrationTip>...HEAD --`) exhausts every Acceptance claim no gate decided and directly reachable siblings in the same failure class handled by the same owning function and governed by the same ticket expectation, before returning one complete `BLOCKED` set with `correctionBase` set to the exact reviewed lane HEAD. It does not equate a new fixed subject with a full review restart.
+**Initial review** (fresh reviewer, protected current lane, integration tip as baseline, `git diff --find-renames <integrationTip>...HEAD --`) exhausts every Acceptance claim no gate decided and directly reachable siblings in the same failure class handled by the same owning function and governed by the same ticket expectation, before returning one complete `BLOCKED`. It does not equate a new fixed subject with a full review restart.
 
-**Rereview** is performed by a fresh reviewer — not a resume of the prior one — against the changed protected lane. Its brief carries the original review brief, the prior typed blockers, and that internal `correctionBase` SHA, and nothing else: no ancestry, reconciliation, scope or incremental-eligibility policy, and no diff content or changed-path cache. Git is the delta authority (`git diff --find-renames <correctionBase>...HEAD --`). A correction brief is the same shape, carrying the original bounded worker contract plus the current typed blockers. Rereview verifies every prior blocker is closed, and checks correction-reachable semantic effects. It does not rerun mechanical gates and does not restart the whole review: a new fixed subject after correction is not a full review restart, because initial review and rereview carry distinct responsibilities. A correction that leaves the lane unchanged still consumes one budget slot; the single count is never reset.
-
-Public terminal projections of `BLOCKED`, `CORRECTION_BUDGET_EXHAUSTED` and `REVIEWED` carry blockers (with `trigger`), `residualRisks` and `efficiencyFeedback`, and nothing else; `correctionBase` is internal and never projected.
+**Rereview** is performed by a fresh reviewer — not a resume of the prior one — against the changed protected lane. Before dispatching it, read the reviewed lane's HEAD: that SHA is the rereview baseline, and it is yours to hold because the reviewer that produced it is gone. The brief carries the original review brief, the prior blockers, and that baseline SHA, and nothing else: no ancestry, reconciliation, scope or incremental-eligibility policy, and no diff content or changed-path cache. Git is the delta authority (`git diff --find-renames <baseline>...HEAD --`). A correction brief is the same shape, carrying the original bounded worker contract plus the current blockers. Rereview verifies every prior blocker is closed, and checks correction-reachable semantic effects. It does not rerun mechanical gates and does not restart the whole review: a new fixed subject after correction is not a full review restart, because initial review and rereview carry distinct responsibilities. A correction that leaves the lane unchanged still consumes one budget slot; the single count is never reset.
 
 A **seam correction** is one of those decisions carried back into the loop rather than a separate
 stage or a new task: a reviewer may propose where the seam belongs, the Orchestrator decides, and

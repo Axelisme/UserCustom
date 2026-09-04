@@ -82,10 +82,10 @@ state: {{STATE}}
      you have established that no command can decide it. `mechanically decidable` and `residue` are
      defined at ~/.codex/skills/collab/SKILL.md boundary 2; read it when a claim is borderline.
      Example gates (replace with ticket-specific ones): -->
-- [ ] Focused behavior gates for changed reviewed-workflow schema and prompt composition
+- [ ] Focused behavior gates for changed dispatch schema and prompt composition
 - [ ] Affected TypeScript/JavaScript static checks and profile/configuration format checks
 - [ ] Formatter and import/style checks (re-run affected gates if files were mutated)
-- [ ] Broader reviewed-lane and Dev-flow template selections after focused gates pass
+- [ ] Broader Collab and Dev-flow template selections after focused gates pass
 - [ ] Absence scan: a retired symbol, path, or alias returns no hit across the tracked tree
 - [ ] Inventory equality: the generated catalog's count equals the number this ticket declares
 - [ ] Reachability: the shipped entrypoint, not a test-only composition, exercises the path
@@ -94,8 +94,8 @@ state: {{STATE}}
 ## Reviewer block ledger
 <!-- The Orchestrator writes this when a review returns. It counts the reviewer `BLOCKED` verdicts
      this ticket has accumulated since its design was last fixed; the third one is where review stops
-     being placed. It lives here rather than with the run because a composed loop's correction budget
-     starts over at the next dispatch. Only a user-approved re-alignment that changed `Outcome` or an
+     being placed. It lives here rather than with the run because a correction budget bounds one
+     dispatch and this cap bounds the ticket. Only a user-approved re-alignment that changed `Outcome` or an
      `S#` resets it, and the reset records the prior count and the reason:
      ~/.codex/skills/dev-flow/references/record-hygiene.md#the-reviewer-block-ledger -->
 Reviewer blocks: 0. Resets: none.

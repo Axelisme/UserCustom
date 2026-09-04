@@ -132,6 +132,6 @@ rules, and the preconditions that stop a ticket's publication or dispatch — in
 drafting preconditions above, which are not seam facts but stop the same dispatch.
 Lightweight retrieval and role-specific application are owned by the `collab-implementer` and
 `collab-acceptor` agent profiles — every runtime copy of them, not the Pi pair alone. Their
-source paths in this repository are `home/.pi/agent/agents/`, `home/.claude/agents/` and
+source paths in this repository are `home/.pi/agent/herdr-subagents/profiles/`, `home/.claude/agents/` and
 `home/.codex/agents/`; a maintainer editing one of these rules edits all three. Do not copy that workflow
 guidance into tickets.

@@ -1,21 +1,18 @@
 # Collab — Pi runtime
 
-Verified against `pi-subagents` 0.56.0 with the attached async supervisor lifecycle present at
-commit `0adb1842c48357b82f1c1e17a197be1e5acc04bb`. Check the installed package before trusting
-runtime-specific placement details; Collab's core guidance remains runtime-neutral.
+Verified against `pi-herdr-subagents` at commit `486a527`. Check the installed package before
+trusting runtime-specific placement details; Collab's core guidance remains runtime-neutral.
 
 ## Routing
 
-Read only the section named for the step you are taking; every section after Composed delegation and
-Typed results states its own enabling condition.
+Read only the section named for the step you are taking.
 
 - **Managed lane environment** — after canonical lane creation succeeds and the repository declares
   a worktree bootstrap: establish its dispatch precondition and lane-lifetime ownership.
-- **Composed delegation** — the canonical branch: invoke `collab_run_reviewed_lane` for one
-  shared lane, including bounded corrections.
-- **Typed results** — how the runtime encodes a child result, beyond what its schema states.
-- **Post-launch** — after launching an asynchronous workflow: the ordinary return-or-yield step
-  that lets completion wake the session.
+- **Dispatch** — the canonical branch: launch one role onto one lane.
+- **Results and decisions** — how a child's outcome and questions reach you.
+- **Post-launch** — after launching a child: the ordinary return-or-yield step that lets a terminal
+  notification wake the session.
 - **Run control** — only when a run is interrupted or needs status, steering, or stopping.
 - **Placement** — only when the canonical lane placement does not fit the chosen shape.
 - **Collection** — only after the Orchestrator judges the lane and chooses collection.
@@ -23,254 +20,114 @@ Typed results states its own enabling condition.
 
 ## Managed lane environment
 
-Read this section after `collab_lane` with `action: create` succeeds when the repository declares a worktree
-bootstrap. Apply that repository-owned contract to the exact managed lane before invoking
-`collab_run_reviewed_lane`. Successful bootstrap and presence of the ordinary-path environment are
-preconditions for reviewed dispatch; if either is observed to fail, report `BLOCKED` and stop there;
-the Orchestrator decides what follows.
+Read this section after `collab_lane` with `action: create` succeeds when the repository declares a
+worktree bootstrap. Apply that repository-owned contract to the exact managed lane before
+dispatching. Successful bootstrap and presence of the ordinary-path environment are preconditions
+for dispatch; if either is observed to fail, report `BLOCKED` and stop there; the Orchestrator
+decides what follows.
 
 After the precondition succeeds, roles consume the provisioned environment through their exact
-dispatched execution parameters without syncing or provisioning it. The reviewed-lane tool retains
-its existing composition responsibility and gains no provisioning behavior or runtime-specific
-parameter. Keep the runtime as lane-owned state through implementation, correction, review, and
-owner-decision waits. Existing `collab_lane` retirement (`collect` or `drop`) removes it with
-the lane; no separate runtime cleanup operation is introduced.
+dispatched execution parameters without syncing or provisioning it. Keep the runtime as lane-owned
+state through implementation, correction, review, and owner-decision waits. Existing `collab_lane`
+retirement (`collect` or `drop`) removes it with the lane; no separate runtime cleanup operation is
+introduced.
 
 Follow this canonical positive path without speculative guards or negative probes. If a concrete
-workflow observation exposes environment mis-selection, return it to the Orchestrator for a separate
+observation exposes environment mis-selection, return it to the Orchestrator for a separate
 control-strength decision before adding enforcement.
 
-## Composed delegation
+## Dispatch
 
-A correction inside this composition is the composition's own: its placement was fixed when the workflow was launched, so Collab's boundary-2 re-entry applies to a correction the Orchestrator dispatches after a terminal handoff, never to one this loop issues.
+`spawn_subagent({ cwd, role, dispatch })` launches one child and returns a `subagent_id`. `cwd` is
+the exact managed lane worktree, `role` names a profile, and `dispatch` is the whole bounded brief.
+Every call creates a new durable subagent, so a correction, a rereview, and a replacement are each
+their own spawn — there is no resume-with-a-new-brief.
 
-For delegated closed work — bounded brief, delegated Acceptance criteria, placement, mutation
-authority, and escalation boundary all closed — invoke the registered
-`collab_run_reviewed_lane` tool. It is the canonical and only accepted Pi composition path for a
-worker, reviewer, and bounded correction over one Collab-managed lane. The tool uses the configured
-`collab-implementer` and `collab-acceptor` profiles. The Orchestrator supplies its finite correction budget as the explicit
-`correction_budget` parameter. Turn, tool, runtime, and usage budgets never stand in for it.
+The profile owns the child's models and tools, and the tool schema rejects caller-supplied model,
+effort, profile, tool, extension, path, and session fields. There is nothing to omit and no override
+to authorize.
 
-**Profile model contract.** The selected agent profile owns its configured `model` and `thinking`.
-The Orchestrator preserves both unchanged, omitting `model` and `thinking` from the outer
-`subagent(...)` options and every child call. Only a current user instruction that explicitly names
-an override grants authority for that launch; task difficulty, retries, and review results grant
-none. This contract is satisfied only when every workflow- and child-level `model` and `thinking`
-field is absent or directly authorized by that instruction.
+Role profiles live at `~/.pi/agent/herdr-subagents/profiles/<role>.md`; Collab ships
+`collab-implementer` and `collab-acceptor` there. `control_subagent({ action: "roles" })` returns
+the current valid role ids without restarting the session. An empty or missing profile directory
+exposes no roles at all, so an unknown-role failure on a first spawn means the registry, not the
+brief.
 
-### Supervisor coordination
+**Both tools exist only inside a Herdr pane** — the package registers them only when the session has
+`HERDR_ENV=1` and a non-empty `HERDR_PANE_ID`. When they are absent, dispatch is unavailable: report
+`BLOCKED` naming the missing capability and stop. Do not substitute a handwritten loop or another
+runtime's mechanism.
 
-The reviewed-lane workflow does not override the configured native intercom bridge on worker or
-reviewer children. Because the tool launches one asynchronous `workflowScript`, pi-subagents keeps a
-blocking `contact_supervisor` request attached to the same workflow-owned child and the original
-`runs.run()` promise. The workflow and step remain running with `needs_attention`; the lane
-reservation remains owned; no provisional detached result reaches Collab control flow. A correlated
-reply completes the same tool call, the same child continues, and only its authoritative structured
-result can drive the existing terminal or correction branch.
+## Results and decisions
 
-Pending coordination is not reviewer runtime failure and consumes neither reviewer recovery nor the
-semantic correction budget. Workflow-owned children reject user detach, while top-level direct
-foreground runs retain their separate detach behavior. Stop, timeout, terminal provider failure, and
-process loss remain terminal controls. Detached completion without a persisted JavaScript
-continuation stays fail-closed; Collab neither promotes it to workflow success nor replays arbitrary
-JavaScript. If the installed pi-subagents runtime does not provide this lifecycle, keep supervisor
-coordination disabled rather than launching reviewed lanes under the older detached-receipt behavior.
+A child reaches you as an attributed notification carrying one of three outcomes:
 
-A Collab lane is already one writable checkout with one live writer. The reviewed-lane tool keeps
-the delegated worker and reviewer on that exact lane, with role-specific structured results;
-corrections follow the retained-correction contract below, and rereviews carry the original review
-expectations against the changed protected lane. Child run IDs remain runtime operation evidence and
-appear in no terminal projection. Every branch and terminal projection reads parsed
-`structuredOutput`, never free-form output text.
+- `COMPLETED` with an optional `message` — the declared result. Residual risks ride in `message`.
+- `BLOCKED` with a `blocker` — the declared stop, in prose.
+- `FAILED` with a `reason` — manager-derived, never submitted by the child. The process ended
+  without declaring a result.
 
-### Retained correction
+`FAILED` is not a verdict on the work. Its durable state is `interrupted`, so
+`control_subagent({ action: "resume", subagent_id })` relaunches the same attempt against the exact
+session file and the child can still declare a result afterwards. Judge whether resuming or
+replacing is right from the lane's actual state, not from the notification alone; Collab's core owns
+that judgement.
 
-The initial implementer and every reviewer or rereviewer are fresh children. Before spawning the
-workflow, the reviewed-lane tool consumes only RPC v1
-`ping.capabilities.foregroundStructuredResume`; retained correction is enabled only when that value
-is an object with `version: 1` and `recoveryDescriptorVersion: 1`. Missing, false, malformed,
-unsupported, or future-version values preselect the fresh correction path without package or version
-inference.
+A child asks a question through `contact_parent`, which reaches you as a decision notification with
+a `request_id`. Answer it with `control_subagent({ action: "reply", subagent_id, request_id, answer })`
+and the child continues on the same context. A question is never a result branch: a child that
+submitted `BLOCKED` to ask something has already ended, and the answer has nowhere to land.
 
-When retained correction is enabled and the latest successful writer supplied a non-empty run ID, a
-blocking review resumes that exact writer on the protected lane with only the latest typed blockers.
-The public capability guarantees recovery of the original profile/model/tools/cwd, structured output
-schema, agent and acceptance contracts, and capability ceiling. Each successful correction replaces
-the target with its returned run ID. A resume rejection terminates the workflow; it is never followed
-by a fresh writer in the same correction round.
-
-The preselected fresh fallback starts exactly one compatible implementer on the current lane. Its
-payload contains only the original ticket contract and exact execution parameters, the latest typed
-blockers, and current lane placement; it contains no INDEX, sibling-ticket narrative, or reconstructed
-task history. Correction selection does not change budget accounting: each blocked-review transition
-consumes one slot. Retained correction prompts may
-request optional native `efficiencyFeedback` following the shared Collab efficiency-feedback guidance
-when a concrete avoidable cost was observed; a fresh fallback receives that request only when it is
-already present in the original bounded worker brief.
-
-Supply the tool only these bounded fields: `task_id` (the task identifier), `ticket_id` (the
-Dev-flow ticket identifier), `lane_id` (the existing managed lane), `worker_brief` (the bounded
-implementation brief), `review_brief` (the bounded read-only acceptance brief), and
-`correction_budget` (the finite correction budget). The tool declares each field's own bound and
-description in its input schema, which Pi surfaces to the calling Orchestrator; this list names the
-fields, not their bounds.
-
-Both briefs follow Collab's Dispatch brief Interface. `review_brief` additionally names the delegated
-Acceptance identifiers and the `collab-acceptor`'s read-only scope, and may carry the optional task-boundary
-pointer. The tool rejects extra fields and unbounded or empty briefs.
-
-Terminal outcomes:
-
-- `REVIEWED` — the worker returned `COMPLETED` and the reviewer returned `PASS`. It projects the
-  merged `residualRisks` and carries no `validation` and no `correctionBase`, which stays internal.
-- `BLOCKED` — the worker returned `BLOCKED`; it carries the worker blocker.
-- `NEEDS_DECISION` — a worker or reviewer returned it; it carries why, the exact question, and any
-  bounded suggestion the reviewer offered, and returns immediately to the Orchestrator.
-- `CORRECTION_BUDGET_EXHAUSTED` — the reviewer still returns `BLOCKED` after the budget is spent; it
-  carries the reviewer's remaining blockers. It is only a terminal seam; it does not start a
-  redesign.
-- `REVIEWER_RUNTIME_RECOVERY_EXHAUSTED` — the reviewer child failed with a runtime or provider
-  transport error and the bounded recovery allowance was exhausted. It carries the failed phase
-  (`REVIEW` or `REREVIEW`) and a bounded error summary. It is distinct from `BLOCKED`,
-  `NEEDS_DECISION`, and correction-budget exhaustion and does not masquerade as a semantic outcome.
-
-### Reviewer runtime recovery — distinct baselines, same budget semantics
-
-The reviewed-lane workflow owns bounded recovery for read-only reviewer transport failures. Each
-review and rereview round allows exactly two fresh replacement attempts after its initial failed
-reviewer child (three attempts total per round). Every replacement runs with fresh context
-(`context: "fresh"`) against the same protected lane, the same ticket expectations and review brief
-as the failed round, and that round's own runtime-owned baseline, `integrationTip` for initial review and `correctionBase` for rereview. Recovery attempts do not
-consume or reset the semantic correction budget — only a `BLOCKED` reviewer verdict followed by a
-writer correction consumes that budget. Only a schema-valid structured verdict (`PASS`, `BLOCKED`,
-`NEEDS_DECISION`) returned by a successful child may drive workflow branching; free-form output
-text and failed-child structured-output capture artifacts remain diagnostic and never drive
-branching. If the bounded allowance is exhausted, the workflow returns the typed
-`REVIEWER_RUNTIME_RECOVERY_EXHAUSTED` outcome with bounded phase and error diagnostics instead of
-throwing or returning an unclassified workflow failure. Writer (implementer/correction) runtime
-failures are never automatically retried or resumed because the lane may contain partial
-mutations; recovery is left to the Orchestrator. Profile-owned model and thinking settings remain
-unchanged and the immutable review subject is never altered by recovery.
-
-The tool returns only an asynchronous launch receipt — `workflow_id`, `async_id`, and `async_dir`.
-The receipt is not Acceptance: the ordinary asynchronous workflow result must wake the session
-through the Post-launch guidance, and the Orchestrator judges the typed result while the lane remains
-available. Child run IDs remain runtime operation evidence; Git, the lane runtime, and the
-Orchestrator own later coordination. Rereviews and collection-time reconciliation reviews use fresh
-compatible children under the tool's bounded contract; correction writers use the retained-correction
-selector above.
-
-The launch fails closed before spawn when the exact managed lane, either configured profile, or the
-pi-subagents Extension RPC v1 `spawn`/`asyncSpawn` capability is missing or incompatible. There is no fallback launcher.
-
-## Typed results
-
-Collab's core owns what these fields mean, and each child's own `outputSchema` — delivered to it at
-launch — is authoritative for the exact shape it must return. This section owns the shape you branch
-on, and the runtime rejects a child result that departs from it.
-
-**Worker (`collab-implementer`).** `outcome` discriminates `COMPLETED`, `BLOCKED` and
-`NEEDS_DECISION`. `COMPLETED` carries no validation field; `BLOCKED` carries `blocker`;
-`NEEDS_DECISION` carries `decision: { why, question }`. Every branch may add `residualRisks` and
-`efficiencyFeedback`, and carries nothing else.
-
-**Reviewer (`collab-acceptor`).** `verdict` discriminates `PASS`, `BLOCKED` and `NEEDS_DECISION`.
-`BLOCKED` requires `blockers` — each with `where`, `why`, bounded `howToFix` and `trigger` — and
-`correctionBase`, the exact lane HEAD SHA it inspected, which stays internal to the loop.
-`NEEDS_DECISION` carries `decision: { why, question }`. Every branch may add `residualRisks` and
-`efficiencyFeedback`, and carries nothing else.
-
-What no schema states:
-
-- Each child finishes through Pi's structured-output protocol, so the parsed `structuredOutput` is
-  what drives every branch and terminal projection, and free-form output text stays diagnostic.
-- Implementer launches retain Pi's v1 effects projection as optional runtime diagnostics only. Every
-  schema-valid `COMPLETED` proceeds to a fresh reviewer on its own, whatever the effects say —
-  absent, empty, missing, or `not-applicable` — and a schema-valid `BLOCKED` or `NEEDS_DECISION`
-  stands on its own without mutation.
-- Give each child one structured result: both default Collab profiles set
-  `acceptance: { level: none, ... }` with a reason, so a launch wanting Pi's generic acceptance
-  report alongside it selects that policy explicitly.
-- An explicitly present empty `efficiencyFeedback` string is valid and produces an artifact, while
-  omitting the field produces none. The Orchestrator requests it in ordinary dispatch content
-  whenever efficiency diagnosis is useful; a request leaves it optional, and omission stays a clean
-  result.
-- **An acceptor child's `PASS` is not the workflow's `REVIEWED`.** The child's verdict is its own;
-  the composed terminal is the workflow's.
+Durable state stays authoritative when a notification is missed or the session was inactive; read it
+with `control_subagent({ action: "status" })` rather than assuming silence means still running.
 
 ## Post-launch
 
-Read this section after launching an asynchronous workflow, when the Orchestrator continues
-independent work before completion wakes the session.
+Read this section after launching a child, when the Orchestrator continues independent work before
+completion wakes the session.
 
-Launch subagents asynchronously so the Orchestrator can continue independent work. In an interactive
-session, return control or use the active goal's yield mechanism and let completion wake the session.
-Use `subagent_wait` only when the current request must finish in the same turn; waiting does not make
-a child more authoritative.
+Launch asynchronously so the Orchestrator can continue independent work. In an interactive session,
+return control or use the active goal's yield mechanism and let the terminal notification wake the
+session. Blocking on a child does not make it more authoritative.
 
-After the workflow reaches a terminal handoff, if the lane's writer owned any Acceptance claims in the assigned `ticket.md` — the claims naming no other observer — reread that exact ticket before final Acceptance judgement, Resolution, lifecycle state, or task-progress reconciliation. Read
-only the assigned ticket. That reread is where the Orchestrator rebuilds the Acceptance list from what each claim's deciding observer reported, rather than from the writer's checkboxes. This adds no post-wake `collab_status` read and no generic record-edit reread; completion processing, collection selection, and ticket mutation ownership remain unchanged.
+After a terminal handoff, if the lane's writer owned any Acceptance claims in the assigned
+`ticket.md` — the claims naming no other observer — reread that exact ticket before final Acceptance
+judgement, Resolution, lifecycle state, or task-progress reconciliation. Read only the assigned
+ticket. That reread is where the Orchestrator rebuilds the Acceptance list from what each claim's
+deciding observer reported, rather than from the writer's checkboxes.
 
 ## Run control
 
 Read this section only when a run is interrupted or needs status, steering, or stopping.
 
-Inspect a run with `subagent({ action: "status", id })`. Guide a live top-level run with
-`action: "steer"` and stop it with `action: "stop"`. After a writing run is interrupted, inspect its changed files and
-commit state before choosing the next owner.
+`control_subagent({ action: "status" })` lists the ids running in this session. Guide a live child
+with `action: "steer"`, relaunch an interrupted one with `action: "resume"`, and end one with
+`action: "terminate"`. After a writing child is interrupted, inspect its changed files and commit
+state before choosing the next owner.
 
 ## Placement
 
-Read this section only when the canonical lane placement does not fit the chosen shape: discovering
-live profiles, selecting another compatible profile, a fork context, managed isolation around a
-non-Collab checkout, or parallel writers.
+Read this section only when the canonical lane placement does not fit the chosen shape.
 
-Discover the live profiles with `subagent({ action: "list" })`, then select only an executable,
-non-disabled agent. The canonical reviewed-lane placement is `collab_run_reviewed_lane`, which
-preflights the configured profiles and exact lane before asking pi-subagents to launch. A different
-shape requires an explicit Orchestrator choice and its own supported placement mechanism; do not
-replace the canonical tool with a handwritten worker/reviewer loop. Keep execution and management
-separate: status, steering, stopping, and other controls use their management action without
-execution fields.
-
-For a gates-only lane, dispatch `collab-implementer` with ordinary asynchronous `subagent` execution,
-using the exact managed lane worktree as `cwd` and `worktree: false`. Omit `model` and `thinking` so
-the profile owns them. This lane has no reviewer, so the direct writer dispatch is not a handwritten
-worker/reviewer loop and `collab_run_reviewed_lane` does not apply. Supply no correction budget; after
-the writer stops, an in-scope correction is another ordinary dispatch onto the same lane. The
+For a gates-only lane, spawn `collab-implementer` onto the exact managed lane worktree. This lane
+has no reviewer, so the direct writer dispatch is not a handwritten worker/reviewer loop. After the
+writer stops, an in-scope correction is another ordinary spawn onto the same lane, and the
 Orchestrator judges the writer's mechanical-gate result before collection.
 
-Use `context: "fresh"` for independent review. Use `context: "fork"` only when the child should
-inherit the persisted parent conversation; it is not a filtered review context. A profile's configured
-default applies when the call omits context.
-
-`worktree: true` remains for a writing child when the source checkout is clean and the Orchestrator
-deliberately wants managed isolation around a non-Collab checkout. Parallel reviewers may remain
-read-only; parallel writers each need their own writable checkout.
+Parallel reviewers may share a read-only lane; parallel writers each need their own writable
+checkout.
 
 ## Collection
 
 Read this section only after the Orchestrator judges the lane and chooses collection.
 
-`lane_collect`'s own stale-lane behavior is the default collection path after the Orchestrator
-judges the lane. A `collected` result completes collection. A `reconciled` result stops before
+`collab_lane` with `action: collect` carries its own stale-lane behavior and is the default
+collection path. A `collected` result completes collection. A `reconciled` result stops before
 collection: apply the core lane-reconciliation placement test to the reconciled protected current
 lane, have the Orchestrator judge again, and only then retry collection. Where that test places a
-reviewer, launch a fresh typed reviewer. A `conflicted` result returns to the Orchestrator.
-`lane_reconcile` remains available but is not an extra default pre-step.
-
-```javascript
-// lane_collect returned "reconciled" and residue placed a reviewer: stop before collection
-const reconciledReview = await runs.run("review-reconcile-1", {
-  agent: "collab-acceptor",
-  cwd: lane,
-  worktree: false,
-  context: "fresh",
-  task: REVIEW_BRIEF + " — rereview the reconciled protected current lane",
-  outputSchema: reviewerSchema
-});
-// The Orchestrator judges reconciledReview.structuredOutput, then retries lane_collect
-```
+reviewer, spawn a fresh `collab-acceptor` onto the reconciled lane with a brief saying so. A
+`conflicted` result returns to the Orchestrator. `collab_lane` with `action: reconcile` remains
+available but is not an extra default pre-step.
 
 ## Operations
 
@@ -304,8 +161,6 @@ heads.
 - The Collection boundary's adoption step: makes an existing branch, passed as `source_branch`, the
   complete managed integration state — `collab_integration_adopt`.
 - Manage the task lane — `collab_lane` with `action` `create` (branch and worktree at integration tip, optional `comment` only for create), `reconcile` (merge integration into lane), `collect` (fast-forward integration to lane tip and force-retire the lane worktree — untracked or ignored files there are lost, tracked dirt or merge conflict keeps the lane with a warning), `drop` (force-retire without collecting, discarding uncollected work and warning if dirty, conflicted or incomplete). Stale-lane handling is via `collect` or explicit `reconcile`; creation is the execution shape for a dispatched writer.
-- Compose a reviewed lane: launches the configured `collab-implementer` and `collab-acceptor` asynchronously in one
-  exact managed lane with bounded corrections — `collab_run_reviewed_lane`.
 - The lane tool distinguishes collection (advances integration and retires the lane) from discarding uncollected work (drop without advancing), and both retire the lane worktree via force removal. It emits a custody warning when
   removal discards tracked or staged changes or active merge/conflict state. Unclassifiable Git state
   remains warning-worthy. This classification changes reporting only: best-effort removal and custody
@@ -317,10 +172,7 @@ heads.
   the commit's tree equals the accepted integration tree, then advances both the persistence and
   integration branches to that commit — `collab_integration_land`.
 - Retire the lane, at task scope: force-removes the managed integration and its remaining lanes once
-  the task's collab-owned state is no longer needed — `collab_integration_remove`. When a Dev-flow task requested `efficiencyFeedback`, follow
-  [dev-flow's feedback closeout](../dev-flow/references/collab-feedback-closeout.md) before
-  `collab_integration_remove`. That reference owns the procedure; run it as written, on the public
-  tool parameters as they stand.
+  the task's collab-owned state is no longer needed — `collab_integration_remove`.
 - Read-only inspection of a task's integration and lane state; supports every step above without
   mutating anything — `collab_status`.
 - Snapshot task state and telemetry to fixed report artifacts, with no cleanup or readiness

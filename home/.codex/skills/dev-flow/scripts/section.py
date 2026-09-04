@@ -13,7 +13,8 @@ HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
 FENCE = re.compile(r"^\s*(```|~~~)")
 MD_LINK = re.compile(r"\]\((?!\w+:)([^)\s#]+\.(?:md|toml))(#[^)\s]*)?\)")
 BARE_LINK = re.compile(r"`([^`\s]+\.(?:md|toml))(#[^`\s]+)?`")
-SEARCH_ROOTS = ("~/.codex/skills", "~/.codex/agents", "~/.claude/agents", "~/.pi/agent/agents")
+SEARCH_ROOTS = ("~/.codex/skills", "~/.codex/agents", "~/.claude/agents", "~/.pi/agent/agents",
+                "~/.pi/agent/herdr-subagents/profiles")
 
 
 def slug(text: str) -> str:

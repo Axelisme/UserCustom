@@ -17,6 +17,7 @@ POINTER_ROOTS = (
     HOME / ".claude/agents",
     HOME / ".codex/agents",
     HOME / ".pi/agent/agents",
+    HOME / ".pi/agent/herdr-subagents/profiles",
 )
 
 
@@ -72,7 +73,7 @@ class SkillPointerTest(unittest.TestCase):
     def test_both_collab_profiles_carry_the_orchestrators_two_anchors(self) -> None:
         profiles = [
             d / f"collab-{role}.md"
-            for d in (HOME / ".claude/agents", HOME / ".pi/agent/agents")
+            for d in (HOME / ".claude/agents", HOME / ".pi/agent/herdr-subagents/profiles")
             for role in ("implementer", "acceptor")
         ] + [
             HOME / f".codex/agents/collab-{role}.toml"

@@ -97,9 +97,7 @@ stops with that verification unbought and says so. Both live in [Closing a ticke
   leaving it cut off is the user's call, never an automatic one. Record which they chose. Reconcile the evidence and close-out in the record before moving it,
   whether work completed or was abandoned: the move itself is neutral and implies no completion. A
   decision whose force outlives the task takes [the ADR route](references/adr-graduation.md), which
-  the user opens. If this task requested Collab `efficiencyFeedback`, discharge
-  [collab-feedback-closeout](references/collab-feedback-closeout.md) **before managed integration
-  removal**, which precedes the move and after which the snapshot cannot be reconstructed.
+  the user opens.
 
 A handoff routes and guides; the record keeps factual authority and continues to own implementation
 work after it. A handoff is neither a durable stage of the lifecycle nor a factual owner: what the
@@ -245,7 +243,4 @@ condition instead:
   holds** → [custody](references/custody.md).
 - **A decision falls outside the task's out-of-scope boundary** → [custody](references/custody.md),
   following the `Envelope` section's pointer to its frozen artifact.
-- **This task is requesting Collab `efficiencyFeedback` for the first time** →
-  [collab-feedback-closeout](references/collab-feedback-closeout.md), which holds the pending closeout
-  obligation it creates.
 - **You are evolving dev-flow itself** → [design-principles](references/design-principles.md).

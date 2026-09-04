@@ -163,6 +163,7 @@ link_one .codex/AGENTS.md
 # Pi
 link_each .pi/agent/skills
 link_each .pi/agent/agents
+link_each .pi/agent/herdr-subagents/profiles
 link_each .pi/agent/extensions
 link_one .pi/settings.json
 link_one .pi/agent/settings.json

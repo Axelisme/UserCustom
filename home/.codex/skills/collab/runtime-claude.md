@@ -16,41 +16,20 @@ The profile's declared tools and Result contract are authoritative for that chil
 optional task, plan, monitor, artifact, scheduling, or messaging tools imply no further capability
 and are not Collab lifecycle stations.
 
-## Composed delegation
+## Dispatch
 
-**Claude has no composed reviewed-lane tool.** Where the Pi runtime hands the whole worker → reviewer
-→ bounded correction loop to one call, here the Orchestrator dispatches each role itself, over the
-one lane it selected. That is the entire binding: the loop's shape, its finite correction bounds, and
-its escalation are [Collab's](SKILL.md#review-placement-and-the-correction-loop), unchanged.
+The Orchestrator dispatches each role itself, over the one lane it selected. That is the entire
+binding: the loop's shape, its finite correction bounds, and its escalation are
+[Collab's](SKILL.md#review-placement-and-the-correction-loop), unchanged.
 
-Each dispatch is a fresh child of the exact profile — `collab-implementer` to write, `collab-acceptor`
-to review the protected current lane once mutation has stopped, a fresh compatible `collab-implementer` to
-correct under the original authority contract, and a fresh `collab-acceptor` to rereview. Every one of those
-is an Orchestrator dispatch, so a correction here has its placement decided at boundary 2 again
-rather than inheriting the previous round's. Project the results through
-Collab's [worker-result](SKILL.md#worker-results-are-semantic) and [Generic
+Each dispatch is a fresh child of the exact profile — `collab-implementer` to write,
+`collab-acceptor` to review the protected current lane once mutation has stopped, a fresh compatible
+`collab-implementer` to correct under the original authority contract, and a fresh `collab-acceptor`
+to rereview. Project the results through Collab's
+[worker-result](SKILL.md#worker-results-are-semantic) and [Generic
 Acceptance](SKILL.md#generic-acceptance) rules, and return blockers or decisions to the Orchestrator;
 final Acceptance, collection, landing, and escalation happen outside this binding.
 
-## Saved-Workflow selection
-
-`collab-reviewed-lane` is an optional saved Claude Workflow composing those same two profiles. It is
-an Orchestrator execution-shape selection over the same composition, not a new lifecycle, authority,
-or Result contract, and it owns its own Result schemas and terminal projection.
-
-Its correction is the Workflow's own: placement was fixed when the Workflow was launched, so
-Collab's boundary-2 re-entry reaches a correction the Orchestrator dispatches after the Workflow
-hands back, never one issued inside it.
-
-Select it only after current implementation authority is closed, one pre-provisioned lane exists, and
-the complete bounded input is closed; discussion, planning, and unbounded requests close none of
-those. Its input is six values: assigned lane, starting head, ticket pointer, envelope pointer or
-`null`, a correction budget of `0` or `1`, and operator notes — free-form text or `null` — carrying no
-scope, no Acceptance criterion, and no mutation authority. A note that contradicts the ticket loses to
-the ticket.
-
-The Workflows feature is host and plan gated and can be absent from a correctly installed
-environment: account entitlement, plan default, a remote gate, or a `disableWorkflows` setting each
-turn it off, none of which is visible from this repository. Finding no `collab-reviewed-lane` means
-the feature is unavailable here, not that the installation is broken; native composition above stays
-complete whenever the Workflow is not selected.
+A Claude child has no live parent channel: it returns once, and a question it needs answered has to
+come back as its whole result. Where Pi's `contact_parent` keeps a child waiting, here a decision
+request ends the run and its answer starts a fresh one.

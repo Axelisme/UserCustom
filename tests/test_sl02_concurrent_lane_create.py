@@ -20,7 +20,6 @@ from tests.test_collab_op_extension import (
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSION_OP = ROOT / "home/.pi/agent/extensions/collab-op.ts"
 PI_PACKAGE = Path("/usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js")
-LANE_MOD = ROOT / "home/.pi/agent/extensions/collab-reviewed-lane.ts"
 
 BLOCK_TEMPLATE = """#!/bin/sh
 real_git="__REAL_GIT__"

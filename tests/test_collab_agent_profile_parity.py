@@ -28,6 +28,9 @@ PARITY_NAMES = (
 # dedicated diagnostic: unknown profiles are never selected, and absent locations remove no compared
 # body. Add registry coverage only after dead declarations become an observed cost.
 COLLAB_ROLE_NAMES = ("collab-implementer", "collab-acceptor")
+# Herdr dispatches the two Collab roles from its own registry, so their Pi copies do not sit beside
+# the ordinary agent profiles the parity names above use.
+COLLAB_PI_DIR = ".pi/agent/herdr-subagents/profiles"
 COLLAB_ROLE_DELTAS: tuple[support.DeclaredDelta, ...] = (
     support.DeclaredDelta(
         profile="collab-implementer",
@@ -37,17 +40,6 @@ COLLAB_ROLE_DELTAS: tuple[support.DeclaredDelta, ...] = (
             "Known pre-existing defect: Codex's copy carries no Reorientation section. The task "
             "envelope explicitly forbids fixing this here; it is registered on candidate-backlog "
             "instead."
-        ),
-    ),
-    support.DeclaredDelta(
-        profile="collab-implementer",
-        runtime="pi",
-        location="## Result",
-        reason=(
-            "Deliberate Pi-specific terminal-result semantics: Pi's frontmatter (`acceptance`, "
-            "`acceptanceRole`, `completionGuard`) gives it a native typed result schema that Claude "
-            "and Codex lack, so only Pi's `## Result` narrates that schema's typed branches, its "
-            "run-artifact command ownership, and that it carries no repo-local validation receipt."
         ),
     ),
     support.DeclaredDelta(
@@ -72,7 +64,7 @@ class CollabAgentProfileParityTests(unittest.TestCase):
 
     def test_collab_role_copies_are_identical_modulo_declared_deltas(self) -> None:
         for name in COLLAB_ROLE_NAMES:
-            profile = support.load_runtime_profile(HOME, name)
+            profile = support.load_runtime_profile(HOME, name, pi_dir=COLLAB_PI_DIR)
             deltas = tuple(delta for delta in COLLAB_ROLE_DELTAS if delta.profile == name)
             with self.subTest(profile=name):
                 support.assert_prompt_parity(
@@ -171,7 +163,7 @@ class CollabAgentProfileParityTests(unittest.TestCase):
             f"the template's repair order runs past one line, so this check would only compare "
             f"its first fragment: {order}",
         )
-        profile = support.load_runtime_profile(HOME, "collab-implementer")
+        profile = support.load_runtime_profile(HOME, "collab-implementer", pi_dir=COLLAB_PI_DIR)
         for runtime, prompt in support.runtime_prompts(profile).items():
             with self.subTest(runtime=runtime):
                 self.assertTrue(
@@ -186,7 +178,8 @@ class CollabAgentProfileParityTests(unittest.TestCase):
         # skills' own documents alike.
         sources = {}
         for name in PARITY_NAMES + COLLAB_ROLE_NAMES:
-            profile = support.load_runtime_profile(HOME, name)
+            pi_dir = COLLAB_PI_DIR if name in COLLAB_ROLE_NAMES else ".pi/agent/agents"
+            profile = support.load_runtime_profile(HOME, name, pi_dir=pi_dir)
             for runtime, prompt in support.runtime_prompts(profile).items():
                 sources[f"{name}/{runtime}"] = prompt
         for skill in ("dev-flow", "collab"):
@@ -208,8 +201,8 @@ class CollabAgentProfileParityTests(unittest.TestCase):
         # collab/SKILL.md bounds the Orchestrator's read of a receiver profile to that profile's
         # `Dispatch contract` and `Result` sections. Bodies may diverge per runtime; these two
         # sections may not go missing, or that instruction dangles under the runtime that lacks one.
-        for name in ("collab-implementer", "collab-acceptor"):
-            profile = support.load_runtime_profile(HOME, name)
+        for name in COLLAB_ROLE_NAMES:
+            profile = support.load_runtime_profile(HOME, name, pi_dir=COLLAB_PI_DIR)
             for runtime, prompt in support.runtime_prompts(profile).items():
                 with self.subTest(profile=name, runtime=runtime):
                     headings = support.section_headings(prompt)

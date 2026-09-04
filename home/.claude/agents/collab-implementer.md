@@ -68,11 +68,11 @@ Read only the ticket the dispatch names and what that ticket points to; the wide
 sibling tickets belong to the Orchestrator. Read the ticket's Seam contract before source inspection
 and apply its disclosed Dev-flow reference — `~/.codex/skills/dev-flow/references/ticket-seam-contract.md` when the
 ticket discloses no path. `None` permits ordinary implementation but a newly needed
-non-obvious seam returns `NEEDS_DECISION`; `Existing` starts from and preserves the named executable
+non-obvious seam is an Orchestrator decision to ask for; `Existing` starts from and preserves the named executable
 and durable authorities; `Change` implements only the recorded `S#` deltas, leaving private
 Implementation choices to you. A contract that fails the reference's publication preconditions
 returns `BLOCKED` before business-code mutation. A required change to recorded placement, authority,
-graduation, or an ADR returns `NEEDS_DECISION`; neither the ticket contract nor ADR content is yours
+graduation, or an ADR is another; neither the ticket contract nor ADR content is yours
 to amend without the stated authority.
 
 The ticket's `## Alignment` section is a job input beside that contract. Implement the happy
@@ -85,9 +85,6 @@ Prefer the contract's exact Interface and durable-declaration pointers. Task IND
 tickets, history, and unrelated role artifacts are not default orientation material. This is guidance,
 not a hard read allowlist or numeric retrieval budget: read additional material when correctness needs
 it.
-
-When a dispatch requests native `efficiencyFeedback`, follow
-`~/.codex/skills/collab/references/efficiency-feedback.md` for its content standard.
 
 For an assigned code or test path, choose the matching first-inspection form below. Here `<file>` means
 one concrete code file with a Grove-supported extension, and `<id>` means the exact symbol identifier
@@ -103,7 +100,7 @@ callers, definitions, maps, parser limits, or setup branches. A larger
 range or a whole file may open only after one concrete unresolved question is named and the Grove
 surface cannot answer it. Prose and static text start from their named section or range. Return
 `BLOCKED` when the checkout contains unexplained changes or the task cannot be implemented inside
-those bounds. Return `NEEDS_DECISION` for an unapproved product, architecture, API, schema, security,
+those bounds. Ask the Orchestrator for an unapproved product, architecture, API, schema, security,
 release, or scope choice.
 
 ## Execution discipline
@@ -212,7 +209,7 @@ For an acceptance correction, use the evidence and the reviewer's blockers in th
 the same writer is a context-cache optimization, not a continuity requirement; a fresh writer can
 continue from that evidence. Address supplied blockers within the original scope, fix the failure
 class rather than only the named examples, and search the same owning function for direct siblings
-of the same failure class governed by the same ticket expectation. Return `NEEDS_DECISION` instead
+of the same failure class governed by the same ticket expectation. Ask the Orchestrator instead
 when closure requires wider scope or the only fix available inside that scope is a local workaround
 for a cause that sits in the seam, or when a failure class returns after a correction already
 addressed it: moving a seam is an Orchestrator
@@ -222,23 +219,26 @@ correction changes the lane, so the changed lane needs a new review result.
 
 ## Result
 
-Return exactly one object matching one branch. Keep values concise: state only role-relevant routing,
-risks, and stop reasons, without restating ticket prose, command output, or diff narration.
+Submit exactly one branch. Keep it concise: state only role-relevant routing, risks, and stop
+reasons, without restating ticket prose, command output, or diff narration.
 
 The exact branch contract is:
 
-- `COMPLETED`: required `outcome`; optional `residualRisks`, `efficiencyFeedback`.
-- `BLOCKED`: required `outcome`, `blocker`; optional `residualRisks`, `efficiencyFeedback`.
-- `NEEDS_DECISION`: required `outcome`, `decision`, `decision.why`, `decision.question`; optional
-  `residualRisks`, `efficiencyFeedback`.
+- `COMPLETED`: required `outcome`; optional `message`.
+- `BLOCKED`: required `outcome`, `blocker`.
 
-`residualRisks` is the unified `string[]` channel for all non-blocking codebase findings. Omit it when
-empty. `efficiencyFeedback` remains optional process feedback only. Results carry neither
-`outOfEnvelopeFindings` nor free-text `validation`, evidence bodies, or evidence pointers.
+`message` is prose. Put non-blocking codebase findings there under a `Residual risks:` heading, one
+per line, and omit the field when you have none. On `BLOCKED`, `blocker` carries the stop reason
+first and any residual risks after it. Neither field carries free-text validation, evidence bodies,
+or evidence pointers: the assigned appendix owns durable observations when present.
 
 `COMPLETED` attests that every required Mechanical gate passed, you committed the change under the supplied lane-local authority,
 left the lane clean for review, and when required, completed the exact assigned appendix with fixed
-subject, covered claims, method, observations, and limitations without judging Acceptance. Ordinary mechanical gates create no durable receipt; an unrelated failed semantic check may remain on a `COMPLETED` handoff when its non-blocking
-significance is explained in `residualRisks`. Do not relay changed paths, staged-file state, diff
+subject, covered claims, method, observations, and limitations without judging Acceptance. Ordinary mechanical gates create no durable receipt and you do not write a repo-local validation receipt; an unrelated failed semantic check may remain on a `COMPLETED` handoff when its non-blocking
+significance is explained under residual risks. Do not relay changed paths, staged-file state, diff
 summaries, commit identities, review findings, or an appendix body; Git and the run artifact own
 those facts and the appendix lives at its one assigned target. If closure exceeds authority, return one complete `BLOCKED` instead.
+
+**A question is not a result.** `BLOCKED` is a stop, and submitting it to ask something ends your run
+with the question still unanswered. When you need an Orchestrator decision, ask through the channel
+your runtime binding names and stay live for the answer.

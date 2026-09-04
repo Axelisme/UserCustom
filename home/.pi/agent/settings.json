@@ -1,33 +1,33 @@
 {
+  "lastChangelogVersion": "0.85.0",
   "theme": "dark",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.6-sol",
   "defaultThinkingLevel": "medium",
   "packages": [
     "/home/axel/Documents/VSCode/Typescript/pi-goal",
-    "/home/axel/Documents/VSCode/Typescript/pi-handoff-context",
     "/home/axel/Documents/VSCode/Typescript/cache-stats",
-    "/home/axel/Documents/VSCode/Typescript/pi-subagents",
+    "/home/axel/Documents/VSCode/Typescript/pi-herdr-subagents",
     "npm:pi-mcp-adapter",
+    "npm:pi-web-access",
     "npm:pi-openai-fast-mode",
-    {
-      "source": "npm:pi-web-access",
-      "extensions": []
-    },
-    "npm:pi-claude-code-ui",
-    "npm:pi-antigravity"
+    "npm:pi-antigravity",
+    "npm:pi-claude-code-ui"
   ],
-  "lastChangelogVersion": "0.84.4",
   "enabledModels": [
-    "openai-codex/gpt-5.6-luna",
     "openai-codex/gpt-5.6-sol",
+    "openai-codex/gpt-5.6-luna",
     "anthropic/claude-opus-5",
     "anthropic/claude-sonnet-5",
     "antigravity/gemini-3.8-flash"
   ],
-  "subagents": {
-    "defaultModel": "gpt-5.6-luna",
-    "defaultProvider": "openai-codex",
-    "defaultThinking": "max"
+  "herdrSubagents": {
+    "allowExtensions": [
+      "/home/axel/Documents/VSCode/Typescript/cache-stats",
+      "npm:pi-web-access",
+      "npm:pi-openai-fast-mode",
+      "npm:pi-antigravity",
+      "npm:pi-claude-code-ui"
+    ]
   }
 }

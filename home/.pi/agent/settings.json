@@ -1,9 +1,9 @@
 {
-  "lastChangelogVersion": "0.85.0",
+  "lastChangelogVersion": "0.85.1",
   "theme": "dark",
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.6-sol",
-  "defaultThinkingLevel": "medium",
+  "defaultModel": "gpt-6-astra",
+  "defaultThinkingLevel": "low",
   "packages": [
     "/home/axel/Documents/VSCode/Typescript/pi-goal",
     "/home/axel/Documents/VSCode/Typescript/cache-stats",
@@ -15,9 +15,11 @@
     "npm:pi-claude-code-ui"
   ],
   "enabledModels": [
+    "openai-codex/gpt-6-astra",
     "openai-codex/gpt-5.6-sol",
     "openai-codex/gpt-5.6-luna",
-    "antigravity/gemini-3.8-flash"
+    "antigravity/gemini-3.8-flash",
+    "antigravity/claude-sonnet-4-6"
   ],
   "herdrSubagents": {
     "allowExtensions": [

@@ -3,6 +3,7 @@ name: collab-implementer
 description: Implement one bounded change as the sole writer, validate it, and return a semantic handoff without owning orchestration or lifecycle.
 modelList:
   - antigravity/gemini-3.8-flash:high
+  - antigravity/claude-sonnet-4-6:high
   - openai-codex/gpt-5.6-luna:max
 tools:
   - read

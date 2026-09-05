@@ -26,6 +26,13 @@
   },
   "aiQuotas": {
     "enabled": true,
-    "pinnedLimits": "{\"claude\":[\"5h\"],\"codex\":[\"5h\",\"Weekly\"],\"opencode\":[\"Rolling\"],\"deepseek\":[\"balance\"],\"openrouter\":[\"balance\"],\"grok\":[\"Billing\"],\"antigravity\":[\"Gemini Models - Five Hour Limit Remaining\"]}"
+    "pinnedLimits": "{\"claude\":[\"5h\"],\"codex\":[\"5h\",\"Weekly\"],\"opencode\":[\"Rolling\"],\"deepseek\":[\"balance\"],\"openrouter\":[\"balance\"],\"grok\":[\"Billing\"],\"antigravity\":[\"Gemini Models - Five Hour Limit Remaining\",\"Claude and GPT models - Five Hour Limit Remaining\"]}",
+    "deepSeekEnabled": false,
+    "openRouterEnabled": false,
+    "grokEnabled": false,
+    "openCodeEnabled": false,
+    "showResetCountdown": true,
+    "displayMode": "used",
+    "refreshInterval": 30
   }
 }

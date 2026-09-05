@@ -23,7 +23,7 @@
   },
   "dankLauncherV2UnloadOnClose": true,
   "useAutoLocation": true,
-  "networkPreference": "ethernet",
+  "networkPreference": "wifi",
   "cursorSettings": {
     "theme": "System Default",
     "size": 24,
@@ -110,19 +110,7 @@
           "enabled": true
         },
         {
-          "id": "aiOverviewControl",
-          "enabled": true
-        },
-        {
-          "id": "codexBar",
-          "enabled": true
-        },
-        {
           "id": "aiQuotas",
-          "enabled": true
-        },
-        {
-          "id": "dankscale",
           "enabled": true
         }
       ],
@@ -133,11 +121,6 @@
           "size": 5
         },
         {
-          "id": "music",
-          "enabled": true,
-          "mediaSize": 0
-        },
-        {
           "id": "appsDock",
           "enabled": true
         },
@@ -145,10 +128,6 @@
           "id": "clock",
           "enabled": true,
           "clockCompactMode": false
-        },
-        {
-          "id": "weather",
-          "enabled": true
         }
       ],
       "rightWidgets": [
@@ -165,11 +144,15 @@
           "enabled": true
         },
         {
-          "id": "systemTray",
+          "id": "dankscale",
           "enabled": true
         },
         {
           "id": "dankKDEConnect",
+          "enabled": true
+        },
+        {
+          "id": "systemTray",
           "enabled": true
         },
         {
@@ -271,5 +254,5 @@
     }
   },
   "frameMode": "separate",
-  "configVersion": 16
+  "configVersion": 17
 }

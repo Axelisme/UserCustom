@@ -2,7 +2,6 @@
 name: collab-acceptor
 description: Independently accept, block, or defer one reviewed lane using read-only, evidence-backed review.
 modelList:
-  - anthropic/claude-opus-5:high
   - openai-codex/gpt-5.6-sol:high
 tools:
   - read

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { cp, lstat, mkdir, open, readdir, readFile, readlink, rename, rm, rmdir, symlink, unlink } from "node:fs/promises";
+import { appendFile, cp, lstat, mkdir, open, readdir, readFile, readlink, realpath, rename, rm, rmdir, stat, symlink, unlink } from "node:fs/promises";
 import path from "node:path";
 import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 const TOOL_VERSION = 1;
@@ -603,7 +603,11 @@ export async function discoverRepository(
 ): Promise<Repository> {
   const rootProbe = await run(cwd, ["rev-parse", "--show-toplevel"], signal);
   if (rootProbe.code !== 0 || !rootProbe.stdout.trim()) {
-    throw new CollabOpError("not_git_repository", "current directory is not a Git repository");
+    throw new CollabOpError(
+      "not_git_repository",
+      "the selected path is not in a Git worktree",
+      "Pass an absolute Git worktree-root path as repo, or omit repo and run from inside a Git worktree.",
+    );
   }
   const worktreeRoot = path.resolve(rootProbe.stdout.trim());
   const common = await requireGit(
@@ -619,6 +623,150 @@ export async function discoverRepository(
     gitDir: commonDir,
     git: run,
   };
+}
+
+const AGENT_STATE_DIRECTORY = ".agent_state";
+// git check-ignore matches a directory-only pattern only when the probed path
+// names a directory, and the managed root usually does not exist yet on a
+// first establishing call, so the probe always carries the trailing slash.
+const AGENT_STATE_PROBE = `${AGENT_STATE_DIRECTORY}/`;
+const AGENT_STATE_PATTERN = `/${AGENT_STATE_DIRECTORY}/`;
+
+async function agentStateIsIgnored(repo: Repository, signal?: AbortSignal): Promise<boolean> {
+  const result = await repo.git(
+    repo.controlRoot,
+    ["check-ignore", "-q", "--", AGENT_STATE_PROBE],
+    signal,
+  );
+  if (result.code === 0) return true;
+  if (result.code === 1) return false;
+  const detail = result.stderr.trim() || result.stdout.trim() || `exit ${result.code}`;
+  throw agentStateExclusionIoError(
+    `check whether ${AGENT_STATE_DIRECTORY} is ignored`,
+    path.join(repo.gitDir, "info", "exclude"),
+    new Error(detail),
+    { git_exit_code: result.code },
+  );
+}
+
+// Only the worktree-root .gitignore outranks the common directory's
+// info/exclude for a repository-root path, so its negations are the complete
+// candidate set for an exclusion that verification found ineffective.
+async function negatingIgnorePatterns(
+  repo: Repository,
+): Promise<Array<{ source: string; line: number; pattern: string }>> {
+  const gitignore = path.join(repo.controlRoot, ".gitignore");
+  let content: string;
+  try {
+    content = await readFile(gitignore, "utf8");
+  } catch {
+    return [];
+  }
+  const negations: Array<{ source: string; line: number; pattern: string }> = [];
+  content.split("\n").forEach((raw, index) => {
+    const pattern = raw.trim();
+    if (!pattern.startsWith("!")) return;
+    negations.push({ source: ".gitignore", line: index + 1, pattern });
+  });
+  return negations.slice(0, 8);
+}
+
+function agentStateExclusionIoError(
+  operation: string,
+  excludeFile: string,
+  error: unknown,
+  details: Record<string, unknown> = {},
+): CollabOpError {
+  const failure = error as NodeJS.ErrnoException;
+  const detail = failure.message?.trim() || String(error);
+  return new CollabOpError(
+    "agent_state_exclusion_io_error",
+    `could not ${operation} for ${excludeFile}: ${detail}`,
+    `Make the repository's common Git info directory and ${excludeFile} writable regular paths, then retry.`,
+    {
+      operation,
+      exclude_file: excludeFile,
+      ...(failure.code ? { filesystem_code: failure.code } : {}),
+      ...details,
+    },
+  );
+}
+
+/**
+ * Make the acting repository ignore the managed state directory, returning the
+ * warning that reports a performed write and null when nothing was written.
+ */
+async function ensureAgentStateIgnored(
+  repo: Repository,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  const excludeFile = path.join(repo.gitDir, "info", "exclude");
+  let excludeMetadata;
+  try {
+    excludeMetadata = await pathMetadata(excludeFile);
+  } catch (error) {
+    throw agentStateExclusionIoError("inspect the exclusion file", excludeFile, error);
+  }
+  if (excludeMetadata !== null && !excludeMetadata.isFile()) {
+    const pathType = excludeMetadata.isSymbolicLink()
+      ? "symbolic link"
+      : excludeMetadata.isDirectory()
+        ? "directory"
+        : "non-regular path";
+    throw agentStateExclusionIoError(
+      "validate the exclusion file",
+      excludeFile,
+      new Error(`${excludeFile} is a ${pathType}, not a regular file`),
+      { path_type: pathType },
+    );
+  }
+  if (await agentStateIsIgnored(repo, signal)) return null;
+  try {
+    await mkdir(path.dirname(excludeFile), { recursive: true });
+  } catch (error) {
+    throw agentStateExclusionIoError("create the exclusion directory", excludeFile, error);
+  }
+  let existing = "";
+  try {
+    existing = await readFile(excludeFile, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw agentStateExclusionIoError("read the exclusion file", excludeFile, error);
+    }
+  }
+  const alreadyWritten = existing
+    .split("\n")
+    .some((line) => line.trim() === AGENT_STATE_PATTERN);
+  let wroteExclusion = false;
+  if (!alreadyWritten) {
+    const separator = existing.length > 0 && !existing.endsWith("\n") ? "\n" : "";
+    try {
+      await appendFile(excludeFile, `${separator}${AGENT_STATE_PATTERN}\n`);
+      wroteExclusion = true;
+    } catch (error) {
+      throw agentStateExclusionIoError("append the exclusion pattern", excludeFile, error);
+    }
+  }
+  if (!(await agentStateIsIgnored(repo, signal))) {
+    const overriding = await negatingIgnorePatterns(repo);
+    const writeOutcome = wroteExclusion
+      ? `; the appended line remains in ${excludeFile}`
+      : `; this call did not modify ${excludeFile}`;
+    throw new CollabOpError(
+      "agent_state_not_ignored",
+      `${AGENT_STATE_DIRECTORY} is still not ignored even though ${AGENT_STATE_PATTERN} is present in ${excludeFile}${writeOutcome}`,
+      `${wroteExclusion ? `The appended line remains in ${excludeFile}. ` : ""}Remove the ignore rule that re-includes ${AGENT_STATE_DIRECTORY}, or ignore ${AGENT_STATE_DIRECTORY} in the repository, then retry.`,
+      {
+        exclude_file: excludeFile,
+        pattern: AGENT_STATE_PATTERN,
+        exclude_written: wroteExclusion,
+        ...(overriding.length ? { overriding_patterns: overriding } : {}),
+      },
+    );
+  }
+  return alreadyWritten
+    ? null
+    : `wrote ${AGENT_STATE_PATTERN} to ${excludeFile} so managed task state is not reported as untracked`;
 }
 
 async function commitAt(
@@ -1140,6 +1288,10 @@ async function integrationCreate(
     throw new CollabOpError("git_error", "current HEAD does not resolve to a commit");
   }
 
+  const warnings: string[] = [];
+  const exclusionWarning = await ensureAgentStateIgnored(repo, signal);
+  if (exclusionWarning) warnings.push(exclusionWarning);
+
   try {
     await mkdir(path.dirname(task.integrationPath), { recursive: true });
     await requireGit(
@@ -1199,7 +1351,6 @@ async function integrationCreate(
     throw error;
   }
 
-  const warnings: string[] = [];
   const telemetryWarning = await recordEvent(task, "integration-create", "success", {
     subject_sha: head,
     persist: persistenceTarget.slice("refs/heads/".length),
@@ -1221,14 +1372,6 @@ async function integrationAdopt(
 ): Promise<Record<string, unknown>> {
   const repo = await discoverRepository(run, cwd, signal);
   const taskId = requireIdentifier(request.task_id, "task id");
-  if (request.dry_run !== undefined && typeof request.dry_run !== "boolean") {
-    throw new CollabOpError(
-      "invalid_dry_run",
-      "dry_run must be a boolean when provided",
-      "Pass true to preview adoption or omit dry_run to perform adoption.",
-    );
-  }
-  const dryRun = request.dry_run === true;
   const task = new TaskLayout(repo, taskId);
   const sourceBranch = await requireLocalBranch(
     repo,
@@ -1325,26 +1468,10 @@ async function integrationAdopt(
     }
   }
 
-  if (dryRun) {
-    return {
-      ok: true,
-      operation: "integration-adopt",
-      tool_version: TOOL_VERSION,
-      dry_run: true,
-      source_branch: sourceBranch.name,
-      source_sha: sourceSha,
-      integration_branch: task.integrationBranch,
-      integration_sha: sourceSha,
-      base_sha: baseSha,
-      persist: persistBranch.name,
-      planned: {
-        create_integration_worktree: !sourceWasCanonical,
-        create_integration_branch: !sourceWasCanonical,
-        create_base_ref: !basePresent,
-        create_persistence_ref: !persistencePresent,
-      },
-    };
-  }
+
+  const warnings: string[] = [];
+  const exclusionWarning = await ensureAgentStateIgnored(repo, signal);
+  if (exclusionWarning) warnings.push(exclusionWarning);
 
   const createdStateRoot = inventory.stateMetadata === null;
   const createdWorktreeRoot = inventory.worktreeMetadata === null;
@@ -1407,7 +1534,6 @@ async function integrationAdopt(
     throw error;
   }
 
-  const warnings: string[] = [];
   const telemetryWarning = await recordEvent(task, "integration-adopt", "success", {
     subject_sha: sourceSha,
     source_branch: sourceBranch.name,
@@ -4157,6 +4283,12 @@ const registeredOutputDir = {
   description: "Non-empty report destination; relative paths resolve from the repository control root.",
 } as const;
 
+const registeredRepo = {
+  type: "string",
+  minLength: 1,
+  description: "Optional repository selector. Omit it to resolve from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. Non-string, empty, relative, missing, and non-directory values return invalid_repo. A path inside a worktree but not exactly its root returns repo_not_worktree_root with details.worktree_root. An existing directory outside a Git worktree returns not_git_repository.",
+} as const;
+
 const registeredLaneId = {
   type: "string",
   pattern: IDENTIFIER.source,
@@ -4175,6 +4307,7 @@ const registeredLaneParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     action: {
       type: "string",
       enum: ["create", "reconcile", "collect", "drop"],
@@ -4191,6 +4324,7 @@ const registeredIntegrationCreateParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     task_id: registeredTaskId,
   },
   required: ["task_id"],
@@ -4200,6 +4334,7 @@ const registeredIntegrationAdoptParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     task_id: registeredTaskId,
     source_branch: registeredBranch,
     persist: registeredBranch,
@@ -4212,6 +4347,7 @@ const registeredIntegrationReconcileParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     task_id: registeredTaskId,
     lane_id: registeredLaneId,
   },
@@ -4222,6 +4358,7 @@ const registeredIntegrationLandParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     task_id: registeredTaskId,
     message: {
       type: "string",
@@ -4237,6 +4374,7 @@ const registeredIntegrationRemoveParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     task_id: registeredTaskId,
   },
   required: ["task_id"],
@@ -4246,6 +4384,7 @@ const registeredStatusParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     task_id: registeredTaskId,
   },
 } as const;
@@ -4254,6 +4393,7 @@ const registeredReportParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     task_id: registeredTaskId,
     output_dir: registeredOutputDir,
   },
@@ -4304,18 +4444,61 @@ function registeredErrorEnvelope(error: unknown): Record<string, unknown> {
   return { ok: false, tool_version: TOOL_VERSION, error: body };
 }
 
+async function registeredRepositoryCwd(
+  run: GitRunner,
+  fallbackCwd: string,
+  value: unknown,
+  signal?: AbortSignal,
+): Promise<string> {
+  if (value === undefined) return fallbackCwd;
+  if (typeof value !== "string" || !value || !path.isAbsolute(value)) {
+    throw new CollabOpError(
+      "invalid_repo",
+      "repo must be an absolute path to an existing Git worktree root",
+      "Pass the absolute path reported by git rev-parse --show-toplevel, or omit repo to resolve from the session working directory.",
+      { repo: value },
+    );
+  }
+  let canonicalInput: string;
+  try {
+    if (!(await stat(value)).isDirectory()) throw new Error("path is not a directory");
+    canonicalInput = await realpath(value);
+  } catch (error) {
+    throw new CollabOpError(
+      "invalid_repo",
+      `repo is not an existing directory: ${value}`,
+      "Pass the absolute path to an existing Git worktree root.",
+      { repo: value, cause: error instanceof Error ? error.message : String(error) },
+    );
+  }
+  const repo = await discoverRepository(run, canonicalInput, signal);
+  const canonicalRoot = await realpath(repo.worktreeRoot);
+  if (canonicalInput !== canonicalRoot) {
+    throw new CollabOpError(
+      "repo_not_worktree_root",
+      `repo must name the exact Git worktree root: ${canonicalRoot}`,
+      `Pass ${canonicalRoot} as repo.`,
+      { repo: value, worktree_root: canonicalRoot },
+    );
+  }
+  return canonicalRoot;
+}
+
 async function executeRegisteredTool(
+  run: GitRunner,
   request: Record<string, unknown>,
   ctx: ExtensionContext,
   handler: (
     request: Record<string, unknown>,
     signal: AbortSignal | undefined,
-    ctx: ExtensionContext,
+    cwd: string,
   ) => Promise<Record<string, unknown>>,
   signal: AbortSignal | undefined,
 ): Promise<Record<string, unknown>> {
   try {
-    return await handler(request, signal, ctx);
+    const { repo, ...operationRequest } = request;
+    const cwd = await registeredRepositoryCwd(run, ctx.cwd, repo, signal);
+    return await handler(operationRequest, signal, cwd);
   } catch (error) {
     throw new Error(JSON.stringify(registeredErrorEnvelope(error)));
   }
@@ -4344,41 +4527,42 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     handler: (
       request: Record<string, unknown>,
       signal: AbortSignal | undefined,
-      ctx: ExtensionContext,
+      cwd: string,
     ) => Promise<Record<string, unknown>>,
   ): (
     request: Record<string, unknown>,
     signal: AbortSignal | undefined,
-    ctx: ExtensionContext,
+    cwd: string,
   ) => Promise<Record<string, unknown>> {
-    return async (request, signal, ctx) => {
-      const repo = await discoverRepository(runGit, ctx.cwd, signal);
+    return async (request, signal, cwd) => {
+      const repo = await discoverRepository(runGit, cwd, signal);
       const taskId = requireIdentifier(request.task_id, "task id");
-      return withTaskLock(repo, taskId, () => handler(request, signal, ctx));
+      return withTaskLock(repo, taskId, () => handler(request, signal, cwd));
     };
   }
 
   pi.registerTool({
     name: "collab_integration_create",
     label: "Create Collab integration",
-    description: "Create a Git-managed integration worktree from the current attached local branch and HEAD.",
+    description: "Create a Git-managed integration worktree from the acting worktree's attached local branch and HEAD; that attached branch becomes the task persistence branch. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. Unless the repository already ignores .agent_state, this first appends /.agent_state/ to info/exclude in the repository's common Git directory, verifies the result, and reports the write in warnings; if a higher-precedence .gitignore rule keeps .agent_state un-ignored, it refuses before creating managed resources and reports whether the appended line remains in info/exclude.",
     parameters: registeredIntegrationCreateParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_integration_create",
             ["task_id"],
             ["task_id"],
           );
-          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
-            integrationCreate(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((created) =>
+          return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
+            integrationCreate(runGit, lockedCwd, lockedRequest, lockedSignal).then((created) =>
               registeredMutationResult(created),
             ),
-          )(params, innerSignal, innerCtx);
+          )(params, innerSignal, innerCwd);
         },
         signal,
       );
@@ -4392,24 +4576,25 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration_adopt",
     label: "Adopt Collab integration",
-    description: "Adopt an existing local branch into a Git-managed integration using an exact common base commit.",
+    description: "Adopt an existing local branch into a Git-managed integration using an exact common base commit. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. Unless the repository already ignores .agent_state, this first appends /.agent_state/ to info/exclude in the repository's common Git directory, verifies the result, and reports the write in warnings; if a higher-precedence .gitignore rule keeps .agent_state un-ignored, it refuses before creating managed resources and reports whether the appended line remains in info/exclude.",
     parameters: registeredIntegrationAdoptParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_integration_adopt",
             ["task_id", "source_branch", "persist", "base_sha"],
             ["task_id", "source_branch", "persist", "base_sha"],
           );
-          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
-            integrationAdopt(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((adopted) =>
+          return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
+            integrationAdopt(runGit, lockedCwd, lockedRequest, lockedSignal).then((adopted) =>
               registeredMutationResult(adopted, ["source_branch", "integration_branch"]),
             ),
-          )(params, innerSignal, innerCtx);
+          )(params, innerSignal, innerCwd);
         },
         signal,
       );
@@ -4423,24 +4608,25 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration_reconcile",
     label: "Reconcile Collab integration",
-    description: "Reconcile the task-owned persistence branch into a Git-managed lane.",
+    description: "Reconcile the task-owned persistence branch into a Git-managed lane. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
     parameters: registeredIntegrationReconcileParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_integration_reconcile",
             ["task_id", "lane_id"],
             ["task_id", "lane_id"],
           );
-          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
-            integrationReconcile(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((reconciled) =>
+          return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
+            integrationReconcile(runGit, lockedCwd, lockedRequest, lockedSignal).then((reconciled) =>
               registeredMutationResult(reconciled, ["state", "lane_id", "lane_sha"]),
             ),
-          )(params, innerSignal, innerCtx);
+          )(params, innerSignal, innerCwd);
         },
         signal,
       );
@@ -4454,24 +4640,25 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration_land",
     label: "Land Collab integration",
-    description: "Land the current integration into the task-owned persistence branch.",
+    description: "Land the current integration into the task-owned persistence branch. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
     parameters: registeredIntegrationLandParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_integration_land",
             ["task_id"],
             ["task_id", "message"],
           );
-          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
-            integrationLand(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((landed) =>
+          return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
+            integrationLand(runGit, lockedCwd, lockedRequest, lockedSignal).then((landed) =>
               registeredMutationResult(landed),
             ),
-          )(params, innerSignal, innerCtx);
+          )(params, innerSignal, innerCwd);
         },
         signal,
       );
@@ -4485,24 +4672,25 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration_remove",
     label: "Remove Collab integration",
-    description: "Best-effort force-removal of a task's recognizable managed integration resources.",
+    description: "Best-effort force-removal of a task's recognizable managed integration resources. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
     parameters: registeredIntegrationRemoveParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_integration_remove",
             ["task_id"],
             ["task_id"],
           );
-          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
-            integrationRemoveBestEffort(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((removed) =>
+          return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
+            integrationRemoveBestEffort(runGit, lockedCwd, lockedRequest, lockedSignal).then((removed) =>
               registeredMutationResult(removed),
             ),
-          )(params, innerSignal, innerCtx);
+          )(params, innerSignal, innerCwd);
         },
         signal,
       );
@@ -4516,20 +4704,21 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_status",
     label: "Inspect Collab status",
-    description: "Inspect Git-managed task status, or list discoverable managed tasks when task_id is omitted.",
+    description: "Inspect Git-managed task status, or list discoverable managed tasks when task_id is omitted. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
     parameters: registeredStatusParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_status",
             [],
             ["task_id"],
           );
-          return status(runGit, innerCtx.cwd, params.task_id, innerSignal);
+          return status(runGit, innerCwd, params.task_id, innerSignal);
         },
         signal,
       );
@@ -4543,20 +4732,21 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_report",
     label: "Report Collab state",
-    description: "Snapshot task state and telemetry to fixed report artifacts; no cleanup or readiness judgement is performed.",
+    description: "Snapshot task state and telemetry to fixed report artifacts; no cleanup or readiness judgement is performed. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
     parameters: registeredReportParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_report",
             ["task_id", "output_dir"],
             ["task_id", "output_dir"],
           );
-          return collabReport(runGit, innerCtx.cwd, params, innerSignal);
+          return collabReport(runGit, innerCwd, params, innerSignal);
         },
         signal,
       );
@@ -4571,13 +4761,14 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     name: "collab_lane",
     label: "Manage Collab lane",
     description:
-      "Manage a task lane. `create` makes a branch and worktree at the integration tip (optional comment only for create). `reconcile` merges integration into the lane. `collect` fast-forwards integration to the lane tip and force-retires the lane worktree — untracked or ignored files there are lost, tracked dirt or merge conflict keeps the lane with a warning. `drop` force-retires the lane without collecting, discarding uncollected work and warning if dirty, conflicted or incomplete.",
+      "Manage a task lane. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. `create` makes a branch and worktree at the integration tip (optional comment only for create). `reconcile` merges integration into the lane. `collect` fast-forwards integration to the lane tip and force-retires the lane worktree — untracked or ignored files there are lost, tracked dirt or merge conflict keeps the lane with a warning. `drop` force-retires the lane without collecting, discarding uncollected work and warning if dirty, conflicted or incomplete.",
     parameters: registeredLaneParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        async (value, innerSignal, innerCtx) => {
+        async (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_lane",
@@ -4602,7 +4793,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
             );
           }
           if (action === "create") {
-            const repo = await discoverRepository(runGit, innerCtx.cwd, innerSignal);
+            const repo = await discoverRepository(runGit, innerCwd, innerSignal);
             const taskId = requireIdentifier(params.task_id, "task id");
             return withTaskLock(
               repo,
@@ -4610,7 +4801,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
               async () => {
                 const created = await laneCreate(
                   runGit,
-                  innerCtx.cwd,
+                  innerCwd,
                   { task_id: params.task_id, lane_id: params.lane_id, comment: params.comment },
                   innerSignal,
                 );
@@ -4620,12 +4811,12 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
             );
           }
           if (action === "reconcile") {
-            const repo = await discoverRepository(runGit, innerCtx.cwd, innerSignal);
+            const repo = await discoverRepository(runGit, innerCwd, innerSignal);
             const taskId = requireIdentifier(params.task_id, "task id");
             return withTaskLock(repo, taskId, async () => {
               const reconciled = await laneReconcile(
                 runGit,
-                innerCtx.cwd,
+                innerCwd,
                 { task_id: params.task_id, lane_id: params.lane_id },
                 innerSignal,
               );
@@ -4633,12 +4824,12 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
             });
           }
           if (action === "collect") {
-            const repo = await discoverRepository(runGit, innerCtx.cwd, innerSignal);
+            const repo = await discoverRepository(runGit, innerCwd, innerSignal);
             const taskId = requireIdentifier(params.task_id, "task id");
             return withTaskLock(repo, taskId, async () => {
               const collected = await laneCollect(
                 runGit,
-                innerCtx.cwd,
+                innerCwd,
                 { task_id: params.task_id, lane_id: params.lane_id },
                 innerSignal,
                 true,
@@ -4646,7 +4837,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
               return registeredMutationResult(collected, ["state"]);
             });
           }
-          const repo = await discoverRepository(runGit, innerCtx.cwd, innerSignal);
+          const repo = await discoverRepository(runGit, innerCwd, innerSignal);
           const taskId = requireIdentifier(params.task_id, "task id");
           return withTaskLock(repo, taskId, async () => {
             const laneId = requireLaneId(params.lane_id);

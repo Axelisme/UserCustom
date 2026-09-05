@@ -11,10 +11,15 @@ import unittest
 from pathlib import Path
 
 from tests.test_collab_op_extension import (
+    close_harness,
+    close_harness_for,
     git,
     seed_managed_task,
     seed_repository,
     seed_task_container,
+    send_request,
+    spawn_raw_harness,
+    wait_until,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -683,6 +688,80 @@ exec "$real_git" "$@"
                 self.assertTrue(result.get("ok"), result)
             finally:
                 os.environ["PATH"] = orig_path
+
+    def test_repo_parameter_keeps_same_task_lanes_independent_across_repositories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            outside = base / "outside"
+            outside.mkdir()
+            first_base = base / "first"
+            first_base.mkdir()
+            first_repository, _ = seed_repository(first_base)
+            seed_task_container(first_repository)
+            seed_managed_task(first_repository, "demo")
+            second_base = base / "second"
+            second_base.mkdir()
+            second_repository, _ = seed_repository(second_base)
+            seed_task_container(second_repository)
+            seed_managed_task(second_repository, "demo")
+            release = base / "release-first"
+            wrapper_dir = base / "wrapper"
+            wrapper_dir.mkdir()
+            wrapper = BLOCK_TEMPLATE.replace("__BRANCH__", "wave/demo/selected-first").replace(
+                "__BLOCK__", str(release)
+            )
+            write_wrapper(wrapper_dir, wrapper)
+            original_path = os.environ.get("PATH", "")
+            os.environ["PATH"] = f"{wrapper_dir}:{original_path}"
+            first: subprocess.Popen[str] | None = None
+            second: subprocess.Popen[str] | None = None
+            try:
+                first = spawn_raw_harness(outside)
+                second = spawn_raw_harness(outside)
+                first_stdin = first.stdin
+                first_stdout = first.stdout
+                assert first_stdin is not None and first_stdout is not None
+                first_stdin.write(
+                    f"{json.dumps({'tool': 'collab_lane_create', 'task_id': 'demo', 'lane_id': 'selected-first', 'repo': str(first_repository)})}\n"
+                )
+                first_stdin.flush()
+                first_lock = first_repository / ".git/collab-op-locks/demo.lock"
+                self.assertTrue(
+                    wait_until(lambda: first_lock.exists()),
+                    "first repository never acquired its task lock",
+                )
+
+                second_observed = send_request(
+                    second,
+                    {
+                        "tool": "collab_lane_create",
+                        "task_id": "demo",
+                        "lane_id": "selected-second",
+                        "repo": str(second_repository),
+                    },
+                )
+
+                self.assertFalse(second_observed["is_error"])
+                self.assertEqual(
+                    git(second_repository, "rev-parse", "wave/demo/selected-second"),
+                    git(second_repository, "rev-parse", "wave/demo/integration"),
+                )
+                self.assertTrue(first_lock.exists())
+
+                release.write_text("go\n", encoding="utf-8")
+                first_observed = json.loads(first_stdout.readline())
+                self.assertFalse(first_observed["is_error"])
+                self.assertEqual(
+                    git(first_repository, "rev-parse", "wave/demo/selected-first"),
+                    git(first_repository, "rev-parse", "wave/demo/integration"),
+                )
+            finally:
+                release.write_text("go\n", encoding="utf-8")
+                os.environ["PATH"] = original_path
+                if first is not None:
+                    close_harness(first)
+                if second is not None:
+                    close_harness_for(outside)
 
     def test_A7_fifo_no_cross_process_ordering_claim(self):
         # This is a documentation/no-test check: FIFO makes no cross-process ordering claim, just verify that distinct process queues are independent (already covered).

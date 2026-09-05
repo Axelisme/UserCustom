@@ -4286,7 +4286,7 @@ const registeredOutputDir = {
 const registeredRepo = {
   type: "string",
   minLength: 1,
-  description: "Optional repository selector; omit it to resolve from the session working directory, otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
+  description: "Optional repository selector. Omit it to resolve from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. Non-string, empty, relative, missing, and non-directory values return invalid_repo. A path inside a worktree but not exactly its root returns repo_not_worktree_root with details.worktree_root. An existing directory outside a Git worktree returns not_git_repository.",
 } as const;
 
 const registeredLaneId = {

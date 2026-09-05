@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { cp, lstat, mkdir, open, readdir, readFile, readlink, rename, rm, rmdir, symlink, unlink } from "node:fs/promises";
+import { appendFile, cp, lstat, mkdir, open, readdir, readFile, readlink, rename, rm, rmdir, symlink, unlink } from "node:fs/promises";
 import path from "node:path";
 import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 const TOOL_VERSION = 1;
@@ -621,6 +621,91 @@ export async function discoverRepository(
   };
 }
 
+const AGENT_STATE_DIRECTORY = ".agent_state";
+// git check-ignore matches a directory-only pattern only when the probed path
+// names a directory, and the managed root usually does not exist yet on a
+// first establishing call, so the probe always carries the trailing slash.
+const AGENT_STATE_PROBE = `${AGENT_STATE_DIRECTORY}/`;
+const AGENT_STATE_PATTERN = `/${AGENT_STATE_DIRECTORY}/`;
+
+async function agentStateIsIgnored(repo: Repository, signal?: AbortSignal): Promise<boolean> {
+  const result = await repo.git(
+    repo.controlRoot,
+    ["check-ignore", "-q", "--", AGENT_STATE_PROBE],
+    signal,
+  );
+  if (result.code === 0) return true;
+  if (result.code === 1) return false;
+  throw new CollabOpError(
+    "git_error",
+    `could not check whether ${AGENT_STATE_DIRECTORY} is ignored: ${result.stderr.trim() || result.stdout.trim()}`,
+  );
+}
+
+// Only the worktree-root .gitignore outranks the common directory's
+// info/exclude for a repository-root path, so its negations are the complete
+// candidate set for an exclusion that verification found ineffective.
+async function negatingIgnorePatterns(
+  repo: Repository,
+): Promise<Array<{ source: string; line: number; pattern: string }>> {
+  const gitignore = path.join(repo.controlRoot, ".gitignore");
+  let content: string;
+  try {
+    content = await readFile(gitignore, "utf8");
+  } catch {
+    return [];
+  }
+  const negations: Array<{ source: string; line: number; pattern: string }> = [];
+  content.split("\n").forEach((raw, index) => {
+    const pattern = raw.trim();
+    if (!pattern.startsWith("!")) return;
+    negations.push({ source: ".gitignore", line: index + 1, pattern });
+  });
+  return negations.slice(0, 8);
+}
+
+/**
+ * Make the acting repository ignore the managed state directory, returning the
+ * warning that reports a performed write and null when nothing was written.
+ */
+async function ensureAgentStateIgnored(
+  repo: Repository,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  if (await agentStateIsIgnored(repo, signal)) return null;
+  const excludeFile = path.join(repo.gitDir, "info", "exclude");
+  await mkdir(path.dirname(excludeFile), { recursive: true });
+  let existing = "";
+  try {
+    existing = await readFile(excludeFile, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const alreadyWritten = existing
+    .split("\n")
+    .some((line) => line.trim() === AGENT_STATE_PATTERN);
+  if (!alreadyWritten) {
+    const separator = existing.length > 0 && !existing.endsWith("\n") ? "\n" : "";
+    await appendFile(excludeFile, `${separator}${AGENT_STATE_PATTERN}\n`);
+  }
+  if (!(await agentStateIsIgnored(repo, signal))) {
+    const overriding = await negatingIgnorePatterns(repo);
+    throw new CollabOpError(
+      "agent_state_not_ignored",
+      `${AGENT_STATE_DIRECTORY} is still not ignored after ${AGENT_STATE_PATTERN} was written to ${excludeFile}`,
+      `Remove the ignore rule that re-includes ${AGENT_STATE_DIRECTORY}, or ignore ${AGENT_STATE_DIRECTORY} in the repository, then retry.`,
+      {
+        exclude_file: excludeFile,
+        pattern: AGENT_STATE_PATTERN,
+        ...(overriding.length ? { overriding_patterns: overriding } : {}),
+      },
+    );
+  }
+  return alreadyWritten
+    ? null
+    : `wrote ${AGENT_STATE_PATTERN} to ${excludeFile} so managed task state is not reported as untracked`;
+}
+
 async function commitAt(
   repo: Repository,
   ref: string,
@@ -1140,6 +1225,10 @@ async function integrationCreate(
     throw new CollabOpError("git_error", "current HEAD does not resolve to a commit");
   }
 
+  const warnings: string[] = [];
+  const exclusionWarning = await ensureAgentStateIgnored(repo, signal);
+  if (exclusionWarning) warnings.push(exclusionWarning);
+
   try {
     await mkdir(path.dirname(task.integrationPath), { recursive: true });
     await requireGit(
@@ -1199,7 +1288,6 @@ async function integrationCreate(
     throw error;
   }
 
-  const warnings: string[] = [];
   const telemetryWarning = await recordEvent(task, "integration-create", "success", {
     subject_sha: head,
     persist: persistenceTarget.slice("refs/heads/".length),
@@ -1346,6 +1434,10 @@ async function integrationAdopt(
     };
   }
 
+  const warnings: string[] = [];
+  const exclusionWarning = await ensureAgentStateIgnored(repo, signal);
+  if (exclusionWarning) warnings.push(exclusionWarning);
+
   const createdStateRoot = inventory.stateMetadata === null;
   const createdWorktreeRoot = inventory.worktreeMetadata === null;
   const createdTaskRoot = inventory.rootMetadata === null;
@@ -1407,7 +1499,6 @@ async function integrationAdopt(
     throw error;
   }
 
-  const warnings: string[] = [];
   const telemetryWarning = await recordEvent(task, "integration-adopt", "success", {
     subject_sha: sourceSha,
     source_branch: sourceBranch.name,
@@ -4361,7 +4452,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration_create",
     label: "Create Collab integration",
-    description: "Create a Git-managed integration worktree from the current attached local branch and HEAD.",
+    description: "Create a Git-managed integration worktree from the current attached local branch and HEAD. Unless the repository already ignores .agent_state, this first appends /.agent_state/ to info/exclude in the repository's common Git directory, verifies the result, and reports the write in warnings; it refuses before creating anything when a higher-precedence .gitignore rule keeps .agent_state un-ignored.",
     parameters: registeredIntegrationCreateParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
@@ -4392,7 +4483,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration_adopt",
     label: "Adopt Collab integration",
-    description: "Adopt an existing local branch into a Git-managed integration using an exact common base commit.",
+    description: "Adopt an existing local branch into a Git-managed integration using an exact common base commit. Unless the repository already ignores .agent_state, this first appends /.agent_state/ to info/exclude in the repository's common Git directory, verifies the result, and reports the write in warnings; it refuses before creating anything when a higher-precedence .gitignore rule keeps .agent_state un-ignored. A dry run creates nothing and writes no exclusion.",
     parameters: registeredIntegrationAdoptParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(

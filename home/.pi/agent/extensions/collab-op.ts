@@ -636,9 +636,12 @@ async function agentStateIsIgnored(repo: Repository, signal?: AbortSignal): Prom
   );
   if (result.code === 0) return true;
   if (result.code === 1) return false;
-  throw new CollabOpError(
-    "git_error",
-    `could not check whether ${AGENT_STATE_DIRECTORY} is ignored: ${result.stderr.trim() || result.stdout.trim()}`,
+  const detail = result.stderr.trim() || result.stdout.trim() || `exit ${result.code}`;
+  throw agentStateExclusionIoError(
+    `check whether ${AGENT_STATE_DIRECTORY} is ignored`,
+    path.join(repo.gitDir, "info", "exclude"),
+    new Error(detail),
+    { git_exit_code: result.code },
   );
 }
 
@@ -664,6 +667,27 @@ async function negatingIgnorePatterns(
   return negations.slice(0, 8);
 }
 
+function agentStateExclusionIoError(
+  operation: string,
+  excludeFile: string,
+  error: unknown,
+  details: Record<string, unknown> = {},
+): CollabOpError {
+  const failure = error as NodeJS.ErrnoException;
+  const detail = failure.message?.trim() || String(error);
+  return new CollabOpError(
+    "agent_state_exclusion_io_error",
+    `could not ${operation} for ${excludeFile}: ${detail}`,
+    `Make the repository's common Git info directory and ${excludeFile} writable regular paths, then retry.`,
+    {
+      operation,
+      exclude_file: excludeFile,
+      ...(failure.code ? { filesystem_code: failure.code } : {}),
+      ...details,
+    },
+  );
+}
+
 /**
  * Make the acting repository ignore the managed state directory, returning the
  * warning that reports a performed write and null when nothing was written.
@@ -674,29 +698,45 @@ async function ensureAgentStateIgnored(
 ): Promise<string | null> {
   if (await agentStateIsIgnored(repo, signal)) return null;
   const excludeFile = path.join(repo.gitDir, "info", "exclude");
-  await mkdir(path.dirname(excludeFile), { recursive: true });
+  try {
+    await mkdir(path.dirname(excludeFile), { recursive: true });
+  } catch (error) {
+    throw agentStateExclusionIoError("create the exclusion directory", excludeFile, error);
+  }
   let existing = "";
   try {
     existing = await readFile(excludeFile, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw agentStateExclusionIoError("read the exclusion file", excludeFile, error);
+    }
   }
   const alreadyWritten = existing
     .split("\n")
     .some((line) => line.trim() === AGENT_STATE_PATTERN);
+  let wroteExclusion = false;
   if (!alreadyWritten) {
     const separator = existing.length > 0 && !existing.endsWith("\n") ? "\n" : "";
-    await appendFile(excludeFile, `${separator}${AGENT_STATE_PATTERN}\n`);
+    try {
+      await appendFile(excludeFile, `${separator}${AGENT_STATE_PATTERN}\n`);
+      wroteExclusion = true;
+    } catch (error) {
+      throw agentStateExclusionIoError("append the exclusion pattern", excludeFile, error);
+    }
   }
   if (!(await agentStateIsIgnored(repo, signal))) {
     const overriding = await negatingIgnorePatterns(repo);
+    const writeOutcome = wroteExclusion
+      ? `; the appended line remains in ${excludeFile}`
+      : `; this call did not modify ${excludeFile}`;
     throw new CollabOpError(
       "agent_state_not_ignored",
-      `${AGENT_STATE_DIRECTORY} is still not ignored after ${AGENT_STATE_PATTERN} was written to ${excludeFile}`,
-      `Remove the ignore rule that re-includes ${AGENT_STATE_DIRECTORY}, or ignore ${AGENT_STATE_DIRECTORY} in the repository, then retry.`,
+      `${AGENT_STATE_DIRECTORY} is still not ignored even though ${AGENT_STATE_PATTERN} is present in ${excludeFile}${writeOutcome}`,
+      `${wroteExclusion ? `The appended line remains in ${excludeFile}. ` : ""}Remove the ignore rule that re-includes ${AGENT_STATE_DIRECTORY}, or ignore ${AGENT_STATE_DIRECTORY} in the repository, then retry.`,
       {
         exclude_file: excludeFile,
         pattern: AGENT_STATE_PATTERN,
+        exclude_written: wroteExclusion,
         ...(overriding.length ? { overriding_patterns: overriding } : {}),
       },
     );
@@ -1309,14 +1349,6 @@ async function integrationAdopt(
 ): Promise<Record<string, unknown>> {
   const repo = await discoverRepository(run, cwd, signal);
   const taskId = requireIdentifier(request.task_id, "task id");
-  if (request.dry_run !== undefined && typeof request.dry_run !== "boolean") {
-    throw new CollabOpError(
-      "invalid_dry_run",
-      "dry_run must be a boolean when provided",
-      "Pass true to preview adoption or omit dry_run to perform adoption.",
-    );
-  }
-  const dryRun = request.dry_run === true;
   const task = new TaskLayout(repo, taskId);
   const sourceBranch = await requireLocalBranch(
     repo,
@@ -1413,26 +1445,6 @@ async function integrationAdopt(
     }
   }
 
-  if (dryRun) {
-    return {
-      ok: true,
-      operation: "integration-adopt",
-      tool_version: TOOL_VERSION,
-      dry_run: true,
-      source_branch: sourceBranch.name,
-      source_sha: sourceSha,
-      integration_branch: task.integrationBranch,
-      integration_sha: sourceSha,
-      base_sha: baseSha,
-      persist: persistBranch.name,
-      planned: {
-        create_integration_worktree: !sourceWasCanonical,
-        create_integration_branch: !sourceWasCanonical,
-        create_base_ref: !basePresent,
-        create_persistence_ref: !persistencePresent,
-      },
-    };
-  }
 
   const warnings: string[] = [];
   const exclusionWarning = await ensureAgentStateIgnored(repo, signal);
@@ -4452,7 +4464,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration_create",
     label: "Create Collab integration",
-    description: "Create a Git-managed integration worktree from the current attached local branch and HEAD. Unless the repository already ignores .agent_state, this first appends /.agent_state/ to info/exclude in the repository's common Git directory, verifies the result, and reports the write in warnings; it refuses before creating anything when a higher-precedence .gitignore rule keeps .agent_state un-ignored.",
+    description: "Create a Git-managed integration worktree from the current attached local branch and HEAD. Unless the repository already ignores .agent_state, this first appends /.agent_state/ to info/exclude in the repository's common Git directory, verifies the result, and reports the write in warnings; if a higher-precedence .gitignore rule keeps .agent_state un-ignored, it refuses before creating managed resources and reports whether the appended line remains in info/exclude.",
     parameters: registeredIntegrationCreateParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
@@ -4483,7 +4495,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration_adopt",
     label: "Adopt Collab integration",
-    description: "Adopt an existing local branch into a Git-managed integration using an exact common base commit. Unless the repository already ignores .agent_state, this first appends /.agent_state/ to info/exclude in the repository's common Git directory, verifies the result, and reports the write in warnings; it refuses before creating anything when a higher-precedence .gitignore rule keeps .agent_state un-ignored. A dry run creates nothing and writes no exclusion.",
+    description: "Adopt an existing local branch into a Git-managed integration using an exact common base commit. Unless the repository already ignores .agent_state, this first appends /.agent_state/ to info/exclude in the repository's common Git directory, verifies the result, and reports the write in warnings; if a higher-precedence .gitignore rule keeps .agent_state un-ignored, it refuses before creating managed resources and reports whether the appended line remains in info/exclude.",
     parameters: registeredIntegrationAdoptParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(

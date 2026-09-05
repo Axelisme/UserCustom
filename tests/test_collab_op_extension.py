@@ -4547,6 +4547,59 @@ class CollabOpExtensionAgentStateExclusionTests(unittest.TestCase):
                 [entry["pattern"] for entry in error["details"]["overriding_patterns"]],
                 ["!.agent_state"],
             )
+            self.assertTrue(error["details"]["exclude_written"])
+            self.assertIn("appended line remains", error["message"])
+            self.assertIn("appended line remains", error["repair"])
+            self.assertEqual(exclusion_lines(repository), ["/.agent_state/"])
+            self.assertEqual(managed_ref_snapshot(repository), before_refs)
+            self.assertEqual(git(repository, "branch", "--list", "wave/demo/integration"), "")
+            self.assertFalse((repository / ".agent_state/worktrees/demo").exists())
+
+    def test_preexisting_exclusion_failure_does_not_claim_this_call_wrote_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            commit_agent_state_ignore(repository, "!.agent_state")
+            seed_task_container(repository)
+            exclude_file(repository).write_text("/.agent_state/\n", encoding="utf-8")
+            before = exclude_file(repository).read_bytes()
+
+            observed = invoke(
+                repository,
+                {"tool": "collab_integration_create", "task_id": "demo"},
+            )
+
+            self.assertTrue(observed["is_error"])
+            error = observed["error"]["error"]
+            self.assertEqual(error["code"], "agent_state_not_ignored")
+            self.assertFalse(error["details"]["exclude_written"])
+            self.assertIn("this call did not modify", error["message"])
+            self.assertNotIn("appended line remains", error["repair"])
+            self.assertEqual(exclude_file(repository).read_bytes(), before)
+
+    def test_non_regular_exclude_file_returns_coded_io_error_without_resources(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            seed_task_container(repository)
+            exclusion = exclude_file(repository)
+            exclusion.unlink()
+            exclusion.mkdir()
+            before_refs = managed_ref_snapshot(repository)
+
+            observed = invoke(
+                repository,
+                {"tool": "collab_integration_create", "task_id": "demo"},
+            )
+
+            self.assertTrue(observed["is_error"])
+            error = observed["error"]["error"]
+            self.assertEqual(error["code"], "agent_state_exclusion_io_error")
+            self.assertTrue(error["repair"])
+            self.assertEqual(
+                error["details"]["operation"],
+                "check whether .agent_state is ignored",
+            )
+            self.assertEqual(error["details"]["exclude_file"], str(exclusion))
+            self.assertTrue(error["details"]["git_exit_code"])
             self.assertEqual(managed_ref_snapshot(repository), before_refs)
             self.assertEqual(git(repository, "branch", "--list", "wave/demo/integration"), "")
             self.assertFalse((repository / ".agent_state/worktrees/demo").exists())

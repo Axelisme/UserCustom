@@ -1669,6 +1669,248 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             self.assertTrue((target / ".agent_state/worktrees/demo/integration").is_dir())
             self.assertEqual(git(target, "status", "--porcelain"), "")
 
+    def test_repo_drives_complete_lifecycle_from_outside_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            outside = base / "outside"
+            outside.mkdir()
+            target_base = base / "target"
+            target_base.mkdir()
+            target, _ = seed_repository(target_base)
+            commit_agent_state_ignore(target)
+            seed_task_container(target)
+            selected_repo = str(target)
+
+            created = invoke(
+                outside,
+                {
+                    "tool": "collab_integration_create",
+                    "task_id": "demo",
+                    "repo": selected_repo,
+                },
+            )
+            self.assertFalse(created["is_error"])
+
+            lane_created = invoke(
+                outside,
+                {
+                    "tool": "collab_lane_create",
+                    "task_id": "demo",
+                    "lane_id": "writer",
+                    "repo": selected_repo,
+                },
+            )
+            self.assertFalse(lane_created["is_error"])
+            lane = target / ".agent_state/worktrees/demo/lanes/writer"
+            (lane / "work.txt").write_text("lane work\n", encoding="utf-8")
+            git(lane, "add", "work.txt")
+            git(lane, "commit", "-m", "lane work")
+
+            collected = invoke(
+                outside,
+                {
+                    "tool": "collab_lane_collect",
+                    "task_id": "demo",
+                    "lane_id": "writer",
+                    "repo": selected_repo,
+                },
+            )
+            self.assertFalse(collected["is_error"])
+            self.assertEqual(collected["result"]["state"], "collected")
+
+            landed = invoke(
+                outside,
+                {
+                    "tool": "collab_integration_land",
+                    "task_id": "demo",
+                    "message": "Land selected repository work",
+                    "repo": selected_repo,
+                },
+            )
+            self.assertFalse(landed["is_error"])
+            self.assertEqual(git(target, "show", "HEAD:work.txt"), "lane work")
+            self.assertFalse((outside / ".agent_state").exists())
+
+            removed = invoke(
+                outside,
+                {
+                    "tool": "collab_integration_remove",
+                    "task_id": "demo",
+                    "repo": selected_repo,
+                },
+            )
+            self.assertFalse(removed["is_error"])
+            self.assertFalse((target / ".agent_state/worktrees/demo").exists())
+
+    def test_repo_rejects_invalid_shapes_before_git_discovery(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            outside = base / "outside"
+            outside.mkdir()
+            file_path = base / "not-a-directory"
+            file_path.write_text("file\n", encoding="utf-8")
+            invalid_values: tuple[tuple[str, object], ...] = (
+                ("non-string", 7),
+                ("empty", ""),
+                ("relative", "repository"),
+                ("missing", str(base / "missing")),
+                ("file", str(file_path)),
+            )
+
+            for case, value in invalid_values:
+                with self.subTest(case=case):
+                    observed = invoke(
+                        outside,
+                        {"tool": "collab_status", "repo": value},
+                    )
+                    self.assertTrue(observed["is_error"])
+                    self.assertEqual(observed["error"]["error"]["code"], "invalid_repo")
+                    self.assertTrue(observed["error"]["error"]["repair"])
+
+    def test_repo_rejects_subdirectory_with_worktree_root_detail(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            outside = base / "outside"
+            outside.mkdir()
+            target_base = base / "target"
+            target_base.mkdir()
+            target, _ = seed_repository(target_base)
+            subdirectory = target / "nested"
+            subdirectory.mkdir()
+
+            observed = invoke(
+                outside,
+                {"tool": "collab_status", "repo": str(subdirectory)},
+            )
+
+            self.assertTrue(observed["is_error"])
+            error = observed["error"]["error"]
+            self.assertEqual(error["code"], "repo_not_worktree_root")
+            self.assertEqual(error["details"]["worktree_root"], str(target.resolve()))
+
+    def test_repo_rejects_directory_outside_git(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            outside = base / "outside"
+            outside.mkdir()
+            selected = base / "not-a-repository"
+            selected.mkdir()
+
+            observed = invoke(
+                outside,
+                {"tool": "collab_status", "repo": str(selected)},
+            )
+
+            self.assertTrue(observed["is_error"])
+            error = observed["error"]["error"]
+            self.assertEqual(error["code"], "not_git_repository")
+            self.assertTrue(error["repair"])
+
+    def test_repo_accepts_symlink_to_worktree_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            outside = base / "outside"
+            outside.mkdir()
+            target_base = base / "target"
+            target_base.mkdir()
+            target, _ = seed_repository(target_base)
+            selected = base / "selected-repository"
+            selected.symlink_to(target, target_is_directory=True)
+
+            observed = invoke(
+                outside,
+                {"tool": "collab_status", "repo": str(selected)},
+            )
+
+            self.assertFalse(observed["is_error"])
+            self.assertEqual(observed["result"]["tasks"], [])
+
+    def test_repo_accepts_linked_worktree_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            outside = base / "outside"
+            outside.mkdir()
+            target_base = base / "target"
+            target_base.mkdir()
+            target, _ = seed_repository(target_base)
+            linked_worktree = base / "linked-worktree"
+            git(target, "worktree", "add", "-b", "linked", str(linked_worktree), "HEAD")
+
+            observed = invoke(
+                outside,
+                {"tool": "collab_status", "repo": str(linked_worktree)},
+            )
+
+            self.assertFalse(observed["is_error"])
+            self.assertEqual(observed["result"]["tasks"], [])
+
+    def test_repo_selects_named_worktree_attached_branch_for_create(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            session_base = base / "session"
+            session_base.mkdir()
+            session_repository, _ = seed_repository(session_base)
+            git(session_repository, "checkout", "-b", "session-persist")
+            target_base = base / "target"
+            target_base.mkdir()
+            target, _ = seed_repository(target_base)
+            git(target, "checkout", "-b", "target-persist")
+            seed_task_container(target)
+
+            observed = invoke(
+                session_repository,
+                {
+                    "tool": "collab_integration_create",
+                    "task_id": "demo",
+                    "repo": str(target),
+                },
+            )
+
+            self.assertFalse(observed["is_error"])
+            self.assertEqual(
+                git(target, "symbolic-ref", "refs/orchestrate/demo/persistence"),
+                "refs/heads/target-persist",
+            )
+            self.assertEqual(
+                git(session_repository, "symbolic-ref", "--short", "HEAD"),
+                "session-persist",
+            )
+
+    def test_repo_controls_relative_report_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            outside = base / "outside"
+            outside.mkdir()
+            target_base = base / "target"
+            target_base.mkdir()
+            target, _ = seed_repository(target_base)
+            seed_task_container(target)
+            selected_repo = str(target)
+            created = invoke(
+                outside,
+                {
+                    "tool": "collab_integration_create",
+                    "task_id": "demo",
+                    "repo": selected_repo,
+                },
+            )
+            self.assertFalse(created["is_error"])
+
+            observed = invoke(
+                outside,
+                {
+                    "tool": "collab_report",
+                    "task_id": "demo",
+                    "output_dir": "reports/selected",
+                    "repo": selected_repo,
+                },
+            )
+
+            self.assertFalse(observed["is_error"])
+            self.assertTrue((target / "reports/selected/collab-report.json").is_file())
+            self.assertTrue((target / "reports/selected/collab-telemetry.jsonl").is_file())
+            self.assertFalse((outside / "reports").exists())
+
     def test_integration_reconcile_derives_persistence_and_projects_reduced_result(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))

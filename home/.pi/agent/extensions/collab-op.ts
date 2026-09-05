@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { appendFile, cp, lstat, mkdir, open, readdir, readFile, readlink, realpath, rename, rm, rmdir, symlink, unlink } from "node:fs/promises";
+import { appendFile, cp, lstat, mkdir, open, readdir, readFile, readlink, realpath, rename, rm, rmdir, stat, symlink, unlink } from "node:fs/promises";
 import path from "node:path";
 import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 const TOOL_VERSION = 1;
@@ -603,7 +603,11 @@ export async function discoverRepository(
 ): Promise<Repository> {
   const rootProbe = await run(cwd, ["rev-parse", "--show-toplevel"], signal);
   if (rootProbe.code !== 0 || !rootProbe.stdout.trim()) {
-    throw new CollabOpError("not_git_repository", "the selected path is not in a Git worktree");
+    throw new CollabOpError(
+      "not_git_repository",
+      "the selected path is not in a Git worktree",
+      "Pass an absolute Git worktree-root path as repo, or omit repo and run from inside a Git worktree.",
+    );
   }
   const worktreeRoot = path.resolve(rootProbe.stdout.trim());
   const common = await requireGit(
@@ -4282,7 +4286,7 @@ const registeredOutputDir = {
 const registeredRepo = {
   type: "string",
   minLength: 1,
-  description: "Optional absolute path to the exact Git worktree root; omit it to resolve from the session working directory.",
+  description: "Optional repository selector; omit it to resolve from the session working directory, otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
 } as const;
 
 const registeredLaneId = {
@@ -4457,8 +4461,8 @@ async function registeredRepositoryCwd(
   }
   let canonicalInput: string;
   try {
+    if (!(await stat(value)).isDirectory()) throw new Error("path is not a directory");
     canonicalInput = await realpath(value);
-    if (!(await lstat(canonicalInput)).isDirectory()) throw new Error("path is not a directory");
   } catch (error) {
     throw new CollabOpError(
       "invalid_repo",
@@ -4540,7 +4544,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration_create",
     label: "Create Collab integration",
-    description: "Create a Git-managed integration worktree from the current attached local branch and HEAD. Unless the repository already ignores .agent_state, this first appends /.agent_state/ to info/exclude in the repository's common Git directory, verifies the result, and reports the write in warnings; if a higher-precedence .gitignore rule keeps .agent_state un-ignored, it refuses before creating managed resources and reports whether the appended line remains in info/exclude.",
+    description: "Create a Git-managed integration worktree from the acting worktree's attached local branch and HEAD; that attached branch becomes the task persistence branch. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. Unless the repository already ignores .agent_state, this first appends /.agent_state/ to info/exclude in the repository's common Git directory, verifies the result, and reports the write in warnings; if a higher-precedence .gitignore rule keeps .agent_state un-ignored, it refuses before creating managed resources and reports whether the appended line remains in info/exclude.",
     parameters: registeredIntegrationCreateParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
@@ -4572,7 +4576,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration_adopt",
     label: "Adopt Collab integration",
-    description: "Adopt an existing local branch into a Git-managed integration using an exact common base commit. Unless the repository already ignores .agent_state, this first appends /.agent_state/ to info/exclude in the repository's common Git directory, verifies the result, and reports the write in warnings; if a higher-precedence .gitignore rule keeps .agent_state un-ignored, it refuses before creating managed resources and reports whether the appended line remains in info/exclude.",
+    description: "Adopt an existing local branch into a Git-managed integration using an exact common base commit. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. Unless the repository already ignores .agent_state, this first appends /.agent_state/ to info/exclude in the repository's common Git directory, verifies the result, and reports the write in warnings; if a higher-precedence .gitignore rule keeps .agent_state un-ignored, it refuses before creating managed resources and reports whether the appended line remains in info/exclude.",
     parameters: registeredIntegrationAdoptParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
@@ -4604,7 +4608,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration_reconcile",
     label: "Reconcile Collab integration",
-    description: "Reconcile the task-owned persistence branch into a Git-managed lane.",
+    description: "Reconcile the task-owned persistence branch into a Git-managed lane. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
     parameters: registeredIntegrationReconcileParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
@@ -4636,7 +4640,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration_land",
     label: "Land Collab integration",
-    description: "Land the current integration into the task-owned persistence branch.",
+    description: "Land the current integration into the task-owned persistence branch. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
     parameters: registeredIntegrationLandParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
@@ -4668,7 +4672,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration_remove",
     label: "Remove Collab integration",
-    description: "Best-effort force-removal of a task's recognizable managed integration resources.",
+    description: "Best-effort force-removal of a task's recognizable managed integration resources. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
     parameters: registeredIntegrationRemoveParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
@@ -4700,7 +4704,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_status",
     label: "Inspect Collab status",
-    description: "Inspect Git-managed task status, or list discoverable managed tasks when task_id is omitted.",
+    description: "Inspect Git-managed task status, or list discoverable managed tasks when task_id is omitted. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
     parameters: registeredStatusParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
@@ -4728,7 +4732,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_report",
     label: "Report Collab state",
-    description: "Snapshot task state and telemetry to fixed report artifacts; no cleanup or readiness judgement is performed.",
+    description: "Snapshot task state and telemetry to fixed report artifacts; no cleanup or readiness judgement is performed. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
     parameters: registeredReportParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
@@ -4757,7 +4761,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     name: "collab_lane",
     label: "Manage Collab lane",
     description:
-      "Manage a task lane. `create` makes a branch and worktree at the integration tip (optional comment only for create). `reconcile` merges integration into the lane. `collect` fast-forwards integration to the lane tip and force-retires the lane worktree — untracked or ignored files there are lost, tracked dirt or merge conflict keeps the lane with a warning. `drop` force-retires the lane without collecting, discarding uncollected work and warning if dirty, conflicted or incomplete.",
+      "Manage a task lane. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. `create` makes a branch and worktree at the integration tip (optional comment only for create). `reconcile` merges integration into the lane. `collect` fast-forwards integration to the lane tip and force-retires the lane worktree — untracked or ignored files there are lost, tracked dirt or merge conflict keeps the lane with a warning. `drop` force-retires the lane without collecting, discarding uncollected work and warning if dirty, conflicted or incomplete.",
     parameters: registeredLaneParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(

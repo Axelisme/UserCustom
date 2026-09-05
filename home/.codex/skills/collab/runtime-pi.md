@@ -136,6 +136,10 @@ independently registered; its own description and parameter schema are authorita
 accepts and returns. This section states which Collab step selects each tool and owns the dirt,
 file-handling, and managed-worktree removal contracts.
 
+All eight tools resolve the acting repository from the session working directory when `repo` is
+omitted. Set `repo` to use another Git worktree root. For `collab_integration_create`, that worktree's
+attached branch becomes the task's persistence branch.
+
 Generic Collab dirt means staged or unstaged tracked changes. Ordinary untracked and ignored paths do
 not by themselves block cleanliness checks or produce dirt, presence, preservation, status, or report
 warnings, except that landing requires no ordinary untracked state before mutation; active

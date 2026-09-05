@@ -4596,10 +4596,35 @@ class CollabOpExtensionAgentStateExclusionTests(unittest.TestCase):
             self.assertTrue(error["repair"])
             self.assertEqual(
                 error["details"]["operation"],
-                "check whether .agent_state is ignored",
+                "validate the exclusion file",
             )
             self.assertEqual(error["details"]["exclude_file"], str(exclusion))
-            self.assertTrue(error["details"]["git_exit_code"])
+            self.assertEqual(error["details"]["path_type"], "directory")
+            self.assertEqual(managed_ref_snapshot(repository), before_refs)
+            self.assertEqual(git(repository, "branch", "--list", "wave/demo/integration"), "")
+            self.assertFalse((repository / ".agent_state/worktrees/demo").exists())
+
+    def test_symlinked_exclude_file_is_rejected_before_it_can_discard_the_write(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            seed_task_container(repository)
+            exclusion = exclude_file(repository)
+            exclusion.unlink()
+            exclusion.symlink_to("/dev/null")
+            before_refs = managed_ref_snapshot(repository)
+
+            observed = invoke(
+                repository,
+                {"tool": "collab_integration_create", "task_id": "demo"},
+            )
+
+            self.assertTrue(observed["is_error"])
+            error = observed["error"]["error"]
+            self.assertEqual(error["code"], "agent_state_exclusion_io_error")
+            self.assertEqual(error["details"]["operation"], "validate the exclusion file")
+            self.assertEqual(error["details"]["exclude_file"], str(exclusion))
+            self.assertEqual(error["details"]["path_type"], "symbolic link")
+            self.assertNotIn("exclude_written", error["details"])
             self.assertEqual(managed_ref_snapshot(repository), before_refs)
             self.assertEqual(git(repository, "branch", "--list", "wave/demo/integration"), "")
             self.assertFalse((repository / ".agent_state/worktrees/demo").exists())

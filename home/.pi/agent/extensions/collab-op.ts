@@ -696,8 +696,27 @@ async function ensureAgentStateIgnored(
   repo: Repository,
   signal?: AbortSignal,
 ): Promise<string | null> {
-  if (await agentStateIsIgnored(repo, signal)) return null;
   const excludeFile = path.join(repo.gitDir, "info", "exclude");
+  let excludeMetadata;
+  try {
+    excludeMetadata = await pathMetadata(excludeFile);
+  } catch (error) {
+    throw agentStateExclusionIoError("inspect the exclusion file", excludeFile, error);
+  }
+  if (excludeMetadata !== null && !excludeMetadata.isFile()) {
+    const pathType = excludeMetadata.isSymbolicLink()
+      ? "symbolic link"
+      : excludeMetadata.isDirectory()
+        ? "directory"
+        : "non-regular path";
+    throw agentStateExclusionIoError(
+      "validate the exclusion file",
+      excludeFile,
+      new Error(`${excludeFile} is a ${pathType}, not a regular file`),
+      { path_type: pathType },
+    );
+  }
+  if (await agentStateIsIgnored(repo, signal)) return null;
   try {
     await mkdir(path.dirname(excludeFile), { recursive: true });
   } catch (error) {

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { appendFile, cp, lstat, mkdir, open, readdir, readFile, readlink, rename, rm, rmdir, symlink, unlink } from "node:fs/promises";
+import { appendFile, cp, lstat, mkdir, open, readdir, readFile, readlink, realpath, rename, rm, rmdir, symlink, unlink } from "node:fs/promises";
 import path from "node:path";
 import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 const TOOL_VERSION = 1;
@@ -603,7 +603,7 @@ export async function discoverRepository(
 ): Promise<Repository> {
   const rootProbe = await run(cwd, ["rev-parse", "--show-toplevel"], signal);
   if (rootProbe.code !== 0 || !rootProbe.stdout.trim()) {
-    throw new CollabOpError("not_git_repository", "current directory is not a Git repository");
+    throw new CollabOpError("not_git_repository", "the selected path is not in a Git worktree");
   }
   const worktreeRoot = path.resolve(rootProbe.stdout.trim());
   const common = await requireGit(
@@ -4279,6 +4279,12 @@ const registeredOutputDir = {
   description: "Non-empty report destination; relative paths resolve from the repository control root.",
 } as const;
 
+const registeredRepo = {
+  type: "string",
+  minLength: 1,
+  description: "Optional absolute path to the exact Git worktree root; omit it to resolve from the session working directory.",
+} as const;
+
 const registeredLaneId = {
   type: "string",
   pattern: IDENTIFIER.source,
@@ -4297,6 +4303,7 @@ const registeredLaneParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     action: {
       type: "string",
       enum: ["create", "reconcile", "collect", "drop"],
@@ -4313,6 +4320,7 @@ const registeredIntegrationCreateParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     task_id: registeredTaskId,
   },
   required: ["task_id"],
@@ -4322,6 +4330,7 @@ const registeredIntegrationAdoptParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     task_id: registeredTaskId,
     source_branch: registeredBranch,
     persist: registeredBranch,
@@ -4334,6 +4343,7 @@ const registeredIntegrationReconcileParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     task_id: registeredTaskId,
     lane_id: registeredLaneId,
   },
@@ -4344,6 +4354,7 @@ const registeredIntegrationLandParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     task_id: registeredTaskId,
     message: {
       type: "string",
@@ -4359,6 +4370,7 @@ const registeredIntegrationRemoveParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     task_id: registeredTaskId,
   },
   required: ["task_id"],
@@ -4368,6 +4380,7 @@ const registeredStatusParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     task_id: registeredTaskId,
   },
 } as const;
@@ -4376,6 +4389,7 @@ const registeredReportParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
+    repo: registeredRepo,
     task_id: registeredTaskId,
     output_dir: registeredOutputDir,
   },
@@ -4426,18 +4440,61 @@ function registeredErrorEnvelope(error: unknown): Record<string, unknown> {
   return { ok: false, tool_version: TOOL_VERSION, error: body };
 }
 
+async function registeredRepositoryCwd(
+  run: GitRunner,
+  fallbackCwd: string,
+  value: unknown,
+  signal?: AbortSignal,
+): Promise<string> {
+  if (value === undefined) return fallbackCwd;
+  if (typeof value !== "string" || !value || !path.isAbsolute(value)) {
+    throw new CollabOpError(
+      "invalid_repo",
+      "repo must be an absolute path to an existing Git worktree root",
+      "Pass the absolute path reported by git rev-parse --show-toplevel, or omit repo to resolve from the session working directory.",
+      { repo: value },
+    );
+  }
+  let canonicalInput: string;
+  try {
+    canonicalInput = await realpath(value);
+    if (!(await lstat(canonicalInput)).isDirectory()) throw new Error("path is not a directory");
+  } catch (error) {
+    throw new CollabOpError(
+      "invalid_repo",
+      `repo is not an existing directory: ${value}`,
+      "Pass the absolute path to an existing Git worktree root.",
+      { repo: value, cause: error instanceof Error ? error.message : String(error) },
+    );
+  }
+  const repo = await discoverRepository(run, canonicalInput, signal);
+  const canonicalRoot = await realpath(repo.worktreeRoot);
+  if (canonicalInput !== canonicalRoot) {
+    throw new CollabOpError(
+      "repo_not_worktree_root",
+      `repo must name the exact Git worktree root: ${canonicalRoot}`,
+      `Pass ${canonicalRoot} as repo.`,
+      { repo: value, worktree_root: canonicalRoot },
+    );
+  }
+  return canonicalRoot;
+}
+
 async function executeRegisteredTool(
+  run: GitRunner,
   request: Record<string, unknown>,
   ctx: ExtensionContext,
   handler: (
     request: Record<string, unknown>,
     signal: AbortSignal | undefined,
-    ctx: ExtensionContext,
+    cwd: string,
   ) => Promise<Record<string, unknown>>,
   signal: AbortSignal | undefined,
 ): Promise<Record<string, unknown>> {
   try {
-    return await handler(request, signal, ctx);
+    const { repo, ...operationRequest } = request;
+    const cwd = await registeredRepositoryCwd(run, ctx.cwd, repo, signal);
+    return await handler(operationRequest, signal, cwd);
   } catch (error) {
     throw new Error(JSON.stringify(registeredErrorEnvelope(error)));
   }
@@ -4466,17 +4523,17 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     handler: (
       request: Record<string, unknown>,
       signal: AbortSignal | undefined,
-      ctx: ExtensionContext,
+      cwd: string,
     ) => Promise<Record<string, unknown>>,
   ): (
     request: Record<string, unknown>,
     signal: AbortSignal | undefined,
-    ctx: ExtensionContext,
+    cwd: string,
   ) => Promise<Record<string, unknown>> {
-    return async (request, signal, ctx) => {
-      const repo = await discoverRepository(runGit, ctx.cwd, signal);
+    return async (request, signal, cwd) => {
+      const repo = await discoverRepository(runGit, cwd, signal);
       const taskId = requireIdentifier(request.task_id, "task id");
-      return withTaskLock(repo, taskId, () => handler(request, signal, ctx));
+      return withTaskLock(repo, taskId, () => handler(request, signal, cwd));
     };
   }
 
@@ -4487,20 +4544,21 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     parameters: registeredIntegrationCreateParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_integration_create",
             ["task_id"],
             ["task_id"],
           );
-          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
-            integrationCreate(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((created) =>
+          return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
+            integrationCreate(runGit, lockedCwd, lockedRequest, lockedSignal).then((created) =>
               registeredMutationResult(created),
             ),
-          )(params, innerSignal, innerCtx);
+          )(params, innerSignal, innerCwd);
         },
         signal,
       );
@@ -4518,20 +4576,21 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     parameters: registeredIntegrationAdoptParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_integration_adopt",
             ["task_id", "source_branch", "persist", "base_sha"],
             ["task_id", "source_branch", "persist", "base_sha"],
           );
-          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
-            integrationAdopt(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((adopted) =>
+          return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
+            integrationAdopt(runGit, lockedCwd, lockedRequest, lockedSignal).then((adopted) =>
               registeredMutationResult(adopted, ["source_branch", "integration_branch"]),
             ),
-          )(params, innerSignal, innerCtx);
+          )(params, innerSignal, innerCwd);
         },
         signal,
       );
@@ -4549,20 +4608,21 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     parameters: registeredIntegrationReconcileParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_integration_reconcile",
             ["task_id", "lane_id"],
             ["task_id", "lane_id"],
           );
-          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
-            integrationReconcile(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((reconciled) =>
+          return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
+            integrationReconcile(runGit, lockedCwd, lockedRequest, lockedSignal).then((reconciled) =>
               registeredMutationResult(reconciled, ["state", "lane_id", "lane_sha"]),
             ),
-          )(params, innerSignal, innerCtx);
+          )(params, innerSignal, innerCwd);
         },
         signal,
       );
@@ -4580,20 +4640,21 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     parameters: registeredIntegrationLandParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_integration_land",
             ["task_id"],
             ["task_id", "message"],
           );
-          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
-            integrationLand(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((landed) =>
+          return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
+            integrationLand(runGit, lockedCwd, lockedRequest, lockedSignal).then((landed) =>
               registeredMutationResult(landed),
             ),
-          )(params, innerSignal, innerCtx);
+          )(params, innerSignal, innerCwd);
         },
         signal,
       );
@@ -4611,20 +4672,21 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     parameters: registeredIntegrationRemoveParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_integration_remove",
             ["task_id"],
             ["task_id"],
           );
-          return taskLocked((lockedRequest, lockedSignal, lockedCtx) =>
-            integrationRemoveBestEffort(runGit, lockedCtx.cwd, lockedRequest, lockedSignal).then((removed) =>
+          return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
+            integrationRemoveBestEffort(runGit, lockedCwd, lockedRequest, lockedSignal).then((removed) =>
               registeredMutationResult(removed),
             ),
-          )(params, innerSignal, innerCtx);
+          )(params, innerSignal, innerCwd);
         },
         signal,
       );
@@ -4642,16 +4704,17 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     parameters: registeredStatusParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_status",
             [],
             ["task_id"],
           );
-          return status(runGit, innerCtx.cwd, params.task_id, innerSignal);
+          return status(runGit, innerCwd, params.task_id, innerSignal);
         },
         signal,
       );
@@ -4669,16 +4732,17 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     parameters: registeredReportParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        (value, innerSignal, innerCtx) => {
+        (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_report",
             ["task_id", "output_dir"],
             ["task_id", "output_dir"],
           );
-          return collabReport(runGit, innerCtx.cwd, params, innerSignal);
+          return collabReport(runGit, innerCwd, params, innerSignal);
         },
         signal,
       );
@@ -4697,9 +4761,10 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     parameters: registeredLaneParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
+        runGit,
         request as Record<string, unknown>,
         ctx,
-        async (value, innerSignal, innerCtx) => {
+        async (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
             "collab_lane",
@@ -4724,7 +4789,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
             );
           }
           if (action === "create") {
-            const repo = await discoverRepository(runGit, innerCtx.cwd, innerSignal);
+            const repo = await discoverRepository(runGit, innerCwd, innerSignal);
             const taskId = requireIdentifier(params.task_id, "task id");
             return withTaskLock(
               repo,
@@ -4732,7 +4797,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
               async () => {
                 const created = await laneCreate(
                   runGit,
-                  innerCtx.cwd,
+                  innerCwd,
                   { task_id: params.task_id, lane_id: params.lane_id, comment: params.comment },
                   innerSignal,
                 );
@@ -4742,12 +4807,12 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
             );
           }
           if (action === "reconcile") {
-            const repo = await discoverRepository(runGit, innerCtx.cwd, innerSignal);
+            const repo = await discoverRepository(runGit, innerCwd, innerSignal);
             const taskId = requireIdentifier(params.task_id, "task id");
             return withTaskLock(repo, taskId, async () => {
               const reconciled = await laneReconcile(
                 runGit,
-                innerCtx.cwd,
+                innerCwd,
                 { task_id: params.task_id, lane_id: params.lane_id },
                 innerSignal,
               );
@@ -4755,12 +4820,12 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
             });
           }
           if (action === "collect") {
-            const repo = await discoverRepository(runGit, innerCtx.cwd, innerSignal);
+            const repo = await discoverRepository(runGit, innerCwd, innerSignal);
             const taskId = requireIdentifier(params.task_id, "task id");
             return withTaskLock(repo, taskId, async () => {
               const collected = await laneCollect(
                 runGit,
-                innerCtx.cwd,
+                innerCwd,
                 { task_id: params.task_id, lane_id: params.lane_id },
                 innerSignal,
                 true,
@@ -4768,7 +4833,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
               return registeredMutationResult(collected, ["state"]);
             });
           }
-          const repo = await discoverRepository(runGit, innerCtx.cwd, innerSignal);
+          const repo = await discoverRepository(runGit, innerCwd, innerSignal);
           const taskId = requireIdentifier(params.task_id, "task id");
           return withTaskLock(repo, taskId, async () => {
             const laneId = requireLaneId(params.lane_id);

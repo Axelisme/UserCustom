@@ -1613,9 +1613,11 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 schema = observed["schemas"][name]["parameters"]
                 self.assertEqual(schema["type"], "object")
                 self.assertFalse(schema["additionalProperties"])
+                self.assertIn("repo", schema["properties"])
+                self.assertNotIn("repo", schema.get("required", []))
             self.assertEqual(
                 set(observed["schemas"]["collab_integration_reconcile"]["parameters"]["properties"]),
-                {"task_id", "lane_id"},
+                {"task_id", "lane_id", "repo"},
             )
             self.assertEqual(
                 observed["schemas"]["collab_integration_reconcile"]["parameters"]["required"],
@@ -1623,7 +1625,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             )
             self.assertEqual(
                 set(observed["schemas"]["collab_integration_land"]["parameters"]["properties"]),
-                {"task_id", "message"},
+                {"task_id", "message", "repo"},
             )
             self.assertEqual(
                 observed["schemas"]["collab_integration_land"]["parameters"]["required"],
@@ -1631,7 +1633,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             )
             self.assertEqual(
                 set(observed["schemas"]["collab_integration_remove"]["parameters"]["properties"]),
-                {"task_id"},
+                {"task_id", "repo"},
             )
             self.assertEqual(
                 observed["schemas"]["collab_integration_remove"]["parameters"]["required"],
@@ -1643,6 +1645,29 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             legacy = invoke(repository, {"tool": "collab_op", "method": "status"})
             self.assertTrue(legacy["is_error"])
             self.assertEqual(legacy["error"]["error"]["code"], "unknown_tool")
+
+    def test_repo_selects_create_target_from_outside_the_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            outside = base / "outside"
+            outside.mkdir()
+            target_base = base / "target"
+            target_base.mkdir()
+            target, _ = seed_repository(target_base)
+            seed_task_container(target)
+
+            observed = invoke(
+                outside,
+                {
+                    "tool": "collab_integration_create",
+                    "task_id": "demo",
+                    "repo": str(target),
+                },
+            )
+
+            self.assertFalse(observed["is_error"])
+            self.assertTrue((target / ".agent_state/worktrees/demo/integration").is_dir())
+            self.assertEqual(git(target, "status", "--porcelain"), "")
 
     def test_integration_reconcile_derives_persistence_and_projects_reduced_result(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

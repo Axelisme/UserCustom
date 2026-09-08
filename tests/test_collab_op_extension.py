@@ -448,6 +448,76 @@ fi
 exec "$real_git" "$@"
 """
 
+class CollabOpLaneResultFactsTests(unittest.TestCase):
+    def assert_identity(self, result: dict, repository: Path, lane_id: str) -> None:
+        self.assertEqual(result["task_id"], "demo")
+        self.assertEqual(result["lane_id"], lane_id)
+        self.assertEqual(result["lane_branch"], f"wave/demo/{lane_id}")
+        self.assertEqual(result["lane_path"], str(repository / f".agent_state/worktrees/demo/lanes/{lane_id}"))
+        self.assertEqual(result["integration_branch"], "wave/demo/integration")
+        self.assertEqual(result["integration_path"], str(repository / ".agent_state/worktrees/demo/integration"))
+
+    def test_results_support_next_actions_without_status(self) -> None:
+        for object_format in ("sha1", "sha256"):
+            with self.subTest(object_format=object_format), tempfile.TemporaryDirectory() as temporary:
+                repository, _ = seed_repository(Path(temporary), object_format)
+                seed_task_container(repository)
+                expected = seed_managed_task(repository)
+                created = invoke(repository, {"tool": "collab_lane", "action": "create", "task_id": "demo", "lane_id": "writer"})["result"]
+                self.assert_identity(created, repository, "writer")
+                lane = Path(created["lane_path"])
+                self.assertEqual(git(lane, "branch", "--show-current"), created["lane_branch"])
+                self.assertEqual(git(lane, "rev-parse", "HEAD"), created["lane_sha"])
+                self.assertEqual(created["lane_sha"], created["integration_sha"])
+                self.assertEqual(created["integration_sha"], expected["integration_head"])
+                reconciled = invoke(repository, {"tool": "collab_lane", "action": "reconcile", "task_id": "demo", "lane_id": "writer"})["result"]
+                self.assert_identity(reconciled, repository, "writer")
+                self.assertEqual(reconciled["state"], "noop")
+                self.assertEqual(reconciled["lane_sha"], created["lane_sha"])
+                (lane / "work.txt").write_text("work\n")
+                git(lane, "add", "work.txt")
+                git(lane, "commit", "-m", "work")
+                sha = git(lane, "rev-parse", "HEAD")
+                tree = git(lane, "rev-parse", "HEAD^{tree}")
+                collected = invoke(repository, {"tool": "collab_lane", "action": "collect", "task_id": "demo", "lane_id": "writer"})["result"]
+                self.assert_identity(collected, repository, "writer")
+                self.assertEqual(collected["state"], "collected")
+                self.assertEqual(collected["integration_sha"], sha)
+                self.assertEqual(collected["integration_tree"], tree)
+                self.assertEqual(git(Path(collected["integration_path"]), "rev-parse", "HEAD"), sha)
+                self.assertEqual(collected["cleanup"], {"cleaned": True, "branch_exists": False, "worktree_registered": False, "path_exists": False})
+                self.assertFalse(lane.exists())
+                dropped = invoke(repository, {"tool": "collab_lane", "action": "drop", "task_id": "demo", "lane_id": "writer-1"})["result"]
+                self.assert_identity(dropped, repository, "writer-1")
+                self.assertEqual(dropped["cleanup"], {"cleaned": True, "branch_exists": False, "worktree_registered": False, "path_exists": False})
+                self.assertEqual(dropped["disposition"], "abandoned")
+
+    def test_partial_cleanup_reports_actual_remaining_resources(self) -> None:
+        for action, failure, present in (("collect", FAIL_WORKTREE_REMOVE, (True, True, True)), ("drop", FAIL_WORKTREE_REMOVE, (True, True, True)), ("drop", FAIL_LANE_BRANCH_REMOVE, (True, False, False))):
+            with self.subTest(action=action, present=present), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                repository, _ = seed_repository(base)
+                seed_task_container(repository)
+                expected = seed_managed_task(repository)
+                wrapper = write_git_wrapper(base, failure)
+                original_path = os.environ["PATH"]
+                os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
+                try:
+                    observed = invoke(repository, {"tool": "collab_lane", "action": action, "task_id": "demo", "lane_id": "writer-1"})
+                finally:
+                    os.environ["PATH"] = original_path
+                    close_harness_for(repository)
+                self.assertFalse(observed["is_error"])
+                result = observed["result"]
+                self.assert_identity(result, repository, "writer-1")
+                self.assertEqual(result["cleanup"], dict(zip(("cleaned", "branch_exists", "worktree_registered", "path_exists"), (False, *present))))
+                self.assertTrue(result["warnings"])
+                if action == "collect":
+                    self.assertEqual(result["state"], "collected")
+                    self.assertEqual(result["integration_sha"], expected["integration_head"])
+                    self.assertEqual(result["integration_tree"], git(repository, "rev-parse", "wave/demo/integration^{tree}"))
+
+
 class CollabOpExtensionGitHelperRegressionTests(unittest.TestCase):
     def test_unstaged_tracked_deletion_keeps_leading_worktree_column(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -905,7 +975,8 @@ class CollabOpExtensionLaneCreateRegressionTests(unittest.TestCase):
             )
 
             self.assertFalse(observed["is_error"])
-            self.assertEqual(observed["result"], {"ok": True, "tool_version": 1})
+            self.assertTrue(observed["result"]["ok"])
+            self.assertEqual(observed["result"]["tool_version"], 1)
             lane = repository / ".agent_state/worktrees/demo/lanes/writer"
             self.assertEqual(git(lane, "rev-parse", "HEAD"), committed_tip)
             self.assertEqual(git(lane, "status", "--porcelain=v1"), "")
@@ -1057,7 +1128,7 @@ class CollabOpExtensionLaneReconcileRegressionTests(unittest.TestCase):
 
             self.assertFalse(observed["is_error"])
             self.assertEqual(
-                observed["result"],
+                {key: observed["result"][key] for key in ("ok", "tool_version", "state", "warnings")},
                 {
                     "ok": True,
                     "tool_version": 1,
@@ -1096,7 +1167,7 @@ class CollabOpExtensionLaneReconcileRegressionTests(unittest.TestCase):
             )
 
             self.assertFalse(observed["is_error"])
-            self.assertEqual(observed["result"], {"ok": True, "tool_version": 1, "state": "merged"})
+            self.assertEqual(observed["result"]["state"], "merged")
             merged_sha = git(repository, "rev-parse", "wave/demo/writer-1")
             self.assertNotEqual(merged_sha, lane_sha)
             self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), integration_sha)
@@ -1137,7 +1208,7 @@ class CollabOpExtensionLaneReconcileRegressionTests(unittest.TestCase):
 
             self.assertFalse(observed["is_error"])
             self.assertEqual(
-                {key: value for key, value in observed["result"].items() if key != "warnings"},
+                {key: observed["result"][key] for key in ("ok", "tool_version", "state")},
                 {"ok": True, "tool_version": 1, "state": "conflicted"},
             )
             self.assertTrue(observed["result"]["warnings"])
@@ -2453,7 +2524,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 "dirty\n",
             )
 
-    def test_lane_collect_reports_conflict_without_conflict_paths(self) -> None:
+    def test_lane_collect_reports_conflict_with_conflict_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
             seed_task_container(repository)
@@ -2477,9 +2548,9 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
 
             self.assertFalse(observed["is_error"])
             self.assertEqual(observed["result"]["state"], "conflicted")
-            self.assertNotIn("conflict_paths", observed["result"])
-            self.assertNotIn("lane_sha", observed["result"])
-            self.assertNotIn("integration_sha", observed["result"])
+            self.assertEqual(observed["result"]["conflict_paths"], ["tracked.txt"])
+            self.assertEqual(observed["result"]["lane_sha"], git(repository, "rev-parse", "wave/demo/writer-1"))
+            self.assertEqual(observed["result"]["integration_sha"], git(repository, "rev-parse", "wave/demo/integration"))
             self.assertTrue(observed["result"]["warnings"])
 
     def test_lane_collect_reconciles_stale_lane_without_reviewed_sha_inputs(self) -> None:
@@ -2502,7 +2573,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
 
             self.assertFalse(observed["is_error"])
             self.assertEqual(
-                {key for key in observed["result"] if key != "warnings"},
+                {key for key in observed["result"] if key in ("ok", "tool_version", "state")},
                 {"ok", "tool_version", "state"},
             )
             self.assertEqual(observed["result"]["state"], "reconciled")
@@ -2513,7 +2584,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             )
             self.assertTrue(Path(expected["lane"]).exists())
             self.assertNotIn("comparison_moved", observed["result"])
-            self.assertNotIn("collected", observed["result"])
+            self.assertFalse(observed["result"]["collected"])
 
     def test_lane_tools_reject_reviewed_sha_and_abandon_parameters(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -2562,7 +2633,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 git(repository, "branch", "--list", "wave/demo/writer-1"),
                 "+ wave/demo/writer-1",
             )
-            self.assertNotIn("disposition", observed["result"])
+            self.assertEqual(observed["result"]["disposition"], "abandoned")
 
     def test_lane_drop_removes_dirty_uncollected_lane_without_abandon_mode(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -2587,7 +2658,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             self.assertTrue(observed["result"]["warnings"])
             self.assertFalse(Path(expected["lane"]).exists())
             self.assertEqual(git(repository, "branch", "--list", "wave/demo/writer-1"), "")
-            self.assertNotIn("disposition", observed["result"])
+            self.assertEqual(observed["result"]["disposition"], "abandoned")
 
     def test_lane_collect_collects_uncollected_lane_from_current_tips(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -2630,14 +2701,14 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
 
             self.assertFalse(observed["is_error"])
             self.assertEqual(
-                observed["result"],
-                {"ok": True, "tool_version": 1, "state": "collected"},
+                observed["result"]["state"],
+                "collected",
             )
             self.assertEqual(last_telemetry_event(repository)["state"], "collected")
             self.assertEqual(git(repository, "branch", "--list", "wave/demo/writer-1"), "")
             self.assertFalse(Path(expected["lane"]).exists())
 
-    def test_lane_reconcile_projects_noop_state_without_identity_or_paths(self) -> None:
+    def test_lane_reconcile_projects_noop_state_with_identity_and_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
             seed_task_container(repository)
@@ -2654,12 +2725,12 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             self.assertFalse(observed["is_error"])
             self.assertEqual(observed["result"]["state"], "noop")
             self.assertTrue(observed["result"]["warnings"])
-            self.assertNotIn("lane_sha", observed["result"])
-            self.assertNotIn("integration_sha", observed["result"])
+            self.assertEqual(observed["result"]["lane_sha"], git(repository, "rev-parse", "wave/demo/writer-1"))
+            self.assertEqual(observed["result"]["integration_sha"], git(repository, "rev-parse", "wave/demo/integration"))
             self.assertNotIn("conflict_paths", observed["result"])
             self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), expected["integration_head"])
 
-    def test_lane_reconcile_projects_conflicted_state_without_identity_or_paths(self) -> None:
+    def test_lane_reconcile_projects_conflicted_state_with_identity_and_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
             seed_task_container(repository)
@@ -2684,11 +2755,11 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             self.assertFalse(observed["is_error"])
             self.assertEqual(observed["result"]["state"], "conflicted")
             self.assertTrue(observed["result"]["warnings"])
-            self.assertNotIn("lane_sha", observed["result"])
-            self.assertNotIn("integration_sha", observed["result"])
-            self.assertNotIn("conflict_paths", observed["result"])
+            self.assertEqual(observed["result"]["lane_sha"], git(repository, "rev-parse", "wave/demo/writer-1"))
+            self.assertEqual(observed["result"]["integration_sha"], git(repository, "rev-parse", "wave/demo/integration"))
+            self.assertEqual(observed["result"]["conflict_paths"], ["tracked.txt"])
 
-    def test_lane_reconcile_projects_state_without_identity_or_paths(self) -> None:
+    def test_lane_reconcile_projects_state_with_identity_and_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
             seed_task_container(repository)
@@ -2708,11 +2779,11 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
 
             self.assertFalse(observed["is_error"])
             self.assertEqual(
-                observed["result"],
-                {"ok": True, "tool_version": 1, "state": "merged"},
+                observed["result"]["state"],
+                "merged",
             )
-            self.assertNotIn("lane_sha", observed["result"])
-            self.assertNotIn("integration_sha", observed["result"])
+            self.assertEqual(observed["result"]["lane_sha"], git(repository, "rev-parse", "wave/demo/writer-1"))
+            self.assertEqual(observed["result"]["integration_sha"], git(repository, "rev-parse", "wave/demo/integration"))
             self.assertNotIn("conflict_paths", observed["result"])
 
     def test_lane_create_preserves_comment_and_projects_common_result(self) -> None:
@@ -2731,7 +2802,8 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             )
 
             self.assertFalse(observed["is_error"])
-            self.assertEqual(observed["result"], {"ok": True, "tool_version": 1})
+            self.assertTrue(observed["result"]["ok"])
+            self.assertEqual(observed["result"]["tool_version"], 1)
             self.assertEqual(
                 git(repository, "rev-parse", "wave/demo/new-lane"),
                 expected["integration_head"],
@@ -3132,7 +3204,7 @@ exec "$real_git" "$@"
                 {"tool": "collab_lane_collect", "task_id": "demo", "lane_id": "repair"},
             )
             self.assertFalse(collected["is_error"])
-            self.assertEqual(collected["result"], {"ok": True, "tool_version": 1, "state": "collected"})
+            self.assertEqual(collected["result"]["state"], "collected")
             self.assertFalse(
                 invoke(repository, {"tool": "collab_status", "task_id": "demo"})["result"]["integration"]["stale"]
             )
@@ -3904,7 +3976,7 @@ class CollabOpExtensionLaneCollectContractRegressionTests(unittest.TestCase):
             )
 
             self.assertFalse(observed["is_error"])
-            self.assertEqual(observed["result"], {"ok": True, "tool_version": 1, "state": "collected"})
+            self.assertEqual(observed["result"]["state"], "collected")
             self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), lane_sha)
             self.assertEqual(git(repository, "rev-list", "--count", f"{expected['integration_head']}..wave/demo/integration"), "1")
             self.assertFalse(lane.exists())
@@ -3964,7 +4036,7 @@ class CollabOpExtensionLaneCollectContractRegressionTests(unittest.TestCase):
             )
 
             self.assertFalse(observed["is_error"])
-            self.assertEqual(observed["result"], {"ok": True, "tool_version": 1, "state": "collected"})
+            self.assertEqual(observed["result"]["state"], "collected")
             self.assertEqual(git(integration, "rev-parse", "HEAD"), lane_sha)
             self.assertEqual((integration / "ignored.tmp").read_text(encoding="utf-8"), "ignored runtime\n")
             self.assertEqual((integration / "runtime.txt").read_text(encoding="utf-8"), "untracked runtime\n")
@@ -4407,7 +4479,8 @@ class CollabOpExtensionLaneDropContractRegressionTests(unittest.TestCase):
             )
 
             self.assertFalse(observed["is_error"])
-            self.assertEqual(observed["result"], {"ok": True, "tool_version": 1})
+            self.assertTrue(observed["result"]["ok"])
+            self.assertEqual(observed["result"]["tool_version"], 1)
             self.assertFalse(lane.exists())
             self.assertEqual(git(repository, "branch", "--list", "wave/demo/writer"), "")
             self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), integration_sha)

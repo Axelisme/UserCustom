@@ -4518,6 +4518,54 @@ function registeredMutationResult(
   return output;
 }
 
+/**
+ * collab_lane result Interface: additive operation-local facts, observed under
+ * the task lock, not a promise of freshness after return. Canonical paths identify
+ * resources even after retirement; use cleanup to determine their existence.
+ * SHA/state/conflict facts belong to the mutation, not a subsequent status call.
+ * Cleanup presence is true/false/null (unknown); cleaned requires all absent.
+ * Observation failure must preserve completed mutation outcomes and add warnings.
+ * integration_tree identifies integration_sha's committed tree, not worktree dirt.
+ */
+type LaneCleanupResult = {
+  cleaned: boolean;
+  branch_exists: boolean | null;
+  worktree_registered: boolean | null;
+  path_exists: boolean | null;
+};
+
+type LaneResultIdentity = {
+  task_id: string;
+  lane_id: string;
+  lane_branch: string;
+  lane_path: string;
+  integration_branch: string;
+  integration_path: string;
+};
+
+async function registeredLaneResult(
+  repo: Repository,
+  taskId: string,
+  laneId: string,
+  result: Record<string, unknown>,
+): Promise<Record<string, unknown> & LaneResultIdentity> {
+  const task = new TaskLayout(repo, taskId);
+  const output = registeredMutationResult(result, [
+    "state", "lane_sha", "integration_sha", "judged_integration_sha", "collected",
+    "conflict_paths", "conflict_paths_truncated", "cleanup", "disposition",
+  ]);
+  // Complete bounded tree/cleanup observation without querying task status.
+  return {
+    ...output,
+    task_id: taskId,
+    lane_id: laneId,
+    lane_branch: task.laneBranch(laneId),
+    lane_path: task.lanePath(laneId),
+    integration_branch: task.integrationBranch,
+    integration_path: task.integrationPath,
+  };
+}
+
 export default function collabOpExtension(pi: ExtensionAPI): void {
   const runGit = gitRunner(pi);
   // Every task-mutating handler executes under one shared task-scoped exclusive
@@ -4805,7 +4853,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
                   { task_id: params.task_id, lane_id: params.lane_id, comment: params.comment },
                   innerSignal,
                 );
-                return registeredMutationResult(created);
+                return registeredLaneResult(repo, taskId, requireLaneId(params.lane_id), created);
               },
               { policy: "bounded-wait", signal: innerSignal, timeoutMs: LANE_CREATE_BOUNDED_WAIT_MS },
             );
@@ -4820,7 +4868,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
                 { task_id: params.task_id, lane_id: params.lane_id },
                 innerSignal,
               );
-              return registeredMutationResult(reconciled, ["state"]);
+              return registeredLaneResult(repo, taskId, requireLaneId(params.lane_id), reconciled);
             });
           }
           if (action === "collect") {
@@ -4834,7 +4882,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
                 innerSignal,
                 true,
               );
-              return registeredMutationResult(collected, ["state"]);
+              return registeredLaneResult(repo, taskId, requireLaneId(params.lane_id), collected);
             });
           }
           const repo = await discoverRepository(runGit, innerCwd, innerSignal);
@@ -4844,7 +4892,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
             const task = new TaskLayout(repo, taskId);
             const inventory = await laneInventory(repo, task, laneId, innerSignal);
             const dropped = await laneAbandon(repo, task, laneId, inventory, innerSignal);
-            return registeredMutationResult(dropped);
+            return registeredLaneResult(repo, taskId, laneId, dropped);
           });
         },
         signal,

@@ -492,6 +492,47 @@ class CollabOpLaneResultFactsTests(unittest.TestCase):
                 self.assertEqual(dropped["cleanup"], {"cleaned": True, "branch_exists": False, "worktree_registered": False, "path_exists": False})
                 self.assertEqual(dropped["disposition"], "abandoned")
 
+    def test_failed_post_collection_observations_preserve_completed_outcome(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            repository, _ = seed_repository(base)
+            seed_task_container(repository)
+            expected = seed_managed_task(repository)
+            marker = base / "observing"
+            wrapper = write_git_wrapper(base, """#!/bin/sh
+real_git="__REAL_GIT__"
+for arg in "$@"; do
+  case "$arg" in
+    *'^{tree}') touch "__MARKER__"; echo 'tree observation unavailable' >&2; exit 1 ;;
+  esac
+done
+if [ -f "__MARKER__" ]; then
+  if [ "$1" = "symbolic-ref" ] || { [ "$1" = "worktree" ] && [ "$2" = "list" ]; }; then
+    echo 'resource observation unavailable' >&2
+    exit 128
+  fi
+fi
+exec "$real_git" "$@"
+""".replace("__MARKER__", str(marker)))
+            original_path = os.environ["PATH"]
+            os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
+            try:
+                observed = invoke(repository, {"tool": "collab_lane", "action": "collect", "task_id": "demo", "lane_id": "writer-1"})
+            finally:
+                os.environ["PATH"] = original_path
+                close_harness_for(repository)
+            self.assertFalse(observed["is_error"])
+            result = observed["result"]
+            self.assertEqual(result["state"], "collected")
+            self.assertEqual(result["integration_sha"], expected["integration_head"])
+            self.assertIsNone(result["integration_tree"])
+            self.assertEqual(result["cleanup"], {"cleaned": False, "branch_exists": None, "worktree_registered": None, "path_exists": False})
+            for label in ("integration tree", "lane branch", "lane worktree registration"):
+                self.assertTrue(any(label in warning for warning in result["warnings"]))
+            self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), result["integration_sha"])
+            self.assertFalse(Path(result["lane_path"]).exists())
+            self.assertEqual(git(repository, "branch", "--list", result["lane_branch"]), "")
+
     def test_partial_cleanup_reports_actual_remaining_resources(self) -> None:
         for action, failure, present in (("collect", FAIL_WORKTREE_REMOVE, (True, True, True)), ("drop", FAIL_WORKTREE_REMOVE, (True, True, True)), ("drop", FAIL_LANE_BRANCH_REMOVE, (True, False, False))):
             with self.subTest(action=action, present=present), tempfile.TemporaryDirectory() as temporary:
@@ -1772,7 +1813,9 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 },
             )
             self.assertFalse(lane_created["is_error"])
-            lane = target / ".agent_state/worktrees/demo/lanes/writer"
+            lane = Path(lane_created["result"]["lane_path"])
+            self.assertEqual(lane, target / ".agent_state/worktrees/demo/lanes/writer")
+            self.assertEqual(git(lane, "rev-parse", "HEAD"), lane_created["result"]["lane_sha"])
             (lane / "work.txt").write_text("lane work\n", encoding="utf-8")
             git(lane, "add", "work.txt")
             git(lane, "commit", "-m", "lane work")

@@ -2662,6 +2662,8 @@ async function laneCreate(
     ok: true,
     operation: "lane-create",
     tool_version: TOOL_VERSION,
+    lane_sha: integration.tip,
+    integration_sha: integration.tip,
     ...(warnings.length ? { warnings } : {}),
   };
 }
@@ -4554,7 +4556,48 @@ async function registeredLaneResult(
     "state", "lane_sha", "integration_sha", "judged_integration_sha", "collected",
     "conflict_paths", "conflict_paths_truncated", "cleanup", "disposition",
   ]);
-  // Complete bounded tree/cleanup observation without querying task status.
+  const warnings = [...(output.warnings as string[] | undefined ?? [])];
+  // These are read-only observations after the operation has completed. Never
+  // replace that outcome with an error that encourages repeating the mutation.
+  async function observe<T>(label: string, read: () => Promise<T>): Promise<T | null> {
+    try {
+      return await read();
+    } catch (error) {
+      warnings.push(`could not observe ${label}: ${boundedGitText(error instanceof Error ? error.message : String(error))}`);
+      return null;
+    }
+  }
+  if (result.operation === "lane-collect" && typeof result.integration_sha === "string") {
+    const sha = result.integration_sha;
+    output.integration_tree = await observe("integration tree", () =>
+      requireGit(repo.git, repo.controlRoot, ["rev-parse", "--verify", `${sha}^{tree}`]),
+    );
+  }
+  if (result.operation === "lane-drop" || result.cleanup !== undefined) {
+    const branchRef = `refs/heads/${task.laneBranch(laneId)}`;
+    const lanePath = task.lanePath(laneId);
+    const branchExists = await observe("lane branch", async () => {
+      // A dangling symbolic ref is still a resource, even though for-each-ref
+      // omits it. Distinguish a non-symbolic ref from a failed observation.
+      const symbolic = await repo.git(repo.controlRoot, ["symbolic-ref", "--quiet", branchRef]);
+      if (symbolic.code === 0) return true;
+      if (symbolic.code !== 1) throw new Error(symbolic.stderr || "could not inspect lane ref");
+      return (await refNames(controlRepository(repo), branchRef)).includes(branchRef);
+    });
+    const registered = await observe("lane worktree registration", async () =>
+      (await worktreeRecords(controlRepository(repo))).some(record =>
+        record.worktree === lanePath || record.branch === branchRef),
+    );
+    const pathExists = await observe("lane path", async () => (await pathMetadata(lanePath)) !== null);
+    const cleanup: LaneCleanupResult = {
+      cleaned: branchExists === false && registered === false && pathExists === false,
+      branch_exists: branchExists,
+      worktree_registered: registered,
+      path_exists: pathExists,
+    };
+    output.cleanup = cleanup;
+  }
+  if (warnings.length) output.warnings = warnings;
   return {
     ...output,
     task_id: taskId,
@@ -4809,7 +4852,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     name: "collab_lane",
     label: "Manage Collab lane",
     description:
-      "Manage a task lane. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. `create` makes a branch and worktree at the integration tip (optional comment only for create). `reconcile` merges integration into the lane. `collect` fast-forwards integration to the lane tip and force-retires the lane worktree — untracked or ignored files there are lost, tracked dirt or merge conflict keeps the lane with a warning. `drop` force-retires the lane without collecting, discarding uncollected work and warning if dirty, conflicted or incomplete.",
+      "Manage a task lane. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. `create` makes a branch and worktree at the integration tip (optional comment only for create). `reconcile` merges integration into the lane. `collect` fast-forwards integration to the lane tip and force-retires the lane worktree — untracked or ignored files there are lost, tracked dirt or merge conflict keeps the lane with a warning. `drop` force-retires the lane without collecting, discarding uncollected work and warning if dirty, conflicted or incomplete. Returns task/lane IDs, canonical branch names and absolute paths, plus operation SHA/state/conflict facts. `collect` includes integration_tree; `collect` and `drop` report cleanup resource presence separately from mutation success. Cleanup presence and integration_tree are null when observation fails, with warnings. Paths may identify retired resources; results describe this operation, not later freshness.",
     parameters: registeredLaneParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(

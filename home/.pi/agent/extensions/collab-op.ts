@@ -2662,6 +2662,8 @@ async function laneCreate(
     ok: true,
     operation: "lane-create",
     tool_version: TOOL_VERSION,
+    lane_sha: integration.tip,
+    integration_sha: integration.tip,
     ...(warnings.length ? { warnings } : {}),
   };
 }
@@ -4518,6 +4520,95 @@ function registeredMutationResult(
   return output;
 }
 
+/**
+ * collab_lane result Interface: additive operation-local facts, observed under
+ * the task lock, not a promise of freshness after return. Canonical paths identify
+ * resources even after retirement; use cleanup to determine their existence.
+ * SHA/state/conflict facts belong to the mutation, not a subsequent status call.
+ * Cleanup presence is true/false/null (unknown); cleaned requires all absent.
+ * Observation failure must preserve completed mutation outcomes and add warnings.
+ * integration_tree identifies integration_sha's committed tree, not worktree dirt.
+ */
+type LaneCleanupResult = {
+  cleaned: boolean;
+  branch_exists: boolean | null;
+  worktree_registered: boolean | null;
+  path_exists: boolean | null;
+};
+
+type LaneResultIdentity = {
+  task_id: string;
+  lane_id: string;
+  lane_branch: string;
+  lane_path: string;
+  integration_branch: string;
+  integration_path: string;
+};
+
+async function registeredLaneResult(
+  repo: Repository,
+  taskId: string,
+  laneId: string,
+  result: Record<string, unknown>,
+): Promise<Record<string, unknown> & LaneResultIdentity> {
+  const task = new TaskLayout(repo, taskId);
+  const output = registeredMutationResult(result, [
+    "state", "lane_sha", "integration_sha", "judged_integration_sha", "collected",
+    "conflict_paths", "conflict_paths_truncated", "cleanup", "disposition",
+  ]);
+  const warnings = [...(output.warnings as string[] | undefined ?? [])];
+  // These are read-only observations after the operation has completed. Never
+  // replace that outcome with an error that encourages repeating the mutation.
+  async function observe<T>(label: string, read: () => Promise<T>): Promise<T | null> {
+    try {
+      return await read();
+    } catch (error) {
+      warnings.push(`could not observe ${label}: ${boundedGitText(error instanceof Error ? error.message : String(error))}`);
+      return null;
+    }
+  }
+  if (result.operation === "lane-collect" && typeof result.integration_sha === "string") {
+    const sha = result.integration_sha;
+    output.integration_tree = await observe("integration tree", () =>
+      requireGit(repo.git, repo.controlRoot, ["rev-parse", "--verify", `${sha}^{tree}`]),
+    );
+  }
+  if (result.operation === "lane-drop" || result.cleanup !== undefined) {
+    const branchRef = `refs/heads/${task.laneBranch(laneId)}`;
+    const lanePath = task.lanePath(laneId);
+    const branchExists = await observe("lane branch", async () => {
+      // A dangling symbolic ref is still a resource, even though for-each-ref
+      // omits it. Distinguish a non-symbolic ref from a failed observation.
+      const symbolic = await repo.git(repo.controlRoot, ["symbolic-ref", "--quiet", branchRef]);
+      if (symbolic.code === 0) return true;
+      if (symbolic.code !== 1) throw new Error(symbolic.stderr || "could not inspect lane ref");
+      return (await refNames(controlRepository(repo), branchRef)).includes(branchRef);
+    });
+    const registered = await observe("lane worktree registration", async () =>
+      (await worktreeRecords(controlRepository(repo))).some(record =>
+        record.worktree === lanePath || record.branch === branchRef),
+    );
+    const pathExists = await observe("lane path", async () => (await pathMetadata(lanePath)) !== null);
+    const cleanup: LaneCleanupResult = {
+      cleaned: branchExists === false && registered === false && pathExists === false,
+      branch_exists: branchExists,
+      worktree_registered: registered,
+      path_exists: pathExists,
+    };
+    output.cleanup = cleanup;
+  }
+  if (warnings.length) output.warnings = warnings;
+  return {
+    ...output,
+    task_id: taskId,
+    lane_id: laneId,
+    lane_branch: task.laneBranch(laneId),
+    lane_path: task.lanePath(laneId),
+    integration_branch: task.integrationBranch,
+    integration_path: task.integrationPath,
+  };
+}
+
 export default function collabOpExtension(pi: ExtensionAPI): void {
   const runGit = gitRunner(pi);
   // Every task-mutating handler executes under one shared task-scoped exclusive
@@ -4761,7 +4852,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     name: "collab_lane",
     label: "Manage Collab lane",
     description:
-      "Manage a task lane. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. `create` makes a branch and worktree at the integration tip (optional comment only for create). `reconcile` merges integration into the lane. `collect` fast-forwards integration to the lane tip and force-retires the lane worktree — untracked or ignored files there are lost, tracked dirt or merge conflict keeps the lane with a warning. `drop` force-retires the lane without collecting, discarding uncollected work and warning if dirty, conflicted or incomplete.",
+      "Manage a task lane. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. `create` makes a branch and worktree at the integration tip (optional comment only for create). `reconcile` merges integration into the lane. `collect` fast-forwards integration to the lane tip and force-retires the lane worktree — untracked or ignored files there are lost, tracked dirt or merge conflict keeps the lane with a warning. `drop` force-retires the lane without collecting, discarding uncollected work and warning if dirty, conflicted or incomplete. Returns task/lane IDs, canonical branch names and absolute paths, plus operation SHA/state/conflict facts. `collect` includes integration_tree; `collect` and `drop` report cleanup resource presence separately from mutation success. Cleanup presence and integration_tree are null when observation fails, with warnings. Paths may identify retired resources; results describe this operation, not later freshness.",
     parameters: registeredLaneParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
@@ -4805,7 +4896,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
                   { task_id: params.task_id, lane_id: params.lane_id, comment: params.comment },
                   innerSignal,
                 );
-                return registeredMutationResult(created);
+                return registeredLaneResult(repo, taskId, requireLaneId(params.lane_id), created);
               },
               { policy: "bounded-wait", signal: innerSignal, timeoutMs: LANE_CREATE_BOUNDED_WAIT_MS },
             );
@@ -4820,7 +4911,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
                 { task_id: params.task_id, lane_id: params.lane_id },
                 innerSignal,
               );
-              return registeredMutationResult(reconciled, ["state"]);
+              return registeredLaneResult(repo, taskId, requireLaneId(params.lane_id), reconciled);
             });
           }
           if (action === "collect") {
@@ -4834,7 +4925,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
                 innerSignal,
                 true,
               );
-              return registeredMutationResult(collected, ["state"]);
+              return registeredLaneResult(repo, taskId, requireLaneId(params.lane_id), collected);
             });
           }
           const repo = await discoverRepository(runGit, innerCwd, innerSignal);
@@ -4844,7 +4935,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
             const task = new TaskLayout(repo, taskId);
             const inventory = await laneInventory(repo, task, laneId, innerSignal);
             const dropped = await laneAbandon(repo, task, laneId, inventory, innerSignal);
-            return registeredMutationResult(dropped);
+            return registeredLaneResult(repo, taskId, laneId, dropped);
           });
         },
         signal,

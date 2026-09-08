@@ -5,42 +5,24 @@ spec: none
 # {{TASK_ID}}
 
 ## Goal
-<!-- State the user's smallest current goal and expected result. Keep inferred requirements, success claims, and quotes out of this section. Write this first: a record whose goal is still the placeholder cannot orient anyone. -->
+<!-- User-visible outcome. -->
 Not yet recorded.
 
+## Scope
+<!-- One pointer to the approved spec or scope file, not its contents. -->
+<scope source>. Read before ticket planning/alignment, a new-scope decision, or a review-driven design change.
+
 ## Current
-<!-- Replace this section, never edit it: remove the text below, keeping this comment, decide each
-     removed fact's fate, then write fresh. What belongs here, the three fates, and why:
-     ~/.codex/skills/dev-flow/references/record-hygiene.md#current-and-next-are-replaced-not-edited -->
+<!-- Active batch ticket pointers, current status, and unresolved decisions. Move settled facts to their owner. -->
 Task created.
 
 ## Next
-<!-- One bounded action and the party who owns it, and nothing else: why it is next belongs to
-     `Current`. Replace this section, never edit it, under the same rule as `Current`:
-     ~/.codex/skills/dev-flow/references/record-hygiene.md#current-and-next-are-replaced-not-edited -->
-Write or select the first ticket. *Owner:* Orchestrator.
-
-## Envelope
-<!-- The task's out-of-scope boundary: what belongs to this task at all, distinct from a ticket's own
-     scope, which its Outcome and Acceptance already carry. The authoritative text lives in one frozen
-     file, typically under `spec/`; this section holds only a pointer to it, never the
-     text itself. Every ticket carries the same pointer. Keep inferred constraints, policy, and
-     acceptance claims out. -->
-Not yet recorded.
-
-## Scripts
-<!-- Guiding locations: `<task>/scripts/` for Orchestrator-owned task helpers; `<ticket>/scripts/` for the lane writer's ticket-scripts subtree (reviewer read-only). Ticket scripts remain with closed ticket content. Dispatch provides the ticket folder path; roles derive needed container from it. -->
-None yet — see `scripts/` and `tickets/<id>/scripts/`.
+<!-- One bounded action and its owner. -->
+Plan and align the next independent batch. Owner: Orchestrator.
 
 ## Standing orders
-<!-- In-force orders only. Follow the active dev-flow skill's references/custody.md when adding,
-     retiring, or reading an entry here: preserve each verbatim grant, its source, and lapse.
-
-     - **YYYY-MM-DD — User:** 「<verbatim>」
-       Source: `standing-orders/<YYYY-MM-DD>-<slug>.md#grant`
-       Lapses: <the user's own condition, or explicit revocation / task archive>
-     - **YYYY-MM-DD — User:** 「<verbatim ratification>」
-       Source: `standing-orders/<YYYY-MM-DD>-<slug>.md#ratification`
-       Ratifies: <path#anchor of the approved text>
-       Lapses: <condition> -->
+<!-- Admit new orders when the user explicitly issues STDO: followed by the order content.
+     Keep every active order's full verbatim text here, with its source and lapse condition.
+     Read all active entries on each reorientation.
+     Admission and custody: ~/.codex/skills/dev-flow/references/custody.md. -->
 None.

@@ -1,246 +1,200 @@
 ---
 name: dev-flow
-description: "Orchestrator durable task lifecycle and narrative record: use to start, resume, locate, archive, or close a multi-session task and manage its INDEX and tickets."
+description: "Orchestrator task records: always use with collab to plan, resume, hand off, close, or archive a task."
 ---
 
-# Dev Flow
+# Dev-flow
 
-## Orient
+Always read this Orchestrator entry with [collab](../collab/SKILL.md), which owns assignment, review,
+and Git operations. Every task has a container; every bounded implementation has a ticket, including
+work completed directly by the Orchestrator. Implementers and reviewers enter through their profiles,
+dispatch, and assigned ticket.
 
-**`locate` points; `INDEX` directs.** Run `locate <task-id>`; when the task ID is unknown, run `list`
-first and use a returned `lookup_id`. `locate` returns the address of the record, so read the
-`INDEX.md` at that address, then the handed-off ticket when a handoff named one, following only the
-pointers current work needs.
+## Resume
 
-If those sources cannot name the next action, repair `INDEX.md`'s `Current` and `Next` — with the
-user when the answer is not yours to write — rather than scanning tickets, artifacts, or the task DAG
-to infer one. Replace those two sections rather than editing them, and read what belongs in each:
-[Current and Next](references/record-hygiene.md#current-and-next-are-replaced-not-edited).
+Run this skill's `scripts/plan.py locate <task-id>` from the main checkout. For an unknown ID, run
+`list` and use a returned `lookup_id`. Read the located INDEX, all its active Standing orders, the
+handed-off ticket, and the pointers needed for the current action.
 
-Orientation is complete when the exact bounded action and owner in the current `Next` are in context,
-any ticket that action names has been read, and you can place that action in the lifecycle below.
+INDEX selects work; `locate` supplies its address. Repair an insufficient Current or Next, involving
+the user when the decision is theirs. Resume when the bounded action, owner, and relevant ticket are
+known. Dependency analysis belongs to batch planning after that action has been selected.
 
-## The lifecycle
+## Plan
 
-```
-S0(task)                           once, at task start
-  Need; Design; Slicing; Triage
-  ticket(drafted) | ticket(pending)
+Create a task with this skill's `scripts/plan.py create` and fill INDEX's Goal, Scope pointer, Current,
+and Next. `scripts/plan.py --help` owns arguments. Record the user-visible outcome and its observation;
+confirm facts about deployment, compatibility, trust, or usage when they affect correctness or scope.
 
-while the task is live:
-  graduate(frontier)
-  dispatch(antichain(pending))
-  implement()
-  close(ticket) | cut off(ticket)
+Keep the confirmed task scope outside INDEX. Use its approved spec as the owner, or create a scope
+file under `spec/` when needed. Read that source before ticket planning/alignment, new-scope decisions,
+or review-driven design changes. Apply [custody](references/custody.md) before changing its boundary.
+Translate task scope into explicit ticket work and exclusions for the implementer.
 
-archive(task)
-```
+Design the smallest end-to-end change and reuse dependencies that meet the need. Read
+[codebase-design](../codebase-design/SKILL.md) when deciding module boundaries or public interfaces;
+place non-obvious interface obligations at the owning module. Split work into usable increments,
+each with an outcome or a pointer to the ticket completing its partial increment.
 
-The block owns the order and nothing else. Each stage below carries its obligation and the pointer to
-the file owning that stage's rules; a stage is not runnable from this page alone. One invariant spans
-them: **a ticket is `pending` before its implementation starts.**
+Use **to-spec** for a frozen implementation contract and **to-tickets** for explicit slicing and
+dependency planning. Keep producer artifacts under `spec/`, link lifecycle tickets to them, and map
+`Blocked by:` to `depends_on`. When an external tracker is explicitly in use, link its artifacts.
 
-`close` and `cut off` are the two terminal transitions, and they differ in what was bought rather
-than in how much work landed. A ticket closes when its applicable Acceptance is settled. A ticket is
-**cut off** when the review it would take to settle the rest is no longer being purchased, so it
-stops with that verification unbought and says so. Both live in [Closing a ticket](#closing-a-ticket).
+Planning is complete when the next batch's tickets have bounded outcomes, known dependencies,
+module-level write scopes, and checkable acceptance criteria. Uncertain later work stays drafted.
 
-- **S0** — Run Need, then Design, then Slicing, then Triage, each output feeding the next. Read the
-  stage you are starting, and only that stage:
-  [Need](references/s0-design-admission.md#need), [Design](references/s0-design-admission.md#design),
-  [Slicing](references/s0-design-admission.md#slicing),
-  [Triage](references/s0-design-admission.md#triage). Decision-only tasks with no implementation
-  output, and small corrections completed in one Orchestrator context, may skip the sequence; they
-  still record the `Envelope` pointer to the frozen file holding the task's out-of-scope boundary.
-  When the task needs a frozen contract or explicit dependency edges, take
-  [the conditional route](#the-conditional-route) first.
-- **`ticket(...)`** — Create it in whichever state fits. What decides that, what a `drafted` ticket
-  carries and what it may omit: [carrying an
-  item](references/s0-design-admission.md#carrying-an-item-to-a-drafted-ticket). Copy
-  `templates/ticket/ticket.md`, and keep its `Seam contract` pointer in the ticket you publish,
-  because that is where the roles you dispatch look for it. Where each kind of content lives —
-  `INDEX.md`, spec, research note, scripts container, durable evidence: [the container
-  shape](references/record-hygiene.md#the-container-shape).
-- **`graduate`** — Graduate the frontier before dispatching from it; [carrying an
-  item](references/s0-design-admission.md#carrying-an-item-to-a-drafted-ticket) owns the batch, its
-  relation to the antichain, and what stays `drafted`. What a ticket must satisfy to reach `pending`,
-  and what you may rewrite in it while it is still `drafted`:
-  [ticket-seam-contract](references/ticket-seam-contract.md#publication-and-change-control),
-  which also owns the three modes, `S#` coverage and its `A#` observers. When a claim names a workflow
-  target, [the Acceptance
-  appendix](references/record-hygiene.md#workflow-scoped-acceptance-appendix) owns its shape.
-- **`antichain`** — Compute it before granting concurrency;
-  [Slicing](references/s0-design-admission.md#slicing) owns candidacy, reachability, write scope and
-  the missing-edge check.
-- **`dispatch`** — Begin with the ticket-start handshake in
-  [ticket-alignment](references/ticket-alignment.md). A request to start opens the handshake; the
-  Orchestrator shows its proposal, and the user's reply to that proposal accepts or corrects it and
-  completes alignment. Then route the ticket through [collab](../collab/SKILL.md), entering at its
-  `Responsibility boundaries` boundary 1, which prepares the contract, places the remaining
-  implementation and its reviewer, and finds each Acceptance claim's deciding observation already
-  settled at graduation. Collab consumes bounded task intent and returns evidence without creating
-  another task lifecycle. When a dispatched role returns `BLOCKED` or `NEEDS_DECISION` against a
-  Seam contract, the coordination is owned by
-  [ticket-seam-contract](references/ticket-seam-contract.md#publication-and-change-control).
-- **`implement`** — Hold or place the lane's single write token.
-  [lane-authority](references/lane-authority.md) owns the writer position, the three mutation classes
-  that are never inferred from one another, the deciding observer every claim names, and how an
-  evidence file is created from its template. Read it before toggling an Acceptance checkbox, holding
-  a write token, or judging whether someone else's mutation was authorized. An observation that must survive the session belongs to [durable
-  validation](references/record-hygiene.md#durable-validation-that-must-persist-a14a15).
-- **`close` | `cut off`** — See [Closing a ticket](#closing-a-ticket), which owns both terminal
-  transitions and the reviewer cap that produces the second.
-- **`archive`** — The task ends when the user completes or abandons it, not when the loop runs out of
-  tickets; a ticket still `drafted` then closes as abandoned under [Closing a
-  ticket](#closing-a-ticket). Put every `cutoff` ticket in front of the user before the move: each
-  one is a ticket whose remaining verification was never bought, and finishing it to `closed` or
-  leaving it cut off is the user's call, never an automatic one. Record which they chose. Reconcile the evidence and close-out in the record before moving it,
-  whether work completed or was abandoned: the move itself is neutral and implies no completion. A
-  decision whose force outlives the task takes [the ADR route](references/adr-graduation.md), which
-  the user opens.
+## Tickets
 
-A handoff routes and guides; the record keeps factual authority and continues to own implementation
-work after it. A handoff is neither a durable stage of the lifecycle nor a factual owner: what the
-task means, what durable stage it reached, and why all stay with the record.
+Copy `templates/ticket/ticket.md` to `tickets/<ticket-id>/ticket.md`; frontmatter ID matches the
+directory. Keep the state vocabulary understood by `plan.py`:
 
-## Jurisdiction
+- `drafted`: requirements or prerequisites are being resolved.
+- `pending`: the contract is ready; includes implementation and blocked work.
+- `closed`: completed, abandoned, rejected, or superseded, as recorded in Resolution.
+- `cutoff`: the review cap and final correction are complete, gates pass, and further independent
+  review is left to the user's choice.
 
-Dev-flow owns the durable task lifecycle, record structure, the conditional route through to-spec and
-to-tickets, and S0 design admission. It remains the sole durable narrative, status, and authority
-record before and after delegated work. Candidate-backlog owns backlog eligibility. Collab owns one
-bounded change from boundary 1 onward.
+Before `pending`, check the contract against current code and instructions. Before implementation,
+complete this ticket's [design alignment](#design-alignment). A ready ticket has:
 
-Point to the owner and stop; restatement creates a drifting second authority.
+- Outcome, module write scope, exclusions, dependencies, and relevant runtime assumptions.
+- Existing interface owners and authorized public changes. Use collab's
+  [contract seed](../collab/SKILL.md#contract-seed) for new or changed interfaces and record its exact
+  locations and remaining implementation steps in Contract starting point.
+- Acceptance covering every agreed behavior, responsibility allocation, and public interface choice.
+  Each criterion names its observation and responsible check or person; related decisions may share
+  a criterion. Tests or scenarios establish behavior. Direct review establishes responsibilities,
+  interface placement, prose, structure, configuration, and repository data.
+- Required checks referencing repository-owned commands, with completion based on actual candidate
+  observations. Apply collab's [test ownership](../collab/SKILL.md#test-ownership).
 
-### The conditional route
+The Orchestrator owns ticket wording, checkboxes, dependencies, state, Resolution, and INDEX. Read
+[record permissions](references/lane-authority.md) before delegating record writes. ADR edits require
+explicit user authority. Implementers receive a complete small assignment with local coding freedom.
 
-Which planning owner applies.
+A cutoff satisfies scheduling dependencies. Carry its outstanding findings and unverified claims
+into the dependent ticket's assumptions. If an observed defect blocks a required downstream behavior,
+record the affected path for user decision at handoff while independent work proceeds. Abandoned or
+superseded dependencies need an identified replacement outcome.
 
-- **to-spec** when the task or Orchestrator needs a frozen implementation contract; landing alone
-  creates no such need and `spec: none` stays valid. Publish the producer-format spec under the
-  task's `spec/` directory (see [the container
-  shape](references/record-hygiene.md#the-container-shape)) and set the INDEX spec pointer; to-spec
-  owns the format.
-- **to-tickets** when several dispatched slices need explicit dependency edges; work the Orchestrator
-  completes in one context still records a generic ticket. Keep the producer artifact under `spec/`
-  beside the spec it slices, then transcribe approved work into separate conforming lifecycle
-  tickets, each producer ticket's `Blocked by:` edges landing in the lifecycle ticket's `depends_on`
-  and each lifecycle ticket pointing back to the producer artifact. A lifecycle ticket is a
-  `tickets/<ticket-id>/ticket.md`, so a producer-format file kept elsewhere leaves the path `locate`
-  parses free.
+Preserve existing tickets and approved obligations. Recover retired reference versions from the task's
+recorded commit or repository history when resuming an old ticket. Ask before replacing those
+obligations; report missing authority when its source cannot be recovered.
 
-When an external repository tracker is explicitly in use, link its spec or issues from the record
-instead of publishing them here.
+## Parallel batches
 
-## The record
+Check dependency paths through the whole ticket graph, including drafted tickets, plus module edits
+and shared interfaces. Select the largest ready set that can complete independently under settled
+contracts. Put interacting changes in explicit dependency order.
 
-Durable work lives under `.agent_state/plans/<task-id>/`, managed by `scripts/plan.py` in this
-skill's directory, not a repository-local `scripts/` directory. `plan.py --help` owns the command
-Interface and `templates/` the current scaffold and frontmatter shape. Four things neither one
-tells you — `--help` emits usage and argument lines only, and says nothing about what these commands
-read or report:
+Present the batch's relationships and complete [design alignment](#design-alignment) for each ticket.
+Materialize shared interface prerequisites first. Prepare each ticket's seed, formal tests, and
+isolated worktree, then dispatch as soon as that ticket is ready. Prepare the next independent ticket
+while dispatched work runs.
 
-- `.agent_state` is gitignored, so a worktree carries no task record. Run `plan.py` from the main
-  checkout.
-- The control root is the explicit `--repo` directory when supplied, otherwise the Git worktree root
-  derived from the current directory; an explicit path is used directly without Git discovery.
-- `list` returns narrow references for immediate active containers without reading INDEX or ticket
-  content. **Active** means only that the container is placed under `.agent_state/plans/`, not that
-  work or tickets remain.
-- `locate` is read-only, and its ticket counts — one per state in `TICKET_STATES`, plus `total` — are exact
-  only when every ticket header is readable; one unreadable header collapses all of them. It does not
-  list ticket paths, inspect narrative sections, dependencies, or artifacts, select focus, infer
-  completion, or claim health — read `INDEX.md` and the relevant ticket narratives for those
-  judgements.
+Interleave preparation, results, corrections, review, and integration. Integrate completed or cutoff
+tickets as ready, checking interactions with current integration. A blocked member records its stop
+while independent members continue. INDEX names the active batch and next coordination action;
+individual progress and evidence stay in each ticket. Each child receives its own bounded assignment.
 
-The script owns container lifecycle, not narrative truth: archive restoration reverses the opaque
-container move, and narrative sections remain human-authored rather than script-validated schema.
+## Design alignment
 
-**What owns what.** INDEX owns task identity and the optional spec pointer. A ticket is a directory
-whose `ticket.md` frontmatter owns ticket identity and lifecycle state; Outcome and Acceptance own
-the bounded contract; state and Resolution own closure. Files beside `ticket.md` own that ticket's
-durable evidence, and only when the evidence must persist. The ticket owns the ordered binary
-Mechanical gates plan; `templates/ticket/ticket.md` holds its rules.
+Before every ticket starts, show its design against current code and obtain the user's confirmation.
+Discuss a parallel batch together, giving each ticket its own proposal:
 
-**Who may write what.** The Orchestrator owns all ticket content and exclusively changes lifecycle
-state and Resolution. The lane's **writer** — whoever holds its single write token, a dispatched
-implementer or the Orchestrator writing the change itself — toggles the Acceptance claims whose
-deciding observer is itself, as a progress note that settles nothing, and may use its ticket's
-`scripts/` subtree. A reviewer reads and verifies without editing the ticket. A dispatched writer or reviewer never
-writes `INDEX.md`. [lane-authority](references/lane-authority.md) owns the writer position, the three
-mutation classes that are never inferred from one another, and the deciding observer every claim names.
+- Module responsibilities and callers, with a small diagram when useful.
+- The few key data structures: contents, owner, lifecycle, and role in the scenarios.
+- Concrete scenarios: starting situation, user action, system response, and responsible modules.
+  Include observed or requirement-backed failures and boundaries when they affect design choices.
+- Deliberate exclusions, including abstractions, extension points, compatibility, and recovery work.
 
-Use one **single-store**: durable ticket state comes from this record. Session task lists are
-temporary projections and never overwrite durable state merely because their UI differs. A competing
-phase, progress, or acceptance store leaves the next reader choosing authority by accident.
-Compaction is a **move** to the owning document rather than a rewrite; where each kind of content
-moves to is owned by [compacting every other
-section](references/record-hygiene.md#compacting-every-other-section). `Current` and `Next` are the
-exception, replaced whole under [Current and
-Next](references/record-hygiene.md#current-and-next-are-replaced-not-edited).
+Expose choices and consequences. Invite challenges to assumptions, responsibilities, behavior, and
+complexity; revise the proposal and scenarios with the user. Start after they confirm the resulting
+design. Non-code tickets use the corresponding owners, scenarios, and exclusions.
 
-## Closing a ticket
+Record each agreed fact in its owning ticket section, including Scenarios and Acceptance. Alignment
+holds the user's confirmation pointer. This step is complete when material questions are resolved,
+the user has confirmed the proposal, and the ticket reflects it.
 
-Treat closure as one Orchestrator-owned coordinated record transition. Confirm the applicable
-Acceptance state, write Resolution once, set the ticket frontmatter to its terminal state, then
-replace — never edit — `INDEX.md`'s `Current` and `Next`, deciding each removed fact's fate under
-[Current and
-Next](references/record-hygiene.md#current-and-next-are-replaced-not-edited). Normal closure follows
-completion of all applicable Acceptance claims. Abandoned, superseded, or rejected closure may retain
-unchecked claims when Resolution explains why. A ticket closed while still `drafted` has no claims to
-retain, and its Resolution says in one line that the question never became current. A deferred path
-the user did not ask you to build is recorded in Resolution with where its comment sits in the code,
-because the ticket directory goes when the ticket closes and the comment is what outlives it; sending
-it to candidate-backlog instead is the user's call, not an automatic one. Closure is
-complete when both files reflect the transition; a session task list or review result alone is not
-durable closure.
+Continue implementation and corrections autonomously within that design. Collect proposed changes
+for [ticket handoff](#ticket-handoff); implement a changed design after user confirmation.
 
-### Cutting a ticket off
+## Ticket handoff
 
-Review is finite. A ticket's **reviewer block ledger** counts the reviewer `BLOCKED` verdicts it has
-accumulated since its design was last fixed, and the third one is where review stops being bought:
-place no further reviewer for that ticket, and let the remaining work finish against its gates alone.
-Collab's [review placement](../collab/SKILL.md#review-placement-and-the-correction-loop) owns the cap
-itself and why the third block is already a loop's own stopping point.
+Record each ticket's completion or blocked handoff when it occurs. Concentrate user decisions at
+batch handoff, after feasible batch work and before the next batch's alignment. The Orchestrator
+handles in-contract corrections, finding disposition, and cutoff while independent tickets continue.
 
-The ledger lives in the ticket because nothing else survives the run that produced it: a correction
-budget bounds the dispatch it was issued for, so a count kept only there reads three separate
-two-block tickets as one cheap one.
-[record-hygiene](references/record-hygiene.md#the-reviewer-block-ledger) owns the ledger's shape, and
-the one condition that resets it.
+Collect user matters in each ticket's User decisions: affected scenario, impact, options, and
+recommendation. Distinguish deferred proposals from current acceptance defects. Continue feasible
+authorized work. If a decision blocks required behavior, retain pending state with its concrete
+blocker and preserve state and evidence at the authority boundary.
 
-Such a ticket ends at `state: cutoff`, not `closed`. Its Resolution separates the claims that were
-proved from the claims that were merely declared — naming, for each of the latter, who declared it
-and that no independent reader confirmed it — because the whole point of the separate state is that a
-reader can tell a finished ticket from one that stopped paying. A `cutoff` ticket is otherwise a
-terminal ticket: its `depends_on` edge is satisfied like a `closed` one, since a downstream ticket
-that cannot start would deadlock the task the cap exists to keep moving. The downstream ticket carries
-the unproven claims into its own `## Alignment` as world facts, so that it builds on a base it knows
-is unverified; [ticket-alignment](references/ticket-alignment.md#inheriting-an-unverified-base) owns
-that inheritance.
+At batch handoff, present decisions together and record the user's answers at their owning locations.
+Then align the next batch. INDEX points to the handoff when user input is next. Handoff is complete
+when required decisions are settled and the next bounded action and owner are recorded.
 
-Then read the closure for what it made determinable: open `drafted` tickets for what is now visible,
-and leave what was already `drafted` to the next graduation batch. An evidence-backed finding outside
-the Envelope goes to candidate-backlog.
+## Maintain the record
 
-Clear implementation-time temporary files, tests, and data before closure, and give every deliberate
-retention an owner and a discharge condition. Each skill that creates implementation-time state
-declares what its own scaffolding is and when it comes down (for example
-[tdd](../tdd/SKILL.md#durable-behavior-tests-and-probes), and
-[collab](../collab/SKILL.md#responsibility-boundaries) for a dispatched writer's
-`probe/<ticket-id>/`).
+Records live under `.agent_state/plans/<task-id>/` in the main checkout. This gitignored directory
+stays there while code worktrees operate separately. `templates/` owns scaffolding; explicit `--repo`
+sets the control directory, otherwise `plan.py` discovers the current Git root.
 
-## When to read what
+INDEX contains:
 
-A pointer ending in `#<anchor>` addresses one section: open it there with
-`python3 ~/.codex/skills/dev-flow/scripts/section.py <pointer>`, copying the pointer verbatim. A pointer
-carrying no anchor is a whole document.
+- `Goal`: a short user-visible outcome.
+- `Scope`: the approved source pointer and its read condition: planning/alignment, a new-scope
+  decision, or a review-driven design change. Preserve existing `Envelope` pointers and their owners.
+- `Current`: active batch ticket pointers, current status, and unresolved judgement. Include a scope
+  issue while it blocks the next action; move its resolution to its owner once settled.
+- `Next`: one bounded coordination action and owner, or `None` when no action remains.
+- `Standing orders`: full verbatim active user-marked `STDO:` orders, read on every reorientation.
+  Use [custody](references/custody.md) for admission, application, changes, and retirement.
 
-The lifecycle above carries the pointer for every rule keyed to a moment in it. These are keyed to a
-condition instead:
+Replace Current and Next from the present situation, preserving each unique removed fact at its
+owner. Keep approved grants verbatim. Session task lists project this record. A handoff names factual
+owners and next actions; tickets retain their contracts, progress, and Resolution.
 
-- **This task's `Standing orders` is about to change, or you quote or apply an entry it already
-  holds** → [custody](references/custody.md).
-- **A decision falls outside the task's out-of-scope boundary** → [custody](references/custody.md),
-  following the `Envelope` section's pointer to its frozen artifact.
-- **You are evolving dev-flow itself** → [design-principles](references/design-principles.md).
+Keep ticket evidence beside its ticket; task-wide specs, research, decisions, and scripts use their
+corresponding directories. Preserve durable validation for costly, external, manual, or audit-required
+observations. Use `templates/ticket/evidence.md`: exact commit/tree, covered claims, operator, time and
+environment, method, expected/actual observations, limitations, and cleanup. Referenced record scripts
+include path and SHA-256. Routine outputs remain with their runs. Revalidate changed candidates.
+
+## Close and archive
+
+For normal closure, establish every applicable acceptance criterion from its evidence. Update the
+checklist, write Resolution, set terminal state, then replace INDEX's Current and Next. Abandoned or
+superseded work may retain unchecked criteria with reasons. A review-capped ticket follows
+[cutoff](#cutoff). Closure is complete when the ticket and INDEX agree.
+
+Preserve complete ticket context through closure and archive: scenarios, recorded design discussion,
+decisions, findings, and evidence stay in their owning files. Resolution states the final disposition
+and points to its basis. Read historical tickets on demand; INDEX stays focused on current work.
+
+Clean implementation-time temporary files, processes, probes, and worktrees whose integration and
+evidence preservation are complete. Retained temporary resources have an owner and cleanup condition.
+Preserve pre-existing user state. Capture evidence-backed out-of-scope opportunities through
+candidate-backlog admission; current acceptance gaps stay with the task and its recorded disposition.
+
+## Cutoff
+
+After collab's [review cap and final correction](../collab/SKILL.md#correct-and-decide), record the
+final clean commit/tree and set `state: cutoff` once required gates and Orchestrator judgement are
+complete. Resolution separates:
+
+- Claims established for the final candidate, with observations and owners.
+- Final fixes, remaining findings and affected scenarios, and claims awaiting independent confirmation.
+  State that independent review ended before the final correction.
+
+Update INDEX and proceed with downstream work under the recorded limitations. The user triggers
+revisiting cutoff findings against the integrated result at that time. Preserve cutoff status and
+evidence until then. A new review allowance records the user's decision and retains prior counts
+and dispositions as history.
+
+## Archive
+
+When the user completes or abandons the task, reconcile unfinished work and surface cutoff tickets.
+Move the complete record into archive with ticket contents and verification status intact. A decision
+that must outlive the task may become a self-contained repository ADR through **domain-modeling** when
+the user requests it. Its readers obtain the decision entirely from tracked repository material.

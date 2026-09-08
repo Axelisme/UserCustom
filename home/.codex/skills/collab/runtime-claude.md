@@ -4,6 +4,13 @@ Claude's native binding delta, and nothing else. [Collab](SKILL.md) owns the pol
 [implementer](../../../.claude/agents/collab-implementer.md) and
 [acceptor](../../../.claude/agents/collab-acceptor.md) profiles own their roles and Results.
 
+## Routing
+
+- Before dispatch, read [Capability check](#capability-check), then [Dispatch](#dispatch).
+- For native Git collection or landing, apply [integration](SKILL.md#integrate) and
+  [landing authority](SKILL.md#land-and-clean-up). Specialized operations not documented here require
+  a decision before use.
+
 ## Capability check
 
 At dispatch time, use the current Claude agent and tool inventory as the capability source of truth.
@@ -20,14 +27,13 @@ and are not Collab lifecycle stations.
 
 The Orchestrator dispatches each role itself, over the one lane it selected. That is the entire
 binding: the loop's shape, its finite correction bounds, and its escalation are
-[Collab's](SKILL.md#review-placement-and-the-correction-loop), unchanged.
+[Collab's](SKILL.md#correct-and-decide), unchanged.
 
 Each dispatch is a fresh child of the exact profile — `collab-implementer` to write,
-`collab-acceptor` to review the protected current lane once mutation has stopped, a fresh compatible
+`collab-acceptor` to review the fixed review commit once mutation has stopped, a fresh compatible
 `collab-implementer` to correct under the original authority contract, and a fresh `collab-acceptor`
 to rereview. Project the results through Collab's
-[worker-result](SKILL.md#worker-results-are-semantic) and [Generic
-Acceptance](SKILL.md#generic-acceptance) rules, and return blockers or decisions to the Orchestrator;
+[worker-result](SKILL.md#results-and-continuity) and [review](SKILL.md#implement-and-review) rules, and return blockers or decisions to the Orchestrator;
 final Acceptance, collection, landing, and escalation happen outside this binding.
 
 A Claude child has no live parent channel: it returns once, and a question it needs answered has to

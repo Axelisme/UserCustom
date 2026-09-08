@@ -2,110 +2,87 @@
 id: {{TICKET_ID}}
 state: {{STATE}}
 ---
-# {{TICKET_ID}} — {{TITLE}}
+# {{TICKET_ID}}: {{TITLE}}
 
-<!-- Copy this to tickets/<ticket-id>/ticket.md. The frontmatter `id` must equal that directory name.
-     This ticket's durable evidence lives beside this file in the same directory — copy
-     the evidence.md beside this template for each piece — and the whole directory is what closure
-     discharges. Guiding script location: `<ticket>/scripts/` for the lane writer's helpers; the Orchestrator owns `<task>/scripts/` and the reviewer is read-only. The Orchestrator owns this ticket.
-     Lifecycle is `drafted` -> `pending` -> `closed`, or `pending` -> `cutoff` when the review that
-     would settle the rest is no longer bought, and only the Orchestrator moves it. Create the
-     ticket in whichever of the first two states fits, and replace `{{STATE}}` with that choice:
-     `pending` when its contract can already be written from the code, `drafted` when writing it now
-     would mean guessing, in which case fill only what is known and leave the rest. Neither is a
-     default; an unreplaced `{{STATE}}` is an unreadable ticket, which is the point.
-     A ticket is `pending` before its implementation starts; what it must satisfy to get there is
-     the publication precondition list at
-     ~/.codex/skills/dev-flow/references/ticket-seam-contract.md#publication-and-change-control. -->
+<!-- Use drafted or pending under ~/.codex/skills/dev-flow/SKILL.md#tickets.
+     The Orchestrator owns this file. Keep evidence beside it and retain Resolution after closure. -->
 
 | Ticket field | Value |
 |---|---|
-| depends_on | <the ticket ids that must reach a terminal state — `closed` or `cutoff` — before this one starts, or `none`. A `drafted` ticket reaches neither, so naming one here blocks this ticket until that one graduates and terminates.> |
-| completes | <when this ticket only partly delivers its user-visible sentence, the ticket id that completes that sentence — which may itself still be `drafted`. `none` when this ticket delivers its whole sentence.> |
-| envelope | <pointer to the frozen file holding this task's out-of-scope boundary — what belongs to this task at all, as against this ticket's own scope, which Outcome and Acceptance below already carry — or `none` if the task has no boundary> |
+| depends_on | <required ticket outcomes, or none> |
+| completes | <ticket completing this partial increment, or none> |
+| scope | <task scope or approved spec pointer> |
 
 ## Outcome
-<!-- State the bounded goal and expected usable result. The Orchestrator owns this contract. -->
 {{OUTCOME}}
 
+## Scope and assumptions
+<!-- Module-level write scope, exclusions, and relevant deployment, trust, or concurrency assumptions.
+     Identify facts needing confirmation and stop when they affect correctness or authority. -->
+{{SCOPE}}
+
+## Interface changes
+<!-- Existing contract owners and authorized public changes; none if no public change.
+     Document non-obvious obligations at the owning module. New scope or interface decisions
+     return to the Orchestrator; ADR changes need explicit user authority. -->
+{{INTERFACE_CHANGES}}
+
+## Contract starting point
+<!-- The Orchestrator names the seed commit, or the existing complete contract, with exact interface,
+     declaration, shipped caller, and contract-test locations. These contract and test edits belong
+     to the Orchestrator. Record agreed key data structures, important algorithm choices, expected
+     test failures, and a short implementation sequence for the implementer's remaining small task.
+     Point to existing declarations where they already own these facts.
+     For work without a code interface, write Not applicable.
+     Preparation: ~/.codex/skills/collab/SKILL.md#contract-seed -->
+{{CONTRACT_STARTING_POINT}}
+
+## Scenarios
+<!-- Agreed starting situation, user action, system response, and responsible modules.
+     Include a requirement-backed boundary or failure case when it changes the design. -->
+{{SCENARIOS}}
+
 ## Alignment
-<!-- What the user is shown, when it runs, and what a world fact is:
-     ~/.codex/skills/dev-flow/references/ticket-alignment.md. The confirmed world facts and non-goals
-     land here; the seam delta settles facts `## Seam contract` owns. The Orchestrator writes this
-     section fresh at every start of this ticket, replacing both placeholders below. -->
-
-**World facts:** {{WORLD_FACTS}}
-<!-- One line per fact this ticket rests on that no frozen record states, each marked `confirmed` or
-     `unconfirmed`; `none` when the frozen records settle what this ticket needs. -->
-
-**Not doing:** {{NON_GOALS}}
-<!-- The nearby work a reader could reasonably expect this ticket to include and that it
-     deliberately leaves out. -->
-
-## Seam contract
-<!-- Contract rules: ~/.codex/skills/dev-flow/references/ticket-seam-contract.md. The reference owns
-     mode fields, S# coverage, graduation, decision stops, and ADR authority. The Orchestrator owns
-     this section. Keep this pointer in the published ticket. -->
-<!-- Before publication or dispatch, replace this instruction and the placeholder below with exactly
-     one complete `None`, `Existing`, or `Change` mode from the reference. -->
-**Mode:** {{SEAM_MODE}}
+<!-- The Orchestrator records the user's confirmation of this ticket's design and scenarios,
+     including confirmation during a batch alignment.
+     Record confirmation of the resulting proposal after questions and revisions are resolved.
+     Design facts stay in their owning sections. -->
+Awaiting design discussion and user confirmation.
 
 ## Acceptance
-<!-- The Orchestrator owns this whole checklist and may revise it. Start every claim unchecked: unchecked
-     means unproven, not necessarily that an executable test is red. Stable labels are encouraged but
-     optional. A worker-reviewer loop is complete when every claim its writer owns is verified; its
-     handoff reports remaining Orchestrator or user observations without treating them as blockers. -->
-<!-- Every claim names one deciding observer in `Observed by` — `gate`, `acceptor`, `orchestrator`,
-     `user`, or a named external observer — and a claim naming none stops publication under the
-     preconditions in ~/.codex/skills/dev-flow/references/ticket-seam-contract.md. The observer is
-     what settles the claim; the checkbox is the writer's progress note and settles nothing, so the
-     Orchestrator rebuilds this list from observer results at closure:
-     ~/.codex/skills/dev-flow/references/lane-authority.md#every-claim-names-the-observer-that-decides-it.
-     Both role profiles carry the same rules, so they hold whether or not this comment survives.
-     `Decided by` is separate and always present: it names the observation itself, on the surface it
-     is observed on, while `Observed by` names who reads that observation. A claim whose promise is
-     about the shipped path is mis-stated when a static assertion or a test-only composition
-     satisfies it; ~/.codex/skills/dev-flow/references/s0-design-admission.md owns what makes a
-     surface adequate. -->
-
-- [ ] **A1** — <observable criterion>. *Decided by:* <the observation that decides it, on its
-  surface> *Observed by:* <gate | acceptor | orchestrator | user | a named external observer>
+<!-- The Orchestrator turns every agreed behavior, responsibility allocation, and public interface
+     choice into explicit acceptance criteria before implementation. Each names its observation and
+     responsible check/person; related decisions may share a criterion.
+     Tests or scenario observations verify behavior; direct review verifies responsibilities,
+     interface placement, prose, configuration, and repository data.
+     The Orchestrator updates checkboxes from evidence. -->
+- [ ] A1: <observable criterion>. Evidence: <observation>. Owner: <check, reviewer, Orchestrator, user, or external operator>.
 
 ## Mechanical gates
-<!-- Ordered binary gate plan owned by this ticket. Every listed gate must pass before `COMPLETED`.
-     Do not duplicate repository-owned commands: use pointer or existing owner, only add ticket-specific gates and execution order.
-     Implementer runs in order: focused (or explicitly failing) → affected → formatter/style (re-run affected after any mutation) → broader/full.
-     State a different order here only when this ticket needs one. The implementer profiles carry
-     that same default, so the order holds whether or not this comment survives publication.
-     Gate-mapping test: draft this list by walking every Acceptance claim above and writing the
-     gate that decides it. A claim becomes residue — what a dispatched reviewer judges — only once
-     you have established that no command can decide it. `mechanically decidable` and `residue` are
-     defined at ~/.codex/skills/collab/SKILL.md boundary 2; read it when a claim is borderline.
-     Example gates (replace with ticket-specific ones): -->
-- [ ] Focused behavior gates for changed dispatch schema and prompt composition
-- [ ] Affected TypeScript/JavaScript static checks and profile/configuration format checks
-- [ ] Formatter and import/style checks (re-run affected gates if files were mutated)
-- [ ] Broader Collab and Dev-flow template selections after focused gates pass
-- [ ] Absence scan: a retired symbol, path, or alias returns no hit across the tracked tree
-- [ ] Inventory equality: the generated catalog's count equals the number this ticket declares
-- [ ] Reachability: the shipped entrypoint, not a test-only composition, exercises the path
-- [ ] Vacuous assertion: no test body asserts a constant or asserts nothing
+<!-- Required checks in execution order. Point to repository-owned commands where available.
+     The Orchestrator owns formal test edits. Implementer probes stay in run-owned temporary locations
+     and are removed before final commit and handoff.
+     Record completion from observed execution results. Re-run affected checks after any mutation. -->
+{{CHECKS}}
 
-## Reviewer block ledger
-<!-- The Orchestrator writes this when a review returns. It counts the reviewer `BLOCKED` verdicts
-     that bought a correction since this ticket's design was last fixed — a block that raised a
-     question or reported an unreviewable subject bought none; the third one is where review stops
-     being placed. It lives here rather than with the run because a correction budget bounds one
-     dispatch and this cap bounds the ticket. Only a user-approved re-alignment that changed `Outcome` or an
-     `S#` resets it, and the reset records the prior count and the reason:
-     ~/.codex/skills/dev-flow/references/record-hygiene.md#the-reviewer-block-ledger -->
-Reviewer blocks: 0. Resets: none.
+## Progress
+<!-- Record reviewer BLOCKED verdicts on reviewable candidates, including the cap-reaching verdict.
+     Preserve the count across dispatches and corrections. Questions and unreviewable subjects return
+     for clarification. Final correction and cutoff follow ~/.codex/skills/collab/SKILL.md#correct-and-decide. -->
+Reviewer BLOCKED count: 0. Work: not started.
+
+## User decisions
+<!-- The Orchestrator collects this ticket's issues for batch handoff, before the next batch's alignment.
+     Each entry states scenario, impact, options, and recommendation; record the user's answer when given.
+     Continue the feasible authorized work under the agreed design. Identify a concrete blocker when
+     required behavior depends on a user decision. Procedure: ~/.codex/skills/dev-flow/SKILL.md#ticket-handoff -->
+None.
 
 ## Resolution
-<!-- The Orchestrator writes this once at the ticket's terminal transition. Normal closure follows
-     completion of all applicable Acceptance claims. An abandoned, superseded, or rejected closure may
-     leave claims unchecked when this conclusion explains why. A `cutoff` ticket separates the proved
-     claims from the declared ones and names who declared each:
-     ~/.codex/skills/dev-flow/references/record-hygiene.md#a-cutoff-tickets-resolution
-     Keep only pointers needed to understand it. -->
+<!-- Final disposition, candidate, pointers to its basis, and outstanding criteria.
+     Keep the ticket's scenarios, design discussion and decisions, findings, and evidence intact in
+     their owning files through closure and task archive. Read historical context on demand.
+     Cutoff records the final bounded correction and passing gates, remaining findings and scenarios,
+     and verification still awaiting independent review. Retain this record for user-triggered revisiting.
+     Disposition: ~/.codex/skills/dev-flow/SKILL.md#cutoff -->
 Pending.

@@ -1,438 +1,217 @@
 ---
 name: collab
-description: "Orchestrator coordination for one bounded change: use when the Orchestrator bounds a change, chooses an execution shape, judges the lane, collects, or lands."
+description: "Orchestrator Feature Branch Workflow: always use with dev-flow to assign implementation or review, judge results, integrate, or land."
 ---
 
 # Collab
 
-Collab coordinates one bounded change without owning a durable lifecycle.
+Always read this Orchestrator entry with [dev-flow](../dev-flow/SKILL.md), which owns the task record
+and tickets. Use **Feature Branch Workflow** for implementation, validation, review, and authorized
+merge. Use **Agile, incremental delivery** to align concrete scenarios, deliver small usable increments,
+and learn from integration. Bound review to the agreed contract; record remaining uncertainty through
+[cutoff](../dev-flow/SKILL.md#cutoff). A hosted pull request is optional.
 
-**This is the Orchestrator's document; the agent profiles are the workers'.** Execution shape, writer
-placement, review placement, collection, and landing are decided here, by the Orchestrator. A
-dispatched writer or reviewer carries out one bounded brief inside those decisions, working from its
-own profile.
+The Orchestrator holds intent, scope, assignments, and final judgement. Tool vocabulary: a **lane** is
+a feature branch and its worktree; **integration** accumulates task-local results; **persistence** is
+the user's target branch.
 
-## Load-bearing objects
+## Plan and assign
 
-Define each at its first use:
+Use dev-flow's [parallel batches](../dev-flow/SKILL.md#parallel-batches) and
+[scenario-based alignment](../dev-flow/SKILL.md#design-alignment). The user confirms each ticket's
+design; its contract supplies scope, assumptions, criteria, checks, and decision boundaries.
 
-- **Orchestrator** — the agent that holds task intent and every scope or authority decision, chooses
-  the execution shape, dispatches writers and reviewers, makes the final Acceptance judgement, and
-  may itself write a bounded change.
-- **Integration branch** — the task-local cumulative result already accepted by the Orchestrator. This is
-  the only meaning `accepted` needs here.
-- **Lane** — one writable branch, checkout, worktree, and its lane-owned temporary state, assigned
-  to one live writer at a time. A lane is an execution resource, not durable narrative.
-- **Writer** — whoever holds the lane's single write token: a dispatched `collab-implementer`, or
-  the Orchestrator writing the change itself.
-- **Reviewer** — whoever reads the stopped lane read-only and judges it: a dispatched
-  `collab-acceptor`, a specialized procedure such as [code-review](../code-review/SKILL.md), or the
-  Orchestrator when it places no separate reader. Both are positions; the profiles specialize them
-  and are never the positions themselves.
-- **Protected current lane** — the lane's current clean checkout state while its one writer is
-  stopped; the ordinary object under review.
-- **Runtime pointer** — this skill directory's `runtime-<name>.md` for the runtime in use. Boundary 2
-  states when to read it and what its absence means.
-- **Anchored pointer** — a reference ending in `#<anchor>`, which addresses one section rather than a
-  document. Open it there with `python3 ~/.codex/skills/dev-flow/scripts/section.py <pointer>`, copying the
-  pointer verbatim; read a document whole when its pointer carries no anchor.
+Materialize shared interface prerequisites first. Dispatch each ticket as soon as its
+[seed](#contract-seed), formal tests, and worktree are ready. Overlap preparation with implementation,
+review, corrections, and collection. Each child receives one small, explicit assignment.
 
-## Core guardrails
+The Orchestrator presents key data structures during alignment and decides algorithms and supporting
+structures affecting correctness, performance requirements, or maintenance cost. Record decisions and
+short implementation steps in Contract starting point. Implementers choose variables, loop forms, and
+private helper organization within that plan. Further design tradeoffs return to the Orchestrator.
+Resolve ambiguity, split further, or implement directly when that is cheaper than describing the work.
+Repeated failed corrections are a reason to take over or re-align.
 
-1. **One writer at a time per checkout.** That checkout is the lane. Parallelize read-only work;
-   give each concurrent writer a separate writable checkout.
-2. **Review reads the protected current lane.** Where a review is placed, a reviewer inspects the
-   lane's current clean state while its writer is stopped. A correction or reconciliation changes
-   that lane, so review runs again against its new current state (see Reconciliation for lane versus
-   integration reconciliation).
-3. **Results carry semantics; identities belong to operations.** Exact commit and tree identities
-   stay with the operations that require them — collection, landing, and runtime tracking. Ordinary
-   worker and reviewer results carry only what workflow branching needs.
+Map mechanically decidable criteria to commands whose exit status establishes them. Assign independent
+review where judgement is needed, and name user or external observation owners separately. For wholly
+mechanical criteria, a second reader is optional. Schedule observations requiring a commit after that
+commit exists. The Orchestrator evaluates the results in every case.
 
-## Dispatch brief Interface
+Read the receiver's `Dispatch contract` and `Result` sections before dispatch. Supply its absolute
+ticket path and execution fields: checkout, environment, mutation authority, evidence targets, and
+stop conditions. Review and correction also need candidate/baseline and prior findings as applicable.
+Reference ticket-owned criteria and checks. Direct Orchestrator implementation follows the same
+contract, test ownership, and checkout constraints.
 
-A dispatch names the ticket and carries only the operational deltas — placement, authority,
-validation, stop conditions, and role-specific deltas — without copying the ticket's prose. Carry a
-needed conclusion inline; point to supporting material with the condition for opening it. Before
-sending the brief, read the selected receiver profile's `#dispatch-contract` and `#result` sections
-and close every required value, path, mutation authority, evidence owner, and stop condition in it,
-with explicit values rather than repository guesses. Those two sections are the Orchestrator's share
-of a profile and carry that role's authoritative field list; the rest of the profile is the
-receiver's own workflow.
+## Role entries
 
-## Responsibility boundaries
+- Orchestrator: both skills, INDEX, and the ticket for the current action. Select runtime sections by
+  operation and receiver input/output contracts by assignment.
+- Implementer: profile, dispatch, ticket, and relevant code/interface declarations. Evidence authoring
+  rules apply when assigned a durable evidence target.
+- Reviewer: profile, dispatch, ticket, fixed candidate, and relevant evidence; prior findings for
+  rereview. Its profile owns evidence assessment.
 
-1. **Bound the change.** Close the applicable goal, scope, Acceptance, validation, authority, and
-   stop conditions in the ticket, which owns Outcome and Acceptance. The Dispatch brief Interface
-   above owns what the brief itself then carries.
-   The ticket contract also closes **operating assumptions** beside the existing envelope pointer:
-   what a reviewer may assume about concurrency, caller trust, input provenance, and adversary
-   presence. The envelope says which changes belong to the task; operating assumptions say which
-   world the code runs in.
-   Name every Acceptance claim's deciding observer, and the observation that decides it, in the
-   ticket rather than in the brief: a claim naming no observer is not publishable, and the writer's
-   checkbox settles nothing either way. A claim no one can decide by an action is not Acceptance, it is intent, and it is
-   rewritten before dispatch.
-   A ticket whose Acceptance cannot be closed by one correction is two tickets. The ticket is the single source
-   both dispatched roles already read, so a brief needs no separate checkbox grant and none can drift
-   from it across correction rounds.
-   [lane-authority](../dev-flow/references/lane-authority.md) owns the writer position and the
-   deciding observer every claim names.
-   This step is complete when the writer can distinguish in-scope implementation from an Orchestrator
-   decision and every receiver field is supplied.
-2. **Prepare the contract, then place the remaining implementation.** Boundary 2 has two steps in
-   that order. Contract preparation closes the Interface shape; placement assigns only the work left
-   inside it.
+Installed profiles use filenames `collab-implementer` and `collab-acceptor`:
 
-   **Step 1 — Prepare the contract.** Compare the ticket's `## Seam contract` with the lane before
-   implementation placement. A ticket is **contract-bearing** when the Interface itself is part of
-   its deliverable, rather than only behavior behind a contract the lane already carries whole. The
-   Orchestrator first writes a **contract seed** for such a ticket and commits it to the lane, and
-   runs this comparison again whenever a seam changes mid-ticket, because the amended Interface is
-   as unbuilt as the original one was.
+| Runtime | Directory | Format |
+|---|---|---|
+| Pi | `~/.pi/agent/herdr-subagents/profiles/` | `.md` |
+| Claude | `~/.claude/agents/` | `.md` |
+| Codex | `~/.codex/agents/` | `.toml` |
 
-   The seed is four things: the minimal Interface, its result and error types, one real caller, and
-   the happy-path contract tests the ticket states. A real caller means one on the shipped path; a
-   test-only composition is what the seed exists to prevent, because it lets an Interface be shaped
-   by nothing but its own tests. The seed commit stays in the ticket's lane and is never collected
-   on its own: it is a starting position, not a deliverable, and collecting it would land an
-   Interface with no implementation behind it.
+Read sections with dev-flow's `scripts/section.py <absolute-profile-path>#dispatch-contract` and
+`#result`. Load technical skills for the concrete assigned work.
 
-   Contract preparation is complete when all four are in the lane for this ticket's contract. Partial
-   code is the state this step exists to finish, not evidence that it is already done: an Interface
-   with no shipped-path caller, or one whose focused tests are green without reaching the shipped
-   path, is a lane awaiting its seed. Only a contract the lane already carries whole completes this
-   step as-is. Repeated same-shape blocks against one ticket reveal a missed contract-bearing case
-   after the fact: its writer rebuilt a boundary from the code and the reviewer could only block
-   local symptoms.
+## Prepare the branch
 
-   The seed needs no protected-path list. Once it is in the lane it is what the ticket's `## Seam
-   contract` names, so the later writer's existing obligation covers it: an `Existing` candidate
-   preserves the named authorities, a `Change` candidate implements only the recorded `S#` deltas,
-   and a required change to either goes back to the Orchestrator as a decision rather than an edit. A second list of the
-   same boundary would read as a guarantee while enforcing nothing.
+Use one writer per checkout, including the Orchestrator. Concurrent writers get separate worktrees
+and independent dependency/module scopes. Preserve pre-existing dirt and evidence; never stash,
+reset, overwrite, or delete them to prepare the branch.
 
-   **Step 2 — Place the remaining implementation.** Start from the committed seed, or from the lane
-   that needed none, and evaluate only the work left inside that contract. Placement now answers two
-   independent questions: who writes that remainder, and who verifies it.
+Before runtime operations, open [Pi routing](runtime-pi.md#routing) or
+[Claude routing](runtime-claude.md#routing) with dev-flow's `scripts/section.py`, then its operation
+section. Codex uses installed profiles and current native Git/dispatch capabilities. Specialized
+operations require a documented binding; recover missing mechanics before proceeding. Tool schemas
+own parameters and capabilities.
 
-   **Who writes the remainder.** A dispatched implementer is cheap and literal: it succeeds where
-   scope is closed and the steps are concrete, and drifts where the work needs judgement no brief can
-   carry. So two shapes of remaining work stay with the Orchestrator — the change small enough that
-   describing it costs about as much as making it, because the brief would have to state the change
-   itself to be intelligible, and the change hard enough that no closed brief would carry it.
-   Otherwise dispatch a writer.
+Run repository-declared worktree bootstrap before dispatch. Roles consume the exact provisioned
+environment; a failed bootstrap returns a concrete blocker. Retain it through implementation, review,
+and correction until worktree retirement. Preparation ends with a bounded assignment, one writer,
+a safe checkout, and a working environment.
 
-   Both shapes are usually predicted. **Deferred work** arrives already observed: a path the writer
-   rejected and the user later asks for is small by construction and arrives while the user is
-   watching, so describing it costs about what making it costs. A ticket that keeps coming back
-   unaccepted is the hard shape showing itself late — take the remaining work yourself whenever the
-   brief has visibly failed to carry it, without waiting for the reviewer block ledger's cap.
+## Contract seed
 
-   **Who verifies.** Walk every Acceptance claim and write the gate that decides it. A claim is
-   **mechanically decidable** when one command's exit status *is* that claim — the same answer for
-   anyone who runs it, with nothing in its output left to read. Every such claim gets that command
-   listed as a Mechanical gate, and is then **proved**. **Residue is what remains after that
-   subtraction**: the claims no command can decide, and what a reviewer exists to judge. Residue
-   places one and its absence does not. All four combinations are ordinary.
+For a new or changed public interface, the Orchestrator writes the confirmed design on the feature
+branch: interface and declaration, result/error types, a real shipped-path caller, and contract tests
+for the agreed scenarios. Hold checkout write ownership, commit the seed, then transfer ownership to
+the implementer. Work preserving an existing complete contract uses that starting point.
 
-   With no residue no independent reader is placed, and the judgement does not move: the Orchestrator
-   holds final Acceptance in every case (boundary 4), and with the gates' pass/fail as the whole
-   judgement there is nothing for a second reader to be independent about. A claim a command could
-   decide that no gate lists is the signal to check the gate list before dispatching, not to staff
-   around it.
+Tests reach the intended interface through the shipped path and assert observable results. A seed
+may leave expected failures for assigned implementation work. Preparation is complete when the ticket
+names the seed commit, exact interface/caller/test locations, expected failures, and a small remaining
+implementation sequence.
 
-   A check that only becomes decidable after the gate phase cannot be a lane gate — the gate list
-   runs before the writer commits. Assign it to the first reader that exists after it: the reviewer
-   when one is placed, and otherwise you at boundary 4.
+The Orchestrator owns interface and declaration changes throughout corrections. Take back write
+ownership for those edits, then resume the implementer from the updated starting point. Design changes
+follow user confirmation at [batch handoff](../dev-flow/SKILL.md#ticket-handoff).
 
-   When implementation is delegated and its brief, delegated Acceptance
-   criteria, placement, mutation authority, and escalation boundary are closed, dispatch a worker and,
-   where a reviewer is placed, run the bounded correction loop yourself; coordinate a transition
-   separately when it depends on Orchestrator judgement. Account for pre-existing state; isolate when
-   another writer is active or existing work needs protection.
-   **Runtime pointer:** before dispatching a writer, before collecting (boundary 5), or before
-   landing, read this skill directory's `runtime-<name>.md` for your runtime when one exists; its
-   Routing section names the section each step reads, and general mechanics stay behind conditional
-   pointers within the file. A runtime needs no file when ordinary generic means — plain git and
-   ordinary agent dispatch — already carry out everything the core states above; the core is then
-   directly actionable as written. Treat any other absence as unwritten rather than as license to
-   proceed: if your runtime works through specialized tooling the core does not name (an extension,
-   a dedicated API) and no `runtime-<name>.md` documents it, stop and ask before guessing its
-   mechanics.
+Assign independent review of interface conformance, shipped-path reachability, and contract-test
+assertions, including Orchestrator-authored tests. Keep the seed on its feature branch until the
+completed increment qualifies for normal acceptance or the bounded [cutoff route](#correct-and-decide).
 
-   A managed lane is dispatch-ready only after its repository-declared worktree bootstrap succeeds.
-   Roles consume the resulting environment through the exact dispatched execution parameters without
-   syncing or provisioning it. An observed bootstrap failure or absent ordinary-path environment is
-   `BLOCKED` before reviewed dispatch, never a reason to discover a fallback. Retain the lane-owned
-   runtime through review and correction until the lane retires through collection or drop. Follow the
-   positive path first; return a concrete environment-selection failure to the Orchestrator before
-   strengthening controls. Pi maps this sequence to its existing operations in
-   [Managed lane environment](runtime-pi.md#managed-lane-environment).
+## Test ownership
 
-   This boundary is complete when contract preparation is complete, the remaining implementation has
-   one writer with one bounded contract and one safe writable checkout, verification placement is
-   decided, and the repository-declared bootstrap has run when the repository requires one.
-3. **Implement and review.** Execute the chosen shape; for delegated closed work that places a
-   reviewer, dispatch worker, reviewer and each correction under a finite correction budget you hold.
-   The runtime pointer carries the dispatch mechanics. Generic Acceptance below reviews the protected current lane. This
-   step is complete when the lane carries a worker result and, where boundary 2 placed a reviewer, an
-   independent review result — or a terminal blocker or decision request.
-4. **Judge the result.** The Orchestrator makes the final Acceptance judgement, and makes it by
-   rebuilding the ticket's Acceptance list from what each claim's deciding observer reported — the
-   gates that ran, the reviewer's verdict, your own reading, the user's answer. The writer's
-   checkboxes are progress notes and settle nothing, so there is no sweep to date and nothing to
-   compare against the lane head. Then choose what follows: accept the judged lane, return a bounded defect for correction, return a decision
-   request or exhausted correction budget to its owner, or select another shape. A correction the
-   Orchestrator itself dispatches returns to boundary 2, so placement is decided once per dispatch
-   rather than once per ticket. When the task owns an integration branch, an
-   accepted lane goes to the collection boundary below before its lane retires. This step is
-   complete when the Orchestrator accepts the result or identifies the unresolved decision and its
-   owner.
-5. **Collect.** Before moving anything, assemble the ticket's **deferred paths** — the rejections
-   its writer left a comment beside, and the residual risks the worker and reviewer reported — into `<ticket>/deferred.md`,
-   which sits in the ticket directory the way its `scripts/` subtree does and needs no separate
-   grant. Put the entries named by neither the ticket's `World facts` nor its `Not doing` in front of
-   the user: those are the ones no alignment covered, so this is the first moment the user could see
-   them, and what they ask for becomes deferred work you write under boundary 2. Then move the
-   Orchestrator-accepted current lane into the integration branch one lane at
-   a time. A stale lane is synchronized with current integration first and stops at the reconciled
-   lane or a conflict; the reconciled lane returns to boundary 2 for review placement and needs the
-   Orchestrator's judgement again before collection (see Reconciliation). This step is complete when
-   the accepted lane is the integration head and its lane is retired or its retention is reported.
-6. **Retire the lane.** When a writer or reviewer lane reaches its terminal handoff and will not
-   continue, inventory and remove lane-owned
-   worktree registrations, temporary files or directories, sessions or processes, and agent-created
-   branches that no longer carry required evidence. Preserve pre-existing user state and evidence
-   still needed for Acceptance or landing; give every deliberate retention an owner and discharge
-   condition. Collab's own implementation-time scaffolding is a dispatched writer's
-   `probe/<ticket-id>/`: that writer's profile puts its still-open questions there, outside the
-   review surface, and the directory comes down before the ticket closes — so a lane that retires
-   with one still standing hands the Orchestrator a directory to clear. This step is complete when
-   no orphaned lane-owned resource remains.
+The Orchestrator authors and updates all formal behavior and regression tests. Test confirmed normal,
+error, and boundary scenarios through public interfaces; helpers receive coverage through their
+contribution to that behavior. A helper promoted to a public interface gains a contract in alignment.
 
-## Continuity is a cache
+Implementers run formal tests and use run-owned temporary probes to inspect helpers and diagnose their
+assignment. Remove probes before final commit and handoff. Report useful scenarios to the Orchestrator
+for formal tests. The final candidate contains implementation and Orchestrator-owned formal tests.
 
-Evidence and the protected current lane carry continuity: the bounded brief, direct observations,
-and the lane's current clean state.
+A coverage blocker identifies a reachable behavior defect or an agreed validation obligation and its
+evidence gap. Route formal-test corrections to the Orchestrator and internal-logic corrections to the
+implementer. Apply mutating checks within the acting writer's edit authority.
 
-When a writer's run ends before its work does, dispatch a fresh compatible child carrying the original
-bounded contract, the current blockers, and the applicable authority and escalation boundary.
-In the correction loop every correction and rereview is such a child; Review placement below states
-what each of those two briefs carries.
+## Implement and review
 
-**A replacement reads its ticket, not the task.** Its context is that ticket and whatever the ticket
-points to; the task record and sibling tickets belong to the Orchestrator, and handing them over invites
-scope creep. The ticket therefore names the next single step and the unverified boundary — which
-edits are validated, which are not, and what must not be redone or widened.
+The writer completes the assignment, passes required checks, commits under branch-local authority,
+and stops writing. Gate evidence establishes the required property of the final candidate.
 
-**Mechanical finish.** When a run ends after its semantic work is validated but before the checkout
-is clean and committed, dispatch a fresh writer for that close-out alone: no semantic edits, lane-owned
-temporary state removed, staged paths and diff inspected, ancestry checked, one clean commit. It
-carries no semantic edit, so it leaves no residue and is judged on its gates.
+Before review, record the exact clean commit/tree and baseline and confirm the writer is stopped.
+Each verdict binds to that immutable subject; apply the relevant correction or integration procedure
+to changed candidates. Coordination evidence owns identities, while role payloads carry results.
 
-## Worker results are semantic
+The reviewer reads the candidate, tests, and existing observations for assigned criteria. Validation
+execution belongs to observation owners; send requests for new observations to them. Interpret its
+Result contract to distinguish defects, unreviewable subjects, and decisions. For separate Standards
+and Spec findings, use [code-review](../code-review/SKILL.md) under its own review contract.
 
-**Gates.** dev-flow's [ticket template](../dev-flow/templates/ticket/ticket.md#mechanical-gates) gives the ticket
-the ordered binary gate plan and requires every listed gate to pass before `COMPLETED`. The implementer fixes failures within scope in the order that
-ticket section states, or the default its own profile carries when the section states none, and
-returns one complete `BLOCKED` result when closure exceeds authority. Ticket-owned gates are validated by the implementer and proved only by lane state;
-reviewed roles neither re-execute them nor reopen run artifacts to judge them. Judging gate integrity from the lane diff alone is not re-execution.
+Review ends with a verdict or named blocker/decision for the assigned criteria. The Orchestrator
+resolves remaining observations before normal acceptance or records cutoff's outstanding verification.
 
-A worker result uses one exact branch contract:
+## Correct and decide
 
-- `COMPLETED`: required `outcome`; optional `message`.
+Count reviewer `BLOCKED` verdicts on reviewable candidates, default cap three per ticket unless the
+user sets another. Record every verdict and cumulative count in Progress, including the cap-reaching
+verdict. Questions and unreviewable subjects return for clarification or preparation. Preserve counts
+across agents, sessions, and design corrections; the user grants a fresh allowance when wanted.
+
+Read evidence and classify findings: in-contract defects become small owner-assigned corrections;
+additional suggestions receive recorded disposition; user-level design, data-structure, scope, or
+authority choices go to [batch handoff](../dev-flow/SKILL.md#ticket-handoff). Continue feasible work
+under the confirmed contract and report a blocker when a decision prevents required behavior.
+
+Below the cap, correct and rereview. Save the reviewed commit before correction, then send a fresh
+reviewer the original brief, prior findings, that baseline, and the new exact candidate. Rereview
+covers prior blockers and correction-related effects. Scope the review to the actual change.
+
+At the cap, select the remaining in-scope fixes for one final bounded correction. Internal logic goes
+to the implementer; formal-test edits go to the Orchestrator. Run required gates, form the final clean
+commit, and record the final candidate's evidence. Independent review ends at the cap. Complete
+[cutoff disposition](../dev-flow/SKILL.md#cutoff) from gates and Orchestrator observations; collect with
+its recorded limitations. If correction or gates stay blocked, retain pending state and the concrete
+decision owner.
+
+For normal acceptance, establish each criterion from its assigned observation. For cutoff, distinguish
+established claims from outstanding verification. Landing retains its separate user-authorization gate.
+
+## Results and continuity
+
+Role payloads retain these branches:
+
+- `COMPLETED`: required `outcome`, optional `message`.
 - `BLOCKED`: required `outcome`, `blocker`.
 
-A decision request is not a result branch, and how a worker raises one is the runtime's to say. Where
-the runtime gives the child a live parent channel, the worker asks through it and stays live for the
-answer; spending `BLOCKED` on a question there ends the run and throws away the context the answer was
-for. Where a child returns once and has no such channel, the question comes back as the whole
-`BLOCKED` result and the answer starts a fresh dispatch. Each profile carries its own runtime's form,
-because a child reads its profile and never a runtime binding.
+Writer completion attests passing required checks, a clean committed candidate, and complete assigned
+evidence. Reviewer completion approves its fixed subject. The Orchestrator owns final disposition.
+Non-blocking findings use `Residual risks:` in message or after a blocker. Runs own raw command output;
+assigned evidence files own durable observations.
 
-**`COMPLETED` is a binary attestation** that the required gates passed. It does not attest
-Acceptance: dev-flow's
-[lane-authority](../dev-flow/references/lane-authority.md#every-claim-names-the-observer-that-decides-it)
-gives every claim a deciding observer, and the Orchestrator reads those observers at boundary 4. It
-carries no free-text `Validation` array and creates no durable receipt. Ordinary gate
-commands and raw outputs stay with the run artifact; a judging process worth keeping belongs only to
-the workflow-scoped Acceptance appendix at the exact dispatched target. Name that target in the brief;
-its writer creates the file from dev-flow's `templates/ticket/evidence.md` and fills it with targeted
-edits, so the grant you issue is a path and never a file you precreate.
-[record-hygiene](../dev-flow/references/record-hygiene.md#workflow-scoped-acceptance-appendix) owns
-when an appendix is required and what an assigned target does and does not grant. Operational Git and runtime checks — status, diff,
-diff-check, staged state, cleanliness, ancestry, commit identity, and lifecycle — are operation
-evidence and never belong in an appendix.
+Use the live parent channel for decisions when available. Single-return runtimes report a clearly
+marked question in `BLOCKED`, and the answer starts a fresh dispatch. An interrupted process needs
+checkout/result inspection before deciding whether to resume or replace it.
 
-**Residual risks** are every non-blocking codebase finding, from any worker or reviewer branch,
-whether inside or outside the task envelope. They ride in `message` under a `Residual risks:` heading
-on `COMPLETED`, and after the blocking reason on `BLOCKED`. They never affect routing. Boundary 5
-reads them, so a branch that drops them loses the ticket's deferred work.
+A replacement receives the original assignment, blockers, verified and unverified work, environment,
+and authority. It reads its ticket and needed pointers. Mechanical close-out assignments grant cleanup
+and commit operations within already validated work.
 
-Results state only role-relevant routing, risks, and stop reasons, without restating ticket prose,
-command output, or evidence the ticket, Git, or the run artifact already own.
+Launch children in the background, continue independent work, then return control or yield an active
+goal for completion notifications. Avoid block-waiting and polling. After compaction or handoff,
+reread governing instructions and relevant records; recover uncertain parameters or authority first.
 
-## Generic Acceptance
+## Integrate
 
-Ordinary Generic Acceptance reviews the protected current lane: the writer is stopped, the lane is
-clean, and the reviewer reads its current state directly, read-only. Bash use is limited to read-only retrieval (`git diff`, `git show`, `git status`, `git log`, `rg`, `grep`, `find`, Grove); it excludes pytest, type/lint/format gates, Python/import probes and runtime/process workflows. The reviewer does not execute mechanical gates; it judges ticket gate coverage, the Acceptance claims no gate proved, and gate integrity. **Gate integrity**: a gate's pass is part of the lane under review, and when the lane obtains that pass by changing what the gate measures, the pass is hollow and the lane is `BLOCKED` — no Acceptance claim need have been violated, because the violated expectation is the ticket's own gate entry. Reading the lane diff for the two shapes this is bounded to — a test or assertion whose subject changed inside this lane, and an added construct whose only effect is to silence a checker — is not re-executing a gate. Beyond those two shapes a hollow pass is unobservable to a read-only role, so it is not pursued.
+Record deferred paths and residual risks in their ticket; queue user decisions for batch handoff.
+Collect ready accepted or cutoff branches into integration one at a time while other members continue.
 
-A reviewer result uses the same two branches as a worker's, read as a verdict:
+Reconcile a stale feature branch with current integration. Resolve conflicts and verify the assembled
+result with checks and review appropriate to the introduced changes. Judge the resulting candidate
+before collection. Review inherited history as inherited; integration review focuses on its new
+interactions, while existing cutoff findings retain their recorded disposition.
 
-- `COMPLETED`: the lane passes. Optional `message` carries residual risks.
-- `BLOCKED`: required `blocker`, carrying every blocker the review found.
+If persistence moved, reconcile it into integration through the runtime route. Reassess affected
+task-level criteria and independently review imported changes before landing.
 
-`BLOCKED` says the lane cannot be accepted as it stands; it does not say the reviewer failed. A
-reviewer that could not review at all — the lane is missing, the subject is dirty or mutable — also
-returns `BLOCKED`, and says so in the first line, because the Orchestrator's next move differs: one
-buys a correction, the other buys a repaired subject.
+Collection verifies exact candidate identity, clean tracked state, and inclusion of current integration.
+It advances task integration. Adoption previews the branch state being adopted and displaced managed
+work; retain uncollected branches and evidence until their retirement is authorized.
 
-`blocker` is prose, and each blocker in it names four things: the affected location, the violated
-ticket expectation or Interface promise with direct evidence, a bounded advisory suggestion, and the
-concrete production-reachable input or call sequence plus its existing entry point. For a hollow pass
-those become the ticket's Mechanical gate, its invocation, and the property it no longer measures. A
-mechanically decidable blocker also names the gate that should have caught it. A blocker missing the
-trigger is a residual risk that was filed in the wrong place.
+## Land and clean up
 
-A decision request is not a verdict. A reviewer that finds a contract contradiction or a new-scope
-question raises it the same way its runtime has the writer raise one, and never as a blocker: a
-correction dispatched against a question answers nothing.
+Land under a current user message or in-force task-scoped grant naming the mutation and conditions;
+read [custody](../dev-flow/references/custody.md) for durable grants. Otherwise stop at integration.
+Push requires its own authority.
 
-A hollow pass is the only blocker class that may omit a production-reachable input; it substitutes the entry point and trigger named above. Every other safety or non-happy-path blocker must be production-reachable under the stated operating assumptions: identify the existing production entry point, a concrete reachable input or event sequence, the current observable failure, the violated Acceptance or Interface promise, and the smallest requirement-compliant bounded fix. When Acceptance does not require recovery, tolerance, fallback, compatibility or graceful degradation, safe explicit rejection or Fast Fail is complete; a reviewer demanding more must prove why Fast Fail violates a named promise, using
-bounded advisory fixes that stay inside the ticket's stated outcome rather than expanding scope via
-robustness or future-proofing. A finding that depends on a wider operating model than the dispatch declared is reported via residual risks, not as a blocker.
+Managed landing creates a two-parent merge: previous persistence head first, judged integration head
+second, with the judged integration tree. Both branches advance to it. Require persistence free of
+staged changes, tracked unstaged changes, and ordinary untracked files. Ignored-file collisions and
+hooks use native Git behavior; report failure with the resulting state. Changed candidates regain
+the applicable judgement before landing.
 
-A pass ends after the outcome and any residual risks; it needs no empty filler. The verdict is a
-review result, not ticket Acceptance: the Orchestrator owns the final judgement and closure. Generic
-Acceptance carries no fixed-subject result fields. Specialized procedures such as
-[code-review](../code-review/SKILL.md) keep their own identity contracts and produce separate
-Standards/Spec findings rather than an Acceptance verdict.
-
-When delegated red/green validation needs several commands, a fixed working directory, or owned
-temporary state, use [TDD Gate mode](../tdd/gate.md). Keep a one-command loop direct.
-
-## Review placement and the correction loop
-
-Boundary 2 decides whether a reviewer is placed, at every dispatch the Orchestrator issues. This section governs the review once one is.
-
-**Blocks are a signal addressed to no one, so read them yourself.** A reviewer measures one candidate
-against a fixed contract and has no standing to say the contract was a good one, so it will never
-tell you that what it keeps blocking should not have been asked for. That leaves the diagnosis to
-you: gates carry the mechanical mass, so a first review should return few small blockers, and one
-returning several independent blocker classes says the gate list or the ticket's width was drafted
-wrong. Repair the ticket rather than spending another correction against it. The cap below bounds
-what this costs when you miss it.
-
-**A reviewer request the contract does not carry is sized by surface, not by lines.** When a
-finding names neither an Acceptance claim nor something the user asked for, ask what satisfying it
-would take: staying inside the seams already in place, adding no public item, and touching no `S#`,
-`A#` or write scope makes it ordinary work — do it, or defer it under the writer's own rejection
-rule. Needing any one of those makes it a design question, and the ticket stops at the user rather
-than absorbing another round. Count only newly public surface — a new module, seam, public method,
-parameter, or cross-module call; changing the inside of an existing one is not that. Line count is a
-weak proxy that misses the case this rule exists for: a forty-line function spread across six
-modules is the expensive one, and it passes any threshold you would set.
-
-The Orchestrator dispatches the worker and the reviewer and holds the loop between them; no runtime
-composes it. It carries a finite correction budget, `2` by default and overridable by a task's own
-standing order. What it counts is narrow: a reviewer `BLOCKED` that buys a writer correction, and
-nothing else. Initial implementation consumes none. A `BLOCKED` that turns out to be a question, or
-one saying the subject could not be reviewed at all, buys no correction and so costs nothing — those
-return a decision or a repaired subject, not rework. Exhausting the budget returns the ticket to the
-Orchestrator under [cutting a ticket off](../dev-flow/SKILL.md#cutting-a-ticket-off). The count lives
-with you across dispatches, not with a run: a budget with no defined exit is what lets a loop keep
-spending, and that reference owns what happens once it is spent.
-
-**Three blocks is where a ticket stops buying review.** At the default budget the third block already
-ends a loop: initial implementation consumes nothing, the first two `BLOCKED` verdicts each buy a
-correction, and the third arrives with no slot left. The cap makes that the ticket's ceiling rather
-than one dispatch's, because a fresh dispatch would otherwise hand the same ticket two more blocks
-against a count you had already spent. Past the third, place no reviewer for that ticket: the
-remaining work finishes against its gates, and the claims a reviewer would have decided stay
-unproved and are recorded as such. dev-flow's [reviewer block
-ledger](../dev-flow/references/record-hygiene.md#the-reviewer-block-ledger) is where the count
-survives the run, and [cutting a ticket
-off](../dev-flow/SKILL.md#cutting-a-ticket-off) owns the terminal state it produces.
-
-Scope, architecture, authority, or contract decisions terminate the loop at the Orchestrator.
-Intermediate rounds stay in the dispatch unless an observation independently justifies a durable
-record.
-
-**Initial review** (fresh reviewer, protected current lane, integration tip as baseline, `git diff --find-renames <integrationTip>...HEAD --`) exhausts every Acceptance claim no gate decided and directly reachable siblings in the same failure class handled by the same owning function and governed by the same ticket expectation, before returning one complete `BLOCKED`. It does not equate a new fixed subject with a full review restart.
-
-**Rereview** is performed by a fresh reviewer — not a resume of the prior one — against the changed protected lane. Before dispatching it, read the reviewed lane's HEAD: that SHA is the rereview baseline, and it is yours to hold because the reviewer that produced it is gone. The brief carries the original review brief, the prior blockers, and that baseline SHA, and nothing else: no ancestry, reconciliation, scope or incremental-eligibility policy, and no diff content or changed-path cache. Git is the delta authority (`git diff --find-renames <baseline>...HEAD --`). A correction brief is the same shape, carrying the original bounded worker contract plus the current blockers. Rereview verifies every prior blocker is closed, and checks correction-reachable semantic effects. It does not rerun mechanical gates and does not restart the whole review: a new fixed subject after correction is not a full review restart, because initial review and rereview carry distinct responsibilities. A correction that leaves the lane unchanged still consumes one budget slot; the single count is never reset.
-
-A **seam correction** is one of those decisions carried back into the loop rather than a separate
-stage or a new task: a reviewer may propose where the seam belongs, the Orchestrator decides, and
-the next correction brief authorizes moving that named seam and so lifts the writer's original write
-scope for that move alone. Its lane is reviewed like any other changed lane. It consumes one
-correction budget slot like any other correction and never resets the budget — that single count is
-what measures the cost this ticket has accumulated, and resetting it erases the evidence that the
-design, not the implementation, is what keeps failing.
-
-The terminal handoff carries the reviewed lane's outcome, the decision that is
-needed, applicable direct observations, and residual risk. Orchestrator- and user-observed
-Acceptance items are reported there rather than mislabelled as blockers.
-
-## Reconciliation
-
-Two operations share this name and carry different review costs; each is defined here once.
-
-**Lane reconciliation** brings a stale lane up to current integration. Its review stays bounded to
-the current ticket: boundary 2's proved/residue test applies to the reconciled lane exactly as it
-applies to any other lane state.
-
-**Integration reconciliation** brings persistence into integration when persistence has moved ahead of
-it; the runtime pointer names the operation that carries it out.
-What it brings in was covered by no ticket's Acceptance, so the Orchestrator re-evaluates the task's
-Acceptance, not only the current ticket's. Boundary 2 places a reviewer for residue, and content no
-ticket ever claimed has no gate to prove it, so residue is never empty for integration reconciliation: a reviewer is always placed there.
-
-Either reconciliation's review brief names the parent provenance it introduced, so a reviewer reports
-inherited history as inherited rather than judging it as current-task scope creep.
-
-## Collection boundary
-
-When existing work becomes the managed integration, adoption previews its mutation before
-authorizing it, and uses an existing branch as the complete managed integration state. It discards
-changes from that integration when their lane has not been collected. It leaves any pre-existing
-lane branch or worktree outside the adopted integration unless a separate lifecycle operation
-retires it. The runtime pointer names the operations that carry these out.
-
-The runtime verifies the exact lane tip, that current integration is contained in the judged lane,
-and that managed refs and worktrees are clean and identity-exact, then advances integration to the
-accepted lane and retires it when it is clean. A stale lane is reconciled first; the reconciled
-current lane returns to boundary 2 for review placement and is judged again before collection (see
-Reconciliation for lane versus integration reconciliation). Dirt or ambiguity in the lane is
-preserved and reported rather than deleted or inferred away.
-
-This task-local collection is not landing and requires no separate landing grant.
-
-## Land
-
-Landing moves the exact current integration result into a user or product persistence branch such
-as `feat/*` or `main` by creating one ordinary two-parent merge commit. The commit's first parent
-is the previous persistence head and second parent is the accepted integration head; the commit's
-tree is verified to equal the accepted integration tree, then both the persistence branch and the
-managed integration branch are advanced to that merge commit. Collab creates no landing authority;
-stop at task integration unless a current user message or an in-force task-scoped user grant
-authorizes landing under its stated conditions. When the Orchestrator is running a dev-flow task,
-verify such a grant in dev-flow's [Custody reference](../dev-flow/references/custody.md), which
-owns how the record holds user authority. Landing requires a clean persistence checkout: no staged,
-no unstaged tracked, and no ordinary untracked state before mutation (ignored files are allowed);
-path conflicts and ignored-file collisions follow native `git merge` behavior. Hooks run natively;
-merge or hook failure is reported as an actionable Git error exposing Git's resulting state, without
-synthetic publication or dirt-preservation rollback. Freshness and continued landing eligibility are
-determined by ordinary branch ancestry and shared heads.
-Landing evidence applies only to the reviewed lane; a changed lane first needs a new review result.
-The runtime pointer names the operation that carries out landing.
-
-Land is the authority boundary Collab owns: its guidance ends once integration has moved into the
-persistence branch. Push and later persistence-branch handling stay outside Collab.
-
-## Evolving this skill
-
-Read [dev-flow's design principles](../dev-flow/references/design-principles.md) before changing
-this document or an agent profile. They own altitude, evidence, and where a rule's text belongs
-against where its readers stand; both skills are governed by them.
+Before destructive retirement, inventory owned resources and move required evidence to its durable
+owner. Managed retirement can remove untracked and ignored files too. Remove owned temporary files,
+processes, worktree registrations, and branches whose purpose is complete. Preserve user state and
+record each retained resource's owner and cleanup condition. Finish when integration or landing is
+confirmed and every execution resource is retired or explicitly retained.

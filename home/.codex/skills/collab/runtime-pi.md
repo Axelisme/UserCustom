@@ -6,18 +6,15 @@ details here.
 
 ## Routing
 
-Read only the section named for the step you are taking.
+Open only the linked section for the current operation, using dev-flow's `scripts/section.py`.
 
-- **Managed lane environment** — after canonical lane creation succeeds and the repository declares
-  a worktree bootstrap: establish its dispatch precondition and lane-lifetime ownership.
-- **Dispatch** — the canonical branch: launch one role onto one lane.
-- **Results and decisions** — how a child's outcome and questions reach you.
-- **Post-launch** — after launching a child: the ordinary return-or-yield step that lets a terminal
-  notification wake the session.
-- **Run control** — only when a run is interrupted or needs status, steering, or stopping.
-- **Placement** — only when the canonical lane placement does not fit the chosen shape.
-- **Collection** — only after the Orchestrator judges the lane and chooses collection.
-- **Operations** — only when selecting which `collab_*` tool carries out a Collab step.
+- After lane creation, if the repository declares bootstrap: [Managed lane environment](#managed-lane-environment).
+- Before launching a child: [Dispatch](#dispatch) and [Post-launch](#post-launch).
+- When a child returns or asks a question: [Results and decisions](#results-and-decisions).
+- When interrupted work needs inspection, steering, or recovery: [Run control](#run-control).
+- For a gates-only assignment: [Placement](#placement).
+- After accepting a branch for collection: [Collection](#collection).
+- Before selecting a managed Git operation or retiring resources: [Operations](#operations).
 
 ## Managed lane environment
 
@@ -123,9 +120,9 @@ Orchestrator judges the writer's mechanical-gate result before collection.
 
 `collab_lane` with `action: collect` carries its own stale-lane behavior and is the default
 collection path. A `collected` result completes collection. A `reconciled` result stops before
-collection: apply the core lane-reconciliation placement test to the reconciled protected current
-lane, have the Orchestrator judge again, and only then retry collection. Where that test places a
-reviewer, spawn a fresh `collab-acceptor` onto the reconciled lane with a brief saying so. A
+collection: apply the core reconciliation review requirements to the reconciled fixed review commit.
+Have the Orchestrator judge again before retrying collection. When review is required, dispatch a fresh
+`collab-acceptor` with the exact candidate identity and comparison baseline. A
 `conflicted` result returns to the Orchestrator. `collab_lane` with `action: reconcile` remains
 available but is not an extra default pre-step.
 

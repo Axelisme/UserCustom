@@ -42,6 +42,14 @@ here). Also not taken: `to-questionnaire` (sending someone else a questionnaire)
 (generating an interactive bash wizard for human-only setup steps), both graduated out of
 `in-progress` at the 2026-08-05 sync but not adopted here.
 
+Also not taken at the `3cca18b` sync:
+
+- `implement-spec`: its branch, PR and merger-subagent workflow overlaps local `dev-flow` / `collab`
+  without their mutation-authority rules. Keep ticket execution with the local workflow.
+- `retro`: upstream's bucket README still labels it a non-functional stub. Its assumption that a
+  reviewer needs no exploration also does not fit local review. Reassess when upstream removes the
+  stub designation and the review assumptions fit this fleet.
+
 ## Skills from other upstreams
 
 `grove` is **still a hand-ported copy**, not a subtree: it is under observation and was deliberately

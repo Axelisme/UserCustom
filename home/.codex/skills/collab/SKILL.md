@@ -38,8 +38,9 @@ mechanical criteria, a second reader is optional. Schedule observations requirin
 commit exists. The Orchestrator evaluates the results in every case.
 
 Read the receiver's `Dispatch contract` and `Result` sections before dispatch. Supply its absolute
-ticket path and execution fields: checkout, environment, mutation authority, evidence targets, and
-stop conditions. Review and correction also need candidate/baseline and prior findings as applicable.
+ticket path and execution fields: checkout, environment, mutation authority, any exceptional evidence
+target, and stop conditions. Review and correction also need candidate/baseline and prior findings as
+applicable.
 Reference ticket-owned criteria and checks. Direct Orchestrator implementation follows the same
 contract, test ownership, and checkout constraints.
 
@@ -49,8 +50,8 @@ contract, test ownership, and checkout constraints.
   operation and receiver input/output contracts by assignment.
 - Implementer: profile, dispatch, ticket, and relevant code/interface declarations. Evidence authoring
   rules apply when assigned a durable evidence target.
-- Reviewer: profile, dispatch, ticket, fixed candidate, and relevant evidence; prior findings for
-  rereview. Its profile owns evidence assessment.
+- Reviewer: profile, dispatch, ticket, fixed candidate, ticket-cited observations, and any relevant
+  evidence; prior findings for rereview. Its profile owns assessment.
 
 Installed profiles use filenames `collab-implementer` and `collab-acceptor`:
 
@@ -117,11 +118,11 @@ implementer. Apply mutating checks within the acting writer's edit authority.
 ## Implement and review
 
 The writer completes the assignment, passes required checks, commits under branch-local authority,
-and stops writing. Gate evidence establishes the required property of the final candidate.
+and stops writing. Gate results establish the required property of the final candidate.
 
 Before review, record the exact clean commit/tree and baseline and confirm the writer is stopped.
 Each verdict binds to that immutable subject; apply the relevant correction or integration procedure
-to changed candidates. Coordination evidence owns identities, while role payloads carry results.
+to changed candidates. Coordination records own identities, while role payloads carry results.
 
 The reviewer reads the candidate, tests, and existing observations for assigned criteria. Validation
 execution belongs to observation owners; send requests for new observations to them. Interpret its
@@ -138,8 +139,9 @@ user sets another. Record every verdict and cumulative count in Progress, includ
 verdict. Questions and unreviewable subjects return for clarification or preparation. Preserve counts
 across agents, sessions, and design corrections; the user grants a fresh allowance when wanted.
 
-Read evidence and classify findings: in-contract defects become small owner-assigned corrections;
-additional suggestions receive recorded disposition; user-level design, data-structure, scope, or
+Read ticket-cited observations and any relevant evidence, then classify findings: in-contract defects
+become small owner-assigned corrections; additional suggestions receive recorded disposition;
+user-level design, data-structure, scope, or
 authority choices go to [batch handoff](../dev-flow/SKILL.md#ticket-handoff). Continue feasible work
 under the confirmed contract and report a blocker when a decision prevents required behavior.
 
@@ -149,7 +151,7 @@ covers prior blockers and correction-related effects. Scope the review to the ac
 
 At the cap, select the remaining in-scope fixes for one final bounded correction. Internal logic goes
 to the implementer; formal-test edits go to the Orchestrator. Run required gates, form the final clean
-commit, and record the final candidate's evidence. Independent review ends at the cap. Complete
+commit, and record its identity and concise gate results. Independent review ends at the cap. Complete
 [cutoff disposition](../dev-flow/SKILL.md#cutoff) from gates and Orchestrator observations; collect with
 its recorded limitations. If correction or gates stay blocked, retain pending state and the concrete
 decision owner.
@@ -164,10 +166,12 @@ Role payloads retain these branches:
 - `COMPLETED`: required `outcome`, optional `message`.
 - `BLOCKED`: required `outcome`, `blocker`.
 
-Writer completion attests passing required checks, a clean committed candidate, and complete assigned
-evidence. Reviewer completion approves its fixed subject. The Orchestrator owns final disposition.
-Non-blocking findings use `Residual risks:` in message or after a blocker. Runs own raw command output;
-assigned evidence files own durable observations.
+Writer completion attests passing required checks, a clean committed candidate, and completion of any
+explicitly assigned evidence. Reviewer completion approves its fixed subject. The Orchestrator owns
+final disposition. Non-blocking findings use `Residual risks:` in message or after a blocker. Runs own
+raw command output; assigned evidence files own exceptional durable observations. Keep model-facing
+results bounded: report outcomes,
+relevant excerpts, and artifact pointers instead of bulky raw output.
 
 Use the live parent channel for decisions when available. Single-return runtimes report a clearly
 marked question in `BLOCKED`, and the answer starts a fresh dispatch. An interrupted process needs
@@ -178,8 +182,8 @@ and authority. It reads its ticket and needed pointers. Mechanical close-out ass
 and commit operations within already validated work.
 
 Launch children in the background, continue independent work, then return control or yield an active
-goal for completion notifications. Avoid block-waiting and polling. After compaction or handoff,
-reread governing instructions and relevant records; recover uncertain parameters or authority first.
+goal for completion notifications. Avoid block-waiting and polling. On reorientation, apply the
+always-resident rule and recover uncertain parameters or authority before acting.
 
 ## Integrate
 

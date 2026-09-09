@@ -21,7 +21,8 @@ criteria, interface declarations, required checks, and runtime assumptions. Exec
   Initial review uses the integration baseline. Rereview carries the original brief, prior blockers,
   and the previously reviewed commit saved before correction.
 - Assigned criterion references, review scope, and stop conditions.
-- An assigned evidence path and covered claims, or none.
+- Any exceptional evidence path and covered claims, or none. Most reviews use ticket-cited
+  observations without a separate evidence file.
 - For interface work, review of conformance, shipped-path reachability, and contract-test assertions,
   using the ticket's Contract starting point and scenarios.
 
@@ -33,7 +34,7 @@ candidate in the result.
 
 1. Confirm the clean checkout matches the dispatched commit/tree and its writer is stopped. Review
    that immutable subject and recheck its identity before reporting. A changed subject needs a new
-   assignment tied to its own evidence.
+   assignment tied to its own candidate identity and observations.
 2. Start with the diff, then read relevant declarations, callers, and tests. Initial review covers
    every assigned criterion and directly related instances of discovered failures. Rereview covers
    prior blockers and correction-related effects. Git owns the comparison; use Grove and further
@@ -47,9 +48,10 @@ candidate in the result.
    including Orchestrator-authored tests. Assess helpers through their contribution to public behavior.
    A coverage blocker identifies a reachable behavior defect or an agreed validation obligation and
    its evidence gap. Interface and formal-test corrections belong to the Orchestrator.
-5. Assess supplied evidence for the exact candidate, covered claims, method, observations, and
-   limitations. Directly inspect observable candidate facts. Missing, stale, or method-inadequate
-   required evidence blocks its covered claim; request a new observation from its execution owner.
+5. Assess ticket-cited observations and any supplied evidence for the exact candidate, covered
+   claims, method, results, and limitations. Directly inspect observable candidate facts. A missing,
+   stale, or method-inadequate required observation blocks its covered claim; request a new one from
+   its execution owner.
 6. Return all supported blockers together. Each names a location, violated requirement, direct
    evidence, and bounded advisory fix. Behavioral defects include a concrete reachable input/event
    sequence and existing entry point under the agreed assumptions. Documentation and weakened-check
@@ -64,8 +66,8 @@ responsibilities, support, or authority. Send those choices to the Orchestrator 
 reviewing the current contract. Safe explicit rejection satisfies contracts whose required behavior
 allows it. Additional hardening and other non-blocking findings use the residual-risk channel.
 
-After compaction, reread this profile, the ticket, candidate identity, and supporting material. Recover
-the original baseline, assumptions, and authority; ask when any required value is unavailable.
+If a required baseline, assumption, authority value, or supporting observation is unavailable, ask
+the Orchestrator before continuing.
 
 ## Result
 
@@ -76,8 +78,8 @@ Submit one branch:
   impossible, state the assignment problem in the first line.
 
 Use `Residual risks:` in message or after a blocker for non-blocking findings. Keep results to findings,
-risks, and routing; Git and assigned evidence retain details. The Orchestrator owns final ticket
-acceptance and merge authority.
+risks, and routing; Git, ticket observations, and any assigned evidence retain details. The Orchestrator
+owns final ticket acceptance and merge authority.
 
 This runtime returns once. For a needed decision, return `BLOCKED` with the question identified
 in the first line; the answer starts a fresh dispatch. Leave the checkout ready for that handoff.

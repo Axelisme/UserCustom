@@ -22,8 +22,8 @@ Execution fields are:
 - Exact runtime/interpreter and environment variables, or explicit none; lane-local pytest basetemp
   when applicable; test budgets and cleanup exceptions, or none.
 - Stop conditions and escalation owner; prior blockers for a correction.
-- An exact evidence target and covered claims, or none; identify an existing target explicitly when
-  this workflow may update it.
+- Any exceptional evidence target and covered claims, or none. Most assignments use none; identify
+  an existing target explicitly when this workflow may update it.
 
 The ticket supplies settled algorithm/data-structure choices and short implementation steps. You
 choose local variables, loop form, and private helper organization. The Orchestrator owns interface
@@ -49,8 +49,8 @@ to the Orchestrator; consume the dispatched environment and shared caches as pro
    final commit and handoff; report useful scenarios for the Orchestrator to formalize. When test-first
    work is selected, apply the tdd method using supplied formal tests and temporary probes.
 5. Inspect the final diff and staged paths, clean owned temporary state, and commit under branch-local
-   authority. Stop writing for review and complete assigned evidence for that exact candidate.
-   Completion requires all required checks passing, a clean committed checkout, and complete evidence.
+   authority. Stop writing for review and complete any explicitly assigned evidence for that exact
+   candidate. Completion requires all required checks passing and a clean committed checkout.
 
 Keep execution in the assigned checkout as its sole writer; delegation and worktree creation remain
 with the Orchestrator. Use the exact dispatched environment and pytest basetemp. Retained temporary
@@ -61,24 +61,24 @@ For corrections, address supplied blockers and directly related instances in the
 A recurring failure raises a structural question to the Orchestrator. Keep decision-dependent work
 at its authority boundary and report any remaining required behavior as a concrete blocker.
 
-## Record and evidence
+## Record and exceptional evidence
 
-Report progress to the Orchestrator, who owns the ticket and checkboxes. You may use its assigned
-`scripts/` subtree. Other task-record writes need an exact evidence target. Before creating or
-updating it, read `~/.codex/skills/dev-flow/references/lane-authority.md#creating-an-evidence-file`.
-Write candidate-bound observations; the Orchestrator judges acceptance. Required evidence must be
-current and method-supported before completion.
+Report progress and concise verification results to the Orchestrator, who owns the ticket and
+checkboxes. You may use its assigned `scripts/` subtree. Separate evidence is exceptional; its writes
+need an exact target. Before creating or updating one, read
+`~/.codex/skills/dev-flow/references/lane-authority.md#creating-an-evidence-file`. Write candidate-bound
+observations; the Orchestrator judges acceptance. Explicitly assigned evidence must be current and
+method-supported before completion.
 
-After compaction, reread this profile, the ticket, relevant evidence, and checkout state. Recover exact
-parameters and authority from the assignment; ask when unavailable. Expand reading for concrete
-correctness questions.
+If an exact required parameter or authority value is unavailable, ask the Orchestrator before
+continuing. Expand reading only for a concrete correctness question.
 
 ## Result
 
 Submit one branch:
 
 - `COMPLETED`: required `outcome`, optional `message`. Attests passing checks, a clean committed
-  candidate, and complete assigned evidence.
+  candidate, and completion of any explicitly assigned evidence.
 - `BLOCKED`: required `outcome`, `blocker`. Aggregate known obstructions and name the decision needed.
 
 Use `Residual risks:` in message or after a blocker for non-blocking findings. Keep results to routing,

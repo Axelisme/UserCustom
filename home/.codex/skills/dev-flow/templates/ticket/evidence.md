@@ -1,6 +1,8 @@
 # Validation evidence
 
-<!-- Create only when durable evidence is needed. Record permissions:
+<!-- Do not use for routine reproducible checks; record those concisely in the ticket. Create this
+     file only for a costly, external, manual, ephemeral, audit-required, or user-requested
+     observation. Record permissions:
      ~/.codex/skills/dev-flow/references/lane-authority.md#creating-an-evidence-file -->
 
 ## Subject

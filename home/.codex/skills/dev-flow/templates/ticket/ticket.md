@@ -5,7 +5,8 @@ state: {{STATE}}
 # {{TICKET_ID}}: {{TITLE}}
 
 <!-- Use drafted or pending under ~/.codex/skills/dev-flow/SKILL.md#tickets.
-     The Orchestrator owns this file. Keep evidence beside it and retain Resolution after closure. -->
+     The Orchestrator owns this file. Keep any exceptional evidence file beside it and retain
+     Resolution after closure. -->
 
 | Ticket field | Value |
 |---|---|
@@ -55,8 +56,8 @@ Awaiting design discussion and user confirmation.
      responsible check/person; related decisions may share a criterion.
      Tests or scenario observations verify behavior; direct review verifies responsibilities,
      interface placement, prose, configuration, and repository data.
-     The Orchestrator updates checkboxes from evidence. -->
-- [ ] A1: <observable criterion>. Evidence: <observation>. Owner: <check, reviewer, Orchestrator, user, or external operator>.
+     The Orchestrator updates checkboxes from recorded observations. -->
+- [ ] A1: <observable criterion>. Check: <command, reviewer, Orchestrator, user, or external operator>.
 
 ## Mechanical gates
 <!-- Required checks in execution order. Point to repository-owned commands where available.
@@ -79,8 +80,8 @@ Reviewer BLOCKED count: 0. Work: not started.
 None.
 
 ## Resolution
-<!-- Final disposition, candidate, pointers to its basis, and outstanding criteria.
-     Keep the ticket's scenarios, design discussion and decisions, findings, and evidence intact in
+<!-- Final disposition, candidate, concise verification results or pointers, and outstanding criteria.
+     Keep the ticket's scenarios, design discussion and decisions, findings, and cited observations in
      their owning files through closure and task archive. Read historical context on demand.
      Cutoff records the final bounded correction and passing gates, remaining findings and scenarios,
      and verification still awaiting independent review. Retain this record for user-triggered revisiting.

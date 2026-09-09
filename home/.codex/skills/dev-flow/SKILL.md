@@ -156,22 +156,22 @@ Replace Current and Next from the present situation, preserving each unique remo
 owner. Keep approved grants verbatim. Session task lists project this record. A handoff names factual
 owners and next actions; tickets retain their contracts, progress, and Resolution.
 
-Keep ticket evidence beside its ticket; task-wide specs, research, decisions, and scripts use their
-corresponding directories. Preserve durable validation for costly, external, manual, or audit-required
-observations. Use `templates/ticket/evidence.md`: exact commit/tree, covered claims, operator, time and
-environment, method, expected/actual observations, limitations, and cleanup. Referenced record scripts
-include path and SHA-256. Routine outputs remain with their runs. Revalidate changed candidates.
+Record routine verification in the ticket: candidate identity, command or observer, concise result,
+and any verdict or limitation. Raw outputs remain with their runs. Create a separate evidence file only for
+costly, external, manual, ephemeral, audit-required, or user-requested observations. Keep it beside the
+ticket and use `templates/ticket/evidence.md`. Referenced record scripts include path and SHA-256.
+Revalidate changed candidates.
 
 ## Close and archive
 
-For normal closure, establish every applicable acceptance criterion from its evidence. Update the
-checklist, write Resolution, set terminal state, then replace INDEX's Current and Next. Abandoned or
-superseded work may retain unchecked criteria with reasons. A review-capped ticket follows
+For normal closure, establish every applicable acceptance criterion from its recorded observation.
+Update the checklist, write Resolution, set terminal state, then replace INDEX's Current and Next.
+Abandoned or superseded work may retain unchecked criteria with reasons. A review-capped ticket follows
 [cutoff](#cutoff). Closure is complete when the ticket and INDEX agree.
 
 Preserve complete ticket context through closure and archive: scenarios, recorded design discussion,
-decisions, findings, and evidence stay in their owning files. Resolution states the final disposition
-and points to its basis. Read historical tickets on demand; INDEX stays focused on current work.
+decisions, findings, and cited observations stay in their owning files. Resolution states the final
+disposition and points to its basis. Read historical tickets on demand; INDEX stays focused on current work.
 
 Clean implementation-time temporary files, processes, probes, and worktrees whose integration and
 evidence preservation are complete. Retained temporary resources have an owner and cleanup condition.

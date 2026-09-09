@@ -8,7 +8,8 @@ description: "Orchestrator task records: always use with collab to plan, resume,
 Always read this Orchestrator entry with [collab](../collab/SKILL.md), which owns assignment, review,
 and Git operations. Every task has a container; every bounded implementation has a ticket, including
 work completed directly by the Orchestrator. Implementers and reviewers enter through their profiles,
-dispatch, and assigned ticket.
+dispatch, and assigned ticket. Group independent tool observations into one parallel call when no
+result is needed to formulate another; keep dependent operations sequential.
 
 ## Resume
 

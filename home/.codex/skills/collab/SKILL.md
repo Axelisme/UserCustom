@@ -167,7 +167,8 @@ Role payloads retain these branches:
 Writer completion attests passing required checks, a clean committed candidate, and complete assigned
 evidence. Reviewer completion approves its fixed subject. The Orchestrator owns final disposition.
 Non-blocking findings use `Residual risks:` in message or after a blocker. Runs own raw command output;
-assigned evidence files own durable observations.
+assigned evidence files own durable observations. Keep model-facing results bounded: report outcomes,
+relevant excerpts, and artifact pointers instead of bulky raw output.
 
 Use the live parent channel for decisions when available. Single-return runtimes report a clearly
 marked question in `BLOCKED`, and the answer starts a fresh dispatch. An interrupted process needs
@@ -178,8 +179,8 @@ and authority. It reads its ticket and needed pointers. Mechanical close-out ass
 and commit operations within already validated work.
 
 Launch children in the background, continue independent work, then return control or yield an active
-goal for completion notifications. Avoid block-waiting and polling. After compaction or handoff,
-reread governing instructions and relevant records; recover uncertain parameters or authority first.
+goal for completion notifications. Avoid block-waiting and polling. On reorientation, apply the
+always-resident rule and recover uncertain parameters or authority before acting.
 
 ## Integrate
 

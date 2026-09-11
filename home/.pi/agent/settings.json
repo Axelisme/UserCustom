@@ -10,7 +10,6 @@
     "/home/axel/Documents/VSCode/Typescript/pi-herdr-subagents",
     "/home/axel/Documents/VSCode/Typescript/billion-context-pi",
     "npm:pi-mcp-adapter",
-    "npm:pi-web-access",
     "npm:pi-openai-fast-mode",
     "npm:pi-antigravity",
     "npm:pi-claude-code-ui"
@@ -26,7 +25,6 @@
     "allowExtensions": [
       "/home/axel/Documents/VSCode/Typescript/cache-stats",
       "/home/axel/Documents/VSCode/Typescript/billion-context-pi",
-      "npm:pi-web-access",
       "npm:pi-openai-fast-mode",
       "npm:pi-antigravity",
       "npm:pi-claude-code-ui"

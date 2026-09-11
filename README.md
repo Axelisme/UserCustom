@@ -65,6 +65,20 @@ entry，`link_one` 連結該 path 本身；要停裝某一項就把那一行註�
 **注意**：symbolic link 會直接反映 `home/` 下的更新——包含穿過 `vendor/` 的那一段，所以同步
 上游之後不需要重跑安裝。重跑 `./setup_scripts/setup_config.sh` 只會略過已正確連結的項目。產生的 `.bak` 可自行刪除。
 
+### 外部網路研究工具
+
+`web-researcher` 在 Pi 中直接使用 `ketch` CLI。Claude 與 Codex 優先使用 runtime 提供的內建網路工具，沒有內建工具時才退回 `ketch`。
+
+請先安裝 `ketch` 並確認它位於 `PATH`。官方提供 release binary、Homebrew，或 Go 安裝方式：
+
+```bash
+go install github.com/1broseidon/ketch@latest
+ketch config set backend ddg
+ketch doctor
+```
+
+研究時使用 `ketch search` 找來源，再用 `ketch scrape` 讀取選定頁面。ketch 會使用本機 page cache，這是預期行為。
+
 ## 步驟 3: 設定其他軟體(Optional)
 
 ```bash

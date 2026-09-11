@@ -12,6 +12,7 @@ import {
 	type ExtensionAPI,
 	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { Container, Text } from "@earendil-works/pi-tui";
 
 /** Sub-tools the batch tool is allowed to dispatch to. */
 const READ_ONLY = ["read", "grep", "find", "ls"] as const;
@@ -168,10 +169,32 @@ function spill(text: string, toolCallId: string, index: number): string {
 type CallOutcome = {
 	index: number;
 	label: string;
+	name: string;
+	args: Record<string, unknown>;
 	ok: boolean;
 	blocks: Array<{ type: string; [k: string]: unknown }>;
+	details: unknown;
 	durationMs: number;
 };
+
+/**
+ * Per-sub-call record kept in `details` so the renderers can hand each built-in
+ * tool its own result. `blockStart`/`blockCount` index into `result.content`
+ * rather than copying it, so the session file carries the output once.
+ */
+type CallRecord = {
+	index: number;
+	name: string;
+	label: string;
+	args: Record<string, unknown>;
+	ok: boolean;
+	durationMs: number;
+	details: unknown;
+	blockStart: number;
+	blockCount: number;
+};
+
+type ParallelDetails = { mode: "sequential" | "concurrent"; calls: CallRecord[] };
 
 async function runOne(
 	call: SubCall,
@@ -189,8 +212,11 @@ async function runOne(
 		return {
 			index,
 			label,
+			name,
+			args: call.parameters,
 			ok: false,
 			durationMs: 0,
+			details: undefined,
 			blocks: [
 				{
 					type: "text",
@@ -212,17 +238,87 @@ async function runOne(
 		if (typeof fullOutputPath === "string" && fullOutputPath.length > 0) {
 			blocks.push({ type: "text", text: `[full output: ${fullOutputPath}]` });
 		}
-		return { index, label, ok: true, durationMs: Date.now() - started, blocks };
+		return {
+			index,
+			label,
+			name,
+			args: prepared as Record<string, unknown>,
+			ok: true,
+			durationMs: Date.now() - started,
+			details: result.details,
+			blocks,
+		};
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		return {
 			index,
 			label,
+			name,
+			args: call.parameters,
 			ok: false,
 			durationMs: Date.now() - started,
+			details: undefined,
 			blocks: [{ type: "text", text: message }],
 		};
 	}
+}
+
+
+type SubRenderSlot = { state: Record<string, unknown>; lastCall?: unknown; lastResult?: unknown };
+
+/** Per-sub-call renderer slots, parked on the row state pi owns so they die with the row. */
+function slotsFor(context: { state?: Record<string, unknown> }): SubRenderSlot[] {
+	const state = (context.state ??= {}) as { parallelSlots?: SubRenderSlot[] };
+	state.parallelSlots ??= [];
+	return state.parallelSlots;
+}
+
+function subContext(
+	context: Record<string, unknown> & { state?: Record<string, unknown>; toolCallId?: string },
+	index: number,
+	args: Record<string, unknown>,
+	kind: "call" | "result",
+	isError?: boolean,
+): Record<string, unknown> {
+	const slots = slotsFor(context);
+	const slot = (slots[index] ??= { state: {} });
+	return {
+		...context,
+		args,
+		toolCallId: `${context.toolCallId ?? "parallel"}:${index}`,
+		state: slot.state,
+		lastComponent: kind === "call" ? slot.lastCall : slot.lastResult,
+		isError: isError ?? context.isError,
+	};
+}
+
+function rememberComponent(
+	context: { state?: Record<string, unknown> },
+	index: number,
+	kind: "call" | "result",
+	component: unknown,
+): void {
+	const slot = (slotsFor(context)[index] ??= { state: {} });
+	if (kind === "call") slot.lastCall = component;
+	else slot.lastResult = component;
+}
+
+function plural(count: number, word: string): string {
+	return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+/** Delegate to a built-in renderer, falling back to plain text if it throws. */
+function safeRender(render: () => unknown, fallback: () => unknown): unknown {
+	try {
+		const component = render();
+		return component ?? fallback();
+	} catch {
+		return fallback();
+	}
+}
+
+function textOf(block: { type: string; [k: string]: unknown }): string {
+	return block.type === "text" && typeof block.text === "string" ? block.text : `[${block.type}]`;
 }
 
 export default function parallelToolsExtension(pi: ExtensionAPI): void {
@@ -267,6 +363,105 @@ export default function parallelToolsExtension(pi: ExtensionAPI): void {
 			additionalProperties: false,
 		} as any,
 		executionMode: "parallel",
+		renderCall(args: ParallelInput, theme: any, context: any) {
+			const calls = Array.isArray(args?.tool_uses) ? args.tool_uses : [];
+			const box = new Container();
+			box.addChild(
+				new Text(
+					`${theme.fg("toolTitle", theme.bold("parallel"))} ${theme.fg("muted", plural(calls.length, "call"))}`,
+					0,
+					0,
+				),
+			);
+			const definitions = definitionsFor(typeof context?.cwd === "string" ? context.cwd : process.cwd());
+			calls.forEach((call, index) => {
+				const definition = definitions[call.recipient_name as SubToolName] as
+					| (AnyToolDef & { renderCall?: (a: unknown, t: unknown, c: unknown) => unknown })
+					| undefined;
+				const line = () => new Text(`  ${theme.fg("muted", summarize(call))}`, 0, 0);
+				const component = definition?.renderCall
+					? safeRender(
+							() =>
+								definition.renderCall?.(
+									call.parameters,
+									theme,
+									subContext(context ?? {}, index, call.parameters, "call"),
+								),
+							line,
+						)
+					: line();
+				rememberComponent(context ?? {}, index, "call", component);
+				box.addChild(component as never);
+			});
+			return box as never;
+		},
+		renderResult(result: any, options: any, theme: any, context: any) {
+			const details = result?.details as ParallelDetails | undefined;
+			const records = details?.calls ?? [];
+			const blocks = (result?.content ?? []) as Array<{ type: string; [k: string]: unknown }>;
+			const box = new Container();
+
+			if (records.length === 0) {
+				box.addChild(new Text(blocks.map(textOf).join("\n"), 0, 0));
+				return box as never;
+			}
+
+			const failed = records.filter((record) => !record.ok).length;
+			const wall =
+				details?.mode === "sequential"
+					? records.reduce((sum, record) => sum + record.durationMs, 0)
+					: records.reduce((max, record) => Math.max(max, record.durationMs), 0);
+			const status =
+				failed === 0 ? theme.fg("success", "all ok") : theme.fg("error", `${failed} failed`);
+			box.addChild(
+				new Text(
+					theme.fg(
+						"muted",
+						`${plural(records.length, "call")} · ${details?.mode ?? "concurrent"} · ${wall}ms · `,
+					) + status,
+					0,
+					0,
+				),
+			);
+
+			const definitions = definitionsFor(typeof context?.cwd === "string" ? context.cwd : process.cwd());
+			for (const record of records) {
+				const mark = record.ok ? theme.fg("success", "✓") : theme.fg("error", "✗");
+				if (!options?.expanded) {
+					box.addChild(
+						new Text(
+							`  ${mark} ${record.label} ${theme.fg("muted", `${record.durationMs}ms`)}`,
+							0,
+							0,
+						),
+					);
+					continue;
+				}
+
+				box.addChild(new Text(`  ${mark} ${theme.fg("toolTitle", record.label)}`, 0, 0));
+				const slice = blocks.slice(record.blockStart, record.blockStart + record.blockCount);
+				const plain = () => new Text(slice.map(textOf).join("\n"), 0, 0);
+				const definition = definitions[record.name as SubToolName] as
+					| (AnyToolDef & { renderResult?: (r: unknown, o: unknown, t: unknown, c: unknown) => unknown })
+					| undefined;
+				const component = definition?.renderResult
+					? safeRender(
+							() =>
+								definition.renderResult?.(
+									{ content: slice, details: record.details },
+									options,
+									theme,
+									subContext(context ?? {}, record.index, record.args, "result", !record.ok),
+								),
+							plain,
+						)
+					: plain();
+				rememberComponent(context ?? {}, record.index, "result", component);
+				box.addChild(component as never);
+			}
+			return box as never;
+		},
+
 		prepareArguments: prepareParallelArguments as any,
 		async execute(toolCallId, params: ParallelInput, signal, _onUpdate, ctx) {
 			const calls = Array.isArray(params?.tool_uses) ? params.tool_uses : [];
@@ -308,12 +503,14 @@ export default function parallelToolsExtension(pi: ExtensionAPI): void {
 			// Each sub-call keeps the budget its tool would get on its own; only a
 			// batch large enough to be head-truncated downstream spills to files.
 			let budget = inlineBudget(config);
+			const records: CallRecord[] = [];
 			for (const outcome of outcomes) {
 				const status = outcome.ok ? "ok" : "failed";
 				content.push({
 					type: "text",
 					text: `--- [${outcome.index + 1}/${calls.length}] ${outcome.label} — ${status} ---`,
 				});
+				const blockStart = content.length;
 				for (const block of outcome.blocks) {
 					if (block.type !== "text") {
 						content.push(block);
@@ -325,6 +522,17 @@ export default function parallelToolsExtension(pi: ExtensionAPI): void {
 					budget = Math.max(0, budget - Buffer.byteLength(text, "utf8"));
 					content.push({ type: "text", text });
 				}
+				records.push({
+					index: outcome.index,
+					name: outcome.name,
+					label: outcome.label,
+					args: outcome.args,
+					ok: outcome.ok,
+					durationMs: outcome.durationMs,
+					details: outcome.details,
+					blockStart,
+					blockCount: content.length - blockStart,
+				});
 			}
 			if (outcomes.length < calls.length) {
 				content.push({
@@ -333,17 +541,11 @@ export default function parallelToolsExtension(pi: ExtensionAPI): void {
 				});
 			}
 
-			return {
-				content,
-				details: {
-					mode: sequential ? "sequential" : "concurrent",
-					calls: outcomes.map((outcome) => ({
-						name: outcome.label,
-						ok: outcome.ok,
-						durationMs: outcome.durationMs,
-					})),
-				},
+			const details: ParallelDetails = {
+				mode: sequential ? "sequential" : "concurrent",
+				calls: records,
 			};
+			return { content, details };
 		},
 	});
 }

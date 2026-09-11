@@ -4,6 +4,7 @@ description: Independently accept, block, or defer one reviewed lane using read-
 modelList:
   - openai-codex/gpt-5.6-sol:high
 tools:
+  - parallel
   - read
   - bash
   - compress

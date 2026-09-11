@@ -23,6 +23,7 @@
   ],
   "herdrSubagents": {
     "allowExtensions": [
+      "extensions/parallel-tools.ts",
       "/home/axel/Documents/VSCode/Typescript/cache-stats",
       "/home/axel/Documents/VSCode/Typescript/billion-context-pi",
       "npm:pi-openai-fast-mode",

@@ -1,5 +1,5 @@
 {
-  "toolBackground": "transparent",
+  "toolBackground": "outlines",
   "groupToolCalls": true,
   "themeAdaptive": true
 }

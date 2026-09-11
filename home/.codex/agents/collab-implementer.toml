@@ -1,7 +1,7 @@
 name = "collab-implementer"
 description = "Implement one bounded change as the sole writer, validate it, and return a semantic handoff without owning orchestration or lifecycle."
-model = "gpt-5.6-sol"
-model_reasoning_effort = "medium"
+model = "gpt-5.6-luna"
+model_reasoning_effort = "max"
 sandbox_mode = "workspace-write"
 developer_instructions = '''
 # Collab implementer

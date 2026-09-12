@@ -74,8 +74,23 @@ type AnyToolDef = {
 /** Built-in tool definitions are cwd-bound, so cache one set per cwd. */
 const definitionsByCwd = new Map<string, Record<SubToolName, AnyToolDef>>();
 
+/**
+ * pi-claude-code-ui replaces the built-in tools with its own wrappers, and its renderers
+ * read result details only those wrappers produce. ExtensionAPI exposes no way to ask
+ * another extension for a registered tool, so it publishes them on this global. Internal
+ * handshake, not a stable interface: when it is absent we simply use the raw factories.
+ */
+function sharedToolDefinitions(): Map<string, AnyToolDef> | undefined {
+	const published = (globalThis as { __piClaudeCodeUiTools?: unknown }).__piClaudeCodeUiTools;
+	return published instanceof Map ? (published as Map<string, AnyToolDef>) : undefined;
+}
+
 function definitionsFor(cwd: string): Record<SubToolName, AnyToolDef> {
-	const cached = definitionsByCwd.get(cwd);
+	const shared = sharedToolDefinitions();
+	// Key on availability too, so a set built before the other extension registered its
+	// tools is not cached forever.
+	const cacheKey = `${shared ? "shared" : "raw"}:${cwd}`;
+	const cached = definitionsByCwd.get(cacheKey);
 	if (cached) return cached;
 	const created = {
 		read: createReadToolDefinition(cwd),
@@ -86,7 +101,18 @@ function definitionsFor(cwd: string): Record<SubToolName, AnyToolDef> {
 		edit: createEditToolDefinition(cwd),
 		write: createWriteToolDefinition(cwd),
 	} as unknown as Record<SubToolName, AnyToolDef>;
-	definitionsByCwd.set(cwd, created);
+	if (shared) {
+		for (const name of Object.keys(created) as SubToolName[]) {
+			const definition = shared.get(name);
+			if (!definition || typeof definition.execute !== "function") continue;
+			// The published wrappers do not carry prepareArguments — pi applies the
+			// built-in one for them. We call execute directly, so keep the factory's.
+			created[name] = definition.prepareArguments
+				? definition
+				: { ...definition, prepareArguments: created[name].prepareArguments };
+		}
+	}
+	definitionsByCwd.set(cacheKey, created);
 	return created;
 }
 

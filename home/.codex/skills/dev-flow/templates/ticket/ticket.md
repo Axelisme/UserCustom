@@ -47,9 +47,9 @@ Awaiting design discussion and user confirmation.
 {{CHECKS}}
 
 ## Progress
-<!-- Keep the bounded candidate and verdict history required by review allowance. Follow it with one
-     replaceable semantic checkpoint: the smallest current state that changes how the next owner
-     resumes, verifies, or decides. This is not an operation log. For a pre-default ticket whose
+<!-- Keep the bounded candidate, verdict, allowance, source, finding, and correction history required
+     by review semantics. Follow it with one replaceable semantic checkpoint: the smallest current
+     state that changes how the next owner resumes, verifies, or decides. This is not an operation log. For a pre-default ticket whose
      allowance is absent, recover and record it before review. Procedures:
      ~/.codex/skills/dev-flow/references/records.md#maintain-the-record
      ~/.codex/skills/collab/references/review.md#correct-and-decide -->

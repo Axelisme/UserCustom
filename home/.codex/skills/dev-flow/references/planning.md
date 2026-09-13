@@ -10,8 +10,8 @@ is read-only until it identifies the bounded action, owner, checkout, and applic
 For a ticket created before the current default, an absent numeric review allowance is unresolved
 historical policy, not permission to apply one. Recover the governing workflow version from a recorded
 baseline, commit, or durable task source; if that is unavailable, return the question to the original
-owner or user. Record the recovered allowance and source in the ticket's semantic checkpoint before
-review or correction.
+owner or user. Record the recovered allowance and source in the bounded review-history portion of
+Progress before review or correction.
 
 Stop when Current or Next is insufficient, or when historical scope, authority, or allowance cannot be
 recovered, and repair the record. Ask the user only when the unresolved choice belongs to them. Resume

@@ -105,7 +105,7 @@ environment, authority, and stop conditions.
 
 A role result owns its returned observations until the Orchestrator records the smallest durable
 conclusion in the ticket or review record that owns the claim. Git and the run retain finer history.
-Update INDEX only when the conclusion creates a routing edge.
+Update INDEX's routing fields only when the conclusion creates a routing edge.
 
 Questions use the runtime's live parent channel when available. Single-return runtimes use BLOCKED and
 a fresh dispatch after the answer. An interrupted writer requires checkout and result inspection

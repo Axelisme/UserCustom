@@ -14,8 +14,8 @@ the user's target branch. Every checkout has one writer at a time. A fixed subje
 commit and tree with a baseline and bounded criteria. Every review binds to one fixed subject. The
 Orchestrator owns intent, assignment, formal tests, interface declarations, observation sufficiency,
 acceptance, and final disposition. Durable workflow conclusions go to the owning ticket or review
-record as a semantic checkpoint or bounded review history. INDEX changes only at a routing edge.
-Dev-flow defines both terms in
+record as a semantic checkpoint or bounded review history. INDEX routing fields change only at a
+routing edge; Standing-order changes follow dev-flow custody. Dev-flow defines both terms in
 [record operations](../dev-flow/references/records.md#maintain-the-record).
 
 On reorientation, reread the selected operation section and receiver contract when their original text

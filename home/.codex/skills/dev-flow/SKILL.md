@@ -47,8 +47,9 @@ only for delegated record or evidence writes.
   returns to its owner; a new default does not rewrite it.
 - Tests establish observable behavior through interfaces. Direct review establishes prose, structure,
   configuration, repository data, responsibility placement, and other static facts.
-- Update INDEX at a routing edge, not for each workflow operation. When it cannot route the next owner,
-  repair the record or ask the decision owner instead of scanning every ticket, artifact, or log.
+- Update INDEX's routing fields at a routing edge, not for each workflow operation. Maintain Standing
+  orders under [custody](references/custody.md). When INDEX cannot route the next owner, repair the
+  record or ask the decision owner instead of scanning every ticket, artifact, or log.
 - Keep routine candidate-bound verification concise in its ticket or batch review record. Separate
   evidence files are exceptional and use the assigned method in `references/lane-authority.md`.
 - Capture valuable out-of-scope findings through candidate-backlog. Current acceptance gaps remain in

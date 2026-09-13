@@ -10,9 +10,10 @@ otherwise.
 INDEX has two jobs. It carries verbatim active `STDO:` orders with source and lapse condition, and it
 routes a newly arriving Orchestrator through Goal, one Scope pointer and read condition, Current, and
 one bounded Next outcome with its owner. Its routing tuple is the active record, bounded outcome,
-owner, blocker, and lifecycle state. A **routing edge** occurs when that tuple changes. Update INDEX at
-that edge. Ordinary reads, edits, commands, dispatch, review progress, correction, collection, and
-landing leave it unchanged while the tuple stays the same.
+owner, blocker, and lifecycle state. A **routing edge** occurs when that tuple changes. Update Current
+and Next at that edge. Ordinary reads, edits, commands, dispatch, review progress, correction,
+collection, and landing leave those routing fields unchanged while the tuple stays the same. Update
+Standing orders under [custody](custody.md), independently of routing edges.
 
 A ticket owns its stable contract, dependencies, acceptance criteria, user decisions, current
 resumable state, and terminal disposition. Prepare contract fields before `pending`. After work starts,
@@ -21,9 +22,10 @@ decision boundary. Keep implementation results out of the contract. Change an ac
 when its assigned stable observation supports the conclusion.
 
 A ticket's **semantic checkpoint** is the smallest current statement that changes how the next owner
-resumes, verifies, or decides. Replace Progress when a stable candidate, gate conclusion, reviewable
-verdict, blocker, or handoff creates a new checkpoint. Keep file reads, ordinary edits, transient
-commands, retries, child events, and raw logs with Git, the tool, or the role result.
+resumes, verifies, or decides. Replace only the semantic-checkpoint entry within Progress when a stable
+candidate, gate conclusion, reviewable verdict, blocker, or handoff creates a new checkpoint. Preserve
+its bounded candidate, verdict, allowance, finding, and correction history. Keep file reads, ordinary
+edits, transient commands, retries, child events, and raw logs with Git, the tool, or the role result.
 
 Use this update gate before changing a durable record: would the fact change how a newly arriving
 authorized owner resumes, verifies, decides, or establishes terminal disposition? If not, leave it at
@@ -69,15 +71,15 @@ disposition, and cutoff continue while independent tickets run.
 Put each user matter in the owning ticket with the affected scenario, impact, options, and
 recommendation. At the batch boundary, present those decisions together and record the answers. Stop
 when a decision blocks required behavior; keep the ticket pending with the concrete blocker. Handoff
-is complete when required choices are settled and the ticket names the next owner. Update INDEX only
-when the handoff creates a routing edge.
+is complete when required choices are settled and the ticket names the next owner. Update INDEX's
+routing fields only when the handoff creates a routing edge.
 
 ## Close
 
 Normal closure requires an observation for every applicable acceptance criterion. Update the
 checkboxes, record the final candidate and concise verification in Resolution, and set `state: closed`.
-Update INDEX when that lifecycle change creates a routing edge. Abandoned or superseded work may retain
-unchecked criteria with reasons. Preserve scenarios, alignment, decisions, findings, and cited
+Update INDEX's routing fields when that lifecycle change creates a routing edge. Abandoned or
+superseded work may retain unchecked criteria with reasons. Preserve scenarios, alignment, decisions, findings, and cited
 observations.
 
 Stop if any required criterion lacks a valid observation or unresolved work lacks a stated terminal
@@ -97,15 +99,15 @@ Otherwise retain `pending` with the blocker and decision owner. Preserve the cou
 new user grant adds review allowance.
 
 A cutoff satisfies scheduling dependencies but carries its limitations downstream. It is complete
-when Resolution names those limitations and the next owner. Update INDEX only if cutoff creates a
-routing edge.
+when Resolution names those limitations and the next owner. Update INDEX's routing fields only if
+cutoff creates a routing edge.
 
 ## Archive
 
 Archive only when the user completes or abandons the task. First reconcile unfinished work, surface
 cutoff tickets and review records, preserve required evidence, and clean owned temporary resources.
-Update INDEX for the final routing edge, then run `scripts/plan.py archive` only after all owners state
-final disposition. Preserve pre-existing user state.
+Update INDEX's routing fields for the final routing edge, then run `scripts/plan.py archive` only after
+all owners state final disposition. Preserve pre-existing user state.
 
 A decision that must outlive the task becomes a tracked ADR only on user request. Archive is complete
 when the full task record moved intact and every retained execution resource has an owner and cleanup

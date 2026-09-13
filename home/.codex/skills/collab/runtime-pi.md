@@ -134,17 +134,14 @@ which Collab step selects each tool, and the contracts cutting across all of the
 
 Select by step:
 
-- `collab_integration_create` — establish the task-local integration branch, before any lane exists
-  to collect into it. That worktree's attached branch becomes the task's persistence branch.
+- `collab_integration` — `create` the task-local integration from the acting worktree's attached
+  persistence branch, `land` accepted integration into persistence, or `remove` the task's remaining
+  managed integration resources. Only `land` accepts `message`.
 - `collab_integration_adopt` — the Collection boundary's adoption step: make an existing
   `source_branch` the complete managed integration state.
-- `collab_lane` — `create` the lane for a dispatched writer, `reconcile` it against integration,
-  `collect` it, or `drop` it uncollected.
-- `collab_integration_reconcile` — merge current persistence back into integration through a lane,
-  when persistence has moved ahead of integration.
-- `collab_integration_land` — merge the accepted integration into persistence.
-- `collab_integration_remove` — retire the managed integration and its remaining lanes at task
-  scope, once the task's collab-owned state is no longer needed.
+- `collab_lane` — `create` the lane for a dispatched writer; `reconcile` integration into an existing
+  lane; `reconcile_persistence` persistence into a new lane based at integration; `collect` a lane;
+  or `drop` it uncollected. A no-op persistence reconciliation creates no lane.
 - `collab_status` — read a task's integration and lane state, mutating nothing.
 - `collab_report` — snapshot task state and telemetry to fixed report artifacts, judging nothing.
 

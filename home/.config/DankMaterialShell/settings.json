@@ -74,6 +74,7 @@
   "osdMediaPlaybackEnabled": true,
   "powerActionConfirm": false,
   "powerMenuDefaultAction": "poweroff",
+  "updaterCheckOnStart": true,
   "screenPreferences": {
     "notepad": [
       "all"

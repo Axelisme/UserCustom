@@ -3,7 +3,7 @@
   "plugins": {
     "aiQuotas": {
       "repo": "https://github.com/agneswd/dms-ai-quotas",
-      "commit": "1cf9f9565420fe4c54a8fb4aca1ffca28594f267"
+      "commit": "7e5f7cbad1982b0472e53e9ba4816dbfb84addf3"
     },
     "calculator": {
       "repo": "https://github.com/rochacbruno/DankCalculator",
@@ -12,7 +12,7 @@
     "dankKDEConnect": {
       "repo": "https://github.com/AvengeMedia/dms-plugins",
       "path": "DankKDEConnect",
-      "commit": "cb66135b0af01eacb25f3a656dc86fb727fa02cf"
+      "commit": "6fc7f25bfb24f93b6488fb8a36ed67b5f242abdb"
     },
     "dankscale": {
       "repo": "https://github.com/dwright134/dms-dankscale",

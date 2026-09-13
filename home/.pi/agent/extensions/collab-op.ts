@@ -4312,7 +4312,7 @@ const registeredLaneParameters = {
     repo: registeredRepo,
     action: {
       type: "string",
-      enum: ["create", "reconcile", "collect", "drop"],
+      enum: ["create", "reconcile", "reconcile_persistence", "collect", "drop"],
       description: "Lane action to perform.",
     },
     task_id: registeredTaskId,
@@ -4322,14 +4322,25 @@ const registeredLaneParameters = {
   required: ["action", "task_id", "lane_id"],
 } as const;
 
-const registeredIntegrationCreateParameters = {
+const registeredIntegrationParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
     repo: registeredRepo,
+    action: {
+      type: "string",
+      enum: ["create", "land", "remove"],
+      description: "Integration lifecycle action to perform.",
+    },
     task_id: registeredTaskId,
+    message: {
+      type: "string",
+      minLength: 1,
+      maxLength: 200,
+      description: "Optional single-line landing subject of 1-200 characters without control characters; valid only for land.",
+    },
   },
-  required: ["task_id"],
+  required: ["action", "task_id"],
 } as const;
 
 const registeredIntegrationAdoptParameters = {
@@ -4343,43 +4354,6 @@ const registeredIntegrationAdoptParameters = {
     base_sha: registeredBaseSha,
   },
   required: ["task_id", "source_branch", "persist", "base_sha"],
-} as const;
-
-const registeredIntegrationReconcileParameters = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    repo: registeredRepo,
-    task_id: registeredTaskId,
-    lane_id: registeredLaneId,
-  },
-  required: ["task_id", "lane_id"],
-} as const;
-
-const registeredIntegrationLandParameters = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    repo: registeredRepo,
-    task_id: registeredTaskId,
-    message: {
-      type: "string",
-      minLength: 1,
-      maxLength: 200,
-      description: "Optional single-line landing subject of 1-200 characters without control characters.",
-    },
-  },
-  required: ["task_id"],
-} as const;
-
-const registeredIntegrationRemoveParameters = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    repo: registeredRepo,
-    task_id: registeredTaskId,
-  },
-  required: ["task_id"],
 } as const;
 
 const registeredStatusParameters = {
@@ -4553,7 +4527,7 @@ async function registeredLaneResult(
 ): Promise<Record<string, unknown> & LaneResultIdentity> {
   const task = new TaskLayout(repo, taskId);
   const output = registeredMutationResult(result, [
-    "state", "lane_sha", "integration_sha", "judged_integration_sha", "collected",
+    "state", "lane_sha", "integration_sha", "persistence_sha", "judged_integration_sha", "collected",
     "conflict_paths", "conflict_paths_truncated", "cleanup", "disposition",
   ]);
   const warnings = [...(output.warnings as string[] | undefined ?? [])];
@@ -4633,10 +4607,10 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   }
 
   pi.registerTool({
-    name: "collab_integration_create",
-    label: "Create Collab integration",
-    description: "Create a Git-managed integration worktree from the acting worktree's attached local branch and HEAD; that attached branch becomes the task persistence branch. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. Unless the repository already ignores .agent_state, this first appends /.agent_state/ to info/exclude in the repository's common Git directory, verifies the result, and reports the write in warnings; if a higher-precedence .gitignore rule keeps .agent_state un-ignored, it refuses before creating managed resources and reports whether the appended line remains in info/exclude.",
-    parameters: registeredIntegrationCreateParameters,
+    name: "collab_integration",
+    label: "Manage Collab integration",
+    description: "Manage the Git-managed integration lifecycle. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. `create` makes an integration worktree from the acting worktree's attached local branch and HEAD; that branch becomes task persistence. `land` merges accepted integration into persistence and accepts optional message. `remove` best-effort force-retires recognizable managed integration resources. Create may append /.agent_state/ to the common Git info/exclude before creating resources; higher-precedence ignore rules can still cause refusal.",
+    parameters: registeredIntegrationParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
         runGit,
@@ -4645,15 +4619,39 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
         (value, innerSignal, innerCwd) => {
           const params = validateRegisteredRequest(
             value,
-            "collab_integration_create",
-            ["task_id"],
-            ["task_id"],
+            "collab_integration",
+            ["action", "task_id"],
+            ["action", "task_id", "message"],
           );
-          return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
-            integrationCreate(runGit, lockedCwd, lockedRequest, lockedSignal).then((created) =>
-              registeredMutationResult(created),
-            ),
-          )(params, innerSignal, innerCwd);
+          const action = params.action as string;
+          if (!["create", "land", "remove"].includes(action)) {
+            throw new CollabOpError(
+              "invalid_parameters",
+              "action must be one of create, land, remove",
+              "Pass action as create, land, or remove.",
+              { action },
+            );
+          }
+          if (params.message !== undefined && action !== "land") {
+            throw new CollabOpError(
+              "invalid_parameters",
+              "message is only valid for action land",
+              "Omit message for create and remove, or use action land.",
+              { action },
+            );
+          }
+          return taskLocked(async (lockedRequest, lockedSignal, lockedCwd) => {
+            if (action === "create") {
+              const created = await integrationCreate(runGit, lockedCwd, lockedRequest, lockedSignal);
+              return registeredMutationResult(created);
+            }
+            if (action === "land") {
+              const landed = await integrationLand(runGit, lockedCwd, lockedRequest, lockedSignal);
+              return registeredMutationResult(landed);
+            }
+            const removed = await integrationRemoveBestEffort(runGit, lockedCwd, lockedRequest, lockedSignal);
+            return registeredMutationResult(removed);
+          })(params, innerSignal, innerCwd);
         },
         signal,
       );
@@ -4684,102 +4682,6 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
           return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
             integrationAdopt(runGit, lockedCwd, lockedRequest, lockedSignal).then((adopted) =>
               registeredMutationResult(adopted, ["source_branch", "integration_branch"]),
-            ),
-          )(params, innerSignal, innerCwd);
-        },
-        signal,
-      );
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        details: result,
-      };
-    },
-  });
-
-  pi.registerTool({
-    name: "collab_integration_reconcile",
-    label: "Reconcile Collab integration",
-    description: "Reconcile the task-owned persistence branch into a Git-managed lane. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
-    parameters: registeredIntegrationReconcileParameters,
-    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
-      const result = await executeRegisteredTool(
-        runGit,
-        request as Record<string, unknown>,
-        ctx,
-        (value, innerSignal, innerCwd) => {
-          const params = validateRegisteredRequest(
-            value,
-            "collab_integration_reconcile",
-            ["task_id", "lane_id"],
-            ["task_id", "lane_id"],
-          );
-          return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
-            integrationReconcile(runGit, lockedCwd, lockedRequest, lockedSignal).then((reconciled) =>
-              registeredMutationResult(reconciled, ["state", "lane_id", "lane_sha"]),
-            ),
-          )(params, innerSignal, innerCwd);
-        },
-        signal,
-      );
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        details: result,
-      };
-    },
-  });
-
-  pi.registerTool({
-    name: "collab_integration_land",
-    label: "Land Collab integration",
-    description: "Land the current integration into the task-owned persistence branch. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
-    parameters: registeredIntegrationLandParameters,
-    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
-      const result = await executeRegisteredTool(
-        runGit,
-        request as Record<string, unknown>,
-        ctx,
-        (value, innerSignal, innerCwd) => {
-          const params = validateRegisteredRequest(
-            value,
-            "collab_integration_land",
-            ["task_id"],
-            ["task_id", "message"],
-          );
-          return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
-            integrationLand(runGit, lockedCwd, lockedRequest, lockedSignal).then((landed) =>
-              registeredMutationResult(landed),
-            ),
-          )(params, innerSignal, innerCwd);
-        },
-        signal,
-      );
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        details: result,
-      };
-    },
-  });
-
-  pi.registerTool({
-    name: "collab_integration_remove",
-    label: "Remove Collab integration",
-    description: "Best-effort force-removal of a task's recognizable managed integration resources. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
-    parameters: registeredIntegrationRemoveParameters,
-    async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
-      const result = await executeRegisteredTool(
-        runGit,
-        request as Record<string, unknown>,
-        ctx,
-        (value, innerSignal, innerCwd) => {
-          const params = validateRegisteredRequest(
-            value,
-            "collab_integration_remove",
-            ["task_id"],
-            ["task_id"],
-          );
-          return taskLocked((lockedRequest, lockedSignal, lockedCwd) =>
-            integrationRemoveBestEffort(runGit, lockedCwd, lockedRequest, lockedSignal).then((removed) =>
-              registeredMutationResult(removed),
             ),
           )(params, innerSignal, innerCwd);
         },
@@ -4852,7 +4754,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     name: "collab_lane",
     label: "Manage Collab lane",
     description:
-      "Manage a task lane. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. `create` makes a branch and worktree at the integration tip (optional comment only for create). `reconcile` merges integration into the lane. `collect` fast-forwards integration to the lane tip and force-retires the lane worktree — untracked or ignored files there are lost, tracked dirt or merge conflict keeps the lane with a warning. `drop` force-retires the lane without collecting, discarding uncollected work and warning if dirty, conflicted or incomplete. Returns task/lane IDs, canonical branch names and absolute paths, plus operation SHA/state/conflict facts. `collect` includes integration_tree; `collect` and `drop` report cleanup resource presence separately from mutation success. Cleanup presence and integration_tree are null when observation fails, with warnings. Paths may identify retired resources; results describe this operation, not later freshness.",
+      "Manage a task lane. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. `create` makes a branch and worktree at the integration tip (optional comment only for create). `reconcile` merges integration into an existing lane. `reconcile_persistence` merges task persistence into a new reconciliation lane based at integration; a no-op creates no lane. `collect` fast-forwards integration to the lane tip and force-retires the lane worktree — untracked or ignored files there are lost, tracked dirt or merge conflict keeps the lane with a warning. `drop` force-retires the lane without collecting, discarding uncollected work and warning if dirty, conflicted or incomplete. Returns task/lane IDs, canonical branch names and absolute paths, plus applicable operation SHA/state/conflict facts. `collect` includes integration_tree; `collect` and `drop` report cleanup resource presence separately from mutation success. Cleanup presence and integration_tree are null when observation fails, with warnings. Paths may identify retired resources; results describe this operation, not later freshness.",
     parameters: registeredLaneParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
@@ -4867,11 +4769,11 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
             ["action", "task_id", "lane_id", "comment"],
           );
           const action = params.action as string;
-          if (!["create", "reconcile", "collect", "drop"].includes(action)) {
+          if (!["create", "reconcile", "reconcile_persistence", "collect", "drop"].includes(action)) {
             throw new CollabOpError(
               "invalid_parameters",
-              "action must be one of create, reconcile, collect, drop",
-              "Pass action as create, reconcile, collect, or drop.",
+              "action must be one of create, reconcile, reconcile_persistence, collect, drop",
+              "Pass action as create, reconcile, reconcile_persistence, collect, or drop.",
               { action },
             );
           }
@@ -4879,7 +4781,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
             throw new CollabOpError(
               "invalid_parameters",
               "comment is only valid for action create",
-              "Omit comment for reconcile, collect, and drop, or use action create.",
+              "Omit comment for reconcile, reconcile_persistence, collect, and drop, or use action create.",
               { action },
             );
           }
@@ -4906,6 +4808,19 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
             const taskId = requireIdentifier(params.task_id, "task id");
             return withTaskLock(repo, taskId, async () => {
               const reconciled = await laneReconcile(
+                runGit,
+                innerCwd,
+                { task_id: params.task_id, lane_id: params.lane_id },
+                innerSignal,
+              );
+              return registeredLaneResult(repo, taskId, requireLaneId(params.lane_id), reconciled);
+            });
+          }
+          if (action === "reconcile_persistence") {
+            const repo = await discoverRepository(runGit, innerCwd, innerSignal);
+            const taskId = requireIdentifier(params.task_id, "task id");
+            return withTaskLock(repo, taskId, async () => {
+              const reconciled = await integrationReconcile(
                 runGit,
                 innerCwd,
                 { task_id: params.task_id, lane_id: params.lane_id },

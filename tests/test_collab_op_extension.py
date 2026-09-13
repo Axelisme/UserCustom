@@ -580,7 +580,7 @@ class CollabOpExtensionIntegrationCreateRegressionTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -613,7 +613,7 @@ class CollabOpExtensionIntegrationCreateRegressionTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -632,7 +632,7 @@ class CollabOpExtensionIntegrationCreateRegressionTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -649,7 +649,7 @@ class CollabOpExtensionIntegrationCreateRegressionTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertTrue(observed["is_error"])
@@ -665,7 +665,7 @@ class CollabOpExtensionIntegrationCreateRegressionTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertTrue(observed["is_error"])
@@ -683,7 +683,7 @@ class CollabOpExtensionIntegrationCreateRegressionTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertTrue(observed["is_error"])
@@ -700,7 +700,7 @@ class CollabOpExtensionIntegrationCreateRegressionTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertTrue(observed["is_error"])
@@ -721,7 +721,7 @@ class CollabOpExtensionIntegrationCreateRegressionTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -1710,11 +1710,8 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             self.assertEqual(
                 observed["tools"],
                 [
+                    "collab_integration",
                     "collab_integration_adopt",
-                    "collab_integration_create",
-                    "collab_integration_land",
-                    "collab_integration_reconcile",
-                    "collab_integration_remove",
                     "collab_lane",
                     "collab_report",
                     "collab_status"],
@@ -1727,36 +1724,50 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                 self.assertFalse(schema["additionalProperties"])
                 self.assertIn("repo", schema["properties"])
                 self.assertNotIn("repo", schema.get("required", []))
+            integration_schema = observed["schemas"]["collab_integration"]["parameters"]
             self.assertEqual(
-                set(observed["schemas"]["collab_integration_reconcile"]["parameters"]["properties"]),
-                {"task_id", "lane_id", "repo"},
+                set(integration_schema["properties"]),
+                {"action", "task_id", "message", "repo"},
             )
+            self.assertEqual(integration_schema["required"], ["action", "task_id"])
+            self.assertEqual(integration_schema["properties"]["action"]["enum"], ["create", "land", "remove"])
+            lane_schema = observed["schemas"]["collab_lane"]["parameters"]
             self.assertEqual(
-                observed["schemas"]["collab_integration_reconcile"]["parameters"]["required"],
-                ["task_id", "lane_id"],
+                lane_schema["properties"]["action"]["enum"],
+                ["create", "reconcile", "reconcile_persistence", "collect", "drop"],
             )
-            self.assertEqual(
-                set(observed["schemas"]["collab_integration_land"]["parameters"]["properties"]),
-                {"task_id", "message", "repo"},
-            )
-            self.assertEqual(
-                observed["schemas"]["collab_integration_land"]["parameters"]["required"],
-                ["task_id"],
-            )
-            self.assertEqual(
-                set(observed["schemas"]["collab_integration_remove"]["parameters"]["properties"]),
-                {"task_id", "repo"},
-            )
-            self.assertEqual(
-                observed["schemas"]["collab_integration_remove"]["parameters"]["required"],
-                ["task_id"],
-            )
-            for name in ("collab_integration_reconcile", "collab_integration_land", "collab_integration_remove"):
+            for name in observed["tools"]:
                 self.assertNotIn("method", observed["schemas"][name]["parameters"]["properties"])
 
-            legacy = invoke(repository, {"tool": "collab_op", "method": "status"})
-            self.assertTrue(legacy["is_error"])
-            self.assertEqual(legacy["error"]["error"]["code"], "unknown_tool")
+            for legacy_name in (
+                "collab_op",
+                "collab_integration_create",
+                "collab_integration_land",
+                "collab_integration_reconcile",
+                "collab_integration_remove",
+            ):
+                legacy = invoke(repository, {"tool": legacy_name, "method": "status"})
+                self.assertTrue(legacy["is_error"])
+                self.assertEqual(legacy["error"]["error"]["code"], "unknown_tool")
+
+    def test_action_specific_integration_parameters_are_rejected_before_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository, _ = seed_repository(Path(temporary))
+            seed_task_container(repository)
+
+            for action in ("create", "remove"):
+                observed = invoke(
+                    repository,
+                    {
+                        "tool": "collab_integration",
+                        "action": action,
+                        "task_id": "demo",
+                        "message": "not valid here",
+                    },
+                )
+                self.assertTrue(observed["is_error"])
+                self.assertEqual(observed["error"]["error"]["code"], "invalid_parameters")
+            self.assertFalse((repository / ".agent_state/worktrees/demo/integration").exists())
 
     def test_repo_selects_create_target_from_outside_the_repository(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1771,7 +1782,8 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             observed = invoke(
                 outside,
                 {
-                    "tool": "collab_integration_create",
+                    "tool": "collab_integration",
+                    "action": "create",
                     "task_id": "demo",
                     "repo": str(target),
                 },
@@ -1796,7 +1808,8 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             created = invoke(
                 outside,
                 {
-                    "tool": "collab_integration_create",
+                    "tool": "collab_integration",
+                    "action": "create",
                     "task_id": "demo",
                     "repo": selected_repo,
                 },
@@ -1835,7 +1848,8 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             landed = invoke(
                 outside,
                 {
-                    "tool": "collab_integration_land",
+                    "tool": "collab_integration",
+                    "action": "land",
                     "task_id": "demo",
                     "message": "Land selected repository work",
                     "repo": selected_repo,
@@ -1848,7 +1862,8 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             removed = invoke(
                 outside,
                 {
-                    "tool": "collab_integration_remove",
+                    "tool": "collab_integration",
+                    "action": "remove",
                     "task_id": "demo",
                     "repo": selected_repo,
                 },
@@ -1974,7 +1989,8 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             observed = invoke(
                 session_repository,
                 {
-                    "tool": "collab_integration_create",
+                    "tool": "collab_integration",
+                    "action": "create",
                     "task_id": "demo",
                     "repo": str(target),
                 },
@@ -2003,7 +2019,8 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             created = invoke(
                 outside,
                 {
-                    "tool": "collab_integration_create",
+                    "tool": "collab_integration",
+                    "action": "create",
                     "task_id": "demo",
                     "repo": selected_repo,
                 },
@@ -2025,31 +2042,36 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             self.assertTrue((target / "reports/selected/collab-telemetry.jsonl").is_file())
             self.assertFalse((outside / "reports").exists())
 
-    def test_integration_reconcile_derives_persistence_and_projects_reduced_result(self) -> None:
+    def test_reconcile_persistence_derives_branch_and_projects_lane_result(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
             seed_task_container(repository)
-            seed_managed_task(repository)
+            expected = seed_managed_task(repository)
             (repository / "persistence.txt").write_text("persisted\n", encoding="utf-8")
             git(repository, "add", "persistence.txt")
             git(repository, "commit", "-m", "persistence work")
+            persistence_sha = git(repository, "rev-parse", "HEAD")
 
             observed = invoke(
                 repository,
                 {
-                    "tool": "collab_integration_reconcile",
+                    "tool": "collab_lane",
+                    "action": "reconcile_persistence",
                     "task_id": "demo",
                     "lane_id": "persistence"},
             )
 
             self.assertFalse(observed["is_error"])
-            self.assertEqual(observed["result"]["state"], "merged")
-            self.assertEqual(observed["result"]["lane_id"], "persistence")
-            self.assertIn("lane_sha", observed["result"])
-            self.assertNotIn("persist", observed["result"])
-            self.assertNotIn("persistence_sha", observed["result"])
-            self.assertNotIn("integration_sha", observed["result"])
-            self.assertNotIn("conflict_paths", observed["result"])
+            result = observed["result"]
+            self.assertEqual(result["state"], "merged")
+            self.assertEqual(result["lane_id"], "persistence")
+            self.assertEqual(result["integration_sha"], expected["integration_head"])
+            self.assertEqual(result["persistence_sha"], persistence_sha)
+            self.assertEqual(result["lane_sha"], git(repository, "rev-parse", "wave/demo/persistence"))
+            self.assertEqual(result["lane_branch"], "wave/demo/persistence")
+            self.assertEqual(result["lane_path"], str(repository / ".agent_state/worktrees/demo/lanes/persistence"))
+            self.assertNotIn("persist", result)
+            self.assertNotIn("conflict_paths", result)
 
     def test_integration_land_derives_persistence_and_projects_common_result(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -2062,7 +2084,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_land", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "land", "task_id": "demo"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2085,7 +2107,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_remove", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "remove", "task_id": "demo"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2127,7 +2149,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_remove", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "remove", "task_id": "demo"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2148,7 +2170,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             try:
                 observed = invoke(
                     repository,
-                    {"tool": "collab_integration_remove", "task_id": "demo"},
+                    {"tool": "collab_integration", "action": "remove", "task_id": "demo"},
                 )
             finally:
                 os.environ["PATH"] = original_path
@@ -2189,7 +2211,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_remove", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "remove", "task_id": "demo"},
             )
 
             self.assertTrue(observed["is_error"])
@@ -2204,11 +2226,11 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             repository, _ = seed_repository(Path(temporary))
             requests = (
-                ("collab_integration_create", {}),
+                ("collab_integration", {"action": "create"}),
                 ("collab_integration_adopt", {"task_id": "demo"}),
-                ("collab_integration_reconcile", {"task_id": "demo"}),
-                ("collab_integration_land", {}),
-                ("collab_integration_remove", {}),
+                ("collab_lane", {"action": "reconcile_persistence", "task_id": "demo"}),
+                ("collab_integration", {"action": "land"}),
+                ("collab_integration", {"action": "remove"}),
                 ("collab_lane_create", {"task_id": "demo"}),
                 ("collab_lane_reconcile", {"task_id": "demo"}),
                 ("collab_lane_collect", {"task_id": "demo"}),
@@ -2240,7 +2262,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             self.assertFalse(
                 invoke(
                     repository,
-                    {"tool": "collab_integration_create", "task_id": "demo"},
+                    {"tool": "collab_integration", "action": "create", "task_id": "demo"},
                 )["is_error"]
             )
             self.assertFalse(
@@ -2273,7 +2295,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
 
             landed = invoke(
                 repository,
-                {"tool": "collab_integration_land", "task_id": "demo", "message": "Ship lane work"},
+                {"tool": "collab_integration", "action": "land", "task_id": "demo", "message": "Ship lane work"},
             )
             self.assertFalse(landed["is_error"])
             self.assertEqual(landed["result"]["ok"], True)
@@ -2282,7 +2304,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
 
             removed = invoke(
                 repository,
-                {"tool": "collab_integration_remove", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "remove", "task_id": "demo"},
             )
             self.assertFalse(removed["is_error"])
             self.assertEqual(set(removed["result"]), {"ok", "tool_version"})
@@ -2292,7 +2314,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             base = Path(temporary)
             repository, _ = seed_repository(base)
             seed_task_container(repository)
-            created = invoke(repository, {"tool": "collab_integration_create", "task_id": "demo"})
+            created = invoke(repository, {"tool": "collab_integration", "action": "create", "task_id": "demo"})
             self.assertFalse(created["is_error"])
             lane_created = invoke(
                 repository,
@@ -2336,7 +2358,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             base = Path(temporary)
             repository, _ = seed_repository(base)
             seed_task_container(repository)
-            created = invoke(repository, {"tool": "collab_integration_create", "task_id": "demo"})
+            created = invoke(repository, {"tool": "collab_integration", "action": "create", "task_id": "demo"})
             self.assertFalse(created["is_error"])
             block = base / "release-report"
             blocked = base / "report-blocked"
@@ -2509,7 +2531,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -2531,7 +2553,8 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             observed = invoke(
                 repository,
                 {
-                    "tool": "collab_integration_create",
+                    "tool": "collab_integration",
+                    "action": "create",
                     "task_id": "demo",
                     "method": "integration_create"},
             )
@@ -2873,11 +2896,8 @@ class CollabOpExtensionStatusTests(unittest.TestCase):
             self.assertEqual(
                 observed["tools"],
                 [
+                    "collab_integration",
                     "collab_integration_adopt",
-                    "collab_integration_create",
-                    "collab_integration_land",
-                    "collab_integration_reconcile",
-                    "collab_integration_remove",
                     "collab_lane",
                     "collab_report",
                     "collab_status"],
@@ -3040,7 +3060,8 @@ class CollabOpExtensionIntegrationReconcileContractRegressionTests(unittest.Test
                 observed = invoke(
                     repository,
                     {
-                        "tool": "collab_integration_reconcile",
+                        "tool": "collab_lane",
+                        "action": "reconcile_persistence",
                         "task_id": "demo",
                         "lane_id": "repair"},
                 )
@@ -3067,7 +3088,8 @@ class CollabOpExtensionIntegrationReconcileContractRegressionTests(unittest.Test
                 observed = invoke(
                     repository,
                     {
-                        "tool": "collab_integration_reconcile",
+                        "tool": "collab_lane",
+                        "action": "reconcile_persistence",
                         "task_id": "demo",
                         "lane_id": "repair"},
                 )
@@ -3110,7 +3132,8 @@ exec "$real_git" "$@"
                     observed = invoke(
                         repository,
                         {
-                            "tool": "collab_integration_reconcile",
+                            "tool": "collab_lane",
+                            "action": "reconcile_persistence",
                             "task_id": "demo",
                             "lane_id": "repair"},
                     )
@@ -3154,7 +3177,8 @@ exec "$real_git" "$@"
                 observed = invoke(
                     repository,
                     {
-                        "tool": "collab_integration_reconcile",
+                        "tool": "collab_lane",
+                        "action": "reconcile_persistence",
                         "task_id": "demo",
                         "lane_id": "repair"},
                 )
@@ -3173,25 +3197,30 @@ exec "$real_git" "$@"
             observed = invoke(
                 repository,
                 {
-                    "tool": "collab_integration_reconcile",
+                    "tool": "collab_lane",
+                    "action": "reconcile_persistence",
                     "task_id": "demo",
                     "lane_id": "repair"},
             )
 
             self.assertFalse(observed["is_error"])
-            self.assertEqual(
-                observed["result"],
-                {
-                    "ok": True,
-                    "tool_version": 1,
-                    "state": "noop",
-                    "warnings": ["persistence is already included in integration"]},
-            )
+            result = observed["result"]
+            self.assertEqual(result["ok"], True)
+            self.assertEqual(result["tool_version"], 1)
+            self.assertEqual(result["state"], "noop")
+            self.assertEqual(result["warnings"], ["persistence is already included in integration"])
+            self.assertEqual(result["task_id"], "demo")
+            self.assertEqual(result["lane_id"], "repair")
+            self.assertEqual(result["lane_branch"], "wave/demo/repair")
+            self.assertEqual(result["lane_path"], str(repository / ".agent_state/worktrees/demo/lanes/repair"))
+            self.assertEqual(result["integration_sha"], expected["integration_head"])
+            self.assertEqual(result["persistence_sha"], git(repository, "rev-parse", "main"))
             self.assertEqual(
                 git(repository, "rev-parse", "wave/demo/integration"),
                 expected["integration_head"],
             )
             self.assertEqual(git(repository, "branch", "--list", "wave/demo/repair"), "")
+            self.assertFalse((repository / ".agent_state/worktrees/demo/lanes/repair").exists())
             event = last_telemetry_event(repository)
             self.assertEqual(event["operation"], "integration-reconcile")
             self.assertEqual(event["outcome"], "noop")
@@ -3213,7 +3242,8 @@ exec "$real_git" "$@"
             observed = invoke(
                 repository,
                 {
-                    "tool": "collab_integration_reconcile",
+                    "tool": "collab_lane",
+                    "action": "reconcile_persistence",
                     "task_id": "demo",
                     "lane_id": "repair"},
             )
@@ -3270,7 +3300,8 @@ exec "$real_git" "$@"
             observed = invoke(
                 repository,
                 {
-                    "tool": "collab_integration_reconcile",
+                    "tool": "collab_lane",
+                    "action": "reconcile_persistence",
                     "task_id": "demo",
                     "lane_id": "repair"},
             )
@@ -3280,7 +3311,9 @@ exec "$real_git" "$@"
             self.assertEqual(result["state"], "conflicted")
             self.assertEqual(result["lane_id"], "repair")
             self.assertEqual(result["lane_sha"], integration_sha)
-            self.assertNotIn("conflict_paths", result)
+            self.assertEqual(result["integration_sha"], integration_sha)
+            self.assertEqual(result["persistence_sha"], persistence_sha)
+            self.assertEqual(result["conflict_paths"], ["tracked.txt"])
             lane = repository / ".agent_state/worktrees/demo/lanes/repair"
             self.assertTrue(lane.exists())
             self.assertEqual(git(repository, "rev-parse", "wave/demo/repair"), integration_sha)
@@ -3305,7 +3338,8 @@ exec "$real_git" "$@"
             observed = invoke(
                 repository,
                 {
-                    "tool": "collab_integration_reconcile",
+                    "tool": "collab_lane",
+                    "action": "reconcile_persistence",
                     "task_id": "demo",
                     "lane_id": "repair"},
             )
@@ -3327,7 +3361,8 @@ exec "$real_git" "$@"
             observed = invoke(
                 repository,
                 {
-                    "tool": "collab_integration_reconcile",
+                    "tool": "collab_lane",
+                    "action": "reconcile_persistence",
                     "task_id": "demo",
                     "lane_id": "repair"},
             )
@@ -3407,7 +3442,7 @@ class LandingTransition:
 
     def land(self) -> dict[str, object]:
         return invoke(
-            self.repository, {"tool": "collab_integration_land", "task_id": "demo"}
+            self.repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"}
         )
 
 
@@ -3516,7 +3551,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             (repository / "untracked.txt").write_text("preserve\n", encoding="utf-8")
             before_refs = managed_ref_snapshot(repository)
             before_head = git(repository, "rev-parse", "HEAD")
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertTrue(observed["is_error"])
             self.assertIn(observed["error"]["error"]["code"], ("dirty_worktree", "path_collision"))
             self.assertEqual(managed_ref_snapshot(repository), before_refs)
@@ -3524,7 +3559,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             # Clean and retry should succeed with native merge topology (S1) and no landed ref
             git(repository, "restore", "stable.txt")
             (repository / "untracked.txt").unlink()
-            observed2 = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed2 = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertFalse(observed2["is_error"])
             persist_ref = git(repository, "symbolic-ref", "refs/orchestrate/demo/persistence")
             persist_sha = git(repository, "rev-parse", persist_ref)
@@ -3551,13 +3586,13 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             expected["integration_head"] = git(integration, "rev-parse", "HEAD")
             (repository / "tracked.txt").write_text("a\nb\nc\nd\nE\nf\n", encoding="utf-8")
             before_head = git(repository, "rev-parse", "HEAD")
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertTrue(observed["is_error"])
             self.assertEqual(observed["error"]["error"]["code"], "dirty_worktree")
             self.assertEqual(git(repository, "rev-parse", "HEAD"), before_head)
             # Clean and succeed
             git(repository, "restore", "tracked.txt")
-            observed2 = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed2 = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertFalse(observed2["is_error"])
 
     def test_land_conflicting_unstaged_hunks_preserves_all_snapshots(self) -> None:
@@ -3580,7 +3615,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             before_head = git(repository, "rev-parse", "HEAD")
             before_status = git(repository, "status", "--porcelain=v1", "--ignored=matching")
             before_file = (repository / "tracked.txt").read_text(encoding="utf-8")
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertTrue(observed["is_error"])
             self.assertEqual(observed["error"]["error"]["code"], "dirty_worktree")
             self.assertEqual(managed_ref_snapshot(repository), before_refs)
@@ -3598,13 +3633,13 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             expected = seed_managed_task(repository)
             seed_task_container(repository)
             (repository / "local.txt").write_text("operator\n", encoding="utf-8")
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertTrue(observed["is_error"])
             self.assertEqual(observed["error"]["error"]["code"], "path_collision")
             self.assertEqual((repository / "local.txt").read_text(encoding="utf-8"), "operator\n")
             # Clean and succeed
             (repository / "local.txt").unlink()
-            observed2 = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed2 = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertFalse(observed2["is_error"])
             self.assertEqual(git(repository, "rev-parse", "HEAD^{tree}"), git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"))
 
@@ -3617,7 +3652,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             expected = seed_managed_task(repository)
             seed_task_container(repository)
             (repository / "ignored.tmp").write_text("operator\n", encoding="utf-8")
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertFalse(observed["is_error"])
             self.assertNotIn("warnings", observed["result"])
             self.assertEqual((repository / "ignored.tmp").read_text(encoding="utf-8"), "operator\n")
@@ -3632,14 +3667,14 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             expected = seed_managed_task(repository)
             # ordinary untracked collision (new file added by integration)
             (repository / "new.txt").write_text("operator\n", encoding="utf-8")
-            collision = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            collision = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             # No change to integration yet, but ordinary untracked should be refused
             self.assertTrue(collision["is_error"])
             self.assertEqual(collision["error"]["error"]["code"], "path_collision")
             (repository / "new.txt").unlink()
             (repository / "index-dirt.txt").write_text("index\n", encoding="utf-8")
             git(repository, "add", "index-dirt.txt")
-            staged = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            staged = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertTrue(staged["is_error"])
             self.assertEqual(staged["error"]["error"]["code"], "dirty_index")
             git(repository, "reset", "--", "index-dirt.txt")
@@ -3647,7 +3682,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             (repository / "later.txt").write_text("later\n", encoding="utf-8")
             git(repository, "add", "later.txt")
             git(repository, "commit", "-m", "persistence stale")
-            stale = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            stale = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertTrue(stale["is_error"])
             self.assertEqual(stale["error"]["error"]["code"], "stale_persistence")
             self.assertTrue(stale["error"]["error"]["repair"])
@@ -3762,7 +3797,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             (repository / "stable.txt").write_text("stable local\n", encoding="utf-8")
             before_refs = managed_ref_snapshot(repository)
             before_head = git(repository, "rev-parse", "HEAD")
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertTrue(observed["is_error"])
             self.assertIn(observed["error"]["error"]["code"], ("dirty_worktree", "path_collision"))
             self.assertEqual(managed_ref_snapshot(repository), before_refs)
@@ -3896,7 +3931,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             hook.chmod(0o755)
             before_refs = managed_ref_snapshot(repository)
             before_status = git(repository, "status", "--porcelain=v1", "--ignored=matching")
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertTrue(observed["is_error"])
             self.assertEqual(observed["error"]["error"]["code"], "git_error")
             # Git state exposed: HEAD unchanged, but merge may be in progress or aborted? For hook failure, merge aborts
@@ -3919,20 +3954,20 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             hook.parent.mkdir(parents=True, exist_ok=True)
             hook.write_text("#!/bin/sh\necho hook ran > hook-output.txt\nexit 1\n", encoding="utf-8")
             hook.chmod(0o755)
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertTrue(observed["is_error"])
             self.assertEqual(observed["error"]["error"]["code"], "git_error")
             self.assertTrue((repository / "hook-output.txt").exists())
             # Clean hook and succeed
             hook.unlink()
             (repository / "hook-output.txt").unlink(missing_ok=True)
-            observed2 = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed2 = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             # Hook failure leaves merge state; clean before retry
             if observed2["is_error"]:
                 import subprocess
                 subprocess.run(["git", "-C", str(repository), "merge", "--abort"], capture_output=True)
                 subprocess.run(["git", "-C", str(repository), "reset", "--hard", "HEAD"], capture_output=True)
-                observed2 = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+                observed2 = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertFalse(observed2["is_error"])
             self.assertEqual(git(repository, "rev-parse", "HEAD^{tree}"), git(repository, "rev-parse", f"{expected['integration_head']}^{{tree}}"))
 
@@ -3944,13 +3979,13 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             git(repository, "commit", "-m", "ignore managed state")
             expected = seed_managed_task(repository)
             seed_task_container(repository)
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo", "message": "Ship demo"})
+            observed = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo", "message": "Ship demo"})
             self.assertFalse(observed["is_error"])
             persist_ref = git(repository, "symbolic-ref", "refs/orchestrate/demo/persistence")
             landing = git(repository, "rev-parse", persist_ref)
             self.assertEqual(git(repository, "show", "-s", "--format=%B", landing), f"Ship demo\n\nTask: demo\nLanded: {expected['integration_head']}")
             # Second landing without new integration work should be no_tree_change (persistence already contains integration)
-            duplicate = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            duplicate = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertTrue(duplicate["is_error"])
             self.assertEqual(duplicate["error"]["error"]["code"], "no_tree_change")
 
@@ -3961,7 +3996,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             git(repository, "add", ".gitignore")
             git(repository, "commit", "-m", "ignore managed state")
             seed_managed_task(repository)
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertFalse(observed["is_error"])
             self.assertTrue(any("telemetry" in warning for warning in observed["result"]["warnings"]))
             self.assertFalse((repository / ".agent_state/plans/demo").exists())
@@ -3979,7 +4014,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             before_refs = managed_ref_snapshot(repository)
             before_head = git(repository, "rev-parse", "HEAD")
             before_status = git(repository, "status", "--porcelain=v1", "--ignored=matching")
-            observed = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertTrue(observed["is_error"])
             self.assertEqual(observed["error"]["error"]["code"], "path_collision")
             self.assertIn(".agent_state/operator.txt", observed["error"]["error"]["details"]["paths"])
@@ -3989,7 +4024,7 @@ class CollabOpExtensionIntegrationLandContractRegressionTests(unittest.TestCase)
             self.assertEqual(git(repository, "rev-parse", "wave/demo/integration"), expected["integration_head"])
             # Clean and verify landing succeeds when only the ordinary .agent_state file is removed
             (repository / ".agent_state/operator.txt").unlink()
-            observed2 = invoke(repository, {"tool": "collab_integration_land", "task_id": "demo"})
+            observed2 = invoke(repository, {"tool": "collab_integration", "action": "land", "task_id": "demo"})
             self.assertFalse(observed2["is_error"])
 
 
@@ -4751,7 +4786,7 @@ class CollabOpExtensionIntegrationRemoveContractRegressionTests(unittest.TestCas
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_remove", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "remove", "task_id": "demo"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -4781,7 +4816,7 @@ class CollabOpExtensionIntegrationRemoveContractRegressionTests(unittest.TestCas
             try:
                 observed = invoke(
                     repository,
-                    {"tool": "collab_integration_remove", "task_id": "demo"},
+                    {"tool": "collab_integration", "action": "remove", "task_id": "demo"},
                 )
             finally:
                 os.environ["PATH"] = original_path
@@ -4802,7 +4837,7 @@ class CollabOpExtensionIntegrationRemoveContractRegressionTests(unittest.TestCas
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_remove", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "remove", "task_id": "demo"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -4824,7 +4859,7 @@ class CollabOpExtensionIntegrationRemoveContractRegressionTests(unittest.TestCas
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_remove", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "remove", "task_id": "demo"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -4840,7 +4875,7 @@ class CollabOpExtensionAgentStateExclusionTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -4881,7 +4916,7 @@ class CollabOpExtensionAgentStateExclusionTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertFalse(observed["is_error"])
@@ -4896,12 +4931,12 @@ class CollabOpExtensionAgentStateExclusionTests(unittest.TestCase):
 
             first = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
             after_first = exclude_file(repository).read_bytes()
             second = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "second"},
+                {"tool": "collab_integration", "action": "create", "task_id": "second"},
             )
 
             self.assertFalse(first["is_error"])
@@ -4919,7 +4954,7 @@ class CollabOpExtensionAgentStateExclusionTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertTrue(observed["is_error"])
@@ -4948,7 +4983,7 @@ class CollabOpExtensionAgentStateExclusionTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertTrue(observed["is_error"])
@@ -4970,7 +5005,7 @@ class CollabOpExtensionAgentStateExclusionTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertTrue(observed["is_error"])
@@ -4998,7 +5033,7 @@ class CollabOpExtensionAgentStateExclusionTests(unittest.TestCase):
 
             observed = invoke(
                 repository,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertTrue(observed["is_error"])
@@ -5025,11 +5060,11 @@ class CollabOpExtensionAgentStateExclusionTests(unittest.TestCase):
 
             wrote = invoke(
                 unprepared,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
             untouched = invoke(
                 prepared,
-                {"tool": "collab_integration_create", "task_id": "demo"},
+                {"tool": "collab_integration", "action": "create", "task_id": "demo"},
             )
 
             self.assertFalse(wrote["is_error"])
@@ -5046,7 +5081,7 @@ class CollabOpExtensionAgentStateExclusionTests(unittest.TestCase):
             self.assertFalse(
                 invoke(
                     repository,
-                    {"tool": "collab_integration_create", "task_id": "demo"},
+                    {"tool": "collab_integration", "action": "create", "task_id": "demo"},
                 )["is_error"]
             )
             self.assertFalse(
@@ -5066,7 +5101,7 @@ class CollabOpExtensionAgentStateExclusionTests(unittest.TestCase):
             )
             landed = invoke(
                 repository,
-                {"tool": "collab_integration_land", "task_id": "demo", "message": "Ship lane work"},
+                {"tool": "collab_integration", "action": "land", "task_id": "demo", "message": "Ship lane work"},
             )
 
             self.assertEqual(collected["result"]["state"], "collected")

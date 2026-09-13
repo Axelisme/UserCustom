@@ -47,11 +47,13 @@ Awaiting design discussion and user confirmation.
 {{CHECKS}}
 
 ## Progress
-<!-- Record every reviewed candidate and whether a BLOCKED result was reviewable. New tickets default
-     to one effective defect verdict; assignment problems do not count. For a pre-default ticket whose
-     allowance is absent, recover and record it before review. Procedure:
+<!-- Keep the bounded candidate, verdict, allowance, source, finding, and correction history required
+     by review semantics. Follow it with one replaceable semantic checkpoint: the smallest current
+     state that changes how the next owner resumes, verifies, or decides. This is not an operation log. For a pre-default ticket whose
+     allowance is absent, recover and record it before review. Procedures:
+     ~/.codex/skills/dev-flow/references/records.md#maintain-the-record
      ~/.codex/skills/collab/references/review.md#correct-and-decide -->
-Reviewer effective BLOCKED count: 0 of default 1. Work: not started.
+Reviewer effective BLOCKED count: 0 of default 1. Semantic checkpoint: work not started.
 
 ## User decisions
 <!-- Each entry states scenario, impact, options, recommendation, and answer. Procedure:

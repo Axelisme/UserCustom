@@ -10,9 +10,11 @@ and landing. Read both short entries when orchestrating a task, then open only t
 routed below.
 
 Every task has one container under `.agent_state/plans/<task-id>/`. Every bounded implementation has a
-ticket, including direct Orchestrator work. The approved spec or scope file owns scope. `INDEX.md` is a
-small current-state index, not a second scope or progress record. The Orchestrator owns INDEX, tickets,
-review records, acceptance checkboxes, and lifecycle state.
+ticket, including direct Orchestrator work. The approved spec or scope file owns scope. `INDEX.md`
+carries active Standing orders and routes current work. Tickets own their stable contract, semantic
+checkpoint, and terminal disposition. [Record operations](references/records.md#maintain-the-record)
+defines those terms. The Orchestrator owns INDEX, tickets, review records, acceptance checkboxes, and
+lifecycle state.
 
 On reorientation, run `scripts/plan.py locate <task-id>` from the main checkout. Read the located INDEX,
 all active Standing orders, the ticket or batch review named by Current or Next, and only the pointers
@@ -45,8 +47,9 @@ only for delegated record or evidence writes.
   returns to its owner; a new default does not rewrite it.
 - Tests establish observable behavior through interfaces. Direct review establishes prose, structure,
   configuration, repository data, responsibility placement, and other static facts.
-- INDEX selects the next bounded action. When it cannot, repair the record or ask the decision owner
-  instead of scanning every ticket, artifact, or historical log.
+- Update INDEX's routing fields at a routing edge, not for each workflow operation. Maintain Standing
+  orders under [custody](references/custody.md). When INDEX cannot route the next owner, repair the
+  record or ask the decision owner instead of scanning every ticket, artifact, or log.
 - Keep routine candidate-bound verification concise in its ticket or batch review record. Separate
   evidence files are exceptional and use the assigned method in `references/lane-authority.md`.
 - Capture valuable out-of-scope findings through candidate-backlog. Current acceptance gaps remain in

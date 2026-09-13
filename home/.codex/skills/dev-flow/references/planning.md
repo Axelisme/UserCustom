@@ -10,7 +10,8 @@ is read-only until it identifies the bounded action, owner, checkout, and applic
 For a ticket created before the current default, an absent numeric review allowance is unresolved
 historical policy, not permission to apply one. Recover the governing workflow version from a recorded
 baseline, commit, or durable task source; if that is unavailable, return the question to the original
-owner or user. Record the recovered allowance and source in Progress before review or correction.
+owner or user. Record the recovered allowance and source in the bounded review-history portion of
+Progress before review or correction.
 
 Stop when Current or Next is insufficient, or when historical scope, authority, or allowance cannot be
 recovered, and repair the record. Ask the user only when the unresolved choice belongs to them. Resume
@@ -37,10 +38,10 @@ work stays drafted.
 
 ## Tickets
 
-Create `tickets/<ticket-id>/ticket.md` from `templates/ticket/ticket.md`. Valid states are `drafted`,
+Create `tickets/<ticket-id>/ticket.md` from `../templates/ticket/ticket.md`. Valid states are `drafted`,
 `pending`, `cutoff`, and `closed`. The Orchestrator owns wording, dependencies, state, criteria,
 checkboxes, Progress, User decisions, and Resolution. Delegated record writes require the exact method
-from `references/lane-authority.md`.
+from `lane-authority.md`.
 
 Before `pending`, confirm the ticket against current code and instructions. Record:
 
@@ -72,10 +73,10 @@ formal tests or seed, isolated checkout, and environment are ready. While childr
 judge independent members. Collect accepted or cutoff work as it becomes ready; a blocked member does
 not stop unrelated members.
 
-INDEX names the active batch and next coordination action. Ticket files own their progress and
-evidence. Stop when write scopes collide, dependencies are unclear, or a shared choice lacks user
-confirmation. Selection is complete when each active member has one owner, one writer, a ready
-contract, and an independent completion path.
+When selection creates a routing edge, INDEX names the active batch and next coordination outcome.
+Ticket files own their semantic checkpoints and evidence. Stop when write scopes collide, dependencies
+are unclear, or a shared choice lacks user confirmation. Selection is complete when each active member
+has one owner, one writer, a ready contract, and an independent completion path.
 
 ## Design alignment
 

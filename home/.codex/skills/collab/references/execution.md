@@ -87,7 +87,8 @@ by surprise.
 Completion requires a clean committed candidate and a concise handoff tying the final candidate to
 each command or selection, environment, result and exit status, raw run pointer, and limitation. Keep
 bulky output with the run. A blocked result aggregates known obstructions and names the next decision
-or execution owner.
+or execution owner. The Orchestrator replaces the owning ticket's semantic checkpoint only when that
+conclusion changes how the next owner resumes, verifies, or decides.
 
 ## Results and continuity
 
@@ -101,6 +102,10 @@ A writer's COMPLETED result attests required gates passed, the checkout is clean
 assigned evidence is complete. The Orchestrator checks the actual checkout and evidence before
 judgement. A replacement receives the original assignment, blockers, verified and unverified work,
 environment, authority, and stop conditions.
+
+A role result owns its returned observations until the Orchestrator records the smallest durable
+conclusion in the ticket or review record that owns the claim. Git and the run retain finer history.
+Update INDEX's routing fields only when the conclusion creates a routing edge.
 
 Questions use the runtime's live parent channel when available. Single-return runtimes use BLOCKED and
 a fresh dispatch after the answer. An interrupted writer requires checkout and result inspection

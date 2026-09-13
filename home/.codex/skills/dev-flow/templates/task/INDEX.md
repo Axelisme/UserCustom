@@ -13,12 +13,13 @@ Not yet recorded.
 <scope source>. Read before ticket planning/alignment, a new-scope decision, or a review-driven design change.
 
 ## Current
-<!-- Active ticket and batch review pointers, current status, and unresolved judgement. Move history to
-     its owner rather than accumulating it here. -->
+<!-- Governing ticket or batch review pointer plus bounded outcome, owner, blocker, and lifecycle state.
+     Update only when this routing edge changes. -->
 Task created.
 
 ## Next
-<!-- One bounded coordination action and owner. -->
+<!-- One bounded outcome or handoff and its owner. Workflow events within the same routing edge leave
+     this field unchanged. -->
 Plan and align the next independent batch. Owner: Orchestrator.
 
 ## Standing orders

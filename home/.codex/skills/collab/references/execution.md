@@ -52,14 +52,25 @@ and observations are explicit enough for a bounded internal implementation and i
 
 ## Test ownership
 
-The Orchestrator creates and changes formal behavior and regression tests. They exercise shipped public
-interfaces and observable results. Helpers receive coverage through their contribution to that
-behavior. An implementer runs assigned formal tests and may use run-owned temporary probes; remove
-probes before commit and report useful scenarios for the Orchestrator to formalize.
+Inputs are the confirmed ticket scenarios and criteria, current public interface and shipped callers,
+existing formal tests, and the prepared checkout's writer authority. Read the ticket's Scenarios,
+Alignment, Acceptance, and Mechanical gates plus repository test instructions named during Prepare.
+The Orchestrator is the writer for formal behavior and regression tests and for public interface
+changes. They exercise shipped public interfaces and observable results. Helpers receive coverage
+through their contribution to that behavior.
 
-A coverage blocker names a reachable behavior defect or agreed validation obligation and its evidence
-gap. Route formal-test corrections to the Orchestrator and internal-logic corrections to the assigned
-writer. A mutating checker runs only under the current writer's authority.
+Stop when behavior or interface ownership is unconfirmed, a proposed assertion tests prose or internal
+shape instead of observable behavior, the checkout has another writer, or the required environment is
+unavailable. Record the test path, covered criterion and scenario, command/selection, environment,
+expected pre-fix failure when applicable, result, and limitation in Contract starting point or Progress.
+Test work is complete when the agreed behavior is observable through a shipped interface, the assigned
+gate is recorded, and write ownership is released or explicitly transferred.
+
+An implementer runs assigned formal tests and may use run-owned temporary probes; remove probes before
+commit and report useful scenarios for the Orchestrator to formalize. A coverage blocker names a
+reachable behavior defect or agreed validation obligation and its evidence gap. Route formal-test
+corrections to the Orchestrator and internal-logic corrections to the assigned writer. A mutating
+checker runs only under the current writer's authority.
 
 ## Implement
 
@@ -80,9 +91,11 @@ or execution owner.
 
 ## Results and continuity
 
-Role payloads retain two branches: `COMPLETED` with required `outcome` and optional `message`, or
-`BLOCKED` with required `outcome` and `blocker`. `Residual risks:` carries non-blocking findings. The
-existing text fields carry candidate and verification metadata; do not add a runtime result schema.
+Role payloads retain the required `outcome` discriminator (`COMPLETED` or `BLOCKED`), optional
+`message`, and required `blocker` on BLOCKED. `outcome` carries status only. A COMPLETED implementer
+puts candidate and verification metadata in `message` unless dispatch named an exact durable record
+that already contains every required item. If neither source contains them, the Orchestrator treats the
+result as incomplete. `Residual risks:` carries non-blocking findings. Do not add a runtime result field.
 
 A writer's COMPLETED result attests required gates passed, the checkout is clean and committed, and
 assigned evidence is complete. The Orchestrator checks the actual checkout and evidence before

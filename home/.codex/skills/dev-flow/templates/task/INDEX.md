@@ -23,5 +23,5 @@ Plan and align the next independent batch. Owner: Orchestrator.
 
 ## Standing orders
 <!-- Keep verbatim active user-marked STDO orders with source and lapse condition. Read every active
-     entry on reorientation. Admission and custody: ../../references/custody.md. -->
+     entry on reorientation. Admission and custody: ~/.codex/skills/dev-flow/references/custody.md -->
 None.

@@ -74,10 +74,10 @@ contract.
 
 Submit one branch:
 
-- `COMPLETED`: required `outcome`, optional `message`. Approves only the assigned claims on the exact
-  reviewed subject.
-- `BLOCKED`: required `outcome`, `blocker`. Include every supported defect. If review was impossible,
-  put `UNREVIEWABLE:` and the concrete assignment problem on the first line.
+- `COMPLETED`: set required `outcome` to the literal status `COMPLETED`; optional `message` may state
+  residual risks. This approves only the assigned claims on the exact reviewed subject.
+- `BLOCKED`: set required `outcome` to `BLOCKED` and put every supported defect in required `blocker`.
+  If review was impossible, put `UNREVIEWABLE:` and the concrete assignment problem on its first line.
 
 Use `Residual risks:` in message or after a blocker for non-blocking findings. Keep results to findings,
 risks, and routing. The Orchestrator owns allowance counting, final acceptance, correction, cutoff, and

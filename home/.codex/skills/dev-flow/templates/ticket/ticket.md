@@ -24,7 +24,7 @@ state: {{STATE}}
 ## Contract starting point
 <!-- Existing complete contract, or the Orchestrator's seed commit with exact interface, declaration,
      shipped caller, formal-test locations, expected failures, and remaining internal implementation.
-     Procedure: ../../../collab/references/execution.md#contract-seed -->
+     Procedure: ~/.codex/skills/collab/references/execution.md#contract-seed -->
 {{CONTRACT_STARTING_POINT}}
 
 ## Scenarios
@@ -33,7 +33,7 @@ state: {{STATE}}
 
 ## Alignment
 <!-- Record the user's confirmation pointer. Shared batch design may be referenced, but this ticket
-     names its own differences and scenarios. Procedure: ../../references/planning.md#design-alignment -->
+     names its own differences and scenarios. Procedure: ~/.codex/skills/dev-flow/references/planning.md#design-alignment -->
 Awaiting design discussion and user confirmation.
 
 ## Acceptance
@@ -48,17 +48,18 @@ Awaiting design discussion and user confirmation.
 
 ## Progress
 <!-- Record every reviewed candidate and whether a BLOCKED result was reviewable. New tickets default
-     to one effective defect verdict; assignment problems do not count. Preserve explicit historical
-     or user-granted allowances. Procedure: ../../../collab/references/review.md#correct-and-decide -->
+     to one effective defect verdict; assignment problems do not count. For a pre-default ticket whose
+     allowance is absent, recover and record it before review. Procedure:
+     ~/.codex/skills/collab/references/review.md#correct-and-decide -->
 Reviewer effective BLOCKED count: 0 of default 1. Work: not started.
 
 ## User decisions
 <!-- Each entry states scenario, impact, options, recommendation, and answer. Procedure:
-     ../../references/records.md#ticket-handoff -->
+     ~/.codex/skills/dev-flow/references/records.md#ticket-handoff -->
 None.
 
 ## Resolution
 <!-- Final candidate, observations, disposition, and outstanding criteria. Cutoff separates established
      claims from final fixes and claims not independently confirmed. Procedure:
-     ../../references/records.md#cutoff -->
+     ~/.codex/skills/dev-flow/references/records.md#cutoff -->
 Pending.

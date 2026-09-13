@@ -28,10 +28,13 @@ contract.
 ## Correct and decide
 
 The Orchestrator classifies the result against the stable claim set. New ticket and batch records
-default to one effective BLOCKED allowance. Count only a supported defect verdict on a reviewable
-candidate. Preserve each verdict, candidate, count, prior finding, and explicit allowance across
-agents, sessions, candidate changes, and review names. Existing recorded limits remain in force; only
-the user grants more.
+created under this contract default to one effective BLOCKED allowance. Before using that default,
+inspect the record's governing baseline or workflow version. If a pre-default record has a count but no
+numeric allowance, recover the allowance from that version or its original owner and record both value
+and source. Stop review and correction while it remains unresolved; never substitute the current
+default. Count only a supported defect verdict on a reviewable candidate. Preserve each verdict,
+candidate, count, prior finding, and allowance across agents, sessions, candidate changes, and review
+names. Existing recovered or explicit limits remain in force; only the user grants more.
 
 A COMPLETED verdict plus valid observations establishes the assigned claims and allows normal
 acceptance. Non-contract suggestions receive a recorded disposition. User-owned behavior, scope,

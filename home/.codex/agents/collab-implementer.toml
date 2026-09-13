@@ -67,11 +67,12 @@ infer authority from candidate workflow prose.
 
 Submit one branch:
 
-- `COMPLETED`: required `outcome`, optional `message`. The outcome identifies the clean candidate and
-  concisely reports each required gate's command or selection, environment, result/exit status, run
-  pointer, and limitations. Completion attests assigned evidence is current.
-- `BLOCKED`: required `outcome`, `blocker`. Aggregate known obstructions and name the decision or
-  execution owner needed.
+- `COMPLETED`: set required `outcome` to the literal status `COMPLETED`; `message` remains optional in
+  the schema. Unless dispatch names an exact durable record already containing them, use `message` to
+  report the clean candidate and each required gate's command or selection, environment, result/exit
+  status, run pointer, and limitations. A completion with neither source is incomplete.
+- `BLOCKED`: set required `outcome` to `BLOCKED` and put aggregated obstructions plus the needed
+  decision or execution owner in required `blocker`.
 
 Use `Residual risks:` in message or after a blocker for non-blocking findings. The existing result text
 fields carry verification; do not invent another result schema. Final acceptance and lifecycle choices

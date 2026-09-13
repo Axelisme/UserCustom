@@ -51,9 +51,11 @@ commit/tree with a baseline, stopped writer, stable brief, and required observat
 missing baselines, mutable subjects, and withdrawn prerequisites are assignment failures, not defect
 verdicts. Repair the missing input, but stop repeated preparation failures with their owner.
 
-A new ticket or batch defaults to one effective BLOCKED verdict. Keep historical limits, verdicts,
-candidates, and counts. Replacing an agent, changing a candidate, or renaming a claim set does not reset
-the count. Existing approved obligations override the new default. A batch covers named tickets,
+A new ticket or batch created under this contract defaults to one effective BLOCKED verdict. Keep
+historical limits, verdicts, candidates, and counts. For a pre-default record lacking a numeric
+allowance, recover it from the governing version or original owner and stop rather than substituting
+one. Replacing an agent, changing a candidate, or renaming a claim set does not reset the count.
+Existing approved obligations override the new default. A batch covers named tickets,
 criteria, cutoff claims, and interactions on one integration subject. Its approval establishes only
 those claims and never silently upgrades unrelated cutoff work.
 

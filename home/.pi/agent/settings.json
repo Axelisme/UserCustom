@@ -8,10 +8,10 @@
     "/home/axel/Documents/VSCode/Typescript/pi-goal",
     "/home/axel/Documents/VSCode/Typescript/pi-herdr-subagents",
     "/home/axel/Documents/VSCode/Typescript/billion-context-pi",
+    "/home/axel/Documents/VSCode/Typescript/pi-cc-tools",
     "npm:pi-mcp-adapter",
     "npm:pi-openai-fast-mode",
     "npm:pi-antigravity",
-    "npm:pi-claude-code-ui",
     "/home/axel/Documents/VSCode/Typescript/cache-stats"
   ],
   "enabledModels": [
@@ -25,9 +25,9 @@
     "allowExtensions": [
       "extensions/parallel-tools.ts",
       "/home/axel/Documents/VSCode/Typescript/billion-context-pi",
+      "/home/axel/Documents/VSCode/Typescript/pi-cc-tools",
       "npm:pi-openai-fast-mode",
       "npm:pi-antigravity",
-      "npm:pi-claude-code-ui",
       "/home/axel/Documents/VSCode/Typescript/cache-stats"
     ]
   }

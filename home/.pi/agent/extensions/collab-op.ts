@@ -3807,17 +3807,17 @@ async function writeAtomicReportFile(
   await rename(temporary, destination);
 }
 
-type RemovalReportSnapshot = {
+type ReportSnapshot = {
   telemetry: string;
   baseSha: string | null;
   integrationSha: string | null;
   integrationDiff: Record<string, unknown> | null;
 };
 
-async function captureRemovalReportSnapshot(
+async function captureReportSnapshot(
   task: TaskLayout,
   signal?: AbortSignal,
-): Promise<RemovalReportSnapshot> {
+): Promise<ReportSnapshot> {
   const source = await telemetryFileForTask(task);
   let telemetry = "";
   if (source !== null && (await pathMetadata(source)) !== null) {
@@ -3858,11 +3858,11 @@ async function captureRemovalReportSnapshot(
   return { telemetry, baseSha, integrationSha, integrationDiff };
 }
 
-async function writeRemovalReport(
+async function writeReport(
   task: TaskLayout,
   outputDir: string,
   facts: Record<string, unknown>,
-  snapshot?: RemovalReportSnapshot,
+  snapshot?: ReportSnapshot,
   signal?: AbortSignal,
 ): Promise<{ reportPath: string; telemetryPath: string }> {
   const destination = path.resolve(task.repo.controlRoot, outputDir);
@@ -3873,7 +3873,7 @@ async function writeRemovalReport(
   await mkdir(destination, { recursive: true });
   const reportPath = path.join(destination, "collab-report.json");
   const telemetryPath = path.join(destination, "collab-telemetry.jsonl");
-  const captured = snapshot ?? await captureRemovalReportSnapshot(task, signal);
+  const captured = snapshot ?? await captureReportSnapshot(task, signal);
   const telemetry = captured.telemetry;
   const events: Record<string, unknown>[] = [];
   const reportWarnings = Array.isArray(facts.warnings)
@@ -3958,7 +3958,7 @@ async function collabReport(
   const task = new TaskLayout(repo, taskId);
   const captured = await withTaskLock(repo, taskId, async () => {
     const state = await status(run, cwd, taskId, signal);
-    const reportSnapshot = await captureRemovalReportSnapshot(task, signal);
+    const reportSnapshot = await captureReportSnapshot(task, signal);
     const lanes = state.lanes && typeof state.lanes === "object"
       ? Object.keys(state.lanes as Record<string, unknown>).sort()
       : [];
@@ -3976,7 +3976,7 @@ async function collabReport(
       warnings,
     };
   });
-  await writeRemovalReport(task, outputDir, captured.facts, captured.snapshot, signal);
+  await writeReport(task, outputDir, captured.facts, captured.snapshot, signal);
   return {
     ok: true,
     tool_version: TOOL_VERSION,

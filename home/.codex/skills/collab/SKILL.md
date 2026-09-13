@@ -12,8 +12,11 @@ short entries when orchestrating a task, then open only the operation sections r
 A lane is a feature branch and worktree. Integration accumulates task-local results. Persistence is
 the user's target branch. Every checkout has one writer at a time. A fixed subject is one exact clean
 commit and tree with a baseline and bounded criteria. Every review binds to one fixed subject. The
-Orchestrator owns intent, assignment,
-formal tests, interface declarations, observation sufficiency, acceptance, and final disposition.
+Orchestrator owns intent, assignment, formal tests, interface declarations, observation sufficiency,
+acceptance, and final disposition. Durable workflow conclusions go to the owning ticket or review
+record as a semantic checkpoint or bounded review history. INDEX changes only at a routing edge.
+Dev-flow defines both terms in
+[record operations](../dev-flow/references/records.md#maintain-the-record).
 
 On reorientation, reread the selected operation section and receiver contract when their original text
 is absent, changed, or uncertain. Existing attempts retain the contract injected at dispatch; a profile

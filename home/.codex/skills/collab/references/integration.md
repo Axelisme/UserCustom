@@ -15,7 +15,8 @@ reassess affected task criteria, and review imported interactions.
 
 Stop on conflicts, tracked dirt, candidate mismatch, stale observations, or unreviewed affected claims.
 Integration is complete when the exact accepted candidate is included, the assembled tree is judged,
-and the ticket or review record names observations and limitations.
+and the ticket or review record names the concise observations and limitations. Update INDEX only when
+integration creates a routing edge.
 
 ## Land and clean up
 
@@ -31,7 +32,8 @@ judged integration head second; its tree must equal the judged integration tree.
 Inventory owned resources before destructive retirement. Move required evidence to its durable owner,
 then remove task-owned temporary files, processes, worktrees, and branches whose purpose is complete.
 Managed retirement may delete untracked and ignored lane files. Preserve user state and record every
-retained resource's owner and cleanup condition.
+retained resource's owner and cleanup condition in its ticket or review record. Update INDEX only when
+landing or retirement creates a routing edge.
 
 Stop on missing authority, persistence dirt, live consumer handoff risk, candidate drift, hook failure,
 or uncertain custody. Completion requires confirmed integration or landing and retirement or explicit

@@ -8,11 +8,11 @@ scenarios, interface and test obligations, relevant candidate-bound observations
 findings, stop conditions, and limitations. A batch brief also names included tickets, cutoff claims,
 and interactions.
 
-The Orchestrator verifies those preconditions, records the subject, then dispatches one acceptor by
-default. The acceptor reads the candidate, tests, declarations, callers, and supplied observations. It
-reviews every assigned criterion and directly related instances. It directly judges prose, structure,
-configuration, repository data, responsibility placement, and test assertions. It does not execute
-runtime gates.
+The Orchestrator verifies those preconditions, records the subject in the owning ticket or review
+record, then dispatches one acceptor by default. The acceptor reads the candidate, tests, declarations,
+callers, and supplied observations. It reviews every assigned criterion and directly related instances.
+It directly judges prose, structure, configuration, repository data, responsibility placement, and
+test assertions. It does not execute runtime gates.
 
 A missing baseline, mutable or dirty subject, active writer, ambiguous criterion, missing authority,
 or unavailable required observation makes the assignment unreviewable. Repair that concrete input and
@@ -33,8 +33,9 @@ inspect the record's governing baseline or workflow version. If a pre-default re
 numeric allowance, recover the allowance from that version or its original owner and record both value
 and source. Stop review and correction while it remains unresolved; never substitute the current
 default. Count only a supported defect verdict on a reviewable candidate. Preserve each verdict,
-candidate, count, prior finding, and allowance across agents, sessions, candidate changes, and review
-names. Existing recovered or explicit limits remain in force; only the user grants more.
+candidate, count, prior finding, and allowance in the owning ticket or review record across agents,
+sessions, candidate changes, and review names. This bounded review history does not admit unrelated
+workflow events. Existing recovered or explicit limits remain in force; only the user grants more.
 
 A COMPLETED verdict plus valid observations establishes the assigned claims and allows normal
 acceptance. Non-contract suggestions receive a recorded disposition. User-owned behavior, scope,
@@ -43,8 +44,9 @@ continues.
 
 The first effective BLOCKED reaches the default cap. Select one final bounded correction. The
 Orchestrator changes interfaces and formal tests; the implementer changes assigned internal logic.
-Run required gates, form a new clean candidate, and record the fixes. Independent review ends unless a
-user grant adds allowance. Do not rename or repartition the same claims to obtain another review.
+Run required gates, form a new clean candidate, and record the fixes in the owning ticket or review
+record. Independent review ends unless a user grant adds allowance. Do not rename or repartition the
+same claims to obtain another review.
 
 After final correction, cutoff is allowed only when gates pass and the Orchestrator can judge the
 bounded candidate. Record established claims, remaining findings, affected scenarios, and fixes or

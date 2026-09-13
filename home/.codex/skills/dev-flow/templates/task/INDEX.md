@@ -9,20 +9,19 @@ spec: none
 Not yet recorded.
 
 ## Scope
-<!-- One pointer to the approved spec or scope file, not its contents. -->
+<!-- One approved spec or scope pointer and its read condition, not copied scope. -->
 <scope source>. Read before ticket planning/alignment, a new-scope decision, or a review-driven design change.
 
 ## Current
-<!-- Active batch ticket pointers, current status, and unresolved decisions. Move settled facts to their owner. -->
+<!-- Active ticket and batch review pointers, current status, and unresolved judgement. Move history to
+     its owner rather than accumulating it here. -->
 Task created.
 
 ## Next
-<!-- One bounded action and its owner. -->
+<!-- One bounded coordination action and owner. -->
 Plan and align the next independent batch. Owner: Orchestrator.
 
 ## Standing orders
-<!-- Admit new orders when the user explicitly issues STDO: followed by the order content.
-     Keep every active order's full verbatim text here, with its source and lapse condition.
-     Read all active entries on each reorientation.
-     Admission and custody: ~/.codex/skills/dev-flow/references/custody.md. -->
+<!-- Keep verbatim active user-marked STDO orders with source and lapse condition. Read every active
+     entry on reorientation. Admission and custody: ../../references/custody.md. -->
 None.

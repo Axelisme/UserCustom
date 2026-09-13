@@ -89,9 +89,9 @@ Launch asynchronously so the Orchestrator can continue independent work. In an i
 return control or use the active goal's yield mechanism and let the terminal notification wake the
 session. Blocking on a child does not make it more authoritative.
 
-Yielding means you were away from the lane while it was written. Reread the assigned `ticket.md` —
-only that one — when the terminal notification lands, so Collab's Acceptance judgement rebuilds from
-what each claim's deciding observer reported rather than from what you remember dispatching.
+Yielding means you were away from the lane while it was written. When the terminal notification lands,
+reread the exact ticket or batch review record named by the dispatch. Rebuild judgement from its current
+candidate-bound observations rather than memory or unrelated task history.
 
 ## Run control
 

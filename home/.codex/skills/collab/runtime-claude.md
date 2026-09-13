@@ -1,42 +1,35 @@
-# Collab — Claude runtime
+# Collab: Claude runtime
 
-Claude's native binding delta, and nothing else. [Collab](SKILL.md) owns the policy, and the
-[implementer](../../../.claude/agents/collab-implementer.md) and
-[acceptor](../../../.claude/agents/collab-acceptor.md) profiles own their roles and Results.
+Claude's native binding delta, and nothing else. [Collab](SKILL.md) owns policy; the installed
+implementer and acceptor profiles own receiver contracts and Results.
 
 ## Routing
 
 - Before dispatch, read [Capability check](#capability-check), then [Dispatch](#dispatch).
-- For native Git collection or landing, apply [integration](SKILL.md#integrate) and
-  [landing authority](SKILL.md#land-and-clean-up). Specialized operations not documented here require
-  a decision before use.
+- For native Git collection or landing, apply [Integrate](references/integration.md#integrate) and
+  [Land and clean up](references/integration.md#land-and-clean-up).
+- Specialized operations not documented here require a decision before use.
 
 ## Capability check
 
-At dispatch time, use the current Claude agent and tool inventory as the capability source of truth.
-Require the exact `collab-implementer` and `collab-acceptor` profiles and Claude's native child-agent
-dispatch capability. If a required role or dispatch capability is unavailable, report `BLOCKED`
-naming the missing capability rather than selecting a generic writer, emulating a child with shell
-processes, or trusting a cached tool signature, version, or feature catalogue.
+At dispatch, use the current Claude agent and tool inventory as the capability source of truth. Require
+exact `collab-implementer` and `collab-acceptor` profiles plus Claude's native child dispatch. If a
+required capability is missing, report `BLOCKED` with the missing item. Do not substitute a generic
+writer, shell process, or cached tool catalogue.
 
-The profile's declared tools and Result contract are authoritative for that child. A session's
-optional task, plan, monitor, artifact, scheduling, or messaging tools imply no further capability
-and are not Collab lifecycle stations.
+The profile's declared tools and Result contract are authoritative. Optional planning, monitoring,
+artifact, scheduling, or messaging tools add no Collab lifecycle operation.
 
 ## Dispatch
 
-The Orchestrator dispatches each role itself, over the one lane it selected. That is the entire
-binding: the loop's shape, its finite correction bounds, and its escalation are
-[Collab's](SKILL.md#correct-and-decide), unchanged.
+The Orchestrator dispatches each role over the selected lane. Read Collab
+[Prepare](references/execution.md#prepare), [Results and continuity](references/execution.md#results-and-continuity),
+and [Correct and decide](references/review.md#correct-and-decide) for the portable loop.
 
-Each dispatch is a fresh child of the exact profile — `collab-implementer` to write,
-`collab-acceptor` to review the fixed review commit once mutation has stopped, a fresh compatible
-`collab-implementer` to correct under the original authority contract, and a fresh `collab-acceptor`
-to rereview. Project the results through Collab's
-[worker-result](SKILL.md#results-and-continuity) and [review](SKILL.md#implement-and-review) rules, and return blockers or decisions to the Orchestrator;
-final Acceptance, collection, landing, and escalation happen outside this binding.
+Each dispatch is a fresh child of the exact profile: `collab-implementer` writes or corrects, and
+`collab-acceptor` reviews one stopped immutable subject. The default effective BLOCKED allowance ends
+independent review after the first reviewable defect verdict and one final correction; a new acceptor
+runs only when the recorded allowance still permits it or the user grants more.
 
-A Claude child has no live parent channel: it returns once, and a question it needs answered has to
-come back as its whole result. Where Pi's `contact_parent` keeps a child waiting, here a decision
-request returns as `BLOCKED` with the question first, and its answer starts a fresh dispatch. Both
-Claude profiles carry that form; do not brief a child to wait for an answer it cannot receive.
+A Claude child has no live parent channel. A needed decision returns as `BLOCKED` with the question
+first. The answer starts a fresh dispatch. Do not brief a child to wait for an answer it cannot receive.

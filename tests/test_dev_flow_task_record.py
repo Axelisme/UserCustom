@@ -407,6 +407,7 @@ class TaskRecordTests(unittest.TestCase):
                     ".agent_state/plans/demo/INDEX.md",
                     ".agent_state/plans/demo/decisions",
                     ".agent_state/plans/demo/research",
+                    ".agent_state/plans/demo/reviews",
                     ".agent_state/plans/demo/scripts",
                     ".agent_state/plans/demo/spec",
                     ".agent_state/plans/demo/standing-orders",
@@ -419,7 +420,7 @@ class TaskRecordTests(unittest.TestCase):
             self.assertFalse((record(root) / "artifacts").exists())
             self.assertEqual(
                 sorted(path.name for path in record(root).iterdir()),
-                ["INDEX.md", "decisions", "research", "scripts", "spec", "standing-orders", "tickets"],
+                ["INDEX.md", "decisions", "research", "reviews", "scripts", "spec", "standing-orders", "tickets"],
             )
             created = (record(root) / "INDEX.md").read_text(encoding="utf-8")
             frontmatter = created.split("---", 2)[1].strip().splitlines()

@@ -17,7 +17,7 @@ The dispatch supplies these exact fields:
 
 - Ticket path plus the current outcome, scope, assumptions, confirmed scenario, alignment, Contract
   starting point, criterion, check, blocker, and observation anchors needed for this assignment.
-- Checkout, exclusive writer, branch-local commit authority, and explicit persistence and push limits.
+- Checkout, branch-local commit authority, and explicit persistence and push limits.
 - Applicable repository instruction paths and when to read them, or explicit none.
 - Required technical skill paths and when to read them, or explicit none.
 - Runtime, interpreter, environment, caches, test selection, gate-specific timeouts, cleanup exceptions,
@@ -39,9 +39,9 @@ confirmed contract.
 
 ## Implement
 
-1. Inspect Git status, the starting diff, named declarations, and the dispatched contract. Confirm the
-   expected starting subject, exclusive ownership, environment, and user alignment pointer. Preserve
-   pre-existing dirt and evidence; unexplained changes return to the Orchestrator.
+1. Inspect Git status, the starting diff, named declarations, and the dispatched contract. Confirm
+   the expected starting subject, environment, and user alignment pointer. Preserve pre-existing
+   dirt and evidence; unexplained changes return to the Orchestrator.
 2. Implement only the assigned internal logic. Return needed interface, formal-test, or design changes
    to the Orchestrator while completing unaffected authorized work.
 3. Run assigned formal tests and gates in ticket order with the dispatched environment, selection, and

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Contract Review"
+  short_description: "Trade-off matrix over pinned contract options"

@@ -18,7 +18,6 @@ HOME = ROOT / "home"
 PARITY_NAMES = (
     "contract-reviewer",
     "repo-investigator",
-    "mechanical-implementer",
 )
 
 # Every explicitly allowed divergence between a Collab role's three runtime copies. A copy not
@@ -28,9 +27,6 @@ PARITY_NAMES = (
 # dedicated diagnostic: unknown profiles are never selected, and absent locations remove no compared
 # body. Add registry coverage only after dead declarations become an observed cost.
 COLLAB_ROLE_NAMES = ("collab-implementer", "collab-acceptor")
-# Herdr dispatches the two Collab roles from its own registry, so their Pi copies do not sit beside
-# the ordinary agent profiles the parity names above use.
-COLLAB_PI_DIR = ".pi/agent/herdr-subagents/profiles"
 COLLAB_ROLE_DELTAS: tuple[support.DeclaredDelta, ...] = (
     support.DeclaredDelta(
         profile="collab-implementer",
@@ -86,7 +82,7 @@ class CollabAgentProfileParityTests(unittest.TestCase):
 
     def test_collab_role_copies_are_identical_modulo_declared_deltas(self) -> None:
         for name in COLLAB_ROLE_NAMES:
-            profile = support.load_runtime_profile(HOME, name, pi_dir=COLLAB_PI_DIR)
+            profile = support.load_runtime_profile(HOME, name)
             deltas = tuple(delta for delta in COLLAB_ROLE_DELTAS if delta.profile == name)
             with self.subTest(profile=name):
                 support.assert_prompt_parity(
@@ -185,7 +181,7 @@ class CollabAgentProfileParityTests(unittest.TestCase):
             f"the template's repair order runs past one line, so this check would only compare "
             f"its first fragment: {order}",
         )
-        profile = support.load_runtime_profile(HOME, "collab-implementer", pi_dir=COLLAB_PI_DIR)
+        profile = support.load_runtime_profile(HOME, "collab-implementer")
         for runtime, prompt in support.runtime_prompts(profile).items():
             with self.subTest(runtime=runtime):
                 self.assertTrue(
@@ -200,8 +196,7 @@ class CollabAgentProfileParityTests(unittest.TestCase):
         # skills' own documents alike.
         sources = {}
         for name in PARITY_NAMES + COLLAB_ROLE_NAMES:
-            pi_dir = COLLAB_PI_DIR if name in COLLAB_ROLE_NAMES else ".pi/agent/agents"
-            profile = support.load_runtime_profile(HOME, name, pi_dir=pi_dir)
+            profile = support.load_runtime_profile(HOME, name)
             for runtime, prompt in support.runtime_prompts(profile).items():
                 sources[f"{name}/{runtime}"] = prompt
         for skill in ("dev-flow", "collab"):
@@ -224,7 +219,7 @@ class CollabAgentProfileParityTests(unittest.TestCase):
         # `Dispatch contract` and `Result` sections. Bodies may diverge per runtime; these two
         # sections may not go missing, or that instruction dangles under the runtime that lacks one.
         for name in COLLAB_ROLE_NAMES:
-            profile = support.load_runtime_profile(HOME, name, pi_dir=COLLAB_PI_DIR)
+            profile = support.load_runtime_profile(HOME, name)
             for runtime, prompt in support.runtime_prompts(profile).items():
                 with self.subTest(profile=name, runtime=runtime):
                     headings = support.section_headings(prompt)

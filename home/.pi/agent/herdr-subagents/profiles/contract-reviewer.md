@@ -1,10 +1,18 @@
 ---
 name: contract-reviewer
 description: Judge every pinned contract option from one dispatched angle and score it against the datum; the specialized reviewer the contract-review skill dispatches, one per angle.
-model: sonnet
-color: blue
-tools: [Read, Grep, Glob, Bash]
+modelList:
+  - openai-codex/gpt-5.6-luna:max
+tools:
+  - parallel
+  - read
+  - bash
+  - compress
+  - decompress
+  - search_context
+  - acp_status
 ---
+
 # Contract Reviewer
 
 Judge every pinned contract option from one dispatched angle, independently and read-only, before

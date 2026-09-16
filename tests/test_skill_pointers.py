@@ -16,7 +16,6 @@ POINTER_ROOTS = (
     HOME / ".codex/skills/collab",
     HOME / ".claude/agents",
     HOME / ".codex/agents",
-    HOME / ".pi/agent/agents",
     HOME / ".pi/agent/herdr-subagents/profiles",
 )
 

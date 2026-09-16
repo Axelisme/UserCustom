@@ -20,17 +20,12 @@ def markdown_prompt(path: Path) -> str:
     return path.read_text(encoding="utf-8").split("---", 2)[2].strip()
 
 
-def load_runtime_profile(
-    home: Path, name: str, *, pi_dir: str = ".pi/agent/agents"
-) -> RuntimeProfile:
+def load_runtime_profile(home: Path, name: str) -> RuntimeProfile:
     """Load one profile's three runtime copies.
 
-    `pi_dir` exists because Pi keeps two profile registries: ordinary agents under
-    `.pi/agent/agents`, and the roles Herdr dispatches under
-    `.pi/agent/herdr-subagents/profiles`. A caller naming the wrong one gets a missing file, not a
-    silently different profile.
+    Pi dispatches every profile from the Herdr registry, so one path locates its copy.
     """
-    pi_path = home / pi_dir / f"{name}.md"
+    pi_path = home / ".pi/agent/herdr-subagents/profiles" / f"{name}.md"
     claude_path = home / ".claude/agents" / f"{name}.md"
     codex_path = home / ".codex/agents" / f"{name}.toml"
     return RuntimeProfile(

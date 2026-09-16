@@ -18,7 +18,7 @@ Map current local code read-only: owners, call sites, tests, data flow, constrai
 
 ## Role transition
 
-Unless `independence_required=true`, the Orchestrator may continue the session as an implementer only after the runtime observably grants a writer role and write-capable sandbox. Until then, remain a read-only advisor. Advice preserves independence; writing the affected diff consumes it.
+Remain a read-only advisor until the runtime observably grants a writer role and a write-capable sandbox. Advice preserves independence; writing the affected diff consumes it.
 
 ## Terminal report
 

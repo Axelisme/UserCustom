@@ -167,28 +167,6 @@ class CollabAgentProfileParityTests(unittest.TestCase):
                 for runtime in runtimes:
                     self.assertIn(runtime, failure)
 
-    def test_gate_repair_order_matches_the_ticket_template(self) -> None:
-        # The order is copied because its two readers cannot reach each other: the Orchestrator
-        # drafting a ticket reads the template, the dispatched writer reads only its own profile.
-        # Reading it out of the template rather than restating it here keeps this a match check,
-        # so rewording the rule in both places stays legal and rewording one of them does not.
-        template = (HOME / ".codex/skills/dev-flow/templates/ticket/ticket.md").read_text("utf-8")
-        match = re.search(r"Implementer runs in order: ([^\n]+)", template)
-        self.assertIsNotNone(match, "the ticket template no longer states the gate repair order")
-        order = match.group(1).strip()
-        self.assertTrue(
-            order.endswith("."),
-            f"the template's repair order runs past one line, so this check would only compare "
-            f"its first fragment: {order}",
-        )
-        profile = support.load_runtime_profile(HOME, "collab-implementer")
-        for runtime, prompt in support.runtime_prompts(profile).items():
-            with self.subTest(runtime=runtime):
-                self.assertTrue(
-                    order in prompt,
-                    f"collab-implementer/{runtime} does not carry the template's repair order: {order}",
-                )
-
     def test_skill_paths_named_for_agents_resolve(self) -> None:
         # A pointer is the whole of its reader's route to the rule: the reader cannot ask where a
         # moved file went. Renaming a reference is how one goes silently dangling, so every

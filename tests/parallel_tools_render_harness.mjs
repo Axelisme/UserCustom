@@ -66,6 +66,53 @@ if (scenarioArg === "wrapped-output") {
       },
     ],
   };
+} else if (scenarioArg === "mutations") {
+  args = {
+    tool_uses: [
+      {
+        recipient_name: "edit",
+        parameters: {
+          path: "docs/unique-edit-target.md",
+          edits: [{ oldText: "unique-old-text", newText: "unique-new-text" }],
+        },
+      },
+      {
+        recipient_name: "write",
+        parameters: {
+          path: "docs/unique-write-target.md",
+          content: "unique-write-content",
+        },
+      },
+    ],
+  };
+  content = [text("EDIT-OUTPUT"), text("WRITE-OUTPUT")];
+  details = {
+    mode: "sequential",
+    calls: [
+      {
+        index: 0,
+        name: "edit",
+        label: "edit(docs/unique-edit-target.md)",
+        args: args.tool_uses[0].parameters,
+        ok: true,
+        durationMs: 5,
+        details: undefined,
+        blockStart: 0,
+        blockCount: 1,
+      },
+      {
+        index: 1,
+        name: "write",
+        label: "write(docs/unique-write-target.md)",
+        args: args.tool_uses[1].parameters,
+        ok: true,
+        durationMs: 6,
+        details: undefined,
+        blockStart: 1,
+        blockCount: 1,
+      },
+    ],
+  };
 } else {
   args = {
     tool_uses: [

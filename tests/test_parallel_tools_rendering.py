@@ -88,10 +88,21 @@ class ParallelToolsRenderingTests(unittest.TestCase):
 
     def test_narrow_collapsed_inputs_stay_on_one_visual_line(self) -> None:
         lines = self.render(width=46)
+        rendered = "\n".join(lines)
         shell_lines = [line for line in lines if "unique-shell-input" in line]
-        self.assertEqual(len(shell_lines), 1, "\n".join(lines))
+        self.assertEqual(len(shell_lines), 1, rendered)
         self.assertLessEqual(len(shell_lines[0]), 46)
-        self.assertTrue(shell_lines[0].endswith("…"), shell_lines[0])
+        self.assertIn("…", shell_lines[0])
+        self.assertTrue(shell_lines[0].endswith("8ms"), shell_lines[0])
+
+        for input_marker, duration in (
+            ("unique-read-input", "4ms"),
+            ("unique-shell-input", "8ms"),
+            ("unique-failed-input", "2ms"),
+            ("unique-empty-input", "1ms"),
+        ):
+            child_line = next(line for line in lines if input_marker in line)
+            self.assertIn(duration, child_line, rendered)
 
     def test_wrapped_outputs_use_visual_line_budget_and_preview_direction(self) -> None:
         lines = self.render(width=30, scenario="wrapped-output")
@@ -133,6 +144,20 @@ class ParallelToolsRenderingTests(unittest.TestCase):
             self.assertIn(marker, rendered)
         self.assertTrue(any("✗" in line and "grep" in line for line in lines), rendered)
         self.assertIn("(no output)", rendered)
+
+    def test_expanded_mutation_inputs_are_complete(self) -> None:
+        rendered = "\n".join(self.render(expanded=True, scenario="mutations"))
+
+        for marker in (
+            "docs/unique-edit-target.md",
+            "unique-old-text",
+            "unique-new-text",
+            "docs/unique-write-target.md",
+            "unique-write-content",
+            "EDIT-OUTPUT",
+            "WRITE-OUTPUT",
+        ):
+            self.assertIn(marker, rendered)
 
 
 if __name__ == "__main__":

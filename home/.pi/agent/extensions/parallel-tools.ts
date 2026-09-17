@@ -12,7 +12,7 @@ import {
 	type ExtensionAPI,
 	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { Container, Text, truncateToWidth } from "@earendil-works/pi-tui";
+import { Container, Text, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 /** Sub-tools the batch tool is allowed to dispatch to. */
 const READ_ONLY = ["read", "grep", "find", "ls"] as const;
@@ -298,6 +298,82 @@ function textOf(block: { type: string; [k: string]: unknown }): string {
 	return block.type === "text" && typeof block.text === "string" ? block.text : `[${block.type}]`;
 }
 
+function formatExpandedChildInput(record: CallRecord, theme: any): string {
+	const name = record.name;
+	const args = record.args ?? {};
+
+	if (name === "grep") {
+		const pattern = typeof args.pattern === "string" ? args.pattern : "";
+		const rawPath = typeof args.path === "string" ? args.path : "";
+		const glob = typeof args.glob === "string" ? args.glob : "";
+		const limit = args.limit !== undefined ? ` limit ${args.limit}` : "";
+		const globStr = glob ? ` (${glob})` : "";
+		if (pattern && rawPath) {
+			return `grep /${pattern}/ in ${rawPath}${globStr}${limit}`;
+		}
+		if (pattern) {
+			return `grep /${pattern}/${globStr}${limit}`;
+		}
+		if (rawPath) {
+			return `grep in ${rawPath}${globStr}${limit}`;
+		}
+		return `grep`;
+	}
+
+	if (name === "find") {
+		const pattern = typeof args.pattern === "string" ? args.pattern : "";
+		const rawPath = typeof args.path === "string" ? args.path : "";
+		if (pattern && rawPath) {
+			return `find ${pattern} in ${rawPath}`;
+		}
+		if (pattern) {
+			return `find ${pattern}`;
+		}
+		if (rawPath) {
+			return `find ${rawPath}`;
+		}
+		return `find`;
+	}
+
+	if (name === "read") {
+		const rawPath =
+			typeof args.file_path === "string"
+				? args.file_path
+				: typeof args.path === "string"
+					? args.path
+					: "";
+		let range = "";
+		if (args.offset !== undefined || args.limit !== undefined) {
+			const start = args.offset ?? 1;
+			const end = args.limit !== undefined ? Number(start) + Number(args.limit) - 1 : "";
+			range = `:${start}${end ? `-${end}` : ""}`;
+		}
+		return rawPath ? `read ${rawPath}${range}` : `read`;
+	}
+
+	if (name === "bash" || name === "powershell") {
+		const cmd = typeof args.command === "string" ? args.command : "";
+		return cmd ? `${name} ${cmd}` : name;
+	}
+
+	if (name === "ls") {
+		const rawPath = typeof args.path === "string" ? args.path : "";
+		return rawPath ? `ls ${rawPath}` : `ls`;
+	}
+
+	if (name === "edit" || name === "write") {
+		const rawPath =
+			typeof args.file_path === "string"
+				? args.file_path
+				: typeof args.path === "string"
+					? args.path
+					: "";
+		return rawPath ? `${name} ${rawPath}` : name;
+	}
+
+	return record.label || name;
+}
+
 export default function parallelToolsExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "parallel",
@@ -343,11 +419,14 @@ export default function parallelToolsExtension(pi: ExtensionAPI): void {
 		renderCall(args: ParallelInput, theme: any, context: any) {
 			const calls = Array.isArray(args?.tool_uses) ? args.tool_uses : [];
 			const header = `${theme.fg("toolTitle", theme.bold("parallel"))} ${theme.fg("muted", `(${plural(calls.length, "call")})`)}`;
-			if (context?.lastComponent instanceof Text) {
-				context.lastComponent.setText(header);
-				return context.lastComponent;
-			}
-			return new Text(header, 0, 0);
+			const state = context ? (context.state ??= {}) : {};
+			return {
+				render(_width: number) {
+					if (state.hasResult) return [];
+					return [header];
+				},
+				invalidate() {},
+			};
 		},
 		renderResult(result: any, options: any, theme: any, context: any) {
 			const details = result?.details as ParallelDetails | undefined;
@@ -363,76 +442,99 @@ export default function parallelToolsExtension(pi: ExtensionAPI): void {
 				return box as never;
 			}
 
+			const state = context ? (context.state ??= {}) : {};
+			state.hasResult = true;
+
+			const failed = records.filter((record) => !record.ok).length;
+			const wall =
+				details?.mode === "sequential"
+					? records.reduce((sum, record) => sum + record.durationMs, 0)
+					: records.reduce((max, record) => Math.max(max, record.durationMs), 0);
+			const status =
+				failed === 0 ? theme.fg("success", "all ok") : theme.fg("error", `${failed} failed`);
+			const headerText = `${theme.fg("toolTitle", theme.bold("parallel"))} ${theme.fg(
+				"muted",
+				`(${plural(records.length, "call")} · ${details?.mode ?? "concurrent"} · ${wall}ms · `,
+			)}${status}${theme.fg("muted", ")")}`;
+			box.addChild(new Text(headerText, 0, 0));
+
 			const expanded = Boolean(options?.expanded ?? context?.expanded);
 
 			for (const record of records) {
 				const mark = record.ok ? theme.fg("success", "✓") : theme.fg("error", "✗");
-
-				let label = record.label;
-				if (expanded || !label) {
-					const hint =
-						(typeof record.args?.path === "string" && record.args.path) ||
-						(typeof record.args?.file_path === "string" && record.args.file_path) ||
-						(typeof record.args?.pattern === "string" && record.args.pattern) ||
-						(typeof record.args?.command === "string" && record.args.command) ||
-						"";
-					if (hint) {
-						label = `${record.name}(${hint})`;
-					} else if (!label) {
-						label = record.name;
-					}
-				}
-
-				const inputLine = `  ${mark} ${label}`;
+				const durationStr = `${record.durationMs}ms`;
+				const durationText = theme.fg("muted", durationStr);
 
 				if (expanded) {
+					const label = formatExpandedChildInput(record, theme);
+					const inputLine = `  ${mark} ${label} ${durationText}`;
 					box.addChild(new Text(inputLine, 0, 0));
 				} else {
+					const label =
+						record.label ||
+						summarize({ recipient_name: record.name, parameters: record.args });
+					const inputLine = `  ${mark} ${label}`;
 					box.addChild({
-						render: (width: number) => [truncateToWidth(inputLine, width, "…")],
+						render: (width: number) => {
+							if (width >= 50) {
+								const reserved = durationStr.length + 1;
+								const avail = Math.max(0, width - reserved);
+								const truncated = truncateToWidth(inputLine, avail, "…");
+								return [`${truncated} ${durationText}`];
+							}
+							return [truncateToWidth(inputLine, width, "…")];
+						},
 						invalidate: () => {},
 					});
 				}
 
 				const slice = blocks.slice(record.blockStart, record.blockStart + record.blockCount);
-				const rawLines: string[] = [];
-				for (const block of slice) {
-					if (block.type === "text" && typeof block.text === "string") {
-						const text = block.text.replace(/\r\n/g, "\n");
-						if (text.length > 0) {
-							rawLines.push(...text.split("\n"));
-						}
-					}
-				}
-				while (rawLines.length > 0 && rawLines[rawLines.length - 1].trim() === "") {
-					rawLines.pop();
-				}
+				const rawText = slice
+					.filter((block) => block.type === "text" && typeof block.text === "string")
+					.map((block) => block.text as string)
+					.join("\n")
+					.replace(/\r\n/g, "\n");
 
-				if (rawLines.length === 0) {
+				if (rawText.trim() === "") {
 					box.addChild({
 						render: () => [`      ${theme.fg("muted", "(no output)")}`],
 						invalidate: () => {},
 					});
 				} else if (expanded) {
 					box.addChild({
-						render: () => rawLines.map((line) => `      ${theme.fg("toolOutput", line)}`),
+						render: (width: number) => {
+							const contentWidth = Math.max(1, width - 6);
+							const visualLines = wrapTextWithAnsi(rawText.trimEnd(), contentWidth);
+							while (visualLines.length > 0 && visualLines[visualLines.length - 1].trim() === "") {
+								visualLines.pop();
+							}
+							if (visualLines.length === 0) {
+								return [`      ${theme.fg("muted", "(no output)")}`];
+							}
+							return visualLines.map((line) => `      ${theme.fg("toolOutput", line)}`);
+						},
 						invalidate: () => {},
 					});
 				} else {
 					const isTail = record.name === "bash" || record.name === "powershell";
-					const displayLines =
-						rawLines.length > 5
-							? isTail
-								? rawLines.slice(-5)
-								: rawLines.slice(0, 5)
-							: rawLines;
-
 					box.addChild({
-						render: (width: number) =>
-							displayLines.map((line) => {
-								const formatted = `      ${theme.fg("toolOutput", line)}`;
-								return truncateToWidth(formatted, width, "…");
-							}),
+						render: (width: number) => {
+							const contentWidth = Math.max(1, width - 6);
+							const visualLines = wrapTextWithAnsi(rawText.trimEnd(), contentWidth);
+							while (visualLines.length > 0 && visualLines[visualLines.length - 1].trim() === "") {
+								visualLines.pop();
+							}
+							if (visualLines.length === 0) {
+								return [`      ${theme.fg("muted", "(no output)")}`];
+							}
+							const displayLines =
+								visualLines.length > 5
+									? isTail
+										? visualLines.slice(-5)
+										: visualLines.slice(0, 5)
+									: visualLines;
+							return displayLines.map((line) => `      ${theme.fg("toolOutput", line)}`);
+						},
 						invalidate: () => {},
 					});
 				}

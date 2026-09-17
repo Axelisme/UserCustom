@@ -298,80 +298,9 @@ function textOf(block: { type: string; [k: string]: unknown }): string {
 	return block.type === "text" && typeof block.text === "string" ? block.text : `[${block.type}]`;
 }
 
-function formatExpandedChildInput(record: CallRecord, theme: any): string {
-	const name = record.name;
-	const args = record.args ?? {};
-
-	if (name === "grep") {
-		const pattern = typeof args.pattern === "string" ? args.pattern : "";
-		const rawPath = typeof args.path === "string" ? args.path : "";
-		const glob = typeof args.glob === "string" ? args.glob : "";
-		const limit = args.limit !== undefined ? ` limit ${args.limit}` : "";
-		const globStr = glob ? ` (${glob})` : "";
-		if (pattern && rawPath) {
-			return `grep /${pattern}/ in ${rawPath}${globStr}${limit}`;
-		}
-		if (pattern) {
-			return `grep /${pattern}/${globStr}${limit}`;
-		}
-		if (rawPath) {
-			return `grep in ${rawPath}${globStr}${limit}`;
-		}
-		return `grep`;
-	}
-
-	if (name === "find") {
-		const pattern = typeof args.pattern === "string" ? args.pattern : "";
-		const rawPath = typeof args.path === "string" ? args.path : "";
-		if (pattern && rawPath) {
-			return `find ${pattern} in ${rawPath}`;
-		}
-		if (pattern) {
-			return `find ${pattern}`;
-		}
-		if (rawPath) {
-			return `find ${rawPath}`;
-		}
-		return `find`;
-	}
-
-	if (name === "read") {
-		const rawPath =
-			typeof args.file_path === "string"
-				? args.file_path
-				: typeof args.path === "string"
-					? args.path
-					: "";
-		let range = "";
-		if (args.offset !== undefined || args.limit !== undefined) {
-			const start = args.offset ?? 1;
-			const end = args.limit !== undefined ? Number(start) + Number(args.limit) - 1 : "";
-			range = `:${start}${end ? `-${end}` : ""}`;
-		}
-		return rawPath ? `read ${rawPath}${range}` : `read`;
-	}
-
-	if (name === "bash" || name === "powershell") {
-		const cmd = typeof args.command === "string" ? args.command : "";
-		return cmd ? `${name} ${cmd}` : name;
-	}
-
-	if (name === "ls") {
-		const rawPath = typeof args.path === "string" ? args.path : "";
-		return rawPath ? `ls ${rawPath}` : `ls`;
-	}
-
-	if (name === "edit" || name === "write") {
-		const rawPath =
-			typeof args.file_path === "string"
-				? args.file_path
-				: typeof args.path === "string"
-					? args.path
-					: "";
-		return rawPath ? `${name} ${rawPath}` : name;
-	}
-
-	return record.label || name;
+function formatExpandedChildInput(record: CallRecord): string {
+	const serializedArgs = JSON.stringify(record.args ?? {});
+	return serializedArgs === undefined ? record.name : `${record.name} ${serializedArgs}`;
 }
 
 export default function parallelToolsExtension(pi: ExtensionAPI): void {
@@ -466,7 +395,7 @@ export default function parallelToolsExtension(pi: ExtensionAPI): void {
 				const durationText = theme.fg("muted", durationStr);
 
 				if (expanded) {
-					const label = formatExpandedChildInput(record, theme);
+					const label = formatExpandedChildInput(record);
 					const inputLine = `  ${mark} ${label} ${durationText}`;
 					box.addChild(new Text(inputLine, 0, 0));
 				} else {
@@ -476,13 +405,10 @@ export default function parallelToolsExtension(pi: ExtensionAPI): void {
 					const inputLine = `  ${mark} ${label}`;
 					box.addChild({
 						render: (width: number) => {
-							if (width >= 50) {
-								const reserved = durationStr.length + 1;
-								const avail = Math.max(0, width - reserved);
-								const truncated = truncateToWidth(inputLine, avail, "…");
-								return [`${truncated} ${durationText}`];
-							}
-							return [truncateToWidth(inputLine, width, "…")];
+							const reserved = durationStr.length + 1;
+							const avail = Math.max(0, width - reserved);
+							const truncated = truncateToWidth(inputLine, avail, "…");
+							return [`${truncated} ${durationText}`];
 						},
 						invalidate: () => {},
 					});

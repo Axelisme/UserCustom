@@ -16,7 +16,9 @@ PI_PACKAGE = Path("/usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/in
 class ParallelToolsRenderingTests(unittest.TestCase):
     maxDiff = None
 
-    def render(self, *, width: int = 80, expanded: bool = False) -> list[str]:
+    def render(
+        self, *, width: int = 80, expanded: bool = False, scenario: str = "standard"
+    ) -> list[str]:
         completed = subprocess.run(
             [
                 "node",
@@ -26,6 +28,7 @@ class ParallelToolsRenderingTests(unittest.TestCase):
                 str(ROOT),
                 str(width),
                 str(expanded).lower(),
+                scenario,
             ],
             capture_output=True,
             text=True,
@@ -38,7 +41,11 @@ class ParallelToolsRenderingTests(unittest.TestCase):
         lines = self.render()
         rendered = "\n".join(lines)
 
-        self.assertEqual(rendered.count("parallel"), 1)
+        header_lines = [line for line in lines if "parallel" in line]
+        self.assertEqual(len(header_lines), 1, rendered)
+        for marker in ("4 calls", "sequential", "15ms", "1 failed"):
+            self.assertIn(marker, header_lines[0], rendered)
+
         for input_marker in (
             "unique-read-input",
             "unique-shell-input",
@@ -62,6 +69,15 @@ class ParallelToolsRenderingTests(unittest.TestCase):
             self.assertIn(marker, rendered)
         self.assertIn("(no output)", rendered)
 
+        for input_marker, duration in (
+            ("unique-read-input", "4ms"),
+            ("unique-shell-input", "8ms"),
+            ("unique-failed-input", "2ms"),
+            ("unique-empty-input", "1ms"),
+        ):
+            child_line = next(line for line in lines if input_marker in line)
+            self.assertIn(duration, child_line, rendered)
+
         output_lines = [
             line
             for line in lines
@@ -77,8 +93,28 @@ class ParallelToolsRenderingTests(unittest.TestCase):
         self.assertLessEqual(len(shell_lines[0]), 46)
         self.assertTrue(shell_lines[0].endswith("…"), shell_lines[0])
 
+    def test_wrapped_outputs_use_visual_line_budget_and_preview_direction(self) -> None:
+        lines = self.render(width=30, scenario="wrapped-output")
+        rendered = "\n".join(lines)
+
+        read_input = next(index for index, line in enumerate(lines) if "r-wrap" in line)
+        bash_input = next(index for index, line in enumerate(lines) if "b-wrap" in line)
+        read_lines = [line for line in lines[read_input + 1 : bash_input] if "READ-WRAP" in line]
+        bash_lines = [line for line in lines[bash_input + 1 :] if "BASH-WRAP" in line]
+
+        self.assertEqual(len(read_lines), 5, rendered)
+        self.assertEqual(len(bash_lines), 5, rendered)
+        self.assertTrue(all(line.startswith("      ") for line in read_lines + bash_lines), rendered)
+        for index in range(1, 6):
+            self.assertIn(f"READ-WRAP-{index:02}", rendered)
+        self.assertNotIn("READ-WRAP-06", rendered)
+        self.assertNotIn("BASH-WRAP-07", rendered)
+        for index in range(8, 13):
+            self.assertIn(f"BASH-WRAP-{index:02}", rendered)
+
     def test_expanded_shows_complete_child_inputs_and_outputs(self) -> None:
-        rendered = "\n".join(self.render(expanded=True))
+        lines = self.render(expanded=True)
+        rendered = "\n".join(lines)
 
         self.assertEqual(rendered.count("parallel"), 1)
         for marker in (
@@ -88,9 +124,14 @@ class ParallelToolsRenderingTests(unittest.TestCase):
             "BASH-L7",
             "BROKEN-L1",
             "BROKEN-L2",
+            "docs/unique-read-input.md",
             "unique-shell-input-with-a-command-that-must-not-wrap-across-visual-rows",
+            "unique-failed-input",
+            "unique-grep-root",
+            "unique-empty-input",
         ):
             self.assertIn(marker, rendered)
+        self.assertTrue(any("✗" in line and "grep" in line for line in lines), rendered)
         self.assertIn("(no output)", rendered)
 
 

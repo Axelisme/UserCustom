@@ -12,7 +12,7 @@ import {
 	type ExtensionAPI,
 	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { Container, Text } from "@earendil-works/pi-tui";
+import { Container, Text, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 /** Sub-tools the batch tool is allowed to dispatch to. */
 const READ_ONLY = ["read", "grep", "find", "ls"] as const;
@@ -290,61 +290,17 @@ async function runOne(
 }
 
 
-type SubRenderSlot = { state: Record<string, unknown>; lastCall?: unknown; lastResult?: unknown };
-
-/** Per-sub-call renderer slots, parked on the row state pi owns so they die with the row. */
-function slotsFor(context: { state?: Record<string, unknown> }): SubRenderSlot[] {
-	const state = (context.state ??= {}) as { parallelSlots?: SubRenderSlot[] };
-	state.parallelSlots ??= [];
-	return state.parallelSlots;
-}
-
-function subContext(
-	context: Record<string, unknown> & { state?: Record<string, unknown>; toolCallId?: string },
-	index: number,
-	args: Record<string, unknown>,
-	kind: "call" | "result",
-	isError?: boolean,
-): Record<string, unknown> {
-	const slots = slotsFor(context);
-	const slot = (slots[index] ??= { state: {} });
-	return {
-		...context,
-		args,
-		toolCallId: `${context.toolCallId ?? "parallel"}:${index}`,
-		state: slot.state,
-		lastComponent: kind === "call" ? slot.lastCall : slot.lastResult,
-		isError: isError ?? context.isError,
-	};
-}
-
-function rememberComponent(
-	context: { state?: Record<string, unknown> },
-	index: number,
-	kind: "call" | "result",
-	component: unknown,
-): void {
-	const slot = (slotsFor(context)[index] ??= { state: {} });
-	if (kind === "call") slot.lastCall = component;
-	else slot.lastResult = component;
-}
-
 function plural(count: number, word: string): string {
 	return `${count} ${word}${count === 1 ? "" : "s"}`;
 }
 
-/** Delegate to a built-in renderer, falling back to plain text if it throws. */
-function safeRender(render: () => unknown, fallback: () => unknown): unknown {
-	try {
-		const component = render();
-		return component ?? fallback();
-	} catch {
-		return fallback();
-	}
-}
-
 function textOf(block: { type: string; [k: string]: unknown }): string {
 	return block.type === "text" && typeof block.text === "string" ? block.text : `[${block.type}]`;
+}
+
+function formatExpandedChildInput(record: CallRecord): string {
+	const serializedArgs = JSON.stringify(record.args ?? {});
+	return serializedArgs === undefined ? record.name : `${record.name} ${serializedArgs}`;
 }
 
 export default function parallelToolsExtension(pi: ExtensionAPI): void {
@@ -391,46 +347,32 @@ export default function parallelToolsExtension(pi: ExtensionAPI): void {
 		executionMode: "parallel",
 		renderCall(args: ParallelInput, theme: any, context: any) {
 			const calls = Array.isArray(args?.tool_uses) ? args.tool_uses : [];
-			const box = new Container();
-			box.addChild(
-				new Text(
-					`${theme.fg("toolTitle", theme.bold("parallel"))} ${theme.fg("muted", plural(calls.length, "call"))}`,
-					0,
-					0,
-				),
-			);
-			const definitions = definitionsFor(typeof context?.cwd === "string" ? context.cwd : process.cwd());
-			calls.forEach((call, index) => {
-				const definition = definitions[call.recipient_name as SubToolName] as
-					| (AnyToolDef & { renderCall?: (a: unknown, t: unknown, c: unknown) => unknown })
-					| undefined;
-				const line = () => new Text(`  ${theme.fg("muted", summarize(call))}`, 0, 0);
-				const component = definition?.renderCall
-					? safeRender(
-							() =>
-								definition.renderCall?.(
-									call.parameters,
-									theme,
-									subContext(context ?? {}, index, call.parameters, "call"),
-								),
-							line,
-						)
-					: line();
-				rememberComponent(context ?? {}, index, "call", component);
-				box.addChild(component as never);
-			});
-			return box as never;
+			const header = `${theme.fg("toolTitle", theme.bold("parallel"))} ${theme.fg("muted", `(${plural(calls.length, "call")})`)}`;
+			const state = context ? (context.state ??= {}) : {};
+			return {
+				render(_width: number) {
+					if (state.hasResult) return [];
+					return [header];
+				},
+				invalidate() {},
+			};
 		},
 		renderResult(result: any, options: any, theme: any, context: any) {
 			const details = result?.details as ParallelDetails | undefined;
-			const records = details?.calls ?? [];
+			const records = Array.isArray(details?.calls) ? details.calls : [];
 			const blocks = (result?.content ?? []) as Array<{ type: string; [k: string]: unknown }>;
-			const box = new Container();
+			const box = context?.lastComponent instanceof Container ? context.lastComponent : new Container();
+			box.clear();
 
 			if (records.length === 0) {
-				box.addChild(new Text(blocks.map(textOf).join("\n"), 0, 0));
+				if (blocks.length > 0) {
+					box.addChild(new Text(blocks.map(textOf).join("\n"), 0, 0));
+				}
 				return box as never;
 			}
+
+			const state = context ? (context.state ??= {}) : {};
+			state.hasResult = true;
 
 			const failed = records.filter((record) => !record.ok).length;
 			const wall =
@@ -439,51 +381,89 @@ export default function parallelToolsExtension(pi: ExtensionAPI): void {
 					: records.reduce((max, record) => Math.max(max, record.durationMs), 0);
 			const status =
 				failed === 0 ? theme.fg("success", "all ok") : theme.fg("error", `${failed} failed`);
-			box.addChild(
-				new Text(
-					theme.fg(
-						"muted",
-						`${plural(records.length, "call")} · ${details?.mode ?? "concurrent"} · ${wall}ms · `,
-					) + status,
-					0,
-					0,
-				),
-			);
+			const headerText = `${theme.fg("toolTitle", theme.bold("parallel"))} ${theme.fg(
+				"muted",
+				`(${plural(records.length, "call")} · ${details?.mode ?? "concurrent"} · ${wall}ms · `,
+			)}${status}${theme.fg("muted", ")")}`;
+			box.addChild(new Text(headerText, 0, 0));
 
-			const definitions = definitionsFor(typeof context?.cwd === "string" ? context.cwd : process.cwd());
+			const expanded = Boolean(options?.expanded ?? context?.expanded);
+
 			for (const record of records) {
 				const mark = record.ok ? theme.fg("success", "✓") : theme.fg("error", "✗");
-				if (!options?.expanded) {
-					box.addChild(
-						new Text(
-							`  ${mark} ${record.label} ${theme.fg("muted", `${record.durationMs}ms`)}`,
-							0,
-							0,
-						),
-					);
-					continue;
+				const durationStr = `${record.durationMs}ms`;
+				const durationText = theme.fg("muted", durationStr);
+
+				if (expanded) {
+					const label = formatExpandedChildInput(record);
+					const inputLine = `  ${mark} ${label} ${durationText}`;
+					box.addChild(new Text(inputLine, 0, 0));
+				} else {
+					const label =
+						record.label ||
+						summarize({ recipient_name: record.name, parameters: record.args });
+					const inputLine = `  ${mark} ${label}`;
+					box.addChild({
+						render: (width: number) => {
+							const reserved = durationStr.length + 1;
+							const avail = Math.max(0, width - reserved);
+							const truncated = truncateToWidth(inputLine, avail, "…");
+							return [`${truncated} ${durationText}`];
+						},
+						invalidate: () => {},
+					});
 				}
 
-				box.addChild(new Text(`  ${mark} ${theme.fg("toolTitle", record.label)}`, 0, 0));
 				const slice = blocks.slice(record.blockStart, record.blockStart + record.blockCount);
-				const plain = () => new Text(slice.map(textOf).join("\n"), 0, 0);
-				const definition = definitions[record.name as SubToolName] as
-					| (AnyToolDef & { renderResult?: (r: unknown, o: unknown, t: unknown, c: unknown) => unknown })
-					| undefined;
-				const component = definition?.renderResult
-					? safeRender(
-							() =>
-								definition.renderResult?.(
-									{ content: slice, details: record.details },
-									options,
-									theme,
-									subContext(context ?? {}, record.index, record.args, "result", !record.ok),
-								),
-							plain,
-						)
-					: plain();
-				rememberComponent(context ?? {}, record.index, "result", component);
-				box.addChild(component as never);
+				const rawText = slice
+					.filter((block) => block.type === "text" && typeof block.text === "string")
+					.map((block) => block.text as string)
+					.join("\n")
+					.replace(/\r\n/g, "\n");
+
+				if (rawText.trim() === "") {
+					box.addChild({
+						render: () => [`      ${theme.fg("muted", "(no output)")}`],
+						invalidate: () => {},
+					});
+				} else if (expanded) {
+					box.addChild({
+						render: (width: number) => {
+							const contentWidth = Math.max(1, width - 6);
+							const visualLines = wrapTextWithAnsi(rawText.trimEnd(), contentWidth);
+							while (visualLines.length > 0 && visualLines[visualLines.length - 1].trim() === "") {
+								visualLines.pop();
+							}
+							if (visualLines.length === 0) {
+								return [`      ${theme.fg("muted", "(no output)")}`];
+							}
+							return visualLines.map((line) => `      ${theme.fg("toolOutput", line)}`);
+						},
+						invalidate: () => {},
+					});
+				} else {
+					const isTail = record.name === "bash" || record.name === "powershell";
+					box.addChild({
+						render: (width: number) => {
+							const contentWidth = Math.max(1, width - 6);
+							const visualLines = wrapTextWithAnsi(rawText.trimEnd(), contentWidth);
+							while (visualLines.length > 0 && visualLines[visualLines.length - 1].trim() === "") {
+								visualLines.pop();
+							}
+							if (visualLines.length === 0) {
+								return [`      ${theme.fg("muted", "(no output)")}`];
+							}
+							const displayLines =
+								visualLines.length > 5
+									? isTail
+										? visualLines.slice(-5)
+										: visualLines.slice(0, 5)
+									: visualLines;
+							return displayLines.map((line) => `      ${theme.fg("toolOutput", line)}`);
+						},
+						invalidate: () => {},
+					});
+				}
 			}
 			return box as never;
 		},

@@ -6,7 +6,6 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
-import time
 import unittest
 from pathlib import Path
 
@@ -50,6 +49,23 @@ done
 if [ "$1" = "worktree" ] && [ "$2" = "add" ] && [ "$3" = "-b" ] && [ "$4" = "__BRANCH__" ]; then
   echo "injected failure for __BRANCH__" >&2
   exit 1
+fi
+exec "$real_git" "$@"
+"""
+
+ACTIVE_ABORT_TEMPLATE = """#!/bin/sh
+real_git="__REAL_GIT__"
+for arg in "$@"; do
+  if [ "$arg" = "-C" ]; then exec "$real_git" "$@"; fi
+done
+if [ "$1" = "worktree" ] && [ "$2" = "add" ] && [ "$3" = "-b" ] && [ "$4" = "__BRANCH__" ]; then
+  printf 'entered\\n' > "__ENTERED__"
+  i=0
+  while [ ! -f "__BLOCK__" ]; do
+    sleep 0.05
+    i=$((i+1))
+    if [ "$i" -ge 400 ]; then break; fi
+  done
 fi
 exec "$real_git" "$@"
 """
@@ -314,8 +330,64 @@ class SL02ConcurrentLaneCreateTests(unittest.TestCase):
                 self.assertTrue(result.get("ok"), result)
             finally:
                 os.environ["PATH"] = orig_path
-            # also test cancelling head waiter case: queued head abort should advance next
-            # (we already tested queued non-head cancellation; head cancellation is similar but we trust implementation)
+
+    def test_A3_active_abort_settles_only_after_locks_are_released(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            repository, _ = seed_repository(base)
+            seed_task_container(repository)
+            seed_managed_task(repository, "demo")
+            block = base / "block-active"
+            entered = base / "entered-active"
+            wrapper_dir = base / "wrapper-active"
+            wrapper_dir.mkdir()
+            script = (
+                ACTIVE_ABORT_TEMPLATE.replace("__BRANCH__", "wave/demo/active-abort")
+                .replace("__ENTERED__", str(entered))
+                .replace("__BLOCK__", str(block))
+            )
+            write_wrapper(wrapper_dir, script)
+            orig_path = os.environ.get("PATH", "")
+            os.environ["PATH"] = f"{wrapper_dir}:{orig_path}"
+            try:
+                repo_str = str(repository)
+                block_str = str(block)
+                entered_str = str(entered)
+                node_body = textwrap.dedent(f"""
+                    const blockPath = "{block_str}";
+                    const enteredPath = "{entered_str}";
+                    try {{ fs.unlinkSync(blockPath); }} catch {{}}
+                    try {{ fs.unlinkSync(enteredPath); }} catch {{}}
+                    const taskLockPath = path.join(repoPath, ".git", "collab-op-locks", "demo.lock");
+                    const repoLockPath = path.join(repoPath, ".git", "collab-op-locks", ".repository.lock");
+                    const controller = new AbortController();
+                    const active = laneCreate.definition.execute("active", {{task_id: "demo", lane_id: "active-abort"}}, controller.signal, undefined, {{cwd: repoPath}})
+                      .then(
+                        r => ({{ok:true, result: JSON.parse(r.content.find(c=>c.type==="text").text)}}),
+                        e => {{ let err; try{{err=JSON.parse(e.message)}}catch{{err={{error:{{message:String(e)}}}}}}; return {{ok:false, error:err}}; }},
+                      )
+                      .then(result => ({{
+                        ...result,
+                        taskLockAtSettlement: fs.existsSync(taskLockPath),
+                        repoLockAtSettlement: fs.existsSync(repoLockPath),
+                      }}));
+                    let waited=0; while(waited<5000){{ if(fs.existsSync(enteredPath) && fs.existsSync(taskLockPath) && fs.existsSync(repoLockPath)) break; await new Promise(r=>setTimeout(r,20)); waited+=20; }}
+                    if(!fs.existsSync(enteredPath)) throw new Error("active request never entered its Git body");
+                    if(!fs.existsSync(taskLockPath) || !fs.existsSync(repoLockPath)) throw new Error("active request did not hold both locks");
+                    controller.abort();
+                    fs.writeFileSync(blockPath, "go");
+                    const result = await active;
+                    if (result.taskLockAtSettlement || result.repoLockAtSettlement) throw new Error("abort settled before lock release: "+JSON.stringify(result));
+                    const after = await laneCreate.definition.execute("after", {{task_id: "demo", lane_id: "after-abort"}}, undefined, undefined, {{cwd: repoPath}});
+                    const afterResult = JSON.parse(after.content.find(c=>c.type==="text").text);
+                    if (!afterResult.ok) throw new Error("queue did not recover after active abort: "+JSON.stringify(afterResult));
+                    process.stdout.write(JSON.stringify({{ok:true, activeOk: result.ok}})+"\\n");
+                """)
+                result = run_node_script(node_loader_script(repo_str, node_body), timeout=20)
+                self.assertTrue(result.get("ok"), result)
+            finally:
+                block.write_text("go\n", encoding="utf-8")
+                os.environ["PATH"] = orig_path
 
     def test_A4_live_external_lock_timeout_returns_task_busy_with_wait_facts(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -493,7 +565,7 @@ exec "$real_git" "$@"
             finally:
                 os.environ["PATH"] = orig_path
 
-    def test_A6_heterogeneous_mutations_remain_fail_fast(self):
+    def test_A6_heterogeneous_mutations_queue_while_report_remains_fail_fast(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             repository, _ = seed_repository(base)
@@ -517,25 +589,18 @@ exec "$real_git" "$@"
                     const pSlow = laneCreate.definition.execute("slow", {{task_id: "demo", lane_id: "slow"}}, undefined, undefined, {{cwd: repoPath}})
                       .then(r => JSON.parse(r.content.find(c=>c.type==="text").text))
                       .catch(e=> {{ try{{return JSON.parse(e.message)}}catch{{throw e}}}});
-                    const lockPath = path.join(repoPath, ".git", "collab-op-locks", "demo.lock");
-                    let waited=0; while(waited<5000){{ if(fs.existsSync(lockPath)) break; await new Promise(r=>setTimeout(r,20)); waited+=20; }}
-                    if(!fs.existsSync(lockPath)) throw new Error("slow lane did not acquire lock");
-                    // Now try heterogeneous mutations that should fail-fast immediately
-                    const heteroStart = Date.now();
-                    let collectResult;
-                    try {{
-                      const r = await laneDrop.definition.execute("drop", {{task_id: "demo", lane_id: "writer-1"}}, undefined, undefined, {{cwd: repoPath}});
-                      collectResult = {{ok:true, result: JSON.parse(r.content.find(c=>c.type==="text").text)}};
-                    }} catch(e) {{
-                      let err; try{{err=JSON.parse(e.message)}}catch{{err={{error:{{message:String(e)}}}}}};
-                      collectResult = {{ok:false, error:err, elapsed: Date.now()-heteroStart}};
-                    }}
-                    const heteroElapsed = Date.now() - heteroStart;
-                    if (collectResult.ok) throw new Error("heterogeneous lane_drop should fail with task_busy while slow holds lock, got success");
-                    const code = collectResult.error?.error?.code || collectResult.error?.code;
-                    if (code !== "task_busy") throw new Error("expected task_busy for heterogeneous, got "+JSON.stringify(collectResult));
-                    if (heteroElapsed > 2000) throw new Error("heterogeneous should fail-fast quickly (<2s), elapsed "+heteroElapsed);
-                    // also try report (which uses withTaskLock internally) should also fail-fast
+                    const taskLockPath = path.join(repoPath, ".git", "collab-op-locks", "demo.lock");
+                    const repoLockPath = path.join(repoPath, ".git", "collab-op-locks", ".repository.lock");
+                    let waited=0; while(waited<5000){{ if(fs.existsSync(taskLockPath) && fs.existsSync(repoLockPath)) break; await new Promise(r=>setTimeout(r,20)); waited+=20; }}
+                    if(!fs.existsSync(taskLockPath)) throw new Error("slow lane did not acquire task lock");
+                    if(!fs.existsSync(repoLockPath)) throw new Error("slow lane did not acquire repository lock");
+                    let dropDone = false;
+                    const pDrop = laneDrop.definition.execute("drop", {{task_id: "demo", lane_id: "writer-1"}}, undefined, undefined, {{cwd: repoPath}})
+                      .then(r => {{ dropDone = true; return {{ok:true, result: JSON.parse(r.content.find(c=>c.type==="text").text)}}; }})
+                      .catch(e => {{ dropDone = true; let err; try{{err=JSON.parse(e.message)}}catch{{err={{error:{{message:String(e)}}}}}}; return {{ok:false, error:err}}; }});
+                    await new Promise(r=>setTimeout(r,200));
+                    if (dropDone) throw new Error("heterogeneous lane_drop should wait for the repository lock");
+                    // Report stays outside the repository lock but still takes the task snapshot lock.
                     const reportStart = Date.now();
                     let reportResult;
                     try {{
@@ -550,23 +615,23 @@ exec "$real_git" "$@"
                     const code2 = reportResult.error?.error?.code || reportResult.error?.code;
                     if (code2 !== "task_busy") throw new Error("expected task_busy for report, got "+JSON.stringify(reportResult));
                     if (reportElapsed > 2000) throw new Error("report should fail-fast (<2s), elapsed "+reportElapsed);
-                    // Now unblock slow
                     fs.writeFileSync(blockPath, "go");
-                    const rSlow = await pSlow;
+                    const [rSlow, rDrop] = await Promise.all([pSlow, pDrop]);
                     if (!rSlow.ok) throw new Error("slow lane should succeed after unblock, got "+JSON.stringify(rSlow));
-                    // After slow releases, heterogeneous should succeed (report should succeed now)
+                    if (!rDrop.ok) throw new Error("queued lane_drop should succeed after unblock, got "+JSON.stringify(rDrop));
                     const r2 = await reportTool.definition.execute("rep2", {{task_id: "demo", output_dir: "report-out2"}}, undefined, undefined, {{cwd: repoPath}});
                     const rep2 = JSON.parse(r2.content.find(c=>c.type==="text").text);
                     if (!rep2.ok) throw new Error("report after release should succeed, got "+JSON.stringify(rep2));
-                    process.stdout.write(JSON.stringify({{ok:true, heteroElapsed, reportElapsed}})+"\\n");
+                    if (fs.existsSync(repoLockPath)) throw new Error("repository lock leaked after queued mutations");
+                    process.stdout.write(JSON.stringify({{ok:true, reportElapsed}})+"\\n");
                 """)
                 result = run_node_script(node_loader_script(repo_str, node_body), timeout=20)
                 self.assertTrue(result.get("ok"), result)
             finally:
                 os.environ["PATH"] = orig_path
 
-    def test_A7_queue_keys_for_distinct_repos_and_tasks_do_not_interfere(self):
-        # distinct tasks
+    def test_A7_repository_lock_serializes_tasks_but_not_repositories(self):
+        # distinct tasks in one repository serialize
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             repository, _ = seed_repository(base)
@@ -590,27 +655,33 @@ exec "$real_git" "$@"
                     try {{ fs.unlinkSync(blockPath); }} catch {{}}
                     const pDemo = laneCreate.definition.execute("d1", {{task_id: "demo", lane_id: "blocked"}}, undefined, undefined, {{cwd: repoPath}})
                       .then(r => JSON.parse(r.content.find(c=>c.type==="text").text));
-                    const lockPathDemo = path.join(repoPath, ".git", "collab-op-locks", "demo.lock");
-                    let waited=0; while(waited<5000){{ if(fs.existsSync(lockPathDemo)) break; await new Promise(r=>setTimeout(r,20)); waited+=20; }}
-                    if(!fs.existsSync(lockPathDemo)) throw new Error("demo lock not held");
-                    const startOther = Date.now();
-                    const rOther = await laneCreate.definition.execute("o1", {{task_id: "other", lane_id: "fast"}}, undefined, undefined, {{cwd: repoPath}})
-                      .then(r => ({{ok:true, result: JSON.parse(r.content.find(c=>c.type==="text").text), elapsed: Date.now()-startOther}}))
-                      .catch(e => {{ let err; try{{err=JSON.parse(e.message)}}catch{{err={{error:{{message:String(e)}}}}}}; return {{ok:false, error:err, elapsed: Date.now()-startOther}}; }});
-                    if (!rOther.ok) throw new Error("other task lane should succeed immediately despite demo lock, got "+JSON.stringify(rOther));
-                    if (rOther.elapsed > 2000) throw new Error("other task should not wait for demo queue, elapsed "+rOther.elapsed);
-                    // also distinct lock files should be independent
-                    const lockOther = path.join(repoPath, ".git", "collab-op-locks", "other.lock");
-                    // other lock should have been acquired and released quickly, not held now
-                    // unblock demo
-                    fs.writeFileSync(blockPath, "go");
-                    const rDemo = await pDemo;
-                    if (!rDemo.ok) throw new Error("demo blocked should eventually succeed, got "+JSON.stringify(rDemo));
-                    // verify both lanes exist
+                    const taskLockPath = path.join(repoPath, ".git", "collab-op-locks", "demo.lock");
+                    const repoLockPath = path.join(repoPath, ".git", "collab-op-locks", ".repository.lock");
+                    let waited=0; while(waited<5000){{ if(fs.existsSync(taskLockPath) && fs.existsSync(repoLockPath)) break; await new Promise(r=>setTimeout(r,20)); waited+=20; }}
+                    if(!fs.existsSync(taskLockPath)) throw new Error("demo task lock not held");
+                    if(!fs.existsSync(repoLockPath)) throw new Error("repository lock not held");
+                    let otherDone = false;
+                    const pOther = laneCreate.definition.execute("o1", {{task_id: "other", lane_id: "fast"}}, undefined, undefined, {{cwd: repoPath}})
+                      .then(r => {{ otherDone = true; return {{ok:true, result: JSON.parse(r.content.find(c=>c.type==="text").text)}}; }})
+                      .catch(e => {{ otherDone = true; let err; try{{err=JSON.parse(e.message)}}catch{{err={{error:{{message:String(e)}}}}}}; return {{ok:false, error:err}}; }});
+                    const statusStart = Date.now();
+                    const statusResponse = await statusTool.definition.execute("s-other", {{task_id: "other"}}, undefined, undefined, {{cwd: repoPath}});
+                    const statusResult = JSON.parse(statusResponse.content.find(c=>c.type==="text").text);
+                    if (statusResult.task_id !== "other") throw new Error("status should remain available while repository lock is held, got "+JSON.stringify(statusResult));
+                    if (Date.now()-statusStart > 2000) throw new Error("status should not join the repository write queue");
+                    await new Promise(r=>setTimeout(r,200));
+                    if (otherDone) throw new Error("other task mutation should wait for the repository lock");
                     const {{ execSync }} = await import("node:child_process");
+                    const earlyOther = execSync("git -C "+repoPath+" branch --list wave/other/fast", {{encoding:"utf8"}}).trim();
+                    if (earlyOther) throw new Error("other task mutated Git before repository lock release");
+                    fs.writeFileSync(blockPath, "go");
+                    const [rDemo, rOther] = await Promise.all([pDemo, pOther]);
+                    if (!rDemo.ok) throw new Error("demo blocked should eventually succeed, got "+JSON.stringify(rDemo));
+                    if (!rOther.ok) throw new Error("other task should succeed after repository lock release, got "+JSON.stringify(rOther));
                     execSync("git -C "+repoPath+" rev-parse --verify wave/demo/blocked", {{encoding:"utf8"}});
                     execSync("git -C "+repoPath+" rev-parse --verify wave/other/fast", {{encoding:"utf8"}});
-                    process.stdout.write(JSON.stringify({{ok:true, otherElapsed: rOther.elapsed}})+"\\n");
+                    if (fs.existsSync(repoLockPath)) throw new Error("repository lock leaked after both tasks completed");
+                    process.stdout.write(JSON.stringify({{ok:true}})+"\\n");
                 """)
                 result = run_node_script(node_loader_script(repo_str, node_body), timeout=20)
                 self.assertTrue(result.get("ok"), result)
@@ -762,18 +833,4 @@ exec "$real_git" "$@"
                     close_harness(first)
                 if second is not None:
                     close_harness_for(outside)
-
-    def test_A7_fifo_no_cross_process_ordering_claim(self):
-        # This is a documentation/no-test check: FIFO makes no cross-process ordering claim, just verify that distinct process queues are independent (already covered).
-        # We just ensure that the module declaration states this.
-        decl_path = ROOT / "home/.pi/agent/extensions/collab-op.ts"
-        text = decl_path.read_text(encoding="utf-8")
-        self.assertIn("FIFO", text)
-        self.assertIn("no fairness promise against another", text)
-        self.assertIn("fail-fast default", text.lower())
-        self.assertIn("bounded-wait", text.lower())
-        self.assertIn("request_aborted", text.lower())
-        self.assertIn("waited_ms", text)
-        self.assertIn("ownership-safe", text.lower())
-        self.assertIn("re-read", text.lower())
 

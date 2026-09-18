@@ -87,183 +87,281 @@ function gitRunner(pi: ExtensionAPI): GitRunner {
   };
 }
 
-const TASK_LOCK_TTL_MS = 24 * 60 * 60 * 1000;
+const LOCK_TTL_MS = 24 * 60 * 60 * 1000;
 
 const LANE_CREATE_BOUNDED_WAIT_MS = 10_000;
-const LANE_CREATE_POLL_MS = 25;
+const LOCK_POLL_MS = 25;
 
 /**
- * Task mutation lock Module
+ * Collab mutation lock Module
  *
- * Fail-fast default: withTaskLock without a bounded-wait policy attempts the filesystem lock immediately and throws task_busy if held.
- * Lane-create-only bounded-wait: only registered collab_lane with action create may pass { policy: "bounded-wait", signal, timeoutMs: 10000 } to wait.
- * FIFO boundary: one process-local FIFO per canonical repository control root (path.resolve) and taskId; only its head polls the ownership-safe filesystem lock at a short bounded interval; no fairness promise against another OS process.
- * Cancellation: an AbortSignal abort removes only that waiter, returns request_aborted, and advances the next eligible waiter without cancelling siblings.
- * Timeout: a fixed ten-second deadline returns the existing task_busy error with bounded wait facts (task_id, waited_ms, timeout_ms) without mutation or leaked queue state.
- * Ownership-safe release: release uses quarantine-and-verify by inode and token, never unlinking the canonical path, restoring foreign replacements or retaining on conflict.
- * Placement revalidation: lane placement (laneCreate) retains per-call request/signal/receipt/error and, after acquisition, re-reads requireManagedIntegration and laneInventory under the held lock before any mutation.
+ * Repository-write lock: every registered Git mutation first waits on one
+ * unbounded, abortable FIFO keyed by the canonical Git common directory.
+ * FIFO ordering is process-local; filesystem contenders have no cross-process
+ * order guarantee. Different repositories remain independent. Read-only status
+ * and report snapshots do not join this queue.
+ * Task lock: once the repository lock is held, the existing task-scoped lock
+ * retains fail-fast behavior, except lane create keeps its 10-second bounded
+ * wait. This preserves task-local custody and compatibility with older
+ * processes that know only the task lock.
+ * Lock order is always repository then task. Both scopes use the same
+ * ownership-safe filesystem implementation and release in reverse order.
  */
 
-type TaskLockOptions = {
-  policy?: "fail-fast" | "bounded-wait";
+type LockPolicy = "fail-fast" | "bounded-wait" | "wait";
+
+type LockOptions = {
+  policy?: LockPolicy;
   signal?: AbortSignal;
   timeoutMs?: number;
 };
 
-type TaskLockWaiter<T> = {
-  id: string;
-  repo: Repository;
-  taskId: string;
+type TaskLockOptions = Omit<LockOptions, "policy"> & {
+  policy?: "fail-fast" | "bounded-wait";
+};
+
+type LockCustody = { pid: number; started_at: string; token: string | null };
+
+type LockTarget = {
   key: string;
+  lockPath: string;
+  busyCode: "task_busy" | "repository_busy";
+  busyMessage: string;
+  label: string;
+  details: Record<string, unknown>;
+  custodyFields: Record<string, unknown>;
+};
+
+type AcquiredLock = { lockPath: string; token: string };
+
+type LockWaiter<T> = {
+  target: LockTarget;
   body: () => Promise<T>;
   signal?: AbortSignal;
-  deadline: number;
+  deadline: number | null;
+  timeoutMs: number | null;
   startedAt: number;
   resolve: (value: T) => void;
   reject: (reason: unknown) => void;
 };
 
-const taskLockQueues = new Map<string, Array<TaskLockWaiter<unknown>>>();
+const lockQueues = new Map<string, Array<LockWaiter<unknown>>>();
+const lockReleaseFailures = new Map<string, CollabOpError>();
 
-function taskLockQueueKey(repo: Repository, taskId: string): string {
-  return `${path.resolve(repo.controlRoot)}\0${taskId}`;
+function lockDirectory(repo: Repository): string {
+  return path.join(repo.gitDir, "collab-op-locks");
 }
 
-async function processTaskLockQueue(key: string): Promise<void> {
-  const queue = taskLockQueues.get(key);
-  if (!queue || queue.length === 0) {
-    taskLockQueues.delete(key);
+function taskLockTarget(repo: Repository, taskId: string): LockTarget {
+  const lockPath = path.join(lockDirectory(repo), `${taskId}.lock`);
+  return {
+    key: path.resolve(lockPath),
+    lockPath,
+    busyCode: "task_busy",
+    busyMessage: `another collab operation is in progress for task ${taskId}`,
+    label: `task ${taskId}`,
+    details: { task_id: taskId },
+    custodyFields: { task_id: taskId },
+  };
+}
+
+function repositoryLockTarget(repo: Repository): LockTarget {
+  const commonDir = path.resolve(repo.gitDir);
+  const lockPath = path.join(commonDir, "collab-op-locks", ".repository.lock");
+  return {
+    key: path.resolve(lockPath),
+    lockPath,
+    busyCode: "repository_busy",
+    busyMessage: "another collab Git mutation is in progress for this repository",
+    label: "repository",
+    details: { git_common_dir: commonDir },
+    custodyFields: { scope: "repository" },
+  };
+}
+
+function lockBusyError(
+  target: LockTarget,
+  custody?: LockCustody | null,
+  details: Record<string, unknown> = {},
+): CollabOpError {
+  return new CollabOpError(
+    target.busyCode,
+    target.busyMessage,
+    "Wait for the in-flight operation to finish, then retry.",
+    {
+      ...target.details,
+      ...(custody === undefined || custody === null
+        ? {}
+        : { held_by: { pid: custody.pid, started_at: custody.started_at } }),
+      ...details,
+    },
+  );
+}
+
+function removeWaiterAbortHandler(waiter: LockWaiter<unknown>): void {
+  const handler = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
+  if (handler && waiter.signal) {
+    try { waiter.signal.removeEventListener("abort", handler); } catch {}
+  }
+  (waiter as unknown as { __abortHandler?: unknown }).__abortHandler = undefined;
+}
+
+function requestAbortedError(target: LockTarget): CollabOpError {
+  return new CollabOpError(
+    "request_aborted",
+    "request was aborted",
+    "Retry the operation after the caller is ready.",
+    target.details,
+  );
+}
+
+function lockReleaseError(target: LockTarget): CollabOpError {
+  return new CollabOpError(
+    "lock_release_failed",
+    `could not release the ${target.label} lock`,
+    "Inspect the reported lock path, remove it only after confirming no collab operation owns it, then restart Pi.",
+    { ...target.details, lock_path: target.lockPath },
+  );
+}
+
+async function rejectIfLockReleaseFailed(target: LockTarget): Promise<void> {
+  const failure = lockReleaseFailures.get(target.key);
+  if (!failure) return;
+  if ((await pathMetadata(target.lockPath)) === null) {
+    lockReleaseFailures.delete(target.key);
     return;
   }
-  const waiter = queue[0] as TaskLockWaiter<unknown>;
-  const startedAt = waiter.startedAt;
-  const deadline = waiter.deadline;
-  const taskId = waiter.taskId;
-  const advance = () => {
-    const q = taskLockQueues.get(key);
-    if (!q) return;
-    if (q.length === 0) taskLockQueues.delete(key);
-    else setTimeout(() => void processTaskLockQueue(key), 0);
-  };
+  throw failure;
+}
+
+function advanceLockQueue(key: string): void {
+  const queue = lockQueues.get(key);
+  if (!queue || queue.length === 0) {
+    lockQueues.delete(key);
+    return;
+  }
+  setTimeout(() => void processLockQueue(key), 0);
+}
+
+function removeLockWaiter(key: string, waiter: LockWaiter<unknown>): void {
+  const queue = lockQueues.get(key);
+  if (!queue) return;
+  const index = queue.indexOf(waiter);
+  if (index !== -1) queue.splice(index, 1);
+  if (queue.length === 0) lockQueues.delete(key);
+}
+
+function rejectLockQueue(key: string, error: CollabOpError): void {
+  const queue = lockQueues.get(key) ?? [];
+  lockQueues.delete(key);
+  for (const waiter of queue) {
+    removeWaiterAbortHandler(waiter);
+    waiter.reject(error);
+  }
+}
+
+async function releaseQueuedLock(
+  waiter: LockWaiter<unknown>,
+  acquired: AcquiredLock,
+): Promise<boolean> {
+  if (await releaseOwnedLock(acquired.lockPath, acquired.token)) return true;
+  const error = lockReleaseError(waiter.target);
+  lockReleaseFailures.set(waiter.target.key, error);
+  rejectLockQueue(waiter.target.key, error);
+  return false;
+}
+
+async function processLockQueue(key: string): Promise<void> {
+  const queue = lockQueues.get(key);
+  if (!queue || queue.length === 0) {
+    lockQueues.delete(key);
+    return;
+  }
+  const waiter = queue[0] as LockWaiter<unknown>;
   while (true) {
-    const abortBeforeAttempt = waiter.signal?.aborted;
-    if (abortBeforeAttempt) {
-      const q = taskLockQueues.get(key);
-      if (q && q[0] === waiter) {
-        q.shift();
-        const handler = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
-        if (handler && waiter.signal) {
-          try { waiter.signal.removeEventListener("abort", handler); } catch {}
-        }
-        waiter.reject(new CollabOpError("request_aborted", "request was aborted", "Retry the operation after the caller is ready.", { task_id: taskId }));
-        advance();
+    if (waiter.signal?.aborted) {
+      const current = lockQueues.get(key);
+      if (current && current[0] === waiter) {
+        current.shift();
+        removeWaiterAbortHandler(waiter);
+        waiter.reject(requestAbortedError(waiter.target));
+        advanceLockQueue(key);
       }
       return;
     }
     const now = Date.now();
-    if (now >= deadline) {
-      const q = taskLockQueues.get(key);
-      if (q && q[0] === waiter) {
-        q.shift();
-        const handler = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
-        if (handler && waiter.signal) {
-          try { waiter.signal.removeEventListener("abort", handler); } catch {}
-        }
-        const waitedMs = now - startedAt;
-        waiter.reject(new CollabOpError("task_busy", `another collab operation is in progress for task ${taskId}`, "Wait for the in-flight operation to finish, then retry.", { task_id: taskId, waited_ms: waitedMs, timeout_ms: LANE_CREATE_BOUNDED_WAIT_MS }));
-        advance();
+    if (waiter.deadline !== null && now >= waiter.deadline) {
+      const current = lockQueues.get(key);
+      if (current && current[0] === waiter) {
+        current.shift();
+        removeWaiterAbortHandler(waiter);
+        waiter.reject(lockBusyError(waiter.target, undefined, {
+          waited_ms: now - waiter.startedAt,
+          timeout_ms: waiter.timeoutMs,
+        }));
+        advanceLockQueue(key);
       }
       return;
     }
     try {
-      const acquired = await acquireTaskLock(waiter.repo, waiter.taskId);
-      const lockedQueue = taskLockQueues.get(key);
-      const stillHead = !!lockedQueue && lockedQueue[0] === waiter;
-      if (!stillHead) {
-        try { await releaseTaskLock(acquired.lockPath, acquired.token); } catch {}
+      const acquired = await acquireOwnedLock(waiter.target);
+      const lockedQueue = lockQueues.get(key);
+      if (!lockedQueue || lockedQueue[0] !== waiter) {
+        await releaseQueuedLock(waiter, acquired);
         return;
       }
       if (waiter.signal?.aborted) {
-        try { await releaseTaskLock(acquired.lockPath, acquired.token); } catch {}
-        lockedQueue!.shift();
-        const handler = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
-        if (handler && waiter.signal) {
-          try { waiter.signal.removeEventListener("abort", handler); } catch {}
-        }
-        waiter.reject(new CollabOpError("request_aborted", "request was aborted", "Retry the operation after the caller is ready.", { task_id: taskId }));
-        advance();
+        if (!(await releaseQueuedLock(waiter, acquired))) return;
+        lockedQueue.shift();
+        removeWaiterAbortHandler(waiter);
+        waiter.reject(requestAbortedError(waiter.target));
+        advanceLockQueue(key);
         return;
       }
-      if (Date.now() >= waiter.deadline) {
-        try { await releaseTaskLock(acquired.lockPath, acquired.token); } catch {}
-        lockedQueue!.shift();
-        const handler = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
-        if (handler && waiter.signal) {
-          try { waiter.signal.removeEventListener("abort", handler); } catch {}
-        }
-        const waitedMs = Date.now() - startedAt;
-        waiter.reject(new CollabOpError("task_busy", `another collab operation is in progress for task ${taskId}`, "Wait for the in-flight operation to finish, then retry.", { task_id: taskId, waited_ms: waitedMs, timeout_ms: LANE_CREATE_BOUNDED_WAIT_MS }));
-        advance();
+      if (waiter.deadline !== null && Date.now() >= waiter.deadline) {
+        if (!(await releaseQueuedLock(waiter, acquired))) return;
+        lockedQueue.shift();
+        removeWaiterAbortHandler(waiter);
+        waiter.reject(lockBusyError(waiter.target, undefined, {
+          waited_ms: Date.now() - waiter.startedAt,
+          timeout_ms: waiter.timeoutMs,
+        }));
+        advanceLockQueue(key);
         return;
       }
+      // Once the body starts, its AbortSignal owns cancellation. Do not reject
+      // the outer promise until the body has settled and both locks are gone.
+      removeWaiterAbortHandler(waiter);
       let bodyResult: unknown;
       let bodyError: unknown;
       let bodySucceeded = false;
       try {
         bodyResult = await waiter.body();
         bodySucceeded = true;
-      } catch (e) {
-        bodyError = e;
+      } catch (error) {
+        bodyError = error;
       }
-      try { await releaseTaskLock(acquired.lockPath, acquired.token); } catch {}
-      const q2 = taskLockQueues.get(key);
-      if (q2 && q2[0] === waiter) q2.shift();
-      else if (q2) {
-        const idx = q2.indexOf(waiter);
-        if (idx !== -1) q2.splice(idx, 1);
-      }
-      const handler2 = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
-      if (handler2 && waiter.signal) {
-        try { waiter.signal.removeEventListener("abort", handler2); } catch {}
-      }
-      if (bodySucceeded) waiter.resolve(bodyResult as unknown);
+      if (!(await releaseQueuedLock(waiter, acquired))) return;
+      removeLockWaiter(key, waiter);
+      removeWaiterAbortHandler(waiter);
+      if (bodySucceeded) waiter.resolve(bodyResult);
       else waiter.reject(bodyError);
-      advance();
+      advanceLockQueue(key);
       return;
     } catch (error) {
-      if (error instanceof CollabOpError && error.code === "task_busy") {
-        const q = taskLockQueues.get(key);
-        if (!q || q[0] !== waiter) return;
-        if (waiter.signal?.aborted) {
-          q.shift();
-          const handler = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
-          if (handler && waiter.signal) {
-            try { waiter.signal.removeEventListener("abort", handler); } catch {}
-          }
-          waiter.reject(new CollabOpError("request_aborted", "request was aborted", "Retry the operation after the caller is ready.", { task_id: taskId }));
-          advance();
-          return;
-        }
-        const remaining = deadline - Date.now();
-        if (remaining <= 0) continue;
-        const sleepMs = Math.min(LANE_CREATE_POLL_MS, remaining);
-        await new Promise<void>(resolve => setTimeout(resolve, sleepMs));
+      if (error instanceof CollabOpError && error.code === waiter.target.busyCode) {
+        const current = lockQueues.get(key);
+        if (!current || current[0] !== waiter) return;
+        const remaining = waiter.deadline === null ? LOCK_POLL_MS : waiter.deadline - Date.now();
+        if (waiter.deadline !== null && remaining <= 0) continue;
+        await new Promise<void>((resolve) => setTimeout(resolve, Math.min(LOCK_POLL_MS, remaining)));
         continue;
-      } else {
-        const q = taskLockQueues.get(key);
-        if (q && q[0] === waiter) q.shift();
-        else if (q) {
-          const idx = q.indexOf(waiter);
-          if (idx !== -1) q.splice(idx, 1);
-        }
-        const handler = (waiter as unknown as { __abortHandler?: () => void }).__abortHandler;
-        if (handler && waiter.signal) {
-          try { waiter.signal.removeEventListener("abort", handler); } catch {}
-        }
-        waiter.reject(error);
-        advance();
-        return;
       }
+      removeLockWaiter(key, waiter);
+      removeWaiterAbortHandler(waiter);
+      waiter.reject(error);
+      advanceLockQueue(key);
+      return;
     }
   }
 }
@@ -300,14 +398,6 @@ async function zeroOidFor(repo: Repository, signal?: AbortSignal): Promise<strin
     : "0".repeat(40);
 }
 
-function lockDirectory(repo: Repository): string {
-  return path.join(repo.gitDir, "collab-op-locks");
-}
-
-function lockFilePath(repo: Repository, taskId: string): string {
-  return path.join(lockDirectory(repo), `${taskId}.lock`);
-}
-
 function pidIsAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -317,13 +407,18 @@ function pidIsAlive(pid: number): boolean {
   }
 }
 
-type TaskLockCustody = { pid: number; started_at: string; token: string | null };
-
-type AcquiredTaskLock = { lockPath: string; token: string };
-
-async function readLockCustody(lockPath: string): Promise<TaskLockCustody | null> {
+async function readLockContents(lockPath: string): Promise<string | null> {
   try {
-    const parsed = JSON.parse(await readFile(lockPath, "utf8")) as {
+    return await readFile(lockPath, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function parseLockCustody(contents: string | null): LockCustody | null {
+  if (contents === null) return null;
+  try {
+    const parsed = JSON.parse(contents) as {
       pid?: unknown;
       started_at?: unknown;
       token?: unknown;
@@ -343,32 +438,31 @@ type InspectedLock = {
   dev: number;
   ino: number;
   mtimeMs: number;
-  custody: TaskLockCustody | null;
+  contents: string | null;
+  custody: LockCustody | null;
 };
 
-function lockIsStale(custody: TaskLockCustody | null, mtimeMs: number): boolean {
-  if (custody === null) return Date.now() - mtimeMs > TASK_LOCK_TTL_MS;
+function lockIsStale(custody: LockCustody | null, mtimeMs: number): boolean {
+  if (custody === null) return Date.now() - mtimeMs > LOCK_TTL_MS;
   return !pidIsAlive(custody.pid);
 }
 
-async function inspectTaskLock(lockPath: string): Promise<InspectedLock | null> {
+async function inspectLock(lockPath: string): Promise<InspectedLock | null> {
   const metadata = await pathMetadata(lockPath);
   if (metadata === null) return null;
+  const contents = await readLockContents(lockPath);
   return {
     dev: metadata.dev,
     ino: metadata.ino,
     mtimeMs: metadata.mtimeMs,
-    custody: await readLockCustody(lockPath),
+    contents,
+    custody: parseLockCustody(contents),
   };
 }
 
 // Shared ownership-safe quarantine primitive used by both stale takeover and
 // release. It atomically renames whatever occupies the canonical lock path to
-// a unique quarantine name (rename never unlinks its source, so a live
-// replacement can never be deleted), then verifies the moved file against the
-// inspected identity and the expected ownership token. A foreign moved file
-// is restored to the canonical path when it is free, or retained under the
-// quarantine name and reported as fail-closed otherwise.
+// a unique quarantine name, then verifies the moved inode and ownership token.
 async function quarantineAndVerifyOwnership(
   lockPath: string,
   inspected: InspectedLock,
@@ -386,22 +480,20 @@ async function quarantineAndVerifyOwnership(
     if (failure.code === "ENOENT") return { state: "restored" };
     throw new CollabOpError(
       "git_error",
-      `could not quarantine the task lock: ${failure.message}`,
+      `could not quarantine the collab lock: ${failure.message}`,
     );
   }
   const moved = await pathMetadata(quarantinePath);
   if (moved === null) return { state: "restored" };
-  const movedCustody = await readLockCustody(quarantinePath);
+  const movedContents = await readLockContents(quarantinePath);
+  const movedCustody = parseLockCustody(movedContents);
   const ownedInode = moved.dev === inspected.dev && moved.ino === inspected.ino;
-  const ownedToken =
-    expectedToken === null ||
-    (movedCustody !== null && movedCustody.token === expectedToken);
-  if (ownedInode && ownedToken) {
+  const ownedIdentity = expectedToken === null
+    ? inspected.contents !== null && movedContents === inspected.contents
+    : movedCustody !== null && movedCustody.token === expectedToken;
+  if (ownedInode && ownedIdentity) {
     return { state: "owned", quarantinePath };
   }
-  // The moved file is not the one we inspected or own: restore it when the
-  // canonical path is free; otherwise retain it and fail closed rather than
-  // ever clobbering another owner.
   if ((await pathMetadata(lockPath)) === null) {
     try {
       await rename(quarantinePath, lockPath);
@@ -429,18 +521,13 @@ async function removeVerifiedQuarantine(
   }
 }
 
-async function acquireTaskLock(
-  repo: Repository,
-  taskId: string,
-): Promise<AcquiredTaskLock> {
-  const directory = lockDirectory(repo);
-  const lockPath = lockFilePath(repo, taskId);
-  await mkdir(directory, { recursive: true, mode: 0o700 });
+async function acquireOwnedLock(target: LockTarget): Promise<AcquiredLock> {
+  await mkdir(path.dirname(target.lockPath), { recursive: true, mode: 0o700 });
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const token = randomUUID();
     try {
       const handle = await open(
-        lockPath,
+        target.lockPath,
         fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | fsConstants.O_NOFOLLOW,
         0o600,
       );
@@ -449,7 +536,7 @@ async function acquireTaskLock(
           JSON.stringify({
             pid: process.pid,
             started_at: new Date().toISOString(),
-            task_id: taskId,
+            ...target.custodyFields,
             token,
           }),
           { encoding: "utf8" },
@@ -457,77 +544,126 @@ async function acquireTaskLock(
       } finally {
         await handle.close();
       }
-      return { lockPath, token };
+      return { lockPath: target.lockPath, token };
     } catch (error) {
       const failure = error as NodeJS.ErrnoException;
       if (failure.code !== "EEXIST") {
         throw new CollabOpError(
           "git_error",
-          `could not acquire the task lock: ${failure.message}`,
+          `could not acquire the ${target.label} lock: ${failure.message}`,
         );
       }
-      // Inspect the existing lock and verify ownership by inode before any
-      // takeover mutation.
-      const inspected = await inspectTaskLock(lockPath);
+      const inspected = await inspectLock(target.lockPath);
       if (inspected === null) continue;
       if (!lockIsStale(inspected.custody, inspected.mtimeMs)) {
-        throw new CollabOpError(
-          "task_busy",
-          `another collab operation is in progress for task ${taskId}`,
-          "Wait for the in-flight operation to finish, then retry.",
-          inspected.custody === null
-            ? { task_id: taskId }
-            : {
-                task_id: taskId,
-                held_by: {
-                  pid: inspected.custody.pid,
-                  started_at: inspected.custody.started_at,
-                },
-              },
-        );
+        throw lockBusyError(target, inspected.custody);
       }
-      const result = await quarantineAndVerifyOwnership(lockPath, inspected, null);
+      const result = await quarantineAndVerifyOwnership(target.lockPath, inspected, null);
       if (result.state === "owned") {
         await removeVerifiedQuarantine(result.quarantinePath, inspected);
-        continue; // retry acquisition at the now-free canonical path
+        continue;
       }
-      if (result.state === "restored") {
-        continue; // retry; the restored file is inspected fresh on the next pass
-      }
-      throw new CollabOpError(
-        "task_busy",
-        `task lock for ${taskId} changed concurrently during stale takeover`,
-        "Wait for the in-flight operation to finish, then retry.",
-        { task_id: taskId, retained_quarantine: result.quarantinePath },
-      );
+      if (result.state === "restored") continue;
+      throw lockBusyError(target, undefined, {
+        retained_quarantine: result.quarantinePath,
+        reason: `${target.label} lock changed concurrently during stale takeover`,
+      });
     }
   }
-  throw new CollabOpError(
-    "task_busy",
-    `task lock for ${taskId} could not be acquired`,
-    "Wait for the in-flight operation to finish, then retry.",
-    { task_id: taskId },
-  );
+  throw lockBusyError(target, undefined, {
+    reason: `${target.label} lock could not be acquired`,
+  });
 }
 
-async function releaseTaskLock(lockPath: string, token: string): Promise<void> {
-  try {
-    // Rename the canonical lock away first, then verify the moved file's
-    // ownership; the canonical path is never unlinked, so a replacement that
-    // appears after the initial inspection is restored or retained, never
-    // deleted.
-    const inspected = await inspectTaskLock(lockPath);
-    if (inspected === null) return;
-    const result = await quarantineAndVerifyOwnership(lockPath, inspected, token);
-    if (result.state === "owned") {
-      await removeVerifiedQuarantine(result.quarantinePath, inspected);
+async function releaseOwnedLock(lockPath: string, token: string): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const inspected = await inspectLock(lockPath);
+      if (inspected === null) return true;
+      const result = await quarantineAndVerifyOwnership(lockPath, inspected, token);
+      if (result.state === "owned") {
+        await removeVerifiedQuarantine(result.quarantinePath, inspected);
+      }
+      // owned: the canonical path is free; restored/retained: it no longer
+      // contains our token. Either way this caller no longer owns the path.
+      return true;
+    } catch {
+      if (attempt < 2) {
+        await new Promise<void>((resolve) => setTimeout(resolve, LOCK_POLL_MS));
+      }
     }
-    // "restored": the foreign replacement is back at the canonical path;
-    // "retained": it could not be restored and stays under its quarantine
-    // name; both fail closed without deleting anything.
-  } catch {
-    // A failed release is recovered by staleness; never force a removal here.
   }
+  return false;
+}
+
+async function withOwnedLock<T>(
+  target: LockTarget,
+  body: () => Promise<T>,
+  options: LockOptions = {},
+): Promise<T> {
+  await rejectIfLockReleaseFailed(target);
+  const policy = options.policy ?? "fail-fast";
+  if (policy === "fail-fast") {
+    const acquired = await acquireOwnedLock(target);
+    let bodyResult: T | undefined;
+    let bodyError: unknown;
+    let bodySucceeded = false;
+    try {
+      bodyResult = await body();
+      bodySucceeded = true;
+    } catch (error) {
+      bodyError = error;
+    }
+    if (!(await releaseOwnedLock(acquired.lockPath, acquired.token))) {
+      const error = lockReleaseError(target);
+      lockReleaseFailures.set(target.key, error);
+      throw error;
+    }
+    if (bodySucceeded) return bodyResult as T;
+    throw bodyError;
+  }
+  const signal = options.signal;
+  if (signal?.aborted) throw requestAbortedError(target);
+  const timeoutMs = policy === "bounded-wait"
+    ? options.timeoutMs ?? LANE_CREATE_BOUNDED_WAIT_MS
+    : null;
+  const startedAt = Date.now();
+  const deadline = timeoutMs === null ? null : startedAt + timeoutMs;
+  return new Promise<T>((resolve, reject) => {
+    const waiter: LockWaiter<T> = {
+      target,
+      body,
+      signal,
+      deadline,
+      timeoutMs,
+      startedAt,
+      resolve,
+      reject,
+    };
+    let queue = lockQueues.get(target.key);
+    if (!queue) {
+      queue = [];
+      lockQueues.set(target.key, queue);
+    }
+    queue.push(waiter as unknown as LockWaiter<unknown>);
+    if (signal) {
+      const abortHandler = () => {
+        const current = lockQueues.get(target.key);
+        if (!current) return;
+        const index = current.indexOf(waiter as unknown as LockWaiter<unknown>);
+        if (index === -1) return;
+        current.splice(index, 1);
+        if (current.length === 0) lockQueues.delete(target.key);
+        try { signal.removeEventListener("abort", abortHandler); } catch {}
+        (waiter as unknown as { __abortHandler?: unknown }).__abortHandler = undefined;
+        waiter.reject(requestAbortedError(target));
+        if (index === 0) advanceLockQueue(target.key);
+      };
+      (waiter as unknown as { __abortHandler?: () => void }).__abortHandler = abortHandler;
+      signal.addEventListener("abort", abortHandler, { once: true });
+    }
+    if (queue.length === 1) void processLockQueue(target.key);
+  });
 }
 
 export async function withTaskLock<T>(
@@ -536,50 +672,28 @@ export async function withTaskLock<T>(
   body: () => Promise<T>,
   options?: TaskLockOptions,
 ): Promise<T> {
-  const policy = options?.policy;
-  if (policy !== "bounded-wait") {
-    const { lockPath, token } = await acquireTaskLock(repo, taskId);
-    try {
-      return await body();
-    } finally {
-      await releaseTaskLock(lockPath, token);
-    }
-  }
-  const signal = options?.signal;
-  const timeoutMs = options?.timeoutMs ?? LANE_CREATE_BOUNDED_WAIT_MS;
-  if (signal?.aborted) {
-    throw new CollabOpError("request_aborted", "request was aborted", "Retry the operation after the caller is ready.", { task_id: taskId });
-  }
-  const key = taskLockQueueKey(repo, taskId);
-  const startedAt = Date.now();
-  const deadline = startedAt + timeoutMs;
-  return new Promise<T>((resolve, reject) => {
-    const waiter: TaskLockWaiter<T> = { id: randomUUID(), repo, taskId, key, body, signal, deadline, startedAt, resolve, reject };
-    let queue = taskLockQueues.get(key);
-    if (!queue) { queue = []; taskLockQueues.set(key, queue); }
-    queue.push(waiter as unknown as TaskLockWaiter<unknown>);
-    let abortHandler: (() => void) | undefined;
-    if (signal) {
-      abortHandler = () => {
-        const q = taskLockQueues.get(key);
-        if (!q) return;
-        const idx = q.indexOf(waiter as unknown as TaskLockWaiter<unknown>);
-        if (idx === -1) return;
-        q.splice(idx, 1);
-        if (q.length === 0) taskLockQueues.delete(key);
-        try { signal.removeEventListener("abort", abortHandler!); } catch {}
-        (waiter as unknown as { __abortHandler?: unknown }).__abortHandler = undefined;
-        waiter.reject(new CollabOpError("request_aborted", "request was aborted", "Retry the operation after the caller is ready.", { task_id: taskId }));
-        if (idx === 0) {
-          const remaining = taskLockQueues.get(key);
-          if (remaining && remaining.length > 0) setTimeout(() => void processTaskLockQueue(key), 0);
-        }
-      };
-      (waiter as unknown as { __abortHandler?: () => void }).__abortHandler = abortHandler;
-      signal.addEventListener("abort", abortHandler, { once: true });
-    }
-    if (queue.length === 1) void processTaskLockQueue(key);
-  });
+  return withOwnedLock(taskLockTarget(repo, taskId), body, options);
+}
+
+async function withRepositoryWriteLock<T>(
+  repo: Repository,
+  body: () => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  return withOwnedLock(repositoryLockTarget(repo), body, { policy: "wait", signal });
+}
+
+async function withMutationLocks<T>(
+  repo: Repository,
+  taskId: string,
+  body: () => Promise<T>,
+  options?: TaskLockOptions,
+): Promise<T> {
+  return withRepositoryWriteLock(
+    repo,
+    () => withTaskLock(repo, taskId, body, options),
+    options?.signal,
+  );
 }
 
 async function requireGit(
@@ -4585,9 +4699,9 @@ async function registeredLaneResult(
 
 export default function collabOpExtension(pi: ExtensionAPI): void {
   const runGit = gitRunner(pi);
-  // Every task-mutating handler executes under one shared task-scoped exclusive
-  // lock so independent tools cannot interleave resource mutations.
-  // The Task mutation lock Module durable declaration above owns fail-fast default, lane-create-only bounded-wait, FIFO, cancellation, timeout, ownership-safe release and placement revalidation.
+  // Every Git-mutating handler takes the repository write lock before its
+  // task lock. The lock Module above owns ordering, waiting, cancellation,
+  // ownership-safe release, and lane-create placement revalidation.
   function taskLocked(
     handler: (
       request: Record<string, unknown>,
@@ -4602,7 +4716,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     return async (request, signal, cwd) => {
       const repo = await discoverRepository(runGit, cwd, signal);
       const taskId = requireIdentifier(request.task_id, "task id");
-      return withTaskLock(repo, taskId, () => handler(request, signal, cwd));
+      return withMutationLocks(repo, taskId, () => handler(request, signal, cwd), { signal });
     };
   }
 
@@ -4788,7 +4902,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
           if (action === "create") {
             const repo = await discoverRepository(runGit, innerCwd, innerSignal);
             const taskId = requireIdentifier(params.task_id, "task id");
-            return withTaskLock(
+            return withMutationLocks(
               repo,
               taskId,
               async () => {
@@ -4806,7 +4920,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
           if (action === "reconcile") {
             const repo = await discoverRepository(runGit, innerCwd, innerSignal);
             const taskId = requireIdentifier(params.task_id, "task id");
-            return withTaskLock(repo, taskId, async () => {
+            return withMutationLocks(repo, taskId, async () => {
               const reconciled = await laneReconcile(
                 runGit,
                 innerCwd,
@@ -4814,12 +4928,12 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
                 innerSignal,
               );
               return registeredLaneResult(repo, taskId, requireLaneId(params.lane_id), reconciled);
-            });
+            }, { signal: innerSignal });
           }
           if (action === "reconcile_persistence") {
             const repo = await discoverRepository(runGit, innerCwd, innerSignal);
             const taskId = requireIdentifier(params.task_id, "task id");
-            return withTaskLock(repo, taskId, async () => {
+            return withMutationLocks(repo, taskId, async () => {
               const reconciled = await integrationReconcile(
                 runGit,
                 innerCwd,
@@ -4827,12 +4941,12 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
                 innerSignal,
               );
               return registeredLaneResult(repo, taskId, requireLaneId(params.lane_id), reconciled);
-            });
+            }, { signal: innerSignal });
           }
           if (action === "collect") {
             const repo = await discoverRepository(runGit, innerCwd, innerSignal);
             const taskId = requireIdentifier(params.task_id, "task id");
-            return withTaskLock(repo, taskId, async () => {
+            return withMutationLocks(repo, taskId, async () => {
               const collected = await laneCollect(
                 runGit,
                 innerCwd,
@@ -4841,17 +4955,17 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
                 true,
               );
               return registeredLaneResult(repo, taskId, requireLaneId(params.lane_id), collected);
-            });
+            }, { signal: innerSignal });
           }
           const repo = await discoverRepository(runGit, innerCwd, innerSignal);
           const taskId = requireIdentifier(params.task_id, "task id");
-          return withTaskLock(repo, taskId, async () => {
+          return withMutationLocks(repo, taskId, async () => {
             const laneId = requireLaneId(params.lane_id);
             const task = new TaskLayout(repo, taskId);
             const inventory = await laneInventory(repo, task, laneId, innerSignal);
             const dropped = await laneAbandon(repo, task, laneId, inventory, innerSignal);
             return registeredLaneResult(repo, taskId, laneId, dropped);
-          });
+          }, { signal: innerSignal });
         },
         signal,
       );

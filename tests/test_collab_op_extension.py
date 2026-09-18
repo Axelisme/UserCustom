@@ -362,6 +362,28 @@ fi
 exec "$real_git" "$@"
 """
 
+REPOSITORY_LOCK_BLOCK_WRAPPER = """#!/bin/sh
+real_git="__REAL_GIT__"
+for arg in "$@"; do
+  if [ "$arg" = "-C" ]; then exec "$real_git" "$@"; fi
+done
+if [ "$1" = "worktree" ] && [ "$2" = "add" ] && [ "$3" = "-b" ]; then
+  if [ "$4" = "wave/demo/slow" ]; then
+    printf 'entered\\n' > "__FIRST_ENTERED__"
+    i=0
+    while [ ! -f "__BLOCK__" ]; do
+      sleep 0.05
+      i=$((i+1))
+      if [ "$i" -ge 400 ]; then break; fi
+    done
+  fi
+  if [ "$4" = "wave/other/fast" ]; then
+    printf 'entered\\n' > "__SECOND_ENTERED__"
+  fi
+fi
+exec "$real_git" "$@"
+"""
+
 # Blocks report's task ref snapshot after the report has acquired its lock.
 REPORT_SNAPSHOT_BLOCK_WRAPPER = """#!/bin/sh
 real_git="__REAL_GIT__"
@@ -1483,10 +1505,11 @@ class CollabOpExtensionTaskLockTests(unittest.TestCase):
                 )
                 # The verified takeover leaves no quarantine residue.
                 self.assertEqual(list(lock_dir.glob("*.quarantine-*")), [])
-                # A concurrent request sees the live lock and is refused.
+                # Report does not join the repository queue, so it observes the
+                # live task lock directly and fails fast.
                 refused = send_request(
                     second,
-                    {"tool": "collab_lane_create", "task_id": "demo", "lane_id": "cross"},
+                    {"tool": "collab_report", "task_id": "demo", "output_dir": "report-refused"},
                 )
                 self.assertTrue(refused["is_error"])
                 self.assertEqual(refused["error"]["error"]["code"], "task_busy")
@@ -1512,7 +1535,7 @@ class CollabOpExtensionTaskLockTests(unittest.TestCase):
                 # The replacement still guards the task.
                 refused_again = send_request(
                     second,
-                    {"tool": "collab_lane_create", "task_id": "demo", "lane_id": "cross2"},
+                    {"tool": "collab_report", "task_id": "demo", "output_dir": "report-refused-again"},
                 )
                 self.assertTrue(refused_again["is_error"])
                 self.assertEqual(refused_again["error"]["error"]["code"], "task_busy")
@@ -1597,7 +1620,7 @@ class CollabOpExtensionTaskLockTests(unittest.TestCase):
                     if first is not None:
                         close_harness(first)
 
-    def test_concurrent_public_requests_cannot_cross_the_task_lock(self) -> None:
+    def test_report_cannot_cross_task_lock_held_by_public_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             repository, _ = seed_repository(base)
@@ -1626,36 +1649,179 @@ class CollabOpExtensionTaskLockTests(unittest.TestCase):
                     wait_until(lambda: lock.exists()),
                     "first request never acquired the task lock",
                 )
-                # A concurrent public request from a separate process must not
-                # cross the lock.
+                # Report stays outside the repository write queue, but its
+                # task snapshot cannot cross the live task lock.
                 refused = send_request(
                     second,
-                    {"tool": "collab_lane_create", "task_id": "demo", "lane_id": "cross"},
+                    {"tool": "collab_report", "task_id": "demo", "output_dir": "report-refused"},
                 )
                 self.assertTrue(refused["is_error"])
                 self.assertEqual(refused["error"]["error"]["code"], "task_busy")
-                self.assertEqual(git(repository, "branch", "--list", "wave/demo/cross"), "")
-                self.assertFalse(
-                    (repository / ".agent_state/worktrees/demo/lanes/cross").exists()
-                )
+                self.assertFalse((repository / "report-refused").exists())
                 # Release the first request; it completes and releases the lock.
                 block.write_text("go\n", encoding="utf-8")
                 first_response = json.loads(first_stdout.readline())
                 self.assertFalse(first_response["is_error"])
                 self.assertEqual(git(repository, "rev-parse", "wave/demo/slow"), expected["integration_head"])
                 self.assertFalse(lock.exists(), "lock was not released in finally")
-                # The refused request can now proceed normally.
+                # The same report can capture a snapshot after release.
                 retried = send_request(
                     second,
-                    {"tool": "collab_lane_create", "task_id": "demo", "lane_id": "cross"},
+                    {"tool": "collab_report", "task_id": "demo", "output_dir": "report-after"},
                 )
                 self.assertFalse(retried["is_error"])
-                self.assertEqual(git(repository, "rev-parse", "wave/demo/cross"), expected["integration_head"])
+                self.assertTrue((repository / "report-after/collab-report.json").is_file())
             finally:
                 os.environ["PATH"] = original_path
                 for process in (first, second):
                     if process is not None:
                         close_harness(process)
+
+    def test_repository_lock_serializes_different_tasks_across_processes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            repository, _ = seed_repository(base)
+            seed_task_container(repository)
+            seed_managed_task(repository, "demo")
+            seed_managed_task(repository, "other")
+            release = base / "release-first"
+            first_entered = base / "first-entered"
+            second_entered = base / "second-entered"
+            wrapper = write_git_wrapper(
+                base,
+                REPOSITORY_LOCK_BLOCK_WRAPPER.replace("__BLOCK__", str(release))
+                .replace("__FIRST_ENTERED__", str(first_entered))
+                .replace("__SECOND_ENTERED__", str(second_entered)),
+            )
+            original_path = os.environ["PATH"]
+            os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
+            first: subprocess.Popen[str] | None = None
+            second: subprocess.Popen[str] | None = None
+            worker: threading.Thread | None = None
+            second_result: dict[str, object] = {}
+            second_error: list[BaseException] = []
+            try:
+                first = spawn_raw_harness(repository)
+                second = spawn_raw_harness(repository)
+                first_stdin = first.stdin
+                first_stdout = first.stdout
+                assert first_stdin is not None and first_stdout is not None
+                first_stdin.write(
+                    f"{json.dumps({'tool': 'collab_lane_create', 'task_id': 'demo', 'lane_id': 'slow'})}\n"
+                )
+                first_stdin.flush()
+                repository_lock = repository / ".git/collab-op-locks/.repository.lock"
+                self.assertTrue(wait_until(first_entered.exists), "first task never reached git worktree add")
+                self.assertTrue(
+                    lock_held_by(repository_lock, first.pid),
+                    "first task did not hold the repository lock",
+                )
+
+                started = threading.Event()
+
+                def run_second() -> None:
+                    started.set()
+                    try:
+                        second_result["response"] = send_request(
+                            second,
+                            {"tool": "collab_lane_create", "task_id": "other", "lane_id": "fast"},
+                        )
+                    except BaseException as error:
+                        second_error.append(error)
+
+                worker = threading.Thread(target=run_second, daemon=True)
+                worker.start()
+                self.assertTrue(started.wait(timeout=1), "second request did not start")
+                time.sleep(0.25)
+                self.assertTrue(worker.is_alive(), "second task crossed the repository lock")
+                self.assertFalse(second_entered.exists(), "second task reached mutating Git before release")
+                self.assertEqual(git(repository, "branch", "--list", "wave/other/fast"), "")
+
+                release.write_text("go\n", encoding="utf-8")
+                first_response = json.loads(first_stdout.readline())
+                self.assertFalse(first_response["is_error"])
+                worker.join(timeout=10)
+                self.assertFalse(worker.is_alive(), "second task did not resume after repository lock release")
+                if second_error:
+                    raise second_error[0]
+                observed = second_result.get("response")
+                self.assertIsInstance(observed, dict)
+                assert isinstance(observed, dict)
+                self.assertFalse(observed["is_error"])
+                self.assertTrue(second_entered.exists())
+                self.assertEqual(
+                    git(repository, "rev-parse", "wave/demo/slow"),
+                    git(repository, "rev-parse", "wave/demo/integration"),
+                )
+                self.assertEqual(
+                    git(repository, "rev-parse", "wave/other/fast"),
+                    git(repository, "rev-parse", "wave/other/integration"),
+                )
+                self.assertFalse(repository_lock.exists(), "repository lock leaked after both requests")
+            finally:
+                release.write_text("go\n", encoding="utf-8")
+                if worker is not None:
+                    worker.join(timeout=5)
+                os.environ["PATH"] = original_path
+                for process in (first, second):
+                    if process is not None:
+                        close_harness(process)
+
+    def test_release_failure_is_reported_and_poisoned_instead_of_hanging_queue(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            repository, _ = seed_repository(base)
+            seed_task_container(repository)
+            seed_managed_task(repository, "demo")
+            block = base / "release-body"
+            wrapper = write_git_wrapper(base, BLOCK_WRAPPER.replace("__BLOCK__", str(block)))
+            original_path = os.environ["PATH"]
+            os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
+            process: subprocess.Popen[str] | None = None
+            lock_dir = repository / ".git/collab-op-locks"
+            task_lock = lock_dir / "demo.lock"
+            repository_lock = lock_dir / ".repository.lock"
+            try:
+                process = spawn_raw_harness(repository)
+                stdin = process.stdin
+                stdout = process.stdout
+                assert stdin is not None and stdout is not None
+                stdin.write(
+                    f"{json.dumps({'tool': 'collab_lane_create', 'task_id': 'demo', 'lane_id': 'release-failure'})}\n"
+                )
+                stdin.flush()
+                self.assertTrue(
+                    wait_until(lambda: task_lock.exists() and repository_lock.exists()),
+                    "request never acquired both locks",
+                )
+                lock_dir.chmod(0o500)
+                block.write_text("go\n", encoding="utf-8")
+                observed = json.loads(stdout.readline())
+                self.assertTrue(observed["is_error"])
+                self.assertEqual(observed["error"]["error"]["code"], "lock_release_failed")
+                self.assertTrue(repository_lock.exists())
+
+                lock_dir.chmod(0o700)
+                started = time.monotonic()
+                refused = send_request(
+                    process,
+                    {"tool": "collab_lane_create", "task_id": "demo", "lane_id": "after-release-failure"},
+                )
+                self.assertLess(time.monotonic() - started, 2)
+                self.assertTrue(refused["is_error"])
+                self.assertEqual(refused["error"]["error"]["code"], "lock_release_failed")
+                self.assertEqual(git(repository, "branch", "--list", "wave/demo/after-release-failure"), "")
+            finally:
+                block.write_text("go\n", encoding="utf-8")
+                try:
+                    lock_dir.chmod(0o700)
+                except FileNotFoundError:
+                    pass
+                os.environ["PATH"] = original_path
+                if process is not None:
+                    close_harness(process)
+                task_lock.unlink(missing_ok=True)
+                repository_lock.unlink(missing_ok=True)
 
 
 FAIL_WORKTREE_REMOVE = """#!/bin/sh

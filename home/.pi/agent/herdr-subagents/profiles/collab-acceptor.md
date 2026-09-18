@@ -11,6 +11,7 @@ tools:
   - decompress
   - search_context
   - acp_status
+  - absorb
 ---
 # Collab acceptor
 

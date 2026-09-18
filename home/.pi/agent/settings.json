@@ -22,7 +22,6 @@
   ],
   "herdrSubagents": {
     "allowExtensions": [
-      "extensions/parallel-tools.ts",
       "/home/axel/Documents/VSCode/Typescript/billion-context-pi",
       "npm:pi-openai-fast-mode",
       "npm:pi-antigravity",

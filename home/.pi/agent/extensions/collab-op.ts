@@ -4585,6 +4585,41 @@ async function registeredLaneResult(
 
 export default function collabOpExtension(pi: ExtensionAPI): void {
   const runGit = gitRunner(pi);
+
+  /**
+   * Shared registry a batching tool in this process reads to reach tools other
+   * extensions own. Pi's ExtensionAPI can list tools (`getAllTools()`) but not hand
+   * one over — `ToolInfo` carries name/description/schema and no `execute` — so
+   * batching one of these needs this handshake. One registry for every publisher,
+   * keyed by tool name; a consumer that finds nothing simply cannot batch them.
+   *
+   * These five need no per-session resolution: every one takes its repo and task from
+   * the request, defaults the repo from `ctx.cwd`, and holds no state of its own, so
+   * the freshest definition is always correct and the latest instance wins.
+   *
+   * `sequential` asks the consumer to run the whole batch in listed order. Everything
+   * that mutates Git is marked: `withTaskLock` serialises calls on one task, but two
+   * concurrent calls on different tasks in one repository still race Git's own
+   * index.lock. `collab_status` only reads, so status batches stay concurrent.
+   */
+  const SEQUENTIAL_TOOLS = new Set([
+    "collab_integration",
+    "collab_integration_adopt",
+    "collab_lane",
+    "collab_report",
+  ]);
+
+  function bridge<T extends { name: string }>(tool: T): T {
+    const holder = globalThis as { __piBridgedTools?: unknown };
+    if (holder.__piBridgedTools === undefined) holder.__piBridgedTools = new Map<string, unknown>();
+    const slot = holder.__piBridgedTools;
+    // A non-Map value is someone else's unrelated global: leave it alone and
+    // simply do not offer these tools for batching.
+    if (slot instanceof Map) {
+      slot.set(tool.name, { definition: tool, sequential: SEQUENTIAL_TOOLS.has(tool.name) });
+    }
+    return tool;
+  }
   // Every task-mutating handler executes under one shared task-scoped exclusive
   // lock so independent tools cannot interleave resource mutations.
   // The Task mutation lock Module durable declaration above owns fail-fast default, lane-create-only bounded-wait, FIFO, cancellation, timeout, ownership-safe release and placement revalidation.
@@ -4606,7 +4641,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
     };
   }
 
-  pi.registerTool({
+  pi.registerTool(bridge({
     name: "collab_integration",
     label: "Manage Collab integration",
     description: "Manage the Git-managed integration lifecycle. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. `create` makes an integration worktree from the acting worktree's attached local branch and HEAD; that branch becomes task persistence. `land` merges accepted integration into persistence and accepts optional message. `remove` best-effort force-retires recognizable managed integration resources. Create may append /.agent_state/ to the common Git info/exclude before creating resources; higher-precedence ignore rules can still cause refusal.",
@@ -4660,9 +4695,9 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
         details: result,
       };
     },
-  });
+  }));
 
-  pi.registerTool({
+  pi.registerTool(bridge({
     name: "collab_integration_adopt",
     label: "Adopt Collab integration",
     description: "Adopt an existing local branch into a Git-managed integration using an exact common base commit. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. Unless the repository already ignores .agent_state, this first appends /.agent_state/ to info/exclude in the repository's common Git directory, verifies the result, and reports the write in warnings; if a higher-precedence .gitignore rule keeps .agent_state un-ignored, it refuses before creating managed resources and reports whether the appended line remains in info/exclude.",
@@ -4692,9 +4727,9 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
         details: result,
       };
     },
-  });
+  }));
 
-  pi.registerTool({
+  pi.registerTool(bridge({
     name: "collab_status",
     label: "Inspect Collab status",
     description: "Inspect Git-managed task status, or list discoverable managed tasks when task_id is omitted. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
@@ -4720,9 +4755,9 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
         details: result,
       };
     },
-  });
+  }));
 
-  pi.registerTool({
+  pi.registerTool(bridge({
     name: "collab_report",
     label: "Report Collab state",
     description: "Snapshot task state and telemetry to fixed report artifacts; no cleanup or readiness judgement is performed. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root.",
@@ -4748,9 +4783,9 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
         details: result,
       };
     },
-  });
+  }));
 
-  pi.registerTool({
+  pi.registerTool(bridge({
     name: "collab_lane",
     label: "Manage Collab lane",
     description:
@@ -4860,5 +4895,5 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
         details: result,
       };
     },
-  });
+  }));
 }

@@ -14,11 +14,17 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Container, Text, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
-/** Sub-tools the batch tool is allowed to dispatch to. */
+/** Built-in sub-tools the batch tool is allowed to dispatch to. Other extensions
+ *  add to this set at run time by publishing into the bridged registry below. */
 const READ_ONLY = ["read", "grep", "find", "ls"] as const;
 const MUTATING = ["bash", "edit", "write"] as const;
-type SubToolName = (typeof READ_ONLY)[number] | (typeof MUTATING)[number];
+type BuiltinToolName = (typeof READ_ONLY)[number] | (typeof MUTATING)[number];
 
+/**
+ * Built-ins whose batch runs in listed order rather than concurrently. A bridged
+ * tool asks for the same by declaring `sequential`, which is the publisher's call
+ * to make — sequencing is about what the tool touches, and only its owner knows.
+ */
 const MUTATING_SET = new Set<string>(MUTATING);
 const MAX_CALLS = 16;
 /** Head kept inline when a sub-result is spilled to a file. */
@@ -72,7 +78,7 @@ type AnyToolDef = {
 };
 
 /** Built-in tool definitions are cwd-bound, so cache one set per cwd. */
-const definitionsByCwd = new Map<string, Record<SubToolName, AnyToolDef>>();
+const definitionsByCwd = new Map<string, Record<string, AnyToolDef>>();
 
 /**
  * pi-claude-code-ui replaces the built-in tools with its own wrappers, and its renderers
@@ -85,11 +91,39 @@ function sharedToolDefinitions(): Map<string, AnyToolDef> | undefined {
 	return published instanceof Map ? (published as Map<string, AnyToolDef>) : undefined;
 }
 
-function definitionsFor(cwd: string): Record<SubToolName, AnyToolDef> {
+/**
+ * Tools other extensions in this process offer for batching. pi's ExtensionAPI can
+ * list tools (`getAllTools()`) but not hand one over — `ToolInfo` carries
+ * name/description/schema and no `execute` — so a batchable tool from another
+ * extension has to arrive by the same global handshake pi-claude-code-ui uses above.
+ * One shared registry rather than a global per publisher. Internal, not a stable
+ * interface: absent or malformed entries are simply not offered.
+ *
+ * A publisher that binds per-session state must publish a definition that resolves
+ * that state from `ctx` at call time, not one closed over a single session — a host
+ * builds many extension instances per process, and the registry holds one slot.
+ */
+type BridgedEntry = { definition: AnyToolDef; sequential?: boolean };
+
+function bridgedTools(): Map<string, BridgedEntry> {
+	const published = (globalThis as { __piBridgedTools?: unknown }).__piBridgedTools;
+	if (!(published instanceof Map)) return new Map();
+	const usable = new Map<string, BridgedEntry>();
+	for (const [name, entry] of published as Map<string, unknown>) {
+		if (typeof name !== "string" || !name) continue;
+		const candidate = entry as BridgedEntry | undefined;
+		if (!candidate?.definition || typeof candidate.definition.execute !== "function") continue;
+		usable.set(name, candidate);
+	}
+	return usable;
+}
+
+function definitionsFor(cwd: string): Record<string, AnyToolDef> {
 	const shared = sharedToolDefinitions();
-	// Key on availability too, so a set built before the other extension registered its
-	// tools is not cached forever.
-	const cacheKey = `${shared ? "shared" : "raw"}:${cwd}`;
+	const bridged = bridgedTools();
+	// Key on availability too, so a set built before the other extensions registered
+	// their tools is not cached forever.
+	const cacheKey = `${shared ? "shared" : "raw"}:${[...bridged.keys()].sort().join("+") || "nobridge"}:${cwd}`;
 	const cached = definitionsByCwd.get(cacheKey);
 	if (cached) return cached;
 	const created = {
@@ -100,9 +134,9 @@ function definitionsFor(cwd: string): Record<SubToolName, AnyToolDef> {
 		bash: createBashToolDefinition(cwd),
 		edit: createEditToolDefinition(cwd),
 		write: createWriteToolDefinition(cwd),
-	} as unknown as Record<SubToolName, AnyToolDef>;
+	} as unknown as Record<string, AnyToolDef>;
 	if (shared) {
-		for (const name of Object.keys(created) as SubToolName[]) {
+		for (const name of Object.keys(created) as BuiltinToolName[]) {
 			const definition = shared.get(name);
 			if (!definition || typeof definition.execute !== "function") continue;
 			// The published wrappers do not carry prepareArguments — pi applies the
@@ -111,6 +145,12 @@ function definitionsFor(cwd: string): Record<SubToolName, AnyToolDef> {
 				? definition
 				: { ...definition, prepareArguments: created[name].prepareArguments };
 		}
+	}
+	// Bridged tools cannot shadow a built-in: a batch that means `read` must reach
+	// pi's read whatever else is loaded.
+	for (const [name, entry] of bridged) {
+		if (name in created) continue;
+		created[name] = entry.definition;
 	}
 	definitionsByCwd.set(cacheKey, created);
 	return created;
@@ -232,8 +272,9 @@ async function runOne(
 ): Promise<CallOutcome> {
 	const label = summarize(call);
 	const started = Date.now();
-	const name = call.recipient_name as SubToolName;
-	const definition = definitionsFor(ctx.cwd)[name];
+	const name = call.recipient_name;
+	const definitions = definitionsFor(ctx.cwd);
+	const definition = definitions[name];
 	if (!definition) {
 		return {
 			index,
@@ -246,7 +287,7 @@ async function runOne(
 			blocks: [
 				{
 					type: "text",
-					text: `unknown tool ${JSON.stringify(call.recipient_name)}; allowed: ${[...READ_ONLY, ...MUTATING].join(", ")}`,
+					text: `unknown tool ${JSON.stringify(call.recipient_name)}; allowed: ${Object.keys(definitions).join(", ")}`,
 				},
 			],
 		};
@@ -308,7 +349,7 @@ export default function parallelToolsExtension(pi: ExtensionAPI): void {
 		name: "parallel",
 		label: "Parallel",
 		description:
-			"Run several independent tool calls in one request. Each entry of tool_uses names a tool in recipient_name (read, grep, find, ls, bash, edit, write) and passes that tool's own arguments in parameters. Read-only batches run concurrently; a batch containing bash, edit, or write runs in listed order. This is the route for every batch: prefer one parallel call over emitting the same calls separately in one response. Never batch a call whose arguments depend on another call's result.",
+			"Run several independent tool calls in one request. Each entry of tool_uses names a tool in recipient_name and passes that tool's own arguments in parameters. Always available: read, grep, find, ls, bash, edit, write. Other loaded extensions add their own; a batch that names one that is not loaded reports the tools it could have used. Read-only batches run concurrently, and a batch containing a tool that mutates something runs in listed order. This is the route for every batch: prefer one parallel call over emitting the same calls separately in one response. Never batch a call whose arguments depend on another call's result.",
 		promptSnippet: "Run several independent tool calls in one request",
 		promptGuidelines: [
 			"Use parallel when the next step needs several independent reads, searches, or commands that are known in advance.",
@@ -491,7 +532,10 @@ export default function parallelToolsExtension(pi: ExtensionAPI): void {
 
 			const config = readAcpConfig(ctx.cwd);
 			const bashTimeout = config.toolBashDefaultTimeout ?? DEFAULT_BASH_TIMEOUT;
-			const sequential = calls.some((call) => MUTATING_SET.has(call.recipient_name));
+			const bridged = bridgedTools();
+			const sequential = calls.some(
+				(call) => MUTATING_SET.has(call.recipient_name) || bridged.get(call.recipient_name)?.sequential === true,
+			);
 			let outcomes: CallOutcome[];
 			if (sequential) {
 				outcomes = [];

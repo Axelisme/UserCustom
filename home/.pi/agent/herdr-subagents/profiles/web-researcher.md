@@ -4,7 +4,6 @@ description: Research official documentation and primary external sources with c
 modelList:
   - openai-codex/gpt-5.6-luna:high
 tools:
-  - parallel
   - read
   - bash
   - compress

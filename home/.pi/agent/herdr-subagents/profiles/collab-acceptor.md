@@ -4,7 +4,6 @@ description: Review one immutable subject against bounded ticket or batch criter
 modelList:
   - openai-codex/gpt-5.6-sol:high
 tools:
-  - parallel
   - read
   - bash
   - compress

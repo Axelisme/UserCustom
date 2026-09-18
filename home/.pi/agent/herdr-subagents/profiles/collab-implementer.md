@@ -6,7 +6,6 @@ modelList:
   - antigravity/claude-sonnet-4-6:high
   - openai-codex/gpt-5.6-luna:max
 tools:
-  - parallel
   - read
   - edit
   - write

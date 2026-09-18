@@ -4,7 +4,6 @@ description: Build a read-only, source-grounded map of local code, call sites, t
 modelList:
   - openai-codex/gpt-5.6-luna:high
 tools:
-  - parallel
   - read
   - bash
   - compress

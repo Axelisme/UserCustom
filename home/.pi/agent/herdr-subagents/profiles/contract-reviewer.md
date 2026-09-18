@@ -4,7 +4,6 @@ description: Judge every pinned contract option from one dispatched angle and sc
 modelList:
   - openai-codex/gpt-5.6-sol:low
 tools:
-  - parallel
   - read
   - bash
   - compress

@@ -40,6 +40,14 @@ parameter covers that case in one call.
 
 Its two test modules and their harnesses, so the live suite stays green.
 
+## Note for a future restore
+
+This copy still reads `globalThis.__piBridgedTools`, the registry that let it
+dispatch tools other extensions own (absorb, the subagent tools, the collab
+tools). Every publisher was removed after this was archived, so on restore that
+path finds an empty registry and only the seven built-ins are dispatchable.
+Restoring the bridge means restoring the publishers too.
+
 ## Restoring
 
 Move `parallel-tools.ts` back to `home/.pi/agent/extensions/`, move the four test

@@ -12,7 +12,7 @@
     "dankKDEConnect": {
       "repo": "https://github.com/AvengeMedia/dms-plugins",
       "path": "DankKDEConnect",
-      "commit": "6fc7f25bfb24f93b6488fb8a36ed67b5f242abdb"
+      "commit": "bb90a1db7d540e64ae049c5906afba9b24baa865"
     },
     "dankscale": {
       "repo": "https://github.com/dwright134/dms-dankscale",

@@ -6,10 +6,6 @@ modelList:
 tools:
   - read
   - bash
-  - compress
-  - decompress
-  - search_context
-  - acp_status
   - absorb
 ---
 

@@ -6,6 +6,7 @@ modelList:
 tools:
   - read
   - bash
+  - absorb
 ---
 
 # Herdr Prober

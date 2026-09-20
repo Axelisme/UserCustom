@@ -10,10 +10,6 @@ tools:
   - edit
   - write
   - bash
-  - compress
-  - decompress
-  - search_context
-  - acp_status
   - absorb
 ---
 # Collab implementer

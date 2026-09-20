@@ -1,8 +1,0 @@
-{
-  "authorityPolicy": {
-    "discardWorktree": "auto"
-  },
-  "modelExclusions": {
-    "defaultTtlMs": 300000
-  }
-}

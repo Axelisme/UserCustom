@@ -1,10 +1,31 @@
-# Always-resident authority index
+# 工作節奏與邊界
 
-1. **Fixed subject:** Every review binds to one immutable fixed subject; a Git-backed subject is one exact clean commit and tree.
-2. **Mutation authority:** Persistence mutation requires current user authority or an in-force task-scoped user grant naming the mutation and its conditions.
-3. **Reorientation:** When the original content of a governing `SKILL.md` or the task `INDEX.md` is absent from active context, reread the current file. Read tickets, evidence, source files, and other records only when the current action needs them. When `INDEX.md` cannot identify the next action, maintain the record instead of scanning all tickets, artifacts, or the task DAG to infer one.
-4. **Custody:** Preserve pre-existing user dirt and non-task evidence; never stash, reset, overwrite, or delete it.
-5. **Test surface:** Tests validate only observable behavior and Interfaces; prose, document wording, static content, configuration values, and repository data remain outside the test surface.
-6. **Subagent scheduling:** Launch subagents in the background, continue independent work, then stop the turn or, in goal mode, `yield_goal` so completion notifications resume the work naturally. Avoid foreground subagents, block-waiting, and polling: each keeps the turn open, blocks compaction, and can exhaust the context window.
-7. **Tool turns:** Before any tool call, list what the next step needs and which items depend on another's result. Stopping to wait means you did not know what you needed; decide first, then fetch it all at once. Emit every independent call in one response, as separate tool calls side by side: reading three files is one response carrying three read calls. Put edits in that same response when they do not depend on what the reads return, and handle an `[absorb id=...]` offer there under the absorb tool's rules rather than spending a turn on it alone. Calls in one response run concurrently, so keep two that touch the same file, repository or lock in different responses. Go sequential only when the next target genuinely cannot be known without seeing a result first. Only batch calls that are independent of each other.
-8. **Bounded output:** Keep model-facing output bounded; write bulky output to an artifact and return its outcome, relevant excerpts, and path.
+## Wave by Wave
+
+以 Wave 推進工作。一個 Wave 是「規劃本波 → 批次行動 → 核對結果」的循環；根據取得的資訊，再規劃下一波。以是否需要新的判斷劃分 Wave，而不是只要操作有先後順序就切換一波。只有需要模型判讀新結果、重新選擇方案或取得授權時，才進入下一波。
+
+1. **規劃本波。** 根據現有資訊，選定本波要達成的具體成果與判定方式。一次找出推進這個成果所需、步驟已確定且已有授權的行動，區分可並行的操作與須依序完成的操作；需要判讀本波結果才能決定的行動留到下一波。批次大小由必要性與可執行性決定，不以湊足呼叫數為目標。
+2. **批次行動。** 將本波行動整理為彼此可獨立執行、且沒有執行衝突的工具呼叫，放在同一個原生 assistant response 中一併送出。規劃與呼叫可以在同一個回應完成；對使用者簡述本波目的與必要依賴即可，不必另外發出純規劃回應。
+   - 依賴決定執行方式，不直接決定回應次數。有順序要求、但步驟已確定且無須模型介入的操作，優先在同一次工具呼叫內依序完成。例如，在一次 `bash` 中以 `&&` 串接，前一步失敗時停止後續步驟；需要條件分支時，使用明確的流程與錯誤處理。
+   - 同檔案、同儲存庫的唯讀操作可以並行。同一檔案、Git 狀態或 lock 上的衝突操作應序列化，不代表必須拆成多個 response；不要把須依序完成的步驟當成獨立呼叫同時送出。
+   - 不依賴本波讀取結果的編輯，若沒有執行衝突，也納入本波。遇到 `[absorb id=...]` 時依 `absorb` 工具規則決定是否摘要；適用的摘要呼叫與其他獨立呼叫一併送出。
+3. **核對結果。** 對照本波的預期成果，確認哪些已成立、哪些失敗，以及新增了哪些資訊或限制，再決定下一波的必要行動。完成任務所需的驗證後就回報結果，不為維持循環而追加工作。
+
+例如：已知需要讀三個互不相依的檔案，就在本波一併讀取；需要判讀讀取結果才能決定的修改屬於下一波。若已確定要在檢查成功後驗證打包，可在一次 `bash` 中執行 `npm run check && npm run pack:check`，不必拆成兩個回應。一個 Wave 可以包含多個並行呼叫，也可以包含某個呼叫內的一串有序操作；只有一個呼叫時也合理。
+
+此處的「同一個回應」是模型一次原生 assistant response，不是整個使用者回合。連續多則回應、單次 `bash` 內的多條命令，都不等於同回應中的多個 tool calls。只有紀錄顯示同一則 assistant message 包含多個 `toolCall`，才宣稱已完成同回應批次呼叫；若確認環境會拆分呼叫，據實說明限制。
+
+### 子代理與 Wave
+
+在背景啟動子代理後，繼續規劃並執行不依賴其結果的 Wave。沒有可繼續的獨立工作時，結束本次回應；若處於目標模式，使用 `yield_goal`。收到完成通知後，將結果納入下一波的規劃。
+
+## 工作邊界
+
+1. **修改授權。** 修改持久分支前，必須取得使用者當前授權，或仍有效的任務專屬授權；授權須明確涵蓋該項修改及其條件。
+2. **恢復工作。** 當目前上下文不含適用的 `SKILL.md` 或任務 `INDEX.md` 原文時，重新讀取目前檔案。票券、證據、原始碼及其他紀錄只在當前操作需要時讀取。若 `INDEX.md` 無法指出下一步，先修補紀錄，不要掃描所有票券、產物或任務相依圖來猜測下一步。
+3. **測試範圍。** 在模組接縫 `seam` 與對外契約 `contract` 驗證可觀察的行為。
+   - 不直接測試私有函式，也不測試腳本行為。
+   - 測試內不另啟獨立程序來驗證行為；測試平行化由測試 CLI 層安排。
+   - 散文、文件措辭、靜態內容、設定值與儲存庫資料本身，以及資料或文件的定位，以直接審閱確認，不納入測試範圍。
+   - 移除邏輯時，同步移除只服務該邏輯的測試；不加入「已移除內容不存在」的斷言。
+4. **限制輸出量。** 先用腳本篩選、統計或擷取大量資料，只將結果摘要、必要片段與相關路徑送入模型。需要保留原始輸出時，寫入產物檔案，不直接灌入上下文。

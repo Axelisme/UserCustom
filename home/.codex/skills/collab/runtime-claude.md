@@ -27,9 +27,8 @@ The Orchestrator dispatches each role over the selected lane. Read Collab
 and [Correct and decide](references/review.md#correct-and-decide) for the portable loop.
 
 Each dispatch is a fresh child of the exact profile: `collab-implementer` writes or corrects, and
-`collab-acceptor` reviews one stopped immutable subject. The default effective BLOCKED allowance ends
-independent review after the first reviewable defect verdict and one final correction; a new acceptor
-runs only when the recorded allowance still permits it or the user grants more.
+`collab-acceptor` reviews one stopped immutable assembled subject against its batch brief. Corrections
+produce a new clean candidate with applicable verification for a fresh acceptor dispatch.
 
 A Claude child has no live parent channel. A needed decision returns as `BLOCKED` with the question
 first. The answer starts a fresh dispatch. Do not brief a child to wait for an answer it cannot receive.

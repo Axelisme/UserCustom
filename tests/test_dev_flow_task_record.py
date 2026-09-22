@@ -590,27 +590,6 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(located["orientation"], "available")
             self.assertEqual(located["parse_errors"], [])
 
-    def test_locate_counts_a_cutoff_ticket_apart_from_closed(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo"), "create")
-            task = record(root)
-            write_ticket(task / "tickets", "T001-fog", "drafted")
-            write_ticket(task / "tickets", "T002-ready", "pending")
-            write_ticket(task / "tickets", "T003-capped", "cutoff")
-            write_ticket(task / "tickets", "T004-done", "closed")
-
-            located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
-
-            self.assertEqual(
-                located["tickets"],
-                counts(drafted=1, pending=1, cutoff=1, closed=1),
-            )
-            self.assertEqual(located["tickets"]["cutoff"], 1)
-            self.assertEqual(located["tickets"]["closed"], 1)
-            self.assertEqual(located["tickets"]["unreadable"], 0)
-            self.assertEqual(located["orientation"], "available")
-
     def test_locate_totals_every_declared_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -628,21 +607,6 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(
                 sorted(tickets),
                 sorted([*plan.TICKET_STATES, "total", "unreadable"]),
-            )
-
-    def test_locate_still_collapses_counts_for_an_unrecognised_state(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.assert_ok(run_plan(root, "create", "demo"), "create")
-            task = record(root)
-            write_ticket(task / "tickets", "T001-ready", "pending")
-            write_ticket(task / "tickets", "T002-bogus", "bogus")
-
-            located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
-
-            self.assertEqual(
-                located["tickets"],
-                collapsed_counts(1),
             )
 
     def test_locate_reads_comments_and_hashes_in_flat_scalar_frontmatter(self) -> None:

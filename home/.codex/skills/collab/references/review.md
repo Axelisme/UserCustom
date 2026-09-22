@@ -2,54 +2,52 @@
 
 ## Review
 
-Inputs are one exact clean candidate commit/tree, baseline, confirmation the writer stopped, and one
-stable bounded brief. The brief may be a ticket or `reviews/<review-id>.md`. It names criterion IDs,
-scenarios, interface and test obligations, relevant candidate-bound observations and owners, prior
-findings, stop conditions, and limitations. A batch brief also names included tickets, cutoff claims,
-and interactions.
+The acceptance unit is a review batch, which may contain one ticket. Inputs are one exact clean
+assembled candidate commit/tree, the batch baseline, confirmation the subject's writer stopped, and a
+stable `reviews/<review-id>.md` brief. The brief maps every included ticket's acceptance criteria to
+observations and names interaction scenarios, interface and test obligations, prior findings, stop
+conditions, and limitations. It covers member criteria as well as interactions, not only merge changes.
 
-The Orchestrator verifies those preconditions, records the subject in the owning ticket or review
-record, then dispatches one acceptor by default. The acceptor reads the candidate, tests, declarations,
-callers, and supplied observations. It reviews every assigned criterion and directly related instances.
-It directly judges prose, structure, configuration, repository data, responsibility placement, and
-test assertions. It does not execute runtime gates.
+The Orchestrator checks delivery completeness and required batch gates, records the subject in the
+review record, then dispatches one acceptor. Freeze the review checkout until the verdict. Independent
+implementation may continue in other lanes; to keep integration moving, use a separate clean checkout
+pinned to the reviewed commit. Later changes are outside that verdict.
 
-A missing baseline, mutable or dirty subject, active writer, ambiguous criterion, missing authority,
-or unavailable required observation makes the assignment unreviewable. Repair that concrete input and
-use a fresh dispatch; these assignment failures are not defect verdicts and consume no BLOCKED
-allowance. Repeated failure to prepare the same missing input stops with its owner rather than spawning
-indefinitely.
+The acceptor reads the candidate, tests, declarations, callers, and supplied observations. It reviews
+every assigned criterion and directly related instances. It directly judges prose, structure,
+configuration, repository data, responsibility placement, test assertions, and gate sufficiency. It
+does not execute runtime gates.
+
+A missing baseline, mutable or dirty subject, active writer in the review checkout, ambiguous criterion,
+missing authority, or unavailable required observation makes the assignment unreviewable. Repair that
+concrete input and use a fresh dispatch. Repeated failure to prepare the same missing input stops with
+its owner rather than spawning indefinitely.
 
 Review completes with `COMPLETED` approving only the named claims on that exact subject, or `BLOCKED`
-containing all supported defects with locations, violated requirements, evidence, affected scenarios,
-and bounded advisory fixes. Specialized Standards and Spec review uses code-review under its own
-contract.
+containing all supported defects with locations, violated criterion IDs, evidence, affected tickets and
+interaction scenarios, and bounded advisory fixes. Specialized Standards and Spec review uses
+code-review under its own contract.
 
 ## Correct and decide
 
-The Orchestrator classifies the result against the stable claim set. New ticket and batch records
-created under this contract default to one effective BLOCKED allowance. Before using that default,
-inspect the record's governing baseline or workflow version. If a pre-default record has a count but no
-numeric allowance, recover the allowance from that version or its original owner and record both value
-and source. Stop review and correction while it remains unresolved; never substitute the current
-default. Count only a supported defect verdict on a reviewable candidate. Preserve each verdict,
-candidate, count, prior finding, and allowance in the owning ticket or review record across agents,
-sessions, candidate changes, and review names. This bounded review history does not admit unrelated
-workflow events. Existing recovered or explicit limits remain in force; only the user grants more.
+The Orchestrator classifies the result against the stable claim set. The review record owns candidates,
+verdicts, findings, observation applicability, corrections, and disposition. Tickets reference that
+record rather than duplicating its review history. Non-contract suggestions receive a recorded
+disposition. User-owned behavior, scope, authority, data structure, or responsibility choices go to
+dev-flow ticket handoff while feasible work continues.
 
-A COMPLETED verdict plus valid observations establishes the assigned claims and allows normal
-acceptance. Non-contract suggestions receive a recorded disposition. User-owned behavior, scope,
-authority, data structure, or responsibility choices go to dev-flow ticket handoff while feasible work
-continues.
+For supported defects, assign bounded corrections. The Orchestrator changes interfaces and formal
+tests; the implementer changes assigned internal logic. Run affected ticket and batch gates, form a
+new clean assembled candidate, and dispatch a fresh acceptor with the same bounded criteria and prior
+findings. Reassess the applicability of earlier observations to the new subject. Review covers the
+corrections and their interactions while accounting for every assigned criterion.
 
-The first effective BLOCKED reaches the default cap. Select one final bounded correction. The
-Orchestrator changes interfaces and formal tests; the implementer changes assigned internal logic.
-Run required gates, form a new clean candidate, and record the fixes in the owning ticket or review
-record. Independent review ends unless a user grant adds allowance. Do not rename or repartition the
-same claims to obtain another review.
+A COMPLETED verdict plus valid observations allows acceptance of the covered claims. Close a ticket
+only when all its applicable criteria are established on the accepted candidate. Absence from a defect
+list is not approval. A changed candidate needs applicable independent judgement before acceptance;
+passing gates alone does not establish it. Findings outside the batch remain with their existing owner.
 
-After final correction, cutoff is allowed only when gates pass and the Orchestrator can judge the
-bounded candidate. Record established claims, remaining findings, affected scenarios, and fixes or
-claims not independently confirmed after correction. Otherwise keep the ticket or batch pending with
-the blocker and owner. Batch approval or cutoff changes only covered claims; it never upgrades
-uncovered historical cutoff work.
+If correction, verification, or a needed decision cannot proceed, keep the batch and affected tickets
+pending with the concrete blocker and next owner. Continue only after a change, new evidence, or an
+owner decision provides a defensible next action. Review is complete when the record establishes the
+covered claims and each member ticket has an evidence-backed disposition.

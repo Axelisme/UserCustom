@@ -28,13 +28,12 @@ Use `scripts/section.py <absolute-path>#anchor` to open the selected operation s
 - Resume an existing task: [Resume](references/planning.md#resume).
 - Create a task, define scope, or slice tickets: [Plan](references/planning.md#plan) and
   [Tickets](references/planning.md#tickets).
-- Select and confirm a batch: [Parallel batches](references/planning.md#parallel-batches) and
+- Select execution and review batches: [Parallel batches](references/planning.md#parallel-batches) and
   [Design alignment](references/planning.md#design-alignment).
 - Record a completed or blocked ticket and collect user decisions: [Ticket handoff](references/records.md#ticket-handoff).
 - Create or update a bounded integration review brief: [Batch review records](references/records.md#batch-review-records).
 - Update INDEX, tickets, observations, or evidence: [Maintain the record](references/records.md#maintain-the-record).
-- Close, cutoff, or archive work: [Close](references/records.md#close), [Cutoff](references/records.md#cutoff),
-  and [Archive](references/records.md#archive).
+- Close or archive work: [Close](references/records.md#close) and [Archive](references/records.md#archive).
 
 Each selected section states its inputs, authority, stop conditions, completion condition, and record
 updates. Open [custody](references/custody.md) before admitting or applying a durable grant, changing
@@ -50,6 +49,8 @@ only for delegated record or evidence writes.
 - Update INDEX's routing fields at a routing edge, not for each workflow operation. Maintain Standing
   orders under [custody](references/custody.md). When INDEX cannot route the next owner, repair the
   record or ask the decision owner instead of scanning every ticket, artifact, or log.
+- Tickets own delivery evidence; batch review records own review history and criterion coverage.
+  Collection leaves tickets pending; closure requires their covered claims to be accepted.
 - Keep routine candidate-bound verification concise in its ticket or batch review record. Separate
   evidence files are exceptional and use the assigned method in `references/lane-authority.md`.
 - Capture valuable out-of-scope findings through candidate-backlog. Current acceptance gaps remain in

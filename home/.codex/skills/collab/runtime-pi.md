@@ -13,7 +13,7 @@ Open only the linked section for the current operation, using dev-flow's `script
 - When a child returns or asks a question: [Results and decisions](#results-and-decisions).
 - When interrupted work needs inspection, steering, or recovery: [Run control](#run-control).
 - For a gates-only assignment: [Placement](#placement).
-- After accepting a branch for collection: [Collection](#collection).
+- After checking a delivery candidate for collection: [Collection](#collection).
 - Before selecting a managed Git operation or retiring resources: [Operations](#operations).
 
 ## Managed lane environment
@@ -120,10 +120,10 @@ Orchestrator judges the writer's mechanical-gate result before collection.
 
 `collab_lane` with `action: collect` carries its own stale-lane behavior and is the default
 collection path. A `collected` result completes collection. A `reconciled` result stops before
-collection: apply the core reconciliation review requirements to the reconciled fixed review commit.
-Have the Orchestrator judge again before retrying collection. When review is required, dispatch a fresh
-`collab-acceptor` with the exact candidate identity and comparison baseline. A
-`conflicted` result returns to the Orchestrator. `collab_lane` with `action: reconcile` remains
+collection: apply the core reconciliation checks to the reconciled delivery candidate. Have the
+Orchestrator check delivery completeness again before retrying collection and record affected claims
+for batch review. Collection does not dispatch a per-ticket acceptor. A `conflicted` result returns to
+the Orchestrator. `collab_lane` with `action: reconcile` remains
 available but is not an extra default pre-step.
 
 ## Operations

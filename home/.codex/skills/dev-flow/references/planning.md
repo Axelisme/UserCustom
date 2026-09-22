@@ -7,16 +7,14 @@ an unknown ID, run `list` and use a returned `lookup_id`. Read the located INDEX
 orders, the Current/Next ticket or review brief, and pointers required by that action. The Orchestrator
 is read-only until it identifies the bounded action, owner, checkout, and applicable authority.
 
-For a ticket created before the current default, an absent numeric review allowance is unresolved
-historical policy, not permission to apply one. Recover the governing workflow version from a recorded
-baseline, commit, or durable task source; if that is unavailable, return the question to the original
-owner or user. Record the recovered allowance and source in the bounded review-history portion of
-Progress before review or correction.
+Preserve historical records and the contract of already dispatched attempts. An unknown historical
+state is not acceptance under this workflow. Before resuming unfinished legacy work, record the
+authorized transition to pending batch review and carry forward its unresolved claims and findings.
+Ask its owner when the applicable contract or transition authority is unclear.
 
-Stop when Current or Next is insufficient, or when historical scope, authority, or allowance cannot be
-recovered, and repair the record. Ask the user only when the unresolved choice belongs to them. Resume
-is complete when one bounded action and owner are known and applicable historical policy is recorded;
-dependency analysis then belongs to batch selection.
+Stop when Current or Next is insufficient, or historical scope or authority cannot be recovered, and
+repair the record. Ask the user only when the unresolved choice belongs to them. Resume is complete
+when one bounded action and owner are known; dependency analysis then belongs to batch selection.
 
 ## Plan
 
@@ -39,7 +37,7 @@ work stays drafted.
 ## Tickets
 
 Create `tickets/<ticket-id>/ticket.md` from `../templates/ticket/ticket.md`. Valid states are `drafted`,
-`pending`, `cutoff`, and `closed`. The Orchestrator owns wording, dependencies, state, criteria,
+`pending` and `closed` for new work. The Orchestrator owns wording, dependencies, state, criteria,
 checkboxes, Progress, User decisions, and Resolution. Delegated record writes require the exact method
 from `lane-authority.md`.
 
@@ -49,14 +47,20 @@ Before `pending`, confirm the ticket against current code and instructions. Reco
 - existing interface owners and authorized public changes;
 - confirmed scenarios and an Alignment pointer;
 - acceptance criteria naming the observation and its owner;
-- required gates and their execution owner;
+- applicable mechanical gates prepared under Collab's
+  [Gate preparation](../../collab/references/execution.md#gate-preparation), or the reason none applies
+  and the direct-review alternative;
+- the owning review-batch pointer, with every acceptance criterion included;
 - an existing complete contract or Collab contract seed with exact interface, caller, test, and
   remaining implementation locations.
 
 Tests and scenarios establish behavior. Direct review establishes responsibilities, interface
-placement, prose, structure, configuration, and repository data. A cutoff dependency satisfies
-scheduling but passes its unconfirmed claims and limitations downstream. An abandoned dependency
-needs an identified replacement outcome.
+placement, prose, structure, configuration, and repository data. Within the same review batch, a
+collected pending dependency satisfies implementation scheduling only when its required ticket gates
+passed and its contract is ready to consume. Record the consumed candidate and inherited unconfirmed
+obligations in the dependent ticket; changed upstream work requires affected downstream verification.
+Cross-batch dependencies require acceptance, or an explicit batch regrouping before consumption. An
+abandoned dependency needs an identified replacement outcome.
 
 Stop before implementation if material design is unconfirmed, a dependency is unresolved, public
 interface ownership is missing, or the required observation has no owner. Ticket preparation is
@@ -68,10 +72,18 @@ Inputs are all drafted and pending dependency edges, module write scopes, shared
 settled tickets under consideration. Select the largest ready set that can finish independently. Put
 interacting changes in explicit dependency order and materialize shared interface prerequisites first.
 
+An execution batch is this ready parallel set. A review batch groups a coherent feature or contract
+for independent acceptance and may span several execution batches, including dependency-ordered tickets.
+A singleton is a review batch too. Choose its membership before implementation and create the brief
+under [Batch review records](records.md#batch-review-records); fill its final subject and observations
+when assembly is ready. Bound the set so one acceptor can judge all member criteria and interactions.
+
 Present the batch relationships and align each ticket. Dispatch a ticket as soon as its contract,
-formal tests or seed, isolated checkout, and environment are ready. While children run, prepare or
-judge independent members. Collect accepted or cutoff work as it becomes ready; a blocked member does
-not stop unrelated members.
+formal tests or seed, prepared gates, isolated checkout, and environment are ready. While children run,
+prepare or judge independent members. Collect gate-passing delivery candidates as they become ready;
+keep them pending for batch acceptance. A blocked member does not stop unrelated implementation.
+Before splitting a review batch, record dependency and criterion ownership so no outstanding obligation
+is lost or treated as approved. Dispatch review only when the selected batch is complete and reviewable.
 
 When selection creates a routing edge, INDEX names the active batch and next coordination outcome.
 Ticket files own their semantic checkpoints and evidence. Stop when write scopes collide, dependencies

@@ -16,7 +16,8 @@ from typing import NoReturn
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 INDEX_FIELDS = ("task_id", "spec")
 TICKET_FIELDS = ("id", "state")
-TICKET_STATES = ("drafted", "pending", "cutoff", "closed")
+# "unknown" is a reporting bucket, not an authorable lifecycle state.
+TICKET_STATES = ("drafted", "pending", "closed", "unknown")
 FRONTMATTER_MAX_BYTES = 16 * 1024
 TICKET_FILE = "ticket.md"
 
@@ -547,12 +548,11 @@ def _ticket_counts(directory: Path) -> tuple[dict[str, int | None], dict[str, ob
                 raise ValueError("ticket id is invalid")
             if values["id"] != owner.name:
                 raise ValueError("ticket id does not match its directory")
-            if values["state"] not in TICKET_STATES:
-                raise ValueError(f"ticket state is not one of {', '.join(TICKET_STATES)}")
+            state = values["state"] if values["state"] in TICKET_STATES else "unknown"
         except (OSError, UnicodeError, ValueError):
             unreadable += 1
             continue
-        counted[values["state"]] += 1
+        counted[state] += 1
     if unreadable:
         return _unavailable_ticket_counts("ticket_headers_unreadable", unreadable)
     counts: dict[str, int | None] = dict(counted)

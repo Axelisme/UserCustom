@@ -10,17 +10,17 @@ together. Most actions need one branch of that workflow. The short entries now r
 invariants and route to a few self-contained operation documents. This lowers routine reading without
 hiding authority or completion rules behind an implied second read.
 
-The workflow also avoids two expensive defaults. It delegates only work whose contract is complete
-enough to survive a handoff, and it gives a ticket or batch one acceptor with one effective reviewable
-BLOCKED allowance by default. This is a stopping rule, not weaker evidence. After that verdict, one
-bounded correction runs its gates and ends at cutoff or pending unless the user grants more review.
+The workflow delegates only work whose contract is complete enough to survive a handoff. Tickets are
+implementation and delivery units; coherent review batches are independent acceptance units. This
+lets an acceptor judge related changes together without repeating a review for each ticket. Stronger
+ticket gate preparation supplies reproducible delivery evidence before assembly.
 
 ## Rule ownership
 
 | Concern | Owner |
 |---|---|
 | Task scope, tickets, alignment, INDEX, lifecycle | `dev-flow` |
-| Batch review brief and allowance history | `dev-flow/references/records.md` and `reviews/<review-id>.md` |
+| Batch review brief and review history | `dev-flow/references/records.md` and `reviews/<review-id>.md` |
 | Writer placement, dispatch, tests, review, correction | `collab` |
 | Git integration, landing, resource custody | `collab` plus dev-flow custody |
 | Receiver inputs and Result wording | Each installed role profile |
@@ -36,7 +36,7 @@ does not become another brief.
 | Role | Routine input | Excluded unless a concrete question requires it |
 |---|---|---|
 | Orchestrator | Both short entries, INDEX and active grants, selected operation sections, current ticket or batch brief, receiver contract/result | Other operations, complete profile bodies, inactive tickets and logs |
-| Implementer | Injected profile, bounded dispatch, named contract anchors, repository instructions, technical skills, seed/caller/test locations, environment, gates, blockers | INDEX, task graph, review counts, landing and archive rules |
+| Implementer | Injected profile, bounded dispatch, named contract anchors, repository instructions, technical skills, seed/caller/test locations, environment, gates, blockers | INDEX, task graph, landing and archive rules |
 | Acceptor | Injected profile, immutable subject and baseline, bounded criteria/scenarios, interface/test duties, applicable instructions, candidate-bound observations and findings | Implementation sequence, provisioning, scheduling, landing, gate execution procedures |
 
 A dispatch must state exact repository instruction and technical skill paths with read conditions. It
@@ -44,24 +44,26 @@ must also name explicit absence. "Follow relevant rules" is not a usable source 
 Resolution is not categorically hidden; dispatch points there when it owns a current blocker or
 observation.
 
-## Review and cutoff invariants
+## Batch acceptance
 
 One acceptor judges the complete assigned criterion set. A reviewable subject is one exact clean
 commit/tree with a baseline, stopped writer, stable brief, and required observation owners. Questions,
 missing baselines, mutable subjects, and withdrawn prerequisites are assignment failures, not defect
 verdicts. Repair the missing input, but stop repeated preparation failures with their owner.
 
-A new ticket or batch created under this contract defaults to one effective BLOCKED verdict. Keep
-historical limits, verdicts, candidates, and counts. For a pre-default record lacking a numeric
-allowance, recover it from the governing version or original owner and stop rather than substituting
-one. Replacing an agent, changing a candidate, or renaming a claim set does not reset the count.
-Existing approved obligations override the new default. A batch covers named tickets,
-criteria, cutoff claims, and interactions on one integration subject. Its approval establishes only
-those claims and never silently upgrades unrelated cutoff work.
+An execution batch selects independent ready writers. A review batch selects a bounded feature or
+contract and can span dependency-ordered implementation. Its brief covers every included ticket
+criterion plus cross-ticket interactions. A singleton uses the same record and review path.
 
-After the cap, make one final bounded correction. Passing gates and Orchestrator judgement allow a
-cutoff record that separates established claims from fixes and claims not independently confirmed.
-Otherwise the work stays pending. A user may grant another allowance explicitly.
+Gate-passing delivery candidates can enter integration before review. Collection does not accept
+claims. Pending same-batch dependencies carry their unresolved obligations downstream; cross-batch
+consumption waits for acceptance or explicit regrouping. Freeze the assembled review checkout while
+other lanes continue work. A verdict on that snapshot does not approve later integration changes.
+
+Corrections require applicable verification and fresh independent review on the new candidate. Work
+that cannot proceed stays pending with its blocker and owner. Review history belongs to the batch;
+tickets link to it and close only when all their applicable criteria are established. Landing requires
+applicable acceptance for all task changes included in its candidate.
 
 ## Tests and execution evidence
 
@@ -75,6 +77,13 @@ method, result, exit status, run pointer, and limitations still apply. A role ch
 to rerun. Missing evidence, changed subjects, wrong selections, timeouts, flaky results, or
 contradictions return to the execution owner. Acceptors inspect the evidence but never run tests,
 imports, linters, formatters, builds, or runtime workflows.
+
+During RED or contract preparation, assess and prepare applicable ticket gates, preferring existing
+checks. Record the property, command/selection, environment, timeout, owner, and pass condition, or a
+reasoned direct-review alternative. RED establishes a focused missing behavior, not a requirement for
+every gate to fail. Ticket gates run at GREEN/delivery; assigned batch gates run on the assembled
+candidate before review. Non-TDD tickets still need gate preparation. Static facts remain direct-review
+obligations rather than tests of document wording or repository data.
 
 Timeouts are gate-specific and bounded. A timeout is incomplete. Repeat diagnosis only after a new
 change, new hypothesis, or explicit reproduction purpose. Plan expensive batch observations up front;
@@ -99,10 +108,12 @@ keeps Pi and Claude profiles independent of Codex installation paths.
 
 ## Walkthrough and evaluation
 
-Before release, walk these cases against the candidate: direct fix, fresh implementer, fresh acceptor,
-first effective BLOCKED followed by final correction, batch cutoff, historical non-default allowance,
-unreviewable assignment, stale gate evidence, context reorientation, and a profile update between old
-and fresh attempts. Check that each path reaches its authority, stop, completion, and record owner.
+Before release, walk these cases against the candidate: direct fix and singleton batch, fresh
+implementer and acceptor, dependency-ordered tickets in one review batch, independent parallel tickets,
+RED gate preparation, non-TDD direct review, correction and fresh review, blocked gates, unreviewable
+assignment, stale evidence, frozen review during concurrent work, persistence drift, legacy record
+resumption, and a profile update between old and fresh attempts. Check each path's authority, stop,
+completion, criterion coverage, and record owner.
 
 Measure required lines and UTF-8 bytes for representative paths before and after a change. Those
 numbers describe document size only. They are not tokenizer output, cumulative prompt savings, runtime

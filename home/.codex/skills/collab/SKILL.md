@@ -29,12 +29,12 @@ Use dev-flow's `scripts/section.py <absolute-path>#anchor` for operation section
 
 - Choose direct work or delegation and prepare a writer: [Placement](references/execution.md#placement)
   and [Prepare](references/execution.md#prepare).
-- Seed interfaces or formal tests: [Contract seed](references/execution.md#contract-seed) and
-  [Test ownership](references/execution.md#test-ownership).
+- Prepare RED or implementation handoff: [Contract seed](references/execution.md#contract-seed),
+  [Gate preparation](references/execution.md#gate-preparation), and [Test ownership](references/execution.md#test-ownership).
 - Dispatch implementation or judge its result: [Implement](references/execution.md#implement) and
   [Results and continuity](references/execution.md#results-and-continuity).
-- Prepare and run ticket or batch acceptance: [Review](references/review.md#review).
-- Count a verdict, correct, accept, or cutoff: [Correct and decide](references/review.md#correct-and-decide).
+- Prepare and run batch acceptance: [Review](references/review.md#review).
+- Correct findings or accept covered claims: [Correct and decide](references/review.md#correct-and-decide).
 - Reconcile or collect branches: [Integrate](references/integration.md#integrate).
 - Land and retire resources: [Land and clean up](references/integration.md#land-and-clean-up).
 
@@ -61,8 +61,8 @@ Installed role filenames are `collab-implementer` and `collab-acceptor`:
 
 Use dev-flow's `scripts/section.py <absolute-profile-path>#dispatch-contract` and `#result`. The
 implementer writes one bounded internal change. The acceptor reads one immutable subject and one
-bounded criterion set, whether owned by a ticket or batch review record. Specialized Standards and
-Spec review remains a separate code-review assignment, not the default ticket loop.
+bounded criterion set owned by a batch review record, including singleton batches. Specialized Standards
+and Spec review remains a separate code-review assignment, not the default acceptance loop.
 
 ## Core invariants
 
@@ -73,8 +73,8 @@ Spec review remains a separate code-review assignment, not the default ticket lo
   and limitations still apply. Role changes alone do not require reruns.
 - The acceptor stays read-only and does not run tests, imports, linters, formatters, builds, or runtime
   gates. Missing or stale observations return to their execution owner.
-- New ticket and batch reviews default to one effective BLOCKED verdict on a reviewable candidate.
-  Questions and assignment defects consume no allowance. Recorded historical or user-granted limits
-  remain authoritative.
+- Collect gate-passing delivery candidates without treating collection as acceptance. Batch review
+  covers all member criteria and interactions; unresolved work remains pending until independently
+  accepted on the applicable candidate.
 - Launch children in the background and continue independent work. Return control rather than polling
   or blocking on them.

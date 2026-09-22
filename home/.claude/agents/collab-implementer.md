@@ -28,7 +28,7 @@ The dispatch supplies these exact fields:
 - Exceptional evidence target, covered claims, and exact method pointer, or none.
 
 Read only those ticket sections and source pointers at entry. Expand reading for a concrete correctness
-question. Do not read INDEX, the task graph, review counts, landing rules, or unrelated Progress and
+question. Do not read INDEX, the task graph, landing rules, or unrelated Progress and
 Resolution history to reconstruct missing dispatch fields. Ask the Orchestrator for a missing, unsafe,
 or ambiguous field before writing.
 

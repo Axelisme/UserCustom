@@ -24,8 +24,9 @@ when its assigned stable observation supports the conclusion.
 A ticket's **semantic checkpoint** is the smallest current statement that changes how the next owner
 resumes, verifies, or decides. Replace only the semantic-checkpoint entry within Progress when a stable
 candidate, gate conclusion, reviewable verdict, blocker, or handoff creates a new checkpoint. Preserve
-its bounded candidate, verdict, allowance, finding, and correction history. Keep file reads, ordinary
-edits, transient commands, retries, child events, and raw logs with Git, the tool, or the role result.
+its implementation candidate and gate evidence, and point to the owning batch review for verdicts,
+findings, and corrections. Keep file reads, ordinary edits, transient commands, retries, child events,
+and raw logs with Git, the tool, or the role result.
 
 Use this update gate before changing a durable record: would the fact change how a newly arriving
 authorized owner resumes, verifies, decides, or establishes terminal disposition? If not, leave it at
@@ -34,9 +35,9 @@ result, and limitation in the ticket or review record that owns the claim. Raw l
 runs. Use a separate evidence file only for a costly, external, manual, ephemeral, audit-required, or
 user-requested observation, following `lane-authority.md`.
 
-A review record may retain each reviewable candidate, effective verdict count, findings, and correction
-disposition because those facts govern fixed-subject allowance and acceptance. This bounded review
-history is not a general operation log.
+A review record retains each reviewable candidate, verdict, findings, and correction disposition
+because those facts govern fixed-subject acceptance. This bounded review history is not a general
+operation log.
 
 Stop if routing, subject identity, observation ownership, or mutation authority is uncertain. The
 update is complete when the current routing edge and semantic checkpoint are sufficient and every
@@ -46,27 +47,31 @@ retained fact has one durable owner.
 
 A batch review evaluates named claims on one integration candidate. Create
 `reviews/<review-id>.md` from `../templates/review/review.md`; the Orchestrator owns it. Inputs are the
-feature boundary, included tickets and criterion IDs, relevant cutoff claims, interaction risks,
-baseline, exact clean integration commit/tree, candidate-bound observations, and prior findings.
+feature boundary, included tickets and all their criterion IDs, interaction risks, baseline,
+candidate-bound observations, and prior findings. Create the membership and coverage map during
+planning; supply the exact clean assembled commit/tree before dispatch. Each criterion names its
+observation and owner. Batch-only interaction scenarios have their own IDs and observations.
 
-The record owns the batch's stable claim set, effective BLOCKED allowance and count, reviewed
-candidates, final correction, findings, observations, and disposition. New batches default to one
-reviewable BLOCKED allowance. Renaming or repackaging the same claims does not create another
-allowance. An explicit historical or user-granted allowance wins over the default and stays recorded.
+The record owns the batch's stable claim set, reviewed candidates, verdicts, corrections, findings,
+observations, and disposition. Tickets reference this record for review history and retain their own
+contract, delivery evidence, semantic checkpoint, and terminal disposition. Membership changes preserve
+criterion and finding ownership; record exclusions without dropping a member's acceptance obligations.
 
 Stop before dispatch if the writer is active, the subject is dirty or mutable, the brief is ambiguous,
 required observations lack owners, or the baseline is missing. A review entry is ready when one
 acceptor can judge the bounded criteria without reconstructing scope from unrelated tickets or INDEX.
-After the verdict, record whether it was reviewable, the count, candidate, findings, and next owner as
-bounded review history. Approval establishes only the claims named in the brief; uncovered cutoff
-claims remain cutoff.
+After the verdict, record whether it was reviewable, the candidate, findings with affected criterion
+and ticket IDs, and the next owner as bounded review history. Use Collab's correction procedure for
+BLOCKED results. Approval establishes only the claims named in the brief on the reviewed subject;
+other work retains its disposition. Keep a per-ticket disposition linking established criteria to the
+accepted candidate. A batch remains pending until all its assigned claims are established.
 
 ## Ticket handoff
 
 Inputs are the ticket result, observations, findings, and any user-owned choice. The Orchestrator
 replaces the ticket's semantic checkpoint when a completed or blocked handoff changes how work resumes,
 then continues feasible work under the confirmed contract. In-contract corrections, finding
-disposition, and cutoff continue while independent tickets run.
+disposition, and verification continue while independent tickets run.
 
 Put each user matter in the owning ticket with the affected scenario, impact, options, and
 recommendation. At the batch boundary, present those decisions together and record the answers. Stop
@@ -76,36 +81,23 @@ routing fields only when the handoff creates a routing edge.
 
 ## Close
 
-Normal closure requires an observation for every applicable acceptance criterion. Update the
+Normal closure requires valid observations for every applicable acceptance criterion and batch
+acceptance covering those criteria on the final candidate. Delivery or collection alone leaves the
+ticket pending. Link the owning review record rather than copying its history. Update the
 checkboxes, record the final candidate and concise verification in Resolution, and set `state: closed`.
 Update INDEX's routing fields when that lifecycle change creates a routing edge. Abandoned or
-superseded work may retain unchecked criteria with reasons. Preserve scenarios, alignment, decisions, findings, and cited
-observations.
+superseded work may retain unchecked criteria with reasons. Preserve scenarios, alignment, decisions,
+findings, and cited observations.
 
 Stop if any required criterion lacks a valid observation or unresolved work lacks a stated terminal
 disposition. Closure is complete when the ticket and any changed INDEX route agree and execution
 resources are retired or have an owner and cleanup condition.
 
-## Cutoff
-
-Cutoff follows Collab's final correction after the recorded effective BLOCKED allowance is exhausted.
-Inputs are the final clean commit/tree, passing required gates, Orchestrator judgement, prior verdicts,
-and claims still awaiting independent confirmation.
-
-Record claims established on the final candidate, final fixes, remaining findings and affected
-scenarios, and unconfirmed claims. State that independent review ended before the final correction.
-Set `state: cutoff` only when required gates pass and the Orchestrator can judge the bounded result.
-Otherwise retain `pending` with the blocker and decision owner. Preserve the count and history; only a
-new user grant adds review allowance.
-
-A cutoff satisfies scheduling dependencies but carries its limitations downstream. It is complete
-when Resolution names those limitations and the next owner. Update INDEX's routing fields only if
-cutoff creates a routing edge.
-
 ## Archive
 
 Archive only when the user completes or abandons the task. First reconcile unfinished work, surface
-cutoff tickets and review records, preserve required evidence, and clean owned temporary resources.
+unresolved tickets and review records, preserve required evidence, and clean owned temporary resources.
+Preserve legacy dispositions as history; archival does not turn them into accepted work.
 Update INDEX's routing fields for the final routing edge, then run `scripts/plan.py archive` only after
 all owners state final disposition. Preserve pre-existing user state.
 

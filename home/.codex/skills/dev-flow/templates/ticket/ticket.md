@@ -9,6 +9,7 @@ state: {{STATE}}
 | depends_on | <required ticket outcomes, or none> |
 | completes | <ticket completing this partial increment, or none> |
 | scope | <task scope or approved spec pointer> |
+| review batch | <review record path covering every criterion> |
 
 ## Outcome
 {{OUTCOME}}
@@ -42,18 +43,22 @@ Awaiting design discussion and user confirmation.
 - [ ] A1: <observable criterion>. Check: <command, acceptor, Orchestrator, user, or external operator>.
 
 ## Mechanical gates
-<!-- Name execution owner, command/selection, environment, timeout, and required property. Formal-test
-     edits belong to the Orchestrator. Runtime output stays with its run. -->
+<!-- Prepare during RED or pre-implementation contract preparation. For each applicable gate, name
+     property/criterion, command/selection and working directory, environment, timeout, execution owner,
+     and pass condition. Prefer existing checks; new behavior tests use confirmed seams/contracts.
+     If none applies, record why and the direct-review alternative with its owner. Distinguish required
+     ticket gates from batch observations and their readiness conditions. Preparation does not require
+     every gate to run or fail at RED. Formal-test edits belong to the Orchestrator.
+     Procedure: ~/.codex/skills/collab/references/execution.md#gate-preparation -->
 {{CHECKS}}
 
 ## Progress
-<!-- Keep the bounded candidate, verdict, allowance, source, finding, and correction history required
-     by review semantics. Follow it with one replaceable semantic checkpoint: the smallest current
-     state that changes how the next owner resumes, verifies, or decides. This is not an operation log. For a pre-default ticket whose
-     allowance is absent, recover and record it before review. Procedures:
-     ~/.codex/skills/dev-flow/references/records.md#maintain-the-record
-     ~/.codex/skills/collab/references/review.md#correct-and-decide -->
-Reviewer effective BLOCKED count: 0 of default 1. Semantic checkpoint: work not started.
+<!-- Keep delivery candidates and gate observations here; reference the owning batch review for
+     verdicts, findings and corrections. Record consumed pending dependency candidates and inherited
+     obligations. Maintain one replaceable semantic checkpoint that tells the next owner how to resume,
+     verify or decide. Collection leaves this ticket pending for batch acceptance.
+     Procedure: ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->
+Semantic checkpoint: work not started.
 
 ## User decisions
 <!-- Each entry states scenario, impact, options, recommendation, and answer. Procedure:
@@ -61,7 +66,8 @@ Reviewer effective BLOCKED count: 0 of default 1. Semantic checkpoint: work not 
 None.
 
 ## Resolution
-<!-- Final candidate, observations, disposition, and outstanding criteria. Cutoff separates established
-     claims from final fixes and claims not independently confirmed. Procedure:
-     ~/.codex/skills/dev-flow/references/records.md#cutoff -->
+<!-- Final accepted candidate, observation pointers, batch review and covered criteria, disposition,
+     and any outstanding work with its owner. Normal closure requires every applicable criterion and
+     batch acceptance. Otherwise stay pending with a concrete blocker.
+     Procedure: ~/.codex/skills/dev-flow/references/records.md#close -->
 Pending.

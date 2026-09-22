@@ -9,7 +9,7 @@ Work directly when the Orchestrator already holds the relevant context and the c
 when a small correction joins production and Orchestrator-owned interface or formal-test edits.
 Delegate a settled, independently implementable and verifiable internal change. Investigate or align
 an ambiguous problem before assigning it. Direct work keeps the same ticket, one-writer, checks, and
-independent-review duties.
+batch-review duties.
 
 Stop when the contract is unclear, writer ownership overlaps, or the proposed child would need to make
 a user, interface, test, or architecture decision. Placement is complete when one writer, checkout,
@@ -50,6 +50,31 @@ behavior, performance, or responsibility changes to the Orchestrator.
 Stop until the user confirms a material design change. The seed is complete when the public contract
 and observations are explicit enough for a bounded internal implementation and independent review.
 
+## Gate preparation
+
+During RED or pre-implementation contract preparation, the Orchestrator assesses and prepares the
+mechanical gates applicable to each ticket. Prefer existing focused behavior tests, affected regression
+checks, and relevant typecheck, lint, or build commands. Add behavior tests only at confirmed seams or
+contracts under [Test ownership](#test-ownership). Read the tdd skill when using red-green cycles.
+
+In Mechanical gates, record the checked property and criterion, command/selection and working directory,
+environment, timeout, execution owner, and pass condition. Verify the command and prerequisites are
+usable. If no mechanical gate applies, state why and name the direct-review observation and owner.
+Review prose, document wording, static content, configuration values, and repository data directly;
+do not create tests of those facts to fill the gate list. A validation driver may run checks, but its
+script behavior is not itself a test target.
+
+Prepare the gate plan in RED; run the focused behavior test to establish the intended missing behavior.
+Setup, import, collection, or unrelated failures are not RED evidence. Other gates need not fail or run
+in RED. Keep behavior tests incremental rather than writing the entire suite before implementation.
+For non-TDD work, complete the same gate preparation before implementation without inventing a RED.
+
+At GREEN and delivery, run required ticket gates. Assign expensive or assembled-candidate checks as
+batch observations during planning, with an owner and readiness condition. They run before batch
+review, not as surprise replacements for ticket obligations. Missing capability or an unusable required
+gate blocks implementation handoff until its owner resolves it. Preparation is complete when the gate
+plan is executable or its justified direct-review alternative is recorded.
+
 ## Test ownership
 
 Inputs are the confirmed ticket scenarios and criteria, current public interface and shipped callers,
@@ -80,9 +105,9 @@ order and timeout, removes probes, inspects the diff, commits under branch-local
 writing.
 
 A gate timeout is incomplete, not passing. Rerun after a new change, new hypothesis, or explicit
-reproduction purpose; repeated unchanged diagnostics stop with the blocker. Expensive batch checks
-must have been assigned as batch observations during planning and never replace ticket-required gates
-by surprise.
+reproduction purpose; repeated unchanged diagnostics stop with the blocker. Use the ticket gates and
+batch assignments established during [Gate preparation](#gate-preparation); passing ticket gates makes
+a delivery candidate, not an accepted ticket.
 
 Completion requires a clean committed candidate and a concise handoff tying the final candidate to
 each command or selection, environment, result and exit status, raw run pointer, and limitation. Keep
@@ -100,8 +125,9 @@ result as incomplete. `Residual risks:` carries non-blocking findings. Do not ad
 
 A writer's COMPLETED result attests required gates passed, the checkout is clean and committed, and
 assigned evidence is complete. The Orchestrator checks the actual checkout and evidence before
-judgement. A replacement receives the original assignment, blockers, verified and unverified work,
-environment, authority, and stop conditions.
+delivery judgement and collection. The ticket remains pending for its owning batch review. A
+replacement receives the original assignment, blockers, verified and unverified work, environment,
+authority, and stop conditions.
 
 A role result owns its returned observations until the Orchestrator records the smallest durable
 conclusion in the ticket or review record that owns the claim. Git and the run retain finer history.

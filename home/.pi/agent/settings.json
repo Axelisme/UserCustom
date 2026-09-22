@@ -40,7 +40,8 @@
       "git:github.com/algal/pi-openai-server-compaction",
       "npm:pi-openai-fast-mode",
       "npm:pi-antigravity",
-      "/home/axel/Documents/VSCode/Typescript/cache-stats"
+      "/home/axel/Documents/VSCode/Typescript/cache-stats",
+      "/home/axel/UserCustom/home/.pi/agent/workarounds/herdr-first-prompt/index.ts"
     ]
   }
 }

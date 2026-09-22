@@ -1,8 +1,8 @@
 {
-  "lastChangelogVersion": "0.86.1",
+  "lastChangelogVersion": "0.87.0",
   "theme": "dark",
   "absorb": {
-    "threshold": 3000
+    "threshold": 2000
   },
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-astra",

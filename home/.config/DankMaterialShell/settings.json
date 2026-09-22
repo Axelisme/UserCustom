@@ -87,7 +87,7 @@
     "apps": "list"
   },
   "dankLauncherV2UnloadOnClose": true,
-  "networkPreference": "ethernet",
+  "networkPreference": "wifi",
   "cursorSettings": {
     "theme": "System Default",
     "size": 24,
@@ -104,8 +104,6 @@
       "cursorHideTimeout": 0
     }
   },
-  "launcherLogoMode": "os",
-  "launcherLogoColorOverride": "primary",
   "notepadShowLineNumbers": true,
   "acMonitorTimeout": 300,
   "acLockTimeout": 300,
@@ -134,6 +132,7 @@
   "maxFprintTries": 3,
   "osdMediaPlaybackEnabled": true,
   "updaterCheckOnStart": true,
+  "updaterReopenAfterUpgrade": false,
   "screenPreferences": {
     "notepad": [
       "all"
@@ -298,5 +297,5 @@
     }
   },
   "frameMode": "separate",
-  "configVersion": 28
+  "configVersion": 29
 }

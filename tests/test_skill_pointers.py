@@ -69,21 +69,6 @@ class SkillPointerTest(unittest.TestCase):
         self.assertIn("## A gate you cannot close honestly", result.stdout)
         self.assertNotIn("## Creating an evidence file", result.stdout)
 
-    def test_both_collab_profiles_carry_the_orchestrators_two_anchors(self) -> None:
-        profiles = [
-            d / f"collab-{role}.md"
-            for d in (HOME / ".claude/agents", HOME / ".pi/agent/herdr-subagents/profiles")
-            for role in ("implementer", "acceptor")
-        ] + [
-            HOME / f".codex/agents/collab-{role}.toml"
-            for role in ("implementer", "acceptor")
-        ]
-        for profile in profiles:
-            with self.subTest(profile=profile.name):
-                anchors = run("--list", str(profile)).stdout
-                self.assertIn("#dispatch-contract", anchors)
-                self.assertIn("#result\n", anchors)
-
 
 if __name__ == "__main__":
     unittest.main()

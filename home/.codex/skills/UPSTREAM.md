@@ -50,6 +50,11 @@ Also not taken at the `3cca18b` sync:
   reviewer needs no exploration also does not fit local review. Reassess when upstream removes the
   stub designation and the review assumptions fit this fleet.
 
+Also not taken at the `c55ee46` sync:
+
+- `pr`: it shapes a GitHub pull request body, and agents here do not interact with GitHub for now.
+  Reassess if agents start opening PRs.
+
 ## Skills from other upstreams
 
 `grove` is **still a hand-ported copy**, not a subtree: it is under observation and was deliberately

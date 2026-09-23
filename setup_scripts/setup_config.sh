@@ -164,8 +164,6 @@ link_one .codex/AGENTS.md
 link_each .pi/agent/skills
 link_each .pi/agent/herdr-subagents/profiles
 link_each .pi/agent/extensions
-link_one .pi/settings.json
-link_one .pi/acp.json
 link_one .pi/agent/settings.json
 link_one .pi/agent/APPEND_SYSTEM.md
 

@@ -2,7 +2,7 @@
 name: herdr-e2e-prober
 description: 此profile用於e2e測試subagents控制工具，無用戶明確同意請勿使用。
 modelList:
-  - openai-codex/gpt-5.6-luna:minimal
+  - openai-codex/gpt-6-luna:minimal
 tools:
   - read
   - bash

@@ -2,7 +2,7 @@
 name: repo-investigator
 description: Build a read-only, source-grounded map of local code, call sites, tests, and constraints without making contract decisions.
 modelList:
-  - openai-codex/gpt-5.6-luna:high
+  - openai-codex/gpt-6-luna:max
 tools:
   - read
   - bash

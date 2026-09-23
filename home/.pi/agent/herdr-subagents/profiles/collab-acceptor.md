@@ -2,7 +2,7 @@
 name: collab-acceptor
 description: Review one immutable assembled subject against bounded batch criteria using existing evidence.
 modelList:
-  - openai-codex/gpt-5.6-sol:high
+  - openai-codex/gpt-6-sol:max
 tools:
   - read
   - bash

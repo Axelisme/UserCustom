@@ -9,7 +9,7 @@
   "defaultThinkingLevel": "medium",
   "compaction": {
     "modelOverrides": {
-      "openai-codex/gpt-5.6-sol": {
+      "openai-codex/gpt-6-sol": {
         "reserveTokens": 72000
       },
       "openai-codex/gpt-6-astra": {
@@ -29,8 +29,8 @@
   ],
   "enabledModels": [
     "openai-codex/gpt-6-astra",
-    "openai-codex/gpt-5.6-sol",
-    "openai-codex/gpt-5.6-luna",
+    "openai-codex/gpt-6-sol",
+    "openai-codex/gpt-6-luna",
     "antigravity/gemini-3.8-flash",
     "antigravity/claude-sonnet-4-6"
   ],

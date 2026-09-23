@@ -2,7 +2,7 @@
 name: web-researcher
 description: Research official documentation and primary external sources with citations; no design or implementation.
 modelList:
-  - openai-codex/gpt-5.6-luna:high
+  - openai-codex/gpt-6-luna:max
 tools:
   - read
   - bash

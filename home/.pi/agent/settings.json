@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.87.0",
+  "lastChangelogVersion": "0.87.1",
   "theme": "dark",
   "absorb": {
     "threshold": 2000
@@ -21,7 +21,7 @@
     "/home/axel/Documents/VSCode/Typescript/pi-goal",
     "/home/axel/Documents/VSCode/Typescript/pi-herdr-subagents",
     "/home/axel/Documents/VSCode/Typescript/pi-absorb",
-    "git:github.com/algal/pi-openai-server-compaction",
+    "/home/axel/Documents/VSCode/Typescript/pi-openai-server-compaction",
     "npm:pi-mcp-adapter",
     "npm:pi-openai-fast-mode",
     "npm:pi-antigravity",
@@ -37,7 +37,7 @@
   "herdrSubagents": {
     "allowExtensions": [
       "/home/axel/Documents/VSCode/Typescript/pi-absorb",
-      "git:github.com/algal/pi-openai-server-compaction",
+      "/home/axel/Documents/VSCode/Typescript/pi-openai-server-compaction",
       "npm:pi-openai-fast-mode",
       "npm:pi-antigravity",
       "/home/axel/Documents/VSCode/Typescript/cache-stats",

@@ -4381,8 +4381,8 @@ const registeredTaskId = {
 const registeredBranch = {
   type: "string",
   minLength: 1,
-  pattern: "^(?!-)(?!refs/)[^\\u0000-\\u001f\\u007f]+$",
-  description: "Short name of an existing local branch below refs/heads/; remote refs are invalid.",
+  pattern: "^[^\\u0000-\\u001f\\u007f]+$",
+  description: "Short name of an existing local branch below refs/heads/; must not start with - or refs/.",
 } as const;
 
 const registeredBaseSha = {

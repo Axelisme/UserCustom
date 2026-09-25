@@ -96,15 +96,14 @@ differ. Do not update a verified runtime hash merely because policy prose change
 at spawn is an attempt's frozen contract; the current disk profile applies to a fresh spawn. Candidate
 workflow files under review are data, not an invitation for the reviewer to adopt them.
 
-Maintain six profiles manually:
+Maintain four profiles manually (Claude dispatches the Pi profiles through the subagent MCP):
 
 - Pi: two Markdown files, live `contact_parent`, Pi model lists and tools.
-- Claude: two Markdown files, single-return decision handling, Claude frontmatter.
 - Codex: two TOML files, single-return handling, sandbox and reasoning fields.
 
 Keep the common role contract semantically equal while preserving those wrappers. Do not copy one
 whole file over another. Exceptional evidence uses the exact method path supplied by dispatch, which
-keeps Pi and Claude profiles independent of Codex installation paths.
+keeps Pi profiles independent of Codex installation paths.
 
 ## Walkthrough and evaluation
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -14,6 +13,7 @@ from tests._collab_support import (
     FAIL_WORKTREE_REMOVE,
     close_harness_for,
     git,
+    git_on_path,
     invoke,
     last_telemetry_event,
     seed_managed_task,
@@ -462,16 +462,14 @@ class CollabOpExtensionLaneCollectContractRegressionTests(unittest.TestCase):
             git(lane, "commit", "-m", "work")
             lane_sha = git(lane, "rev-parse", "HEAD")
             wrapper = write_git_wrapper(base, FAIL_WORKTREE_REMOVE)
-            original_path = os.environ["PATH"]
-            os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
             close_harness_for(repository)
             try:
-                observed = invoke(
-                    repository,
-                    {"tool": "collab_lane_collect", "task_id": "demo", "lane_id": "writer-1"},
-                )
+                with git_on_path(wrapper.parent):
+                    observed = invoke(
+                        repository,
+                        {"tool": "collab_lane_collect", "task_id": "demo", "lane_id": "writer-1"},
+                    )
             finally:
-                os.environ["PATH"] = original_path
                 close_harness_for(repository)
 
             self.assertFalse(observed["is_error"])
@@ -494,16 +492,14 @@ class CollabOpExtensionLaneCollectContractRegressionTests(unittest.TestCase):
             git(lane, "commit", "-m", "work")
             lane_sha = git(lane, "rev-parse", "HEAD")
             wrapper = write_git_wrapper(base, FAIL_LANE_BRANCH_REMOVE)
-            original_path = os.environ["PATH"]
-            os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
             close_harness_for(repository)
             try:
-                observed = invoke(
-                    repository,
-                    {"tool": "collab_lane_collect", "task_id": "demo", "lane_id": "writer-1"},
-                )
+                with git_on_path(wrapper.parent):
+                    observed = invoke(
+                        repository,
+                        {"tool": "collab_lane_collect", "task_id": "demo", "lane_id": "writer-1"},
+                    )
             finally:
-                os.environ["PATH"] = original_path
                 close_harness_for(repository)
 
             self.assertFalse(observed["is_error"])

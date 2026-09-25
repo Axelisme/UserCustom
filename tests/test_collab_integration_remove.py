@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -13,6 +12,7 @@ from tests._collab_support import (
     FAIL_LANE_BRANCH_REMOVE,
     close_harness_for,
     git,
+    git_on_path,
     invoke,
     seed_managed_task,
     seed_repository,
@@ -62,16 +62,14 @@ class CollabOpExtensionIntegrationRemoveContractRegressionTests(unittest.TestCas
             repository, _ = seed_repository(base)
             seed_managed_task(repository)
             wrapper = write_git_wrapper(base, FAIL_LANE_BRANCH_REMOVE)
-            original_path = os.environ["PATH"]
-            os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
             close_harness_for(repository)
             try:
-                observed = invoke(
-                    repository,
-                    {"tool": "collab_integration", "action": "remove", "task_id": "demo"},
-                )
+                with git_on_path(wrapper.parent):
+                    observed = invoke(
+                        repository,
+                        {"tool": "collab_integration", "action": "remove", "task_id": "demo"},
+                    )
             finally:
-                os.environ["PATH"] = original_path
                 close_harness_for(repository)
 
             self.assertFalse(observed["is_error"])

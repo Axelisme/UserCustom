@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -13,6 +12,7 @@ from tests._collab_support import (
     FAIL_STATUS,
     close_harness_for,
     git,
+    git_on_path,
     invoke,
     last_telemetry_event,
     seed_managed_task,
@@ -154,16 +154,14 @@ class CollabOpExtensionLaneDropContractRegressionTests(unittest.TestCase):
             expected = seed_managed_task(repository)
             seed_task_container(repository)
             wrapper = write_git_wrapper(base, FAIL_STATUS)
-            original_path = os.environ["PATH"]
-            os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
             close_harness_for(repository)
             try:
-                observed = invoke(
-                    repository,
-                    {"tool": "collab_lane_drop", "task_id": "demo", "lane_id": "writer-1"},
-                )
+                with git_on_path(wrapper.parent):
+                    observed = invoke(
+                        repository,
+                        {"tool": "collab_lane_drop", "task_id": "demo", "lane_id": "writer-1"},
+                    )
             finally:
-                os.environ["PATH"] = original_path
                 close_harness_for(repository)
 
             self.assertFalse(observed["is_error"])
@@ -180,16 +178,14 @@ class CollabOpExtensionLaneDropContractRegressionTests(unittest.TestCase):
             seed_task_container(repository)
             seed_managed_task(repository)
             wrapper = write_git_wrapper(base, FAIL_LANE_BRANCH_REMOVE)
-            original_path = os.environ["PATH"]
-            os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
             close_harness_for(repository)
             try:
-                observed = invoke(
-                    repository,
-                    {"tool": "collab_lane_drop", "task_id": "demo", "lane_id": "writer-1"},
-                )
+                with git_on_path(wrapper.parent):
+                    observed = invoke(
+                        repository,
+                        {"tool": "collab_lane_drop", "task_id": "demo", "lane_id": "writer-1"},
+                    )
             finally:
-                os.environ["PATH"] = original_path
                 close_harness_for(repository)
 
             self.assertFalse(observed["is_error"])

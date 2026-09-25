@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -11,6 +10,7 @@ from tests import _support
 from tests._collab_support import (
     close_harness_for,
     git,
+    git_on_path,
     invoke,
     last_telemetry_event,
     seed_managed_task,
@@ -102,20 +102,18 @@ fi
 exec "$real_git" "$@"
 """.replace("__PARENT__", str(candidate.parent)).replace("__CANDIDATE__", str(candidate))
                 wrapper = write_git_wrapper(base, wrapper_script)
-                original_path = os.environ["PATH"]
-                os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
                 close_harness_for(repository)
                 try:
-                    observed = invoke(
-                        repository,
-                        {
-                            "tool": "collab_lane",
-                            "action": "reconcile_persistence",
-                            "task_id": "demo",
-                            "lane_id": "repair"},
-                    )
+                    with git_on_path(wrapper.parent):
+                        observed = invoke(
+                            repository,
+                            {
+                                "tool": "collab_lane",
+                                "action": "reconcile_persistence",
+                                "task_id": "demo",
+                                "lane_id": "repair"},
+                        )
                 finally:
-                    os.environ["PATH"] = original_path
                     close_harness_for(repository)
 
                 self.assertTrue(observed["is_error"])

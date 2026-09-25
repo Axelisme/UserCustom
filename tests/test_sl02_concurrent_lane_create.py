@@ -14,6 +14,7 @@ from tests._collab_support import (
     close_harness,
     close_harness_for,
     git,
+    git_on_path,
     seed_managed_task,
     seed_repository,
     seed_task_container,
@@ -144,9 +145,7 @@ class SL02ConcurrentLaneCreateTests(unittest.TestCase):
             wrapper_dir.mkdir()
             script = BLOCK_TEMPLATE.replace("__BRANCH__", "wave/demo/alpha").replace("__BLOCK__", str(block))
             write_wrapper(wrapper_dir, script)
-            orig_path = os.environ.get("PATH", "")
-            os.environ["PATH"] = f"{wrapper_dir}:{orig_path}"
-            try:
+            with git_on_path(wrapper_dir):
                 repo_str = str(repository)
                 block_str = str(block)
                 node_body = textwrap.dedent(f"""
@@ -206,8 +205,6 @@ class SL02ConcurrentLaneCreateTests(unittest.TestCase):
                 """)
                 result = run_node_script(node_loader_script(repo_str, node_body), timeout=20)
                 self.assertTrue(result.get("ok"), result)
-            finally:
-                os.environ["PATH"] = orig_path
             # verify lanes via git
             self.assertEqual(git(repository, "rev-parse", "--verify", "wave/demo/alpha"), git(repository, "rev-parse", "wave/demo/integration"))
             self.assertEqual(git(repository, "rev-parse", "--verify", "wave/demo/beta"), git(repository, "rev-parse", "wave/demo/integration"))
@@ -226,9 +223,7 @@ class SL02ConcurrentLaneCreateTests(unittest.TestCase):
             wrapper_dir.mkdir()
             script = BLOCK_TEMPLATE.replace("__BRANCH__", "wave/demo/dup").replace("__BLOCK__", str(block))
             write_wrapper(wrapper_dir, script)
-            orig_path = os.environ.get("PATH", "")
-            os.environ["PATH"] = f"{wrapper_dir}:{orig_path}"
-            try:
+            with git_on_path(wrapper_dir):
                 repo_str = str(repository)
                 block_str = str(block)
                 node_body = textwrap.dedent(f"""
@@ -267,8 +262,6 @@ class SL02ConcurrentLaneCreateTests(unittest.TestCase):
                 """)
                 result = run_node_script(node_loader_script(repo_str, node_body), timeout=20)
                 self.assertTrue(result.get("ok"), result)
-            finally:
-                os.environ["PATH"] = orig_path
 
     def test_A3_cancellation_removes_only_that_waiter(self):
         # A3 covers S2,S3 : cancelling queued call returns request_aborted, next eligible proceeds
@@ -284,9 +277,7 @@ class SL02ConcurrentLaneCreateTests(unittest.TestCase):
             wrapper_dir.mkdir()
             script = BLOCK_TEMPLATE.replace("__BRANCH__", "wave/demo/slow").replace("__BLOCK__", str(block))
             write_wrapper(wrapper_dir, script)
-            orig_path = os.environ.get("PATH", "")
-            os.environ["PATH"] = f"{wrapper_dir}:{orig_path}"
-            try:
+            with git_on_path(wrapper_dir):
                 repo_str = str(repository)
                 block_str = str(block)
                 node_body = textwrap.dedent(f"""
@@ -330,8 +321,6 @@ class SL02ConcurrentLaneCreateTests(unittest.TestCase):
                 """)
                 result = run_node_script(node_loader_script(repo_str, node_body), timeout=20)
                 self.assertTrue(result.get("ok"), result)
-            finally:
-                os.environ["PATH"] = orig_path
 
     def test_A3_active_abort_settles_only_after_locks_are_released(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -349,13 +338,12 @@ class SL02ConcurrentLaneCreateTests(unittest.TestCase):
                 .replace("__BLOCK__", str(block))
             )
             write_wrapper(wrapper_dir, script)
-            orig_path = os.environ.get("PATH", "")
-            os.environ["PATH"] = f"{wrapper_dir}:{orig_path}"
             try:
-                repo_str = str(repository)
-                block_str = str(block)
-                entered_str = str(entered)
-                node_body = textwrap.dedent(f"""
+                with git_on_path(wrapper_dir):
+                    repo_str = str(repository)
+                    block_str = str(block)
+                    entered_str = str(entered)
+                    node_body = textwrap.dedent(f"""
                     const blockPath = "{block_str}";
                     const enteredPath = "{entered_str}";
                     try {{ fs.unlinkSync(blockPath); }} catch {{}}
@@ -385,11 +373,10 @@ class SL02ConcurrentLaneCreateTests(unittest.TestCase):
                     if (!afterResult.ok) throw new Error("queue did not recover after active abort: "+JSON.stringify(afterResult));
                     process.stdout.write(JSON.stringify({{ok:true, activeOk: result.ok}})+"\\n");
                 """)
-                result = run_node_script(node_loader_script(repo_str, node_body), timeout=20)
-                self.assertTrue(result.get("ok"), result)
+                    result = run_node_script(node_loader_script(repo_str, node_body), timeout=20)
+                    self.assertTrue(result.get("ok"), result)
             finally:
                 block.write_text("go\n", encoding="utf-8")
-                os.environ["PATH"] = orig_path
 
     def test_A4_live_external_lock_timeout_returns_task_busy_with_wait_facts(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -504,9 +491,7 @@ exec "$real_git" "$@"
 """
             fail_script = signal_fail_template.replace("__BRANCH__", "wave/demo/failme").replace("__SIGNAL__", str(signal_file)).replace("__BLOCK__", str(block_file))
             write_wrapper(wrapper_dir, fail_script)
-            orig_path = os.environ.get("PATH", "")
-            os.environ["PATH"] = f"{wrapper_dir}:{orig_path}"
-            try:
+            with git_on_path(wrapper_dir):
                 repo_str = str(repository)
                 signal_str = str(signal_file)
                 block_str = str(block_file)
@@ -564,8 +549,6 @@ exec "$real_git" "$@"
                 """)
                 result = run_node_script(node_loader_script(repo_str, node_body), timeout=20)
                 self.assertTrue(result.get("ok"), result)
-            finally:
-                os.environ["PATH"] = orig_path
 
     def test_A6_heterogeneous_mutations_queue_while_report_remains_fail_fast(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -580,9 +563,7 @@ exec "$real_git" "$@"
             wrapper_dir.mkdir()
             script = BLOCK_TEMPLATE.replace("__BRANCH__", "wave/demo/slow").replace("__BLOCK__", str(block))
             write_wrapper(wrapper_dir, script)
-            orig_path = os.environ.get("PATH", "")
-            os.environ["PATH"] = f"{wrapper_dir}:{orig_path}"
-            try:
+            with git_on_path(wrapper_dir):
                 repo_str = str(repository)
                 block_str = str(block)
                 node_body = textwrap.dedent(f"""
@@ -629,8 +610,6 @@ exec "$real_git" "$@"
                 """)
                 result = run_node_script(node_loader_script(repo_str, node_body), timeout=20)
                 self.assertTrue(result.get("ok"), result)
-            finally:
-                os.environ["PATH"] = orig_path
 
     def test_A7_repository_lock_serializes_tasks_but_not_repositories(self):
         # distinct tasks in one repository serialize
@@ -647,9 +626,7 @@ exec "$real_git" "$@"
             wrapper_dir.mkdir()
             script = BLOCK_TEMPLATE.replace("__BRANCH__", "wave/demo/blocked").replace("__BLOCK__", str(block))
             write_wrapper(wrapper_dir, script)
-            orig_path = os.environ.get("PATH", "")
-            os.environ["PATH"] = f"{wrapper_dir}:{orig_path}"
-            try:
+            with git_on_path(wrapper_dir):
                 repo_str = str(repository)
                 block_str = str(block)
                 node_body = textwrap.dedent(f"""
@@ -687,8 +664,6 @@ exec "$real_git" "$@"
                 """)
                 result = run_node_script(node_loader_script(repo_str, node_body), timeout=20)
                 self.assertTrue(result.get("ok"), result)
-            finally:
-                os.environ["PATH"] = orig_path
 
         # distinct repositories (control roots)
         with tempfile.TemporaryDirectory() as tmp:
@@ -708,9 +683,7 @@ exec "$real_git" "$@"
             wrapper_dir.mkdir()
             script = BLOCK_TEMPLATE.replace("__BRANCH__", "wave/demo/concurrent").replace("__BLOCK__", str(block))
             write_wrapper(wrapper_dir, script)
-            orig_path = os.environ.get("PATH", "")
-            os.environ["PATH"] = f"{wrapper_dir}:{orig_path}"
-            try:
+            with git_on_path(wrapper_dir):
                 repoAStr = str(repoA)
                 repoBStr = str(repoB)
                 blockStr = str(block)
@@ -759,8 +732,6 @@ exec "$real_git" "$@"
                 # Need to run without the wrapper loader script helper, use direct run_node_script with custom body that doesn't use node_loader_script
                 result = run_node_script(node_body, timeout=20)
                 self.assertTrue(result.get("ok"), result)
-            finally:
-                os.environ["PATH"] = orig_path
 
     def test_repo_parameter_keeps_same_task_lanes_independent_across_repositories(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -784,53 +755,51 @@ exec "$real_git" "$@"
                 "__BLOCK__", str(release)
             )
             write_wrapper(wrapper_dir, wrapper)
-            original_path = os.environ.get("PATH", "")
-            os.environ["PATH"] = f"{wrapper_dir}:{original_path}"
             first: subprocess.Popen[str] | None = None
             second: subprocess.Popen[str] | None = None
             try:
-                first = spawn_raw_harness(outside)
-                second = spawn_raw_harness(outside)
-                first_stdin = first.stdin
-                first_stdout = first.stdout
-                assert first_stdin is not None and first_stdout is not None
-                first_stdin.write(
-                    f"{json.dumps({'tool': 'collab_lane_create', 'task_id': 'demo', 'lane_id': 'selected-first', 'repo': str(first_repository)})}\n"
-                )
-                first_stdin.flush()
-                first_lock = first_repository / ".git/collab-op-locks/demo.lock"
-                self.assertTrue(
-                    wait_until(lambda: first_lock.exists()),
-                    "first repository never acquired its task lock",
-                )
+                with git_on_path(wrapper_dir):
+                    first = spawn_raw_harness(outside)
+                    second = spawn_raw_harness(outside)
+                    first_stdin = first.stdin
+                    first_stdout = first.stdout
+                    assert first_stdin is not None and first_stdout is not None
+                    first_stdin.write(
+                        f"{json.dumps({'tool': 'collab_lane_create', 'task_id': 'demo', 'lane_id': 'selected-first', 'repo': str(first_repository)})}\n"
+                    )
+                    first_stdin.flush()
+                    first_lock = first_repository / ".git/collab-op-locks/demo.lock"
+                    self.assertTrue(
+                        wait_until(lambda: first_lock.exists()),
+                        "first repository never acquired its task lock",
+                    )
 
-                second_observed = send_request(
-                    second,
-                    {
-                        "tool": "collab_lane_create",
-                        "task_id": "demo",
-                        "lane_id": "selected-second",
-                        "repo": str(second_repository),
-                    },
-                )
+                    second_observed = send_request(
+                        second,
+                        {
+                            "tool": "collab_lane_create",
+                            "task_id": "demo",
+                            "lane_id": "selected-second",
+                            "repo": str(second_repository),
+                        },
+                    )
 
-                self.assertFalse(second_observed["is_error"])
-                self.assertEqual(
-                    git(second_repository, "rev-parse", "wave/demo/selected-second"),
-                    git(second_repository, "rev-parse", "wave/demo/integration"),
-                )
-                self.assertTrue(first_lock.exists())
+                    self.assertFalse(second_observed["is_error"])
+                    self.assertEqual(
+                        git(second_repository, "rev-parse", "wave/demo/selected-second"),
+                        git(second_repository, "rev-parse", "wave/demo/integration"),
+                    )
+                    self.assertTrue(first_lock.exists())
 
-                release.write_text("go\n", encoding="utf-8")
-                first_observed = json.loads(first_stdout.readline())
-                self.assertFalse(first_observed["is_error"])
-                self.assertEqual(
-                    git(first_repository, "rev-parse", "wave/demo/selected-first"),
-                    git(first_repository, "rev-parse", "wave/demo/integration"),
-                )
+                    release.write_text("go\n", encoding="utf-8")
+                    first_observed = json.loads(first_stdout.readline())
+                    self.assertFalse(first_observed["is_error"])
+                    self.assertEqual(
+                        git(first_repository, "rev-parse", "wave/demo/selected-first"),
+                        git(first_repository, "rev-parse", "wave/demo/integration"),
+                    )
             finally:
                 release.write_text("go\n", encoding="utf-8")
-                os.environ["PATH"] = original_path
                 if first is not None:
                     close_harness(first)
                 if second is not None:

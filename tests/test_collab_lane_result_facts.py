@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -13,6 +12,7 @@ from tests._collab_support import (
     FAIL_WORKTREE_REMOVE,
     close_harness_for,
     git,
+    git_on_path,
     invoke,
     seed_managed_task,
     seed_repository,
@@ -89,12 +89,10 @@ if [ -f "__MARKER__" ]; then
 fi
 exec "$real_git" "$@"
 """.replace("__MARKER__", str(marker)))
-            original_path = os.environ["PATH"]
-            os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
             try:
-                observed = invoke(repository, {"tool": "collab_lane", "action": "collect", "task_id": "demo", "lane_id": "writer-1"})
+                with git_on_path(wrapper.parent):
+                    observed = invoke(repository, {"tool": "collab_lane", "action": "collect", "task_id": "demo", "lane_id": "writer-1"})
             finally:
-                os.environ["PATH"] = original_path
                 close_harness_for(repository)
             self.assertFalse(observed["is_error"])
             result = observed["result"]
@@ -116,12 +114,10 @@ exec "$real_git" "$@"
                 seed_task_container(repository)
                 expected = seed_managed_task(repository)
                 wrapper = write_git_wrapper(base, failure)
-                original_path = os.environ["PATH"]
-                os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
                 try:
-                    observed = invoke(repository, {"tool": "collab_lane", "action": action, "task_id": "demo", "lane_id": "writer-1"})
+                    with git_on_path(wrapper.parent):
+                        observed = invoke(repository, {"tool": "collab_lane", "action": action, "task_id": "demo", "lane_id": "writer-1"})
                 finally:
-                    os.environ["PATH"] = original_path
                     close_harness_for(repository)
                 self.assertFalse(observed["is_error"])
                 result = observed["result"]

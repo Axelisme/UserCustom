@@ -7,7 +7,10 @@ tests/collab_op_extension_harness.mjs against temporary git repositories.
 from __future__ import annotations
 
 import atexit
+from collections.abc import Iterator
+from contextlib import contextmanager
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -289,6 +292,17 @@ def worktree_block(records: str, path: str) -> str | None:
     return None
 
 
+@contextmanager
+def git_on_path(directory: Path) -> Iterator[None]:
+    """Put `directory` (holding a git wrapper) first on PATH for the block, then restore PATH."""
+    original = os.environ.get("PATH", "")
+    os.environ["PATH"] = f"{directory}:{original}"
+    try:
+        yield
+    finally:
+        os.environ["PATH"] = original
+
+
 def write_git_wrapper(base: Path, script: str) -> Path:
     real_git = shutil.which("git")
     assert real_git is not None
@@ -411,71 +425,6 @@ if [ "$1" = "for-each-ref" ]; then
       if [ "$i" -ge 400 ]; then break; fi
     done
   fi
-fi
-exec "$real_git" "$@"
-"""
-
-
-# Blocks the n-th git update-ref invocation (the migration runs exactly two:
-# the atomic transition transaction and the sentinel deletion), letting a test
-# kill the harness at a precise fault boundary.
-UPDATE_REF_BLOCK_WRAPPER = """#!/bin/sh
-real_git="__REAL_GIT__"
-for arg in "$@"; do
-  if [ "$arg" = "-C" ]; then exec "$real_git" "$@"; fi
-done
-if [ "$1" = "update-ref" ]; then
-  if [ -f "__COUNTER__" ]; then
-    n=$(cat "__COUNTER__")
-  else
-    n=0
-  fi
-  n=$((n+1))
-  printf '%s\\n' "$n" > "__COUNTER__"
-  if [ "$n" = "__BLOCK_ON__" ]; then
-    printf 'blocked\\n' > "__BLOCKED__"
-    i=0
-    while [ ! -f "__BLOCK__" ]; do
-      sleep 0.05
-      i=$((i+1))
-      if [ "$i" -ge 400 ]; then break; fi
-    done
-  fi
-fi
-exec "$real_git" "$@"
-"""
-
-
-# Blocks git worktree remove before it runs, for crash injection during the
-# non-force canonical acceptance cleanup.
-WORKTREE_REMOVE_BLOCK_WRAPPER = """#!/bin/sh
-real_git="__REAL_GIT__"
-for arg in "$@"; do
-  if [ "$arg" = "-C" ]; then exec "$real_git" "$@"; fi
-done
-if [ "$1" = "worktree" ] && [ "$2" = "remove" ]; then
-  printf 'blocked\\n' > "__BLOCKED__"
-  i=0
-  while [ ! -f "__BLOCK__" ]; do
-    sleep 0.05
-    i=$((i+1))
-    if [ "$i" -ge 400 ]; then break; fi
-  done
-fi
-exec "$real_git" "$@"
-"""
-
-
-# Injects an active clean-index merge (MERGE_HEAD) into the canonical
-# integration worktree when git worktree remove runs, i.e. after the first
-# resume inventory and before the sentinel compare-and-swap deletion.
-MERGE_INJECT_WRAPPER = """#!/bin/sh
-real_git="__REAL_GIT__"
-for arg in "$@"; do
-  if [ "$arg" = "-C" ]; then exec "$real_git" "$@"; fi
-done
-if [ "$1" = "worktree" ] && [ "$2" = "remove" ]; then
-  printf '%s\\n' "__SHA__" > "__MERGE_HEAD_PATH__"
 fi
 exec "$real_git" "$@"
 """

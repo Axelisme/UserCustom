@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -18,6 +17,7 @@ from tests._collab_support import (
     close_harness_for,
     commit_agent_state_ignore,
     git,
+    git_on_path,
     invoke,
     last_telemetry_event,
     seed_donor,
@@ -498,16 +498,14 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             seed_task_container(repository)
             expected = seed_managed_task(repository)
             wrapper = write_git_wrapper(base, FAIL_WORKTREE_REMOVE)
-            original_path = os.environ["PATH"]
-            os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
             close_harness_for(repository)
             try:
-                observed = invoke(
-                    repository,
-                    {"tool": "collab_integration", "action": "remove", "task_id": "demo"},
-                )
+                with git_on_path(wrapper.parent):
+                    observed = invoke(
+                        repository,
+                        {"tool": "collab_integration", "action": "remove", "task_id": "demo"},
+                    )
             finally:
-                os.environ["PATH"] = original_path
                 close_harness_for(repository)
 
             self.assertFalse(observed["is_error"])
@@ -702,39 +700,37 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
                     "__BLOCKED__", str(blocked)
                 ),
             )
-            original_path = os.environ["PATH"]
-            os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
             first: subprocess.Popen[str] | None = None
             second: subprocess.Popen[str] | None = None
             try:
-                first = spawn_raw_harness(repository)
-                second = spawn_raw_harness(repository)
-                first_stdin = first.stdin
-                first_stdout = first.stdout
-                assert first_stdin is not None and first_stdout is not None
-                first_stdin.write(
-                    f"{json.dumps({'tool': 'collab_report', 'task_id': 'demo', 'output_dir': 'reports'})}\n"
-                )
-                first_stdin.flush()
-                self.assertTrue(
-                    wait_until(lambda: blocked.exists()),
-                    "report never reached its ref snapshot",
-                )
+                with git_on_path(wrapper.parent):
+                    first = spawn_raw_harness(repository)
+                    second = spawn_raw_harness(repository)
+                    first_stdin = first.stdin
+                    first_stdout = first.stdout
+                    assert first_stdin is not None and first_stdout is not None
+                    first_stdin.write(
+                        f"{json.dumps({'tool': 'collab_report', 'task_id': 'demo', 'output_dir': 'reports'})}\n"
+                    )
+                    first_stdin.flush()
+                    self.assertTrue(
+                        wait_until(lambda: blocked.exists()),
+                        "report never reached its ref snapshot",
+                    )
 
-                refused = send_request(
-                    second,
-                    {"tool": "collab_lane_create", "task_id": "demo", "lane_id": "concurrent"},
-                )
+                    refused = send_request(
+                        second,
+                        {"tool": "collab_lane_create", "task_id": "demo", "lane_id": "concurrent"},
+                    )
 
-                self.assertTrue(refused["is_error"])
-                self.assertEqual(refused["error"]["error"]["code"], "task_busy")
-                self.assertEqual(git(repository, "branch", "--list", "wave/demo/concurrent"), "")
-                block.write_text("go\\n", encoding="utf-8")
-                observed = json.loads(first_stdout.readline())
-                self.assertFalse(observed["is_error"])
-                self.assertEqual(observed["result"], {"ok": True, "tool_version": 1})
+                    self.assertTrue(refused["is_error"])
+                    self.assertEqual(refused["error"]["error"]["code"], "task_busy")
+                    self.assertEqual(git(repository, "branch", "--list", "wave/demo/concurrent"), "")
+                    block.write_text("go\\n", encoding="utf-8")
+                    observed = json.loads(first_stdout.readline())
+                    self.assertFalse(observed["is_error"])
+                    self.assertEqual(observed["result"], {"ok": True, "tool_version": 1})
             finally:
-                os.environ["PATH"] = original_path
                 for process in (first, second):
                     if process is not None:
                         close_harness(process)
@@ -1011,19 +1007,17 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             seed_task_container(repository)
             expected = seed_managed_task(repository)
             wrapper = write_git_wrapper(base, FAIL_WORKTREE_REMOVE)
-            original_path = os.environ["PATH"]
-            os.environ["PATH"] = f"{wrapper.parent}:{original_path}"
             close_harness_for(repository)
             try:
-                observed = invoke(
-                    repository,
-                    {
-                        "tool": "collab_lane_drop",
-                        "task_id": "demo",
-                        "lane_id": "writer-1"},
-                )
+                with git_on_path(wrapper.parent):
+                    observed = invoke(
+                        repository,
+                        {
+                            "tool": "collab_lane_drop",
+                            "task_id": "demo",
+                            "lane_id": "writer-1"},
+                    )
             finally:
-                os.environ["PATH"] = original_path
                 close_harness_for(repository)
 
             self.assertFalse(observed["is_error"])

@@ -13,11 +13,16 @@ import threading
 import time
 import unittest
 
+try:
+    from tests import _support as support
+except ImportError:  # Direct test-file execution keeps tests/ on sys.path.
+    import _support as support
+
 
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSION = ROOT / "home/.pi/agent/extensions/collab-op.ts"
 HARNESS = ROOT / "tests/collab_op_extension_harness.mjs"
-PI_PACKAGE = Path("/usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js")
+PI_PACKAGE = support.PI_PACKAGE
 _HARNESSES: dict[Path, subprocess.Popen[str]] = {}
 _HARNESS_SUPPORT: dict[Path, Path | None] = {}
 
@@ -48,6 +53,7 @@ def close_harnesses() -> None:
 
 
 atexit.register(close_harnesses)
+setUpModule = support.require_pi
 
 
 def git(repository: Path, *arguments: str) -> str:

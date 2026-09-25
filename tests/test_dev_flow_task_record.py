@@ -12,6 +12,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+try:
+    from tests import _support as support
+except ImportError:  # Direct test-file execution keeps tests/ on sys.path.
+    import _support as support
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "home" / ".codex" / "skills" / "dev-flow" / "scripts" / "plan.py"
 
@@ -26,6 +31,7 @@ def load_plan():
 
 
 plan = load_plan()
+setUpModule = support.require_git
 
 
 @dataclasses.dataclass(frozen=True)
@@ -53,7 +59,7 @@ def run_plan(root: Path, *arguments: str) -> Outcome:
             # Check Git worktree membership without side effects
             try:
                 probe = subprocess.run(
-                    ["/usr/bin/git", "rev-parse", "--show-toplevel"],
+                    ["git", "rev-parse", "--show-toplevel"],
                     cwd=root,
                     capture_output=True,
                     text=True,
@@ -1030,7 +1036,7 @@ class RootSelectionProductionTests(unittest.TestCase):
             self.assertEqual(located["location"], "active")
             # Even when the CWD is itself a Git worktree, explicit --repo still wins and
             # does not silently redirect to the CWD's worktree root.
-            subprocess.run(["/usr/bin/git", "init", "-q", str(other)], check=True)
+            subprocess.run(["git", "init", "-q", str(other)], check=True)
             located2 = self.assert_ok(run_production(other, "--repo", str(repo), "locate", "demo"), "locate")
             self.assertEqual(located2["control_root"], str(repo.resolve()))
 
@@ -1039,7 +1045,7 @@ class RootSelectionProductionTests(unittest.TestCase):
             base = Path(tmp)
             repo = base / "repo"
             repo.mkdir()
-            subprocess.run(["/usr/bin/git", "init", "-q", str(repo)], check=True)
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
             nested = repo / "nested" / "deep"
             nested.mkdir(parents=True)
             # Without --repo, CWD inside nested directory must discover the worktree root.
@@ -1064,7 +1070,7 @@ class RootSelectionProductionTests(unittest.TestCase):
             outside = Path(tmp) / "outside"
             outside.mkdir()
             probe = subprocess.run(
-                ["/usr/bin/git", "rev-parse", "--show-toplevel"],
+                ["git", "rev-parse", "--show-toplevel"],
                 cwd=outside,
                 capture_output=True,
                 text=True,
@@ -1087,7 +1093,7 @@ class RootSelectionProductionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"
             repo.mkdir()
-            subprocess.run(["/usr/bin/git", "init", "-q", str(repo)], check=True)
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
             # Success payloads include absolute control_root.
             created = self.assert_ok(run_production(repo, "create", "demo"), "create")
             self.assertEqual(created["control_root"], str(repo.resolve()))
@@ -1128,7 +1134,7 @@ class RootSelectionProductionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"
             repo.mkdir()
-            subprocess.run(["/usr/bin/git", "init", "-q", str(repo)], check=True)
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
             with tempfile.TemporaryDirectory() as tmp_cwd:
                 other = Path(tmp_cwd)
                 # Create via explicit --repo from another CWD, outside Git.

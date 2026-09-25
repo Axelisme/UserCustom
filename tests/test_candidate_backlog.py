@@ -9,33 +9,30 @@ import tempfile
 import unittest
 from pathlib import Path
 
+try:
+    from tests import _support as support
+except ImportError:  # Direct test-file execution keeps tests/ on sys.path.
+    import _support as support
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = (
     ROOT / "home" / ".codex" / "skills" / "candidate-backlog" / "scripts" / "backlog.py"
 )
 
-GIT_ENV = {
-    **os.environ,
-    "GIT_AUTHOR_NAME": "test",
-    "GIT_AUTHOR_EMAIL": "test@example.com",
-    "GIT_COMMITTER_NAME": "test",
-    "GIT_COMMITTER_EMAIL": "test@example.com",
-}
+setUpModule = support.require_git
 
 
 def init_repo(root: Path) -> None:
     git = ("git", "-C", str(root))
-    subprocess.run([*git, "init", "-q"], check=True, env=GIT_ENV)
+    subprocess.run([*git, "init", "-q"], check=True)
     (root / "README.md").write_text("seed\n", encoding="utf-8")
-    subprocess.run([*git, "add", "-A"], check=True, env=GIT_ENV)
-    subprocess.run([*git, "commit", "-qm", "seed"], check=True, env=GIT_ENV)
+    subprocess.run([*git, "add", "-A"], check=True)
+    subprocess.run([*git, "commit", "-qm", "seed"], check=True)
 
 
 def add_worktree(root: Path, path: Path) -> None:
     git = ("git", "-C", str(root))
-    subprocess.run(
-        [*git, "worktree", "add", "-q", "--detach", str(path)], check=True, env=GIT_ENV
-    )
+    subprocess.run([*git, "worktree", "add", "-q", "--detach", str(path)], check=True)
 
 
 def run_backlog(cwd: Path, *arguments: str) -> subprocess.CompletedProcess[str]:

@@ -9,6 +9,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
+from tests import _support as support
 from tests.test_collab_op_extension import (
     close_harness,
     close_harness_for,
@@ -23,7 +24,8 @@ from tests.test_collab_op_extension import (
 
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSION_OP = ROOT / "home/.pi/agent/extensions/collab-op.ts"
-PI_PACKAGE = Path("/usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js")
+PI_PACKAGE = support.PI_PACKAGE
+setUpModule = support.require_pi
 
 BLOCK_TEMPLATE = """#!/bin/sh
 real_git="__REAL_GIT__"
@@ -84,7 +86,7 @@ def run_node_script(script: str, timeout: int = 20) -> dict:
         fname = f.name
     try:
         run = subprocess.run(
-            ["/usr/bin/node", "--experimental-strip-types", fname],
+            [support.NODE, "--experimental-strip-types", fname],
             capture_output=True,
             text=True,
             timeout=timeout,

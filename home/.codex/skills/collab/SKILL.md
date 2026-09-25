@@ -56,7 +56,7 @@ Installed role filenames are `collab-implementer` and `collab-acceptor`:
 | Runtime | Directory | Format |
 |---|---|---|
 | Pi | `~/.pi/agent/herdr-subagents/profiles/` | `.md` |
-| Claude | `~/.claude/agents/` | `.md` |
+| Claude | Pi profiles, dispatched through the subagent MCP ([Claude runtime](runtime-claude.md)) | — |
 | Codex | `~/.codex/agents/` | `.toml` |
 
 Use dev-flow's `scripts/section.py <absolute-profile-path>#dispatch-contract <absolute-profile-path>#result`. The

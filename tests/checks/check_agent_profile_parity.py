@@ -3,12 +3,9 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-try:
-    from tests import _profile_test_support as support
-except ImportError:  # Direct test-file execution keeps tests/ on sys.path.
-    import _profile_test_support as support
+from tests import _profile_test_support as support
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 HOME = ROOT / "home"
 
 PARITY_NAMES = (

@@ -6,10 +6,16 @@ import subprocess
 import unittest
 from pathlib import Path
 
+try:
+    from tests import _support as support
+except ImportError:  # Direct test-file execution keeps tests/ on sys.path.
+    import _support as support
+
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSIONS = ROOT / "home/.pi/agent/extensions"
 HARNESS = ROOT / "tests/collab_op_extension_harness.mjs"
-PI_PACKAGE = Path("/usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js")
+PI_PACKAGE = support.PI_PACKAGE
+setUpModule = support.require_pi
 
 
 class PiExtensionLoadTests(unittest.TestCase):

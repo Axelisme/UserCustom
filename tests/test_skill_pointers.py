@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
 import unittest
@@ -21,8 +22,14 @@ POINTER_ROOTS = (
 
 
 def run(*args: str) -> subprocess.CompletedProcess[str]:
+    # section.py resolves bare pointers under ~/; point it at this checkout's home/ tree
+    # rather than whatever the invoking user has installed.
     return subprocess.run(
-        ["python3", str(SECTION), *args], capture_output=True, text=True, cwd=ROOT
+        ["python3", str(SECTION), *args],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        env={**os.environ, "HOME": str(HOME)},
     )
 
 

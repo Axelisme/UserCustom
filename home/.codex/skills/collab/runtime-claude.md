@@ -18,7 +18,9 @@ roles, never as a `collab-implementer` or `collab-acceptor` substitute.
 
 ## Capability check
 
-At dispatch, the current Claude tool inventory is the capability source of truth. Require the MCP
+At dispatch, the current Claude tool inventory is the capability source of truth. The MCP binds to the
+parent Claude session only when that session runs inside a usable Herdr pane, as Pi
+[Dispatch](runtime-pi.md#dispatch) states for Pi parents. Outside one, the tools are inactive. Require the MCP
 tools `spawn_subagent`, `wait_subagent_events`, `query_subagent`, and `control_subagent` (exposed as
 `mcp__subagents__*`; load deferred schemas before the first call). Then require
 `collab-implementer` or `collab-acceptor` in `query_subagent({ action: "roles" })`. Those roles are the
@@ -40,7 +42,8 @@ Read Collab [Prepare](references/execution.md#prepare),
 review checkout for `collab-acceptor`. `dispatch` is the whole bounded brief. Each correction,
 rereview, and replacement is its own spawn; no call resumes a child with a new brief. Pi
 [Dispatch](runtime-pi.md#dispatch) describes the profile registry and the parameters the schema
-rejects. Its Herdr-pane availability rule does not apply here, because the MCP server owns pane placement.
+rejects. The MCP places each child in its own pane. That does not lift the parent-pane prerequisite in
+[Capability check](#capability-check).
 
 A child can ask its parent a question, so brief it to request a decision through `contact_parent`
 and stay live rather than ending `BLOCKED` with a question.
@@ -64,8 +67,11 @@ Branch on the returned `state`:
   which children are still running, and check again when the user next responds.
 - `superseded`: a newer wait replaced this call and consumed nothing. Do nothing; the newer call
   stands.
-- `session_changed`: notifications addressed to the previous Claude session stay pending until that
-  session resumes. Recover each child dispatched from it by exact-id `result` (see below).
+- `session_changed`: the MCP rebound to a new Claude session. Children, notifications, and results
+  belong to the session that spawned them, so exact-id `result` from the new session cannot find them.
+  To collect them, resume the previous Claude session. If that session is unavailable, treat those
+  children's outcomes as unrecoverable: inspect the affected checkout's actual state, record the loss
+  in the owning ticket or batch review record, and dispatch fresh.
 
 While a child runs, continue independent work. On each wake, reread the exact ticket or batch review
 record named by the dispatch, as in Pi [Post-launch](runtime-pi.md#post-launch).

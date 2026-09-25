@@ -59,7 +59,7 @@ Installed role filenames are `collab-implementer` and `collab-acceptor`:
 | Claude | `~/.claude/agents/` | `.md` |
 | Codex | `~/.codex/agents/` | `.toml` |
 
-Use dev-flow's `scripts/section.py <absolute-profile-path>#dispatch-contract` and `#result`. The
+Use dev-flow's `scripts/section.py <absolute-profile-path>#dispatch-contract <absolute-profile-path>#result`. The
 implementer writes one bounded internal change. The acceptor reads one immutable subject and one
 bounded criterion set owned by a batch review record, including singleton batches. Specialized Standards
 and Spec review remains a separate code-review assignment, not the default acceptance loop.

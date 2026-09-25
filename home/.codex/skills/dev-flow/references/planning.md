@@ -6,6 +6,8 @@ Inputs are the task ID or lookup ID and the main checkout. Run `scripts/plan.py 
 an unknown ID, run `list` and use a returned `lookup_id`. Read the located INDEX, active Standing
 orders, the Current/Next ticket or review brief, and pointers required by that action. The Orchestrator
 is read-only until it identifies the bounded action, owner, checkout, and applicable authority.
+`size_warnings` names an INDEX or ticket past the line limit; condense it under
+[Maintain the record](records.md#maintain-the-record) at its next record update.
 
 Preserve historical records and the contract of already dispatched attempts. An unknown historical
 state is not acceptance under this workflow. Before resuming unfinished legacy work, record the

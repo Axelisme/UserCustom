@@ -23,7 +23,8 @@ changed, or uncertain, reread it. A summary never replaces governing text or an 
 
 ## The lifecycle
 
-Use `scripts/section.py <absolute-path>#anchor` to open the selected operation section.
+Use `scripts/section.py <absolute-path>#anchor ...` to open the selected operation sections; one call
+reads several pointers in order.
 
 - Resume an existing task: [Resume](references/planning.md#resume).
 - Create a task, define scope, or slice tickets: [Plan](references/planning.md#plan) and

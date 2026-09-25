@@ -694,6 +694,48 @@ class TaskRecordTests(unittest.TestCase):
             )
             self.assertEqual(located["parse_errors"], [])
 
+    def test_locate_warns_only_about_records_past_the_line_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
+            task = record(root)
+            limit = plan.LINE_WARN_LIMIT
+            (task / "INDEX.md").write_bytes(
+                b"---\ntask_id: demo\nspec: none\n---\n" + b"opaque:\xff\x00\n" * limit
+            )
+            write_ticket(task / "tickets", "T001-long", "pending", "line\n" * limit)
+            write_ticket(task / "tickets", "T002-short", "pending")
+            write_ticket(task / "tickets", "T003-edge", "pending", "line\n" * (limit - 5))
+            self.assertEqual(
+                len((task / "tickets" / "T003-edge" / "ticket.md").read_text().splitlines()),
+                limit,
+            )
+            before = snapshot(task)
+
+            located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+
+            self.assertEqual(snapshot(task), before, "locate must not write")
+            self.assertEqual(located["orientation"], "available")
+            self.assertEqual(
+                located["size_warnings"],
+                [
+                    {"path": ".agent_state/plans/demo/INDEX.md", "lines": limit + 4},
+                    {
+                        "path": ".agent_state/plans/demo/tickets/T001-long/ticket.md",
+                        "lines": limit + 5,
+                    },
+                ],
+            )
+
+    def test_locate_reports_no_size_warnings_for_a_fresh_or_missing_record(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            missing = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+            self.assertEqual(missing["size_warnings"], [])
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
+            located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+            self.assertEqual(located["size_warnings"], [])
+
     def test_malformed_and_legacy_indexes_still_locate_without_rewrite(self) -> None:
         for label, index_text in (
             ("malformed", "---\ntask_id: malformed\nno closing marker\n"),

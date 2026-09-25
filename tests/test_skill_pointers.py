@@ -69,6 +69,31 @@ class SkillPointerTest(unittest.TestCase):
         self.assertIn("## A gate you cannot close honestly", result.stdout)
         self.assertNotIn("## Creating an evidence file", result.stdout)
 
+    def test_several_pointers_are_read_in_order(self) -> None:
+        lane_authority = HOME / ".codex/skills/dev-flow/references/lane-authority.md"
+        result = run(
+            f"{lane_authority}#creating-an-evidence-file",
+            f"{lane_authority}#a-gate-you-cannot-close-honestly",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        first = result.stdout.index("#creating-an-evidence-file")
+        second = result.stdout.index("#a-gate-you-cannot-close-honestly")
+        self.assertLess(first, second)
+        self.assertIn("## Creating an evidence file", result.stdout)
+        self.assertIn("## A gate you cannot close honestly", result.stdout)
+
+    def test_a_broken_pointer_is_skipped_and_the_rest_still_read(self) -> None:
+        lane_authority = HOME / ".codex/skills/dev-flow/references/lane-authority.md"
+        result = run(
+            f"{lane_authority}#no-such-heading",
+            "../dev-flow/references/no-such-doc.md#anything",
+            f"{lane_authority}#a-gate-you-cannot-close-honestly",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("#no-such-heading", result.stderr)
+        self.assertIn("no-such-doc.md", result.stderr)
+        self.assertIn("## A gate you cannot close honestly", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

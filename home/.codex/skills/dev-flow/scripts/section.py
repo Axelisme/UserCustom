@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Read one anchored section of a Markdown file, and check that anchors resolve."""
+"""Read anchored sections of Markdown files, and check that anchors resolve."""
 
 from __future__ import annotations
 
 import argparse
+import functools
 import os
 import re
 import sys
@@ -21,6 +22,7 @@ def slug(text: str) -> str:
     return re.sub(r"[^\w\s-]", "", text.lower()).strip().replace(" ", "-")
 
 
+@functools.cache
 def headings(path: Path) -> list[tuple[int, int, str, str]]:
     """(line_number, level, title, slug) for every heading outside a fenced block."""
     out: list[tuple[int, int, str, str]] = []
@@ -52,9 +54,13 @@ def walk(root: Path, follow: bool = True) -> list[Path]:
     ]
 
 
-def die(message: str) -> None:
-    print(message, file=sys.stderr)
-    raise SystemExit(1)
+class Unreadable(Exception):
+    """One pointer that cannot be read; the rest of a batch still is."""
+
+
+@functools.cache
+def searchable() -> list[Path]:
+    return [p for root in SEARCH_ROOTS for p in walk(Path(root).expanduser())]
 
 
 def resolve(target: str) -> Path:
@@ -63,14 +69,13 @@ def resolve(target: str) -> Path:
     if direct.is_file():
         return direct
     suffix = Path(*[p for p in Path(target).parts if p not in ("..", ".")])
-    hits = sorted({p for root in SEARCH_ROOTS for p in walk(Path(root).expanduser())
+    hits = sorted({p for p in searchable()
                    if p.name == suffix.name and p.as_posix().endswith(suffix.as_posix())})
     if len(hits) == 1:
         return hits[0]
     if not hits:
-        die(f"{target}: no such document under {', '.join(SEARCH_ROOTS)}")
-    die(f"{target}: ambiguous, matches\n" + "\n".join(f"  {h}" for h in hits))
-    raise AssertionError("unreachable")
+        raise Unreadable(f"{target}: no such document under {', '.join(SEARCH_ROOTS)}")
+    raise Unreadable(f"{target}: ambiguous, matches\n" + "\n".join(f"  {h}" for h in hits))
 
 
 def read_section(path: Path, anchor: str) -> None:
@@ -78,7 +83,7 @@ def read_section(path: Path, anchor: str) -> None:
     wanted = anchor.lstrip("#")
     match = next((h for h in heads if h[3] == wanted), None)
     if match is None:
-        die(
+        raise Unreadable(
             f"{path}: no heading for anchor '#{wanted}'. Available anchors:\n"
             + "\n".join(f"  #{h[3]}" for h in heads)
         )
@@ -126,23 +131,34 @@ def check(roots: list[Path]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("target", nargs="+", help="a pointer 'path.md#anchor', or roots with --check")
+    parser.add_argument(
+        "target", nargs="+",
+        help="pointers 'path.md#anchor', read in order; a bare path lists its anchors; roots with --check",
+    )
     parser.add_argument("--check", action="store_true", help="verify every pointer under the given roots")
-    parser.add_argument("--list", action="store_true", help="list a document's anchors")
+    parser.add_argument("--list", action="store_true", help="list each document's anchors")
     args = parser.parse_args()
 
     if args.check:
         check([Path(t).expanduser() for t in args.target])
         return
 
-    path, _, inline = args.target[0].partition("#")
-    anchor = inline or (args.target[1] if len(args.target) > 1 else "")
-    document = resolve(path)
-    if args.list or not anchor:
-        for n, level, _, s in headings(document):
-            print(f"{n:>5}  {'  ' * (level - 1)}#{s}")
-        return
-    read_section(document, anchor)
+    failed = False
+    for target in args.target:
+        path, _, anchor = target.partition("#")
+        try:
+            document = resolve(path)
+            if args.list or not anchor:
+                print(f"== {document}")
+                for n, level, _, s in headings(document):
+                    print(f"{n:>5}  {'  ' * (level - 1)}#{s}")
+            else:
+                read_section(document, anchor)
+        except Unreadable as error:
+            print(error, file=sys.stderr)
+            failed = True
+    if failed:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

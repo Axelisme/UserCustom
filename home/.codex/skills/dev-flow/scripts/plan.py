@@ -19,6 +19,8 @@ TICKET_FIELDS = ("id", "state")
 # "unknown" is a reporting bucket, not an authorable lifecycle state.
 TICKET_STATES = ("drafted", "pending", "closed", "unknown")
 FRONTMATTER_MAX_BYTES = 16 * 1024
+# A record longer than this still locates; `size_warnings` names it so it can be condensed.
+LINE_WARN_LIMIT = 500
 TICKET_FILE = "ticket.md"
 
 
@@ -561,6 +563,40 @@ def _ticket_counts(directory: Path) -> tuple[dict[str, int | None], dict[str, ob
     return counts, None
 
 
+def _line_count(path: Path) -> int:
+    """Count lines on raw bytes, so an undecodable body is measured without being parsed."""
+    lines = 0
+    last = b"\n"
+    with path.open("rb") as stream:
+        while chunk := stream.read(64 * 1024):
+            lines += chunk.count(b"\n")
+            last = chunk[-1:]
+    return lines + (last != b"\n")
+
+
+def _size_warnings(root: Path, directory: Path) -> list[dict[str, object]]:
+    """Name each INDEX or ticket past the line limit; unreadable files belong to parse_errors."""
+    candidates = [directory / "INDEX.md"]
+    try:
+        with os.scandir(directory / "tickets") as entries:
+            candidates += sorted(
+                Path(entry.path) / TICKET_FILE for entry in entries if not entry.name.startswith(".")
+            )
+    except OSError:
+        pass
+    warnings: list[dict[str, object]] = []
+    for path in candidates:
+        try:
+            if path.parent.is_symlink() or path.is_symlink() or not path.is_file():
+                continue
+            lines = _line_count(path)
+        except OSError:
+            continue
+        if lines > LINE_WARN_LIMIT:
+            warnings.append({"path": relative(root, path), "lines": lines})
+    return warnings
+
+
 def command_list(root: Path, _arguments: argparse.Namespace, *, control_root: str) -> None:
     """List narrow references to active containers without reading their contents."""
     plans = root / ".agent_state" / "plans"
@@ -637,6 +673,7 @@ def command_locate(root: Path, arguments: argparse.Namespace, *, control_root: s
             tickets=_empty_ticket_counts(unknown=True),
             orientation="unavailable",
             parse_errors=[],
+            size_warnings=[],
         )
         return
     if len(matches) > 1:
@@ -661,6 +698,7 @@ def command_locate(root: Path, arguments: argparse.Namespace, *, control_root: s
             tickets=_empty_ticket_counts(unknown=True),
             orientation="unavailable",
             parse_errors=[],
+            size_warnings=[],
         )
         return
 
@@ -689,6 +727,7 @@ def command_locate(root: Path, arguments: argparse.Namespace, *, control_root: s
         tickets=tickets,
         orientation=orientation,
         parse_errors=errors,
+        size_warnings=_size_warnings(root, directory),
     )
 
 

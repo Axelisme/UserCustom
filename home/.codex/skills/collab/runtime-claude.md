@@ -48,11 +48,24 @@ and stay live rather than ending `BLOCKED` with a question.
 ## Waiting
 
 Children report only through `wait_subagent_events`. After each spawn, and after handling each
-notification batch, call it with `ack` listing every `notification_id` received in the previous call,
-then end the turn. Claude moves the call to the background, and its completion starts a new turn. Do
-not poll `status` or block on a child instead. Unacknowledged notifications are delivered again. An
-`idle` answer means no child is running and nothing is pending. Only the main conversation may call
-it; a Claude-native subagent that calls it blocks.
+notification batch, call it with `ack` listing every `notification_id` received in the previous call.
+Unacknowledged notifications are delivered again. Only the main conversation may call it; a
+Claude-native subagent that calls it blocks. Do not poll `status` or block on a child instead.
+
+Branch on the returned `state`:
+
+- A backgrounded call (Claude reports that the call moved to the background) is armed. End the turn;
+  its completion starts a new turn.
+- `notifications`: handle each one under [Results and decisions](#results-and-decisions), then wait
+  again with their ids in `ack`.
+- `idle`: no child is running and nothing is pending. Wait again only after a spawn or resume.
+- `poll`: Claude background tasks are disabled, so nothing is armed and no turn will wake you. Continue
+  independent work and call again at the next natural point. With nothing else to do, tell the user
+  which children are still running, and check again when the user next responds.
+- `superseded`: a newer wait replaced this call and consumed nothing. Do nothing; the newer call
+  stands.
+- `session_changed`: notifications addressed to the previous Claude session stay pending until that
+  session resumes. Recover each child dispatched from it by exact-id `result` (see below).
 
 While a child runs, continue independent work. On each wake, reread the exact ticket or batch review
 record named by the dispatch, as in Pi [Post-launch](runtime-pi.md#post-launch).
@@ -63,7 +76,10 @@ Outcome semantics follow Pi [Results and decisions](runtime-pi.md#results-and-de
 `COMPLETED`, `BLOCKED`, or manager-derived `FAILED`, with `FAILED` resumable. Recovery uses
 exact-id `query_subagent({ action: "result", subagent_id })`. The MCP differs in delivery:
 
-- Each notification carries `kind: terminal` or `kind: decision`, plus its `notification_id`.
+- Each notification carries a `notification_id` and one of three kinds. A `terminal` notification is the
+  child's result. A `decision` notification is a question awaiting a reply. A `recovery` notification
+  reports that the child is alive in `provider-wait` for its model provider. It needs no reply and is
+  neither a result nor a failure: acknowledge it and keep waiting.
 - Answer a decision with `control_subagent({ action: "reply", subagent_id, answer })`, where
   `subagent_id` is the id named in the notification. A prose response or `steer` does not unblock the
   child, and a steer is rejected while its decision is pending. An unanswered decision gets one

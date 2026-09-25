@@ -295,12 +295,15 @@ def worktree_block(records: str, path: str) -> str | None:
 @contextmanager
 def git_on_path(directory: Path) -> Iterator[None]:
     """Put `directory` (holding a git wrapper) first on PATH for the block, then restore PATH."""
-    original = os.environ.get("PATH", "")
-    os.environ["PATH"] = f"{directory}:{original}"
+    original = os.environ.get("PATH")
+    os.environ["PATH"] = f"{directory}:{original}" if original is not None else str(directory)
     try:
         yield
     finally:
-        os.environ["PATH"] = original
+        if original is None:
+            os.environ.pop("PATH", None)
+        else:
+            os.environ["PATH"] = original
 
 
 # Lane create waits LANE_CREATE_WAIT_ENV milliseconds (default 10000) for a busy task lock. Tests

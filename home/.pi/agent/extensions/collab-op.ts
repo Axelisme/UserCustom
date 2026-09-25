@@ -95,8 +95,9 @@ const LOCK_POLL_MS = 25;
 
 /** Lane create's bounded wait; a positive integer in COLLAB_LANE_CREATE_WAIT_MS overrides the default. */
 function laneCreateBoundedWaitMs(): number {
-  const override = process.env[LANE_CREATE_WAIT_ENV]?.trim();
-  return override && /^[1-9]\d*$/.test(override) ? Number(override) : LANE_CREATE_BOUNDED_WAIT_MS;
+  const raw = process.env[LANE_CREATE_WAIT_ENV]?.trim() ?? "";
+  const override = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  return Number.isSafeInteger(override) && override > 0 ? override : LANE_CREATE_BOUNDED_WAIT_MS;
 }
 
 /**

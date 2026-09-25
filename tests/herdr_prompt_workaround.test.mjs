@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { findPackageJSON } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -7,11 +7,19 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const entry = process.env.PI_TEST_PACKAGE_ENTRY
-  ?? "/usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js";
-const aiRoot = dirname(findPackageJSON("@earendil-works/pi-ai", pathToFileURL(entry)));
-const { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } = await import(pathToFileURL(entry));
-const { registerFauxProvider } = await import(pathToFileURL(join(aiRoot, "dist/compat.js")));
-const { fauxAssistantMessage, fauxToolCall, getCurrentSystemPrompt, getCurrentTools, InMemoryCredentialStore } = await import(pathToFileURL(join(aiRoot, "dist/index.js")));
+  || process.env.PI_PACKAGE
+  || "/usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js";
+// Same contract as tests/_support.py: without an installed Pi the suite skips instead of erroring.
+const piMissing = existsSync(entry) ? false : `Pi package not found at ${entry} (set PI_PACKAGE)`;
+let createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager;
+let registerFauxProvider;
+let fauxAssistantMessage, fauxToolCall, getCurrentSystemPrompt, getCurrentTools, InMemoryCredentialStore;
+if (!piMissing) {
+  const aiRoot = dirname(findPackageJSON("@earendil-works/pi-ai", pathToFileURL(entry)));
+  ({ createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } = await import(pathToFileURL(entry)));
+  ({ registerFauxProvider } = await import(pathToFileURL(join(aiRoot, "dist/compat.js"))));
+  ({ fauxAssistantMessage, fauxToolCall, getCurrentSystemPrompt, getCurrentTools, InMemoryCredentialStore } = await import(pathToFileURL(join(aiRoot, "dist/index.js"))));
+}
 const plugin = resolve(dirname(fileURLToPath(import.meta.url)), "../home/.pi/agent/workarounds/herdr-first-prompt/index.ts");
 const prompt = "<subagent_role_guidance>Read-only reviewer</subagent_role_guidance>\n<subagent_dispatch>Review SENTINEL-123</subagent_dispatch>";
 const kickoff = "Start working on the supplied subagent task now.";
@@ -94,7 +102,7 @@ async function run({ enabled = true, child = true, source = prompt, priorPrompt,
 }
 
 // Sequential subtests because the managed-child environment is process-global.
-test("removable herdr first-prompt repair", async (t) => {
+test("removable herdr first-prompt repair", { skip: piMissing }, async (t) => {
   await t.test("fresh custom kickoff is repaired before its first provider request", async () => {
     const result = await run();
     assert.ok(result.prompts[0].includes(prompt));

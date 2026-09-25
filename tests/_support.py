@@ -70,12 +70,12 @@ def _git_version() -> tuple[int, ...] | None:
 
 
 def require_git() -> None:
-    """Module guard: isolate the environment, or skip when git is missing or too old."""
+    """Module guard: isolate the environment, then skip when git is missing or too old."""
+    isolate_environment()
     version = _git_version()
     if version is None or version < MIN_GIT_VERSION:
         wanted = ".".join(map(str, MIN_GIT_VERSION))
         raise unittest.SkipTest(f"git >= {wanted} is required (found {version})")
-    isolate_environment()
 
 
 def require_pi() -> None:

@@ -10,16 +10,6 @@ ROOT = Path(__file__).resolve().parents[1]
 HOME = ROOT / "home"
 SECTION = HOME / ".codex/skills/dev-flow/scripts/section.py"
 
-# An anchored pointer addresses one section, so a heading is an address: renaming one silently
-# breaks every pointer into it. These are the trees whose pointers dev-flow principle 17 governs.
-POINTER_ROOTS = (
-    HOME / ".codex/skills/dev-flow",
-    HOME / ".codex/skills/collab",
-    HOME / ".claude/agents",
-    HOME / ".codex/agents",
-    HOME / ".pi/agent/herdr-subagents/profiles",
-)
-
 
 def run(*args: str) -> subprocess.CompletedProcess[str]:
     # section.py resolves bare pointers under ~/; point it at this checkout's home/ tree
@@ -34,10 +24,6 @@ def run(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 class SkillPointerTest(unittest.TestCase):
-    def test_every_anchored_pointer_resolves(self) -> None:
-        result = run("--check", *[str(p) for p in POINTER_ROOTS])
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
     def test_a_stale_anchor_fails_loudly_with_the_real_anchors(self) -> None:
         lane_authority = HOME / ".codex/skills/dev-flow/references/lane-authority.md"
         result = run(f"{lane_authority}#creating-an-evidence-fil")

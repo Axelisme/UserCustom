@@ -29,6 +29,8 @@ class TestRunnerTests(unittest.TestCase):
             environment = {
                 **os.environ,
                 "TEST_RUNNER_BARRIER": temporary,
+                # Concurrency must not depend on the host's core count.
+                "PYTHON_CPU_COUNT": "1",
             }
             result = subprocess.run(
                 [sys.executable, str(RUNNER), "tests.runner_parallel_fixture"],
@@ -59,6 +61,15 @@ class TestRunnerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
         self.assertIn("CHECK-FIXTURE-FAILURE", result.stderr)
         self.assertRegex(result.stdout, r"check\s+FAILED\s+tests\.checks\.runner_failing_fixture")
+
+    def test_failing_case_is_named_and_counted_alone_among_its_neighbours(self) -> None:
+        result = run_runner("tests.runner_failing_case_fixture")
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("CASE-FIXTURE-FAILURE", result.stderr)
+        self.assertIn("test_fixture_case_fails", result.stderr)
+        self.assertIn("Ran 2 tests", result.stdout)
+        self.assertIn("FAILED (1 tests)", result.stdout)
 
     def test_default_run_discovers_node_tests_and_checks(self) -> None:
         result = subprocess.run(

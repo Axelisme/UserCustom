@@ -20,10 +20,11 @@ setUpModule = support.require_pi
 
 class PiExtensionLoadTests(unittest.TestCase):
     def test_every_shipped_extension_loads(self) -> None:
-        shipped = sorted(EXTENSIONS.glob("*.ts"))
+        # Pi loads top-level .ts files and directories with an index.ts.
+        shipped = sorted([*EXTENSIONS.glob("*.ts"), *EXTENSIONS.glob("*/index.ts")])
         self.assertTrue(shipped, f"no extensions found under {EXTENSIONS}")
         for extension in shipped:
-            with self.subTest(extension=extension.name):
+            with self.subTest(extension=str(extension.relative_to(EXTENSIONS))):
                 loaded = subprocess.run(
                     ["node", str(HARNESS), str(PI_PACKAGE), str(extension), str(ROOT)],
                     input='{"tool":"missing"}\n',

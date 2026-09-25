@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 
 from tests import _support as support
-from tests.test_collab_op_extension import (
+from tests._collab_support import (
     close_harness,
     close_harness_for,
     git,

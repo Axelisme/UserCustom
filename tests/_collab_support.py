@@ -26,8 +26,13 @@ ROOT = Path(__file__).resolve().parents[1]
 EXTENSION = ROOT / "home/.pi/agent/extensions/collab-op.ts"
 HARNESS = ROOT / "tests/collab_op_extension_harness.mjs"
 PI_PACKAGE = support.PI_PACKAGE
+# Starting a harness imports Pi (~0.3 s), so one harness serves every repository
+# a process invokes. A harness sees the environment it was spawned with, so it
+# is reused only while the process environment is unchanged; a test that puts a
+# git wrapper on PATH or sets a COLLAB_* override gets a fresh harness.
+_SHARED: dict[Path | None, tuple[dict[str, str], subprocess.Popen[str]]] = {}
+# Raw harnesses from spawn_raw_harness, keyed by the repository they serve.
 _HARNESSES: dict[Path, subprocess.Popen[str]] = {}
-_HARNESS_SUPPORT: dict[Path, Path | None] = {}
 
 
 def close_harness(process: subprocess.Popen[str]) -> None:
@@ -49,10 +54,12 @@ def close_harness(process: subprocess.Popen[str]) -> None:
 
 
 def close_harnesses() -> None:
+    for _environment, process in _SHARED.values():
+        close_harness(process)
+    _SHARED.clear()
     for process in _HARNESSES.values():
         close_harness(process)
     _HARNESSES.clear()
-    _HARNESS_SUPPORT.clear()
 
 
 atexit.register(close_harnesses)
@@ -76,22 +83,17 @@ def invoke(
     *,
     support_extension: Path | None = None,
 ) -> dict[str, object]:
-    for stale in [key for key in _HARNESSES if not key.exists()]:
-        close_harness(_HARNESSES.pop(stale))
-        _HARNESS_SUPPORT.pop(stale, None)
-
-    key = repository.resolve()
     support = support_extension.resolve() if support_extension is not None else None
-    process = _HARNESSES.get(key)
-    if process is not None and _HARNESS_SUPPORT.get(key) != support:
+    environment = dict(os.environ)
+    shared = _SHARED.get(support)
+    process = shared[1] if shared is not None else None
+    if shared is not None and (shared[0] != environment or process.poll() is not None):
         close_harness(process)
-        _HARNESSES.pop(key, None)
-        _HARNESS_SUPPORT.pop(key, None)
+        del _SHARED[support]
         process = None
-    if process is None or process.poll() is not None:
-        if process is not None:
-            close_harness(process)
-        command = ["node", str(HARNESS), str(PI_PACKAGE), str(EXTENSION), str(key)]
+    if process is None:
+        # The loader's cwd only anchors Pi resource discovery; each request names its repository.
+        command = ["node", str(HARNESS), str(PI_PACKAGE), str(EXTENSION), os.environ["HOME"]]
         if support is not None:
             command.append(str(support))
         process = subprocess.Popen(
@@ -101,8 +103,8 @@ def invoke(
             stderr=subprocess.PIPE,
             text=True,
         )
-        _HARNESSES[key] = process
-        _HARNESS_SUPPORT[key] = support
+        _SHARED[support] = (environment, process)
+    request = {**request, "__cwd": str(repository.resolve())}
 
     stdin = process.stdin
     stdout = process.stdout
@@ -346,7 +348,6 @@ def spawn_raw_harness(repository: Path) -> subprocess.Popen[str]:
         text=True,
     )
     _HARNESSES[repository.resolve()] = process
-    _HARNESS_SUPPORT[repository.resolve()] = None
     return process
 
 
@@ -374,11 +375,13 @@ def wait_until(predicate, timeout: float = 30.0) -> bool:
 
 
 def close_harness_for(repository: Path) -> None:
-    key = repository.resolve()
-    process = _HARNESSES.pop(key, None)
-    _HARNESS_SUPPORT.pop(key, None)
+    """Stop every harness that can serve `repository`; the next invoke starts a fresh one."""
+    process = _HARNESSES.pop(repository.resolve(), None)
     if process is not None:
         close_harness(process)
+    for _environment, shared in _SHARED.values():
+        close_harness(shared)
+    _SHARED.clear()
 
 
 def lock_held_by(lock: Path, pid: int) -> bool:

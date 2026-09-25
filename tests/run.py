@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Run every test in parallel, one isolated subprocess per case or node test file.
+"""Run every test in parallel, one subprocess per small chunk of cases or node test file.
 
 `python3 -m unittest discover -s tests` still works for the Python behavior
 tests and remains their reference behavior; this runner exists because that
 discovery is serial and covers neither node tests nor repository checks.
 Almost all of the suite's wall time is spent launching shipped scripts against
 temporary repositories and homes, so independent jobs are scheduled across
-CPU cores.
+CPU cores. Each collab test process starts a node harness that imports Pi
+(~0.3 s), so a job runs up to CHUNK_SIZE consecutive cases of one test class
+and shares that harness; node's compile cache is enabled for every job.
 
 Three kinds of test are discovered and reported separately:
 
-  test   tests/test_*.py          behavior tests, one job per unittest case
-  check  tests/checks/check_*.py  repository-data checks, one job per case
+  test   tests/test_*.py          behavior tests, one job per chunk of cases
+  check  tests/checks/check_*.py  repository-data checks, one job per chunk
   node   tests/*.test.mjs         node:test files, one job per file
 
 Usage: python3 tests/run.py [--list] [selection ...]
@@ -26,6 +28,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 from collections import defaultdict
@@ -37,6 +40,7 @@ TESTS = Path(__file__).resolve().parent
 ROOT = TESTS.parent
 CHECKS = TESTS / "checks"
 KINDS = ("test", "check", "node")
+CHUNK_SIZE = 4
 
 
 @dataclass(frozen=True)
@@ -45,6 +49,7 @@ class Job:
     group: str
     name: str
     command: tuple[str, ...]
+    cases: int = 1
 
 
 @dataclass(frozen=True)
@@ -54,6 +59,19 @@ class Result:
     duration: float
     skipped: int
     output: str
+
+    @property
+    def failed(self) -> int:
+        """Failed cases: unittest's own count when it reports one, else the whole job."""
+        if self.returncode == 0:
+            return 0
+        if self.job.kind != "node":
+            match = re.search(r"^FAILED \((.*)\)$", self.output, re.MULTILINE)
+            if match:
+                counted = sum(int(count) for count in re.findall(r"(?:failures|errors|unexpected successes)=(\d+)", match.group(1)))
+                if counted:
+                    return counted
+        return self.job.cases
 
 
 def discovered_selection() -> list[str]:
@@ -86,12 +104,21 @@ def jobs_for(selection: list[str]) -> list[Job]:
     jobs = [Job("node", name, name, ("node", "--test", name)) for name in node_files]
     if modules:
         sys.path.insert(0, str(ROOT))
+        chunks: dict[str, list[str]] = defaultdict(list)
         for test in flatten(unittest.defaultTestLoader.loadTestsFromNames(modules)):
-            module = module_for(test.id(), modules)
-            kind = "check" if module.startswith("tests.checks.") else "test"
-            command = (sys.executable, "-m", "unittest", test.id())
-            jobs.append(Job(kind, module, test.id(), command))
+            test_class = test.id().rsplit(".", 1)[0]
+            if len(chunks[test_class]) == CHUNK_SIZE:
+                jobs.append(chunk_job(chunks.pop(test_class), modules))
+            chunks[test_class].append(test.id())
+        jobs.extend(chunk_job(ids, modules) for ids in chunks.values())
     return jobs
+
+
+def chunk_job(ids: list[str], modules: list[str]) -> Job:
+    module = module_for(ids[0], modules)
+    kind = "check" if module.startswith("tests.checks.") else "test"
+    name = ids[0] if len(ids) == 1 else f"{ids[0]} (+{len(ids) - 1} more)"
+    return Job(kind, module, name, (sys.executable, "-m", "unittest", *ids), len(ids))
 
 
 def skipped_count(job: Job, output: str) -> int:
@@ -99,13 +126,12 @@ def skipped_count(job: Job, output: str) -> int:
     return sum(int(count) for count in re.findall(pattern, output, re.MULTILINE))
 
 
-def run_job(job: Job) -> Result:
+def run_job(job: Job, environment: dict[str, str]) -> Result:
     started = time.monotonic()
     result = subprocess.run(
         job.command,
         cwd=ROOT,
-        # Node tests load the Pi SDK, which must never reach the network from a test.
-        env={**os.environ, "PI_OFFLINE": "1"},
+        env=environment,
         text=True,
         capture_output=True,
         check=False,
@@ -132,8 +158,15 @@ def main(argv: list[str]) -> int:
             print(f"{kind:6s} {group}")
         return 0
 
-    with ThreadPoolExecutor(max_workers=min(len(jobs), os.cpu_count() or 4)) as pool:
-        results = list(pool.map(run_job, jobs))
+    with tempfile.TemporaryDirectory(prefix="test-node-compile-cache-") as compile_cache:
+        environment = {
+            **os.environ,
+            # Node tests load the Pi SDK, which must never reach the network from a test.
+            "PI_OFFLINE": "1",
+            "NODE_COMPILE_CACHE": compile_cache,
+        }
+        with ThreadPoolExecutor(max_workers=min(len(jobs), os.cpu_count() or 4)) as pool:
+            results = list(pool.map(lambda job: run_job(job, environment), jobs))
 
     summaries: dict[tuple[str, str], list[Result]] = defaultdict(list)
     for result in results:
@@ -148,7 +181,7 @@ def main(argv: list[str]) -> int:
         skipped = sum(result.skipped for result in members)
         note = f"  ({skipped} skipped)" if skipped else ""
         print(
-            f"{worker_time:6.1f} worker-s  {len(members):4d} tests  "
+            f"{worker_time:6.1f} worker-s  {sum(result.job.cases for result in members):4d} tests  "
             f"{kind:5s}  {status:6s}  {group}{note}"
         )
 
@@ -159,12 +192,13 @@ def main(argv: list[str]) -> int:
 
     elapsed = time.monotonic() - started
     counts = ", ".join(
-        f"{sum(result.job.kind == kind for result in results)} {kind}"
+        f"{sum(result.job.cases for result in results if result.job.kind == kind)} {kind}"
         for kind in KINDS
         if any(result.job.kind == kind for result in results)
     )
-    print(f"\nRan {len(results)} tests ({counts}) in {elapsed:.1f}s across {len(summaries)} groups")
-    print("OK" if not failures else f"FAILED ({len(failures)} tests)")
+    total = sum(result.job.cases for result in results)
+    print(f"\nRan {total} tests ({counts}) in {elapsed:.1f}s across {len(summaries)} groups")
+    print("OK" if not failures else f"FAILED ({sum(result.failed for result in failures)} tests)")
     return 1 if failures else 0
 
 

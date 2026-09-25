@@ -46,6 +46,8 @@ const laneActionMap = {
   collab_lane_drop: "drop",
 };
 async function execute(envelope) {
+  // A shared harness serves several repositories; `__cwd` names the one for this request.
+  const requestCwd = typeof envelope.__cwd === "string" ? envelope.__cwd : cwd;
   let toolName = typeof envelope.tool === "string" ? envelope.tool : "collab_op";
   let laneAction = laneActionMap[toolName];
   const originalToolName = toolName;
@@ -77,11 +79,11 @@ async function execute(envelope) {
       envelope.__rpc,
       undefined,
       undefined,
-      { cwd },
+      { cwd: requestCwd },
     );
   }
   let request = Object.fromEntries(
-    Object.entries(envelope).filter(([key]) => key !== "tool" && key !== "__rpc"),
+    Object.entries(envelope).filter(([key]) => key !== "tool" && key !== "__rpc" && key !== "__cwd"),
   );
   if (laneAction) {
     request = { action: laneAction, ...request };
@@ -92,7 +94,7 @@ async function execute(envelope) {
       request,
       undefined,
       undefined,
-      { cwd },
+      { cwd: requestCwd },
     );
     const text = result.content.find((part) => part.type === "text")?.text;
     return { tools, schemas, tool: toolName, is_error: false, result: JSON.parse(text) };

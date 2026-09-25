@@ -24,7 +24,7 @@ from tests._collab_support import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-EXTENSION_OP = ROOT / "home/.pi/agent/extensions/collab-op.ts"
+EXTENSION_OP = ROOT / "home/.pi/agent/extensions/collab-op/index.ts"
 PI_PACKAGE = support.PI_PACKAGE
 setUpModule = support.require_pi
 

@@ -1,6 +1,6 @@
 """Shared harness, git helpers, seeders, and fault wrappers for the collab extension tests.
 
-Tests drive home/.pi/agent/extensions/collab-op.ts through the node harness in
+Tests drive home/.pi/agent/extensions/collab-op/index.ts through the node harness in
 tests/collab_op_extension_harness.mjs against temporary git repositories.
 """
 
@@ -23,7 +23,7 @@ except ImportError:  # Direct test-file execution keeps tests/ on sys.path.
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXTENSION = ROOT / "home/.pi/agent/extensions/collab-op.ts"
+EXTENSION = ROOT / "home/.pi/agent/extensions/collab-op/index.ts"
 HARNESS = ROOT / "tests/collab_op_extension_harness.mjs"
 PI_PACKAGE = support.PI_PACKAGE
 # Starting a harness imports Pi (~0.3 s), so one harness serves every repository

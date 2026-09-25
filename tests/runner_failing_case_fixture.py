@@ -7,7 +7,8 @@ import unittest
 
 class RunnerFailingCaseFixture(unittest.TestCase):
     def test_passing_neighbour(self) -> None:
-        pass
+        # Summary-like output from a case must not be mistaken for unittest's own summary.
+        print("FAILED (errors=3)")
 
     def test_fixture_case_fails(self) -> None:
         self.fail("CASE-FIXTURE-FAILURE")

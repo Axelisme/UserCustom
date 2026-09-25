@@ -4157,8 +4157,8 @@ async function registeredLaneResult(
 export default function collabOpExtension(pi: ExtensionAPI): void {
   const runGit = gitRunner(pi);
   // Every Git-mutating handler takes the repository write lock before its
-  // task lock. The lock Module above owns ordering, waiting, cancellation,
-  // ownership-safe release, and lane-create placement revalidation.
+  // task lock (withMutationLocks). lock.ts owns queueing, waiting,
+  // cancellation, and ownership-safe release.
   function taskLocked(
     handler: (
       request: Record<string, unknown>,

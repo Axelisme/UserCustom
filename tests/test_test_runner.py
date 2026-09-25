@@ -29,6 +29,8 @@ class TestRunnerTests(unittest.TestCase):
             environment = {
                 **os.environ,
                 "TEST_RUNNER_BARRIER": temporary,
+                # Concurrency must not depend on the host's core count.
+                "PYTHON_CPU_COUNT": "1",
             }
             result = subprocess.run(
                 [sys.executable, str(RUNNER), "tests.runner_parallel_fixture"],

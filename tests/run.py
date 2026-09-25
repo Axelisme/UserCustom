@@ -66,9 +66,10 @@ class Result:
         if self.returncode == 0:
             return 0
         if self.job.kind != "node":
-            match = re.search(r"^FAILED \((.*)\)$", self.output, re.MULTILINE)
-            if match:
-                counted = sum(int(count) for count in re.findall(r"(?:failures|errors|unexpected successes)=(\d+)", match.group(1)))
+            # unittest prints its summary last; earlier lines may come from the cases themselves.
+            summaries = re.findall(r"^FAILED \((.*)\)$", self.output, re.MULTILINE)
+            if summaries:
+                counted = sum(int(count) for count in re.findall(r"(?:failures|errors|unexpected successes)=(\d+)", summaries[-1]))
                 if counted:
                     return counted
         return self.job.cases
@@ -165,7 +166,9 @@ def main(argv: list[str]) -> int:
             "PI_OFFLINE": "1",
             "NODE_COMPILE_CACHE": compile_cache,
         }
-        with ThreadPoolExecutor(max_workers=min(len(jobs), os.cpu_count() or 4)) as pool:
+        # At least two workers, so independent jobs overlap even on a one-core host.
+        workers = min(len(jobs), max(2, os.cpu_count() or 4))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
             results = list(pool.map(lambda job: run_job(job, environment), jobs))
 
     summaries: dict[tuple[str, str], list[Result]] = defaultdict(list)

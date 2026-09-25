@@ -44,18 +44,6 @@ fi
 exec "$real_git" "$@"
 """
 
-FAIL_TEMPLATE = """#!/bin/sh
-real_git="__REAL_GIT__"
-for arg in "$@"; do
-  if [ "$arg" = "-C" ]; then exec "$real_git" "$@"; fi
-done
-if [ "$1" = "worktree" ] && [ "$2" = "add" ] && [ "$3" = "-b" ] && [ "$4" = "__BRANCH__" ]; then
-  echo "injected failure for __BRANCH__" >&2
-  exit 1
-fi
-exec "$real_git" "$@"
-"""
-
 ACTIVE_ABORT_TEMPLATE = """#!/bin/sh
 real_git="__REAL_GIT__"
 for arg in "$@"; do

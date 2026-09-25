@@ -105,7 +105,18 @@ def is_bare_pointer(target: str, anchor: str | None) -> bool:
 
 
 def check(roots: list[Path]) -> None:
-    files = sorted({p for r in roots for p in ([r] if r.is_file() else walk(r, follow=False)) if p.suffix in (".md", ".toml")})
+    # Only this repository's own documents: a symlinked directory is a vendored skill whose
+    # pointers belong upstream. Say how many were skipped so the coverage is never silent.
+    found: set[Path] = set()
+    skipped = 0
+    for r in roots:
+        if r.is_file():
+            found.add(r)
+            continue
+        for base, dirs, names in os.walk(r):
+            skipped += sum(Path(base, d).is_symlink() for d in dirs)
+            found.update(Path(base, name).resolve() for name in names)
+    files = sorted(p for p in found if p.suffix in (".md", ".toml"))
     broken = 0
     for f in files:
         text = f.read_text()
@@ -124,7 +135,8 @@ def check(roots: list[Path]) -> None:
                 if m.group(2) and m.group(2).lstrip("#") not in {h[3] for h in headings(target)}:
                     print(f"{f}: broken anchor {m.group(1)}{m.group(2)}")
                     broken += 1
-    print(f"checked {len(files)} files: {broken} broken pointer(s)")
+    note = f"; skipped {skipped} symlinked director{'y' if skipped == 1 else 'ies'}" if skipped else ""
+    print(f"checked {len(files)} files: {broken} broken pointer(s){note}")
     if broken:
         raise SystemExit(1)
 

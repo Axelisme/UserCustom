@@ -56,6 +56,28 @@ class SkillPointerTest(unittest.TestCase):
             result = run("--check", str(root))
             self.assertEqual(result.returncode, 0, result.stdout)
 
+    def test_a_pointer_into_a_bridged_skill_resolves(self) -> None:
+        # Upstream skills are symlinks into vendor/; a walk that skips them misses most of the fleet.
+        self.assertTrue((HOME / ".codex/skills/tdd").is_symlink(), "fixture assumption: tdd is bridged")
+        result = run("../tdd/SKILL.md")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("#", result.stdout)
+
+    def test_check_reports_the_symlinked_directories_it_skips(self) -> None:
+        # Vendored skills are symlinks whose pointers belong upstream; skipping them must be visible.
+        with tempfile.TemporaryDirectory() as tmp:
+            vendor = Path(tmp, "vendor", "skill")
+            vendor.mkdir(parents=True)
+            (vendor / "doc.md").write_text("See [x](missing-doc.md) for details.\n")
+            root = Path(tmp, "skills")
+            root.mkdir()
+            (root / "bridged").symlink_to(vendor, target_is_directory=True)
+            (root / "own.md").write_text("Nothing to resolve.\n")
+            result = run("--check", str(root))
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertIn("checked 1 files", result.stdout)
+            self.assertIn("skipped 1 symlinked directory", result.stdout)
+
     def test_a_pointer_is_read_at_its_section(self) -> None:
         result = run("../dev-flow/references/lane-authority.md#a-gate-you-cannot-close-honestly")
         self.assertEqual(result.returncode, 0, result.stderr)

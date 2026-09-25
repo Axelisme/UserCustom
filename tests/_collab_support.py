@@ -303,6 +303,26 @@ def git_on_path(directory: Path) -> Iterator[None]:
         os.environ["PATH"] = original
 
 
+# Lane create waits LANE_CREATE_WAIT_ENV milliseconds (default 10000) for a busy task lock. Tests
+# that only need the timeout to happen shorten it for the harnesses they spawn.
+LANE_CREATE_WAIT_ENV = "COLLAB_LANE_CREATE_WAIT_MS"
+SHORT_LANE_CREATE_WAIT_MS = 300
+
+
+@contextmanager
+def lane_create_wait_ms(milliseconds: int = SHORT_LANE_CREATE_WAIT_MS) -> Iterator[None]:
+    """Shorten lane create's bounded lock wait for harnesses spawned inside the block."""
+    original = os.environ.get(LANE_CREATE_WAIT_ENV)
+    os.environ[LANE_CREATE_WAIT_ENV] = str(milliseconds)
+    try:
+        yield
+    finally:
+        if original is None:
+            os.environ.pop(LANE_CREATE_WAIT_ENV, None)
+        else:
+            os.environ[LANE_CREATE_WAIT_ENV] = original
+
+
 def write_git_wrapper(base: Path, script: str) -> Path:
     real_git = shutil.which("git")
     assert real_git is not None

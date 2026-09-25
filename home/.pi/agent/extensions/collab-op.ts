@@ -90,7 +90,14 @@ function gitRunner(pi: ExtensionAPI): GitRunner {
 const LOCK_TTL_MS = 24 * 60 * 60 * 1000;
 
 const LANE_CREATE_BOUNDED_WAIT_MS = 10_000;
+const LANE_CREATE_WAIT_ENV = "COLLAB_LANE_CREATE_WAIT_MS";
 const LOCK_POLL_MS = 25;
+
+/** Lane create's bounded wait; a positive integer in COLLAB_LANE_CREATE_WAIT_MS overrides the default. */
+function laneCreateBoundedWaitMs(): number {
+  const override = process.env[LANE_CREATE_WAIT_ENV]?.trim();
+  return override && /^[1-9]\d*$/.test(override) ? Number(override) : LANE_CREATE_BOUNDED_WAIT_MS;
+}
 
 /**
  * Collab mutation lock Module
@@ -102,7 +109,7 @@ const LOCK_POLL_MS = 25;
  * and report snapshots do not join this queue.
  * Task lock: once the repository lock is held, the existing task-scoped lock
  * retains fail-fast behavior, except lane create keeps its 10-second bounded
- * wait. This preserves task-local custody and compatibility with older
+ * wait (overridable through COLLAB_LANE_CREATE_WAIT_MS). This preserves task-local custody and compatibility with older
  * processes that know only the task lock.
  * Lock order is always repository then task. Both scopes use the same
  * ownership-safe filesystem implementation and release in reverse order.
@@ -4914,7 +4921,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
                 );
                 return registeredLaneResult(repo, taskId, requireLaneId(params.lane_id), created);
               },
-              { policy: "bounded-wait", signal: innerSignal, timeoutMs: LANE_CREATE_BOUNDED_WAIT_MS },
+              { policy: "bounded-wait", signal: innerSignal, timeoutMs: laneCreateBoundedWaitMs() },
             );
           }
           if (action === "reconcile") {

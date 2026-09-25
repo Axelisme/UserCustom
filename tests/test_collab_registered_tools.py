@@ -19,6 +19,7 @@ from tests._collab_support import (
     git,
     git_on_path,
     invoke,
+    lane_create_wait_ms,
     last_telemetry_event,
     seed_donor,
     seed_managed_task,
@@ -703,7 +704,7 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             first: subprocess.Popen[str] | None = None
             second: subprocess.Popen[str] | None = None
             try:
-                with git_on_path(wrapper.parent):
+                with git_on_path(wrapper.parent), lane_create_wait_ms():
                     first = spawn_raw_harness(repository)
                     second = spawn_raw_harness(repository)
                     first_stdin = first.stdin

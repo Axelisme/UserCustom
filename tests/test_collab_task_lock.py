@@ -15,10 +15,12 @@ from tests import _support
 from tests._collab_support import (
     BLOCK_WRAPPER,
     REPOSITORY_LOCK_BLOCK_WRAPPER,
+    SHORT_LANE_CREATE_WAIT_MS,
     close_harness,
     git,
     git_on_path,
     invoke,
+    lane_create_wait_ms,
     lock_held_by,
     managed_ref_snapshot,
     seed_managed_task,
@@ -52,16 +54,18 @@ class CollabOpExtensionTaskLockTests(unittest.TestCase):
             )
             refs_before = managed_ref_snapshot(repository)
 
-            observed = invoke(repository, {"tool": "collab_lane_create", "task_id": "demo", "lane_id": "writer"})
+            with lane_create_wait_ms():
+                observed = invoke(repository, {"tool": "collab_lane_create", "task_id": "demo", "lane_id": "writer"})
 
             self.assertTrue(observed["is_error"])
             self.assertEqual(observed["error"]["error"]["code"], "task_busy")
             details = observed["error"]["error"]["details"]
             self.assertEqual(details.get("task_id"), "demo")
-            # SL02: lane_create uses bounded wait (10s) rather than immediate fail-fast
+            # SL02: lane_create uses a bounded wait rather than immediate fail-fast. The 10 s production
+            # default is covered by test_A4_live_external_lock_timeout_returns_task_busy_with_wait_facts.
             self.assertIn("waited_ms", details)
-            self.assertEqual(details.get("timeout_ms"), 10000)
-            self.assertGreaterEqual(details.get("waited_ms", 0), 9000)
+            self.assertEqual(details.get("timeout_ms"), SHORT_LANE_CREATE_WAIT_MS)
+            self.assertGreaterEqual(details.get("waited_ms", 0), SHORT_LANE_CREATE_WAIT_MS - 50)
             self.assertEqual(managed_ref_snapshot(repository), refs_before)
             self.assertEqual(git(repository, "branch", "--list", "wave/demo/writer"), "")
             self.assertFalse((repository / ".agent_state/worktrees/demo/lanes/writer").exists())
@@ -231,7 +235,7 @@ class CollabOpExtensionTaskLockTests(unittest.TestCase):
                 wrapper = write_git_wrapper(base, BLOCK_WRAPPER.replace("__BLOCK__", str(block)))
                 first: subprocess.Popen[str] | None = None
                 try:
-                    with git_on_path(wrapper.parent):
+                    with git_on_path(wrapper.parent), lane_create_wait_ms():
                         first = spawn_raw_harness(repository)
                         first_stdin = first.stdin
                         first_stdout = first.stdout

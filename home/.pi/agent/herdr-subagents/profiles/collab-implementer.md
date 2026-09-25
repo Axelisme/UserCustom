@@ -2,9 +2,7 @@
 name: collab-implementer
 description: Implement one bounded internal change as the sole writer and return candidate-bound verification.
 modelList:
-  - antigravity/gemini-3.8-flash:high
-  - antigravity/claude-sonnet-4-6:high
-  - openai-codex/gpt-6-luna:max
+  - openai-codex/gpt-6-sol:high
 tools:
   - read
   - edit

@@ -2,6 +2,8 @@
 name: repo-investigator
 description: Build a read-only, source-grounded map of local code, call sites, tests, and constraints without making contract decisions.
 modelList:
+  - antigravity/gemini-3.8-flash:high
+  - antigravity/claude-sonnet-4-6:high
   - openai-codex/gpt-6-luna:max
 tools:
   - read

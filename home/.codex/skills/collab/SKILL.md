@@ -39,8 +39,8 @@ Use dev-flow's `scripts/section.py <absolute-path>#anchor` for operation section
 - Land and retire resources: [Land and clean up](references/integration.md#land-and-clean-up).
 
 Before a runtime operation, open [Pi routing](runtime-pi.md#routing) or
-[Claude routing](runtime-claude.md#routing), then its selected section. Codex uses installed profiles
-and native Git/dispatch capabilities. Tool schemas own their parameters. Missing runtime mechanics are
+[Claude routing](runtime-claude.md#routing), then its selected section. Pi and Claude are the supported
+Orchestrator runtimes. Tool schemas own their parameters. Missing runtime mechanics are
 a blocker, not permission to invent a replacement.
 
 ## Role entries
@@ -57,7 +57,6 @@ Installed role filenames are `collab-implementer` and `collab-acceptor`:
 |---|---|---|
 | Pi | `~/.pi/agent/herdr-subagents/profiles/` | `.md` |
 | Claude | Pi profiles, dispatched through the subagent MCP ([Claude runtime](runtime-claude.md)) | — |
-| Codex | `~/.codex/agents/` | `.toml` |
 
 Use dev-flow's `scripts/section.py <absolute-profile-path>#dispatch-contract <absolute-profile-path>#result`. The
 implementer writes one bounded internal change. The acceptor reads one immutable subject and one

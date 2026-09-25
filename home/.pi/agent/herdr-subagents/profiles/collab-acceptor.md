@@ -6,6 +6,7 @@ modelList:
 tools:
   - read
   - bash
+  - write
   - absorb
 ---
 # Collab acceptor

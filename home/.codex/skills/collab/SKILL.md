@@ -24,7 +24,7 @@ proposed rules.
 
 ## Routing
 
-Use dev-flow's `scripts/section.py <absolute-path>#anchor` for operation sections.
+Use `mdsec <absolute-path>#anchor ...` for operation sections.
 
 - Choose direct work or delegation and prepare a writer: [Placement](references/execution.md#placement)
   and [Prepare](references/execution.md#prepare).
@@ -57,7 +57,7 @@ Installed role filenames are `collab-implementer` and `collab-acceptor`:
 | Pi | `~/.pi/agent/herdr-subagents/profiles/` | `.md` |
 | Claude | Pi profiles, dispatched through the subagent MCP ([Claude runtime](runtime-claude.md)) | — |
 
-Use dev-flow's `scripts/section.py <absolute-profile-path>#dispatch-contract <absolute-profile-path>#result`. The
+Use `mdsec <absolute-profile-path>#dispatch-contract <absolute-profile-path>#result`. The
 implementer writes one bounded internal change. The acceptor reads one immutable subject and one
 bounded criterion set owned by a batch review record, including singleton batches. Specialized Standards
 and Spec review remains a separate code-review assignment, not the default acceptance loop.

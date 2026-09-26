@@ -5,7 +5,7 @@
 Inputs are the task ID or lookup ID and the main checkout. Run `scripts/plan.py locate <task-id>`; for
 an unknown ID, run `list` and use a returned `lookup_id`. Read the located INDEX and its active
 Standing orders. Open the governing record named in Current through its current-state anchors in one
-`section.py` call: a ticket's `#outcome`, `#acceptance`, and `#progress`, or a review's
+`mdsec` call: a ticket's `#outcome`, `#acceptance`, and `#progress`, or a review's
 `#current-round` and `#findings`. Read a record whole only when it predates those headings. When the
 semantic checkpoint names a checkout, its `git log` and `git status` supply the commits since that
 checkpoint. Open other sections, records, and pointers when the action that uses them starts. The

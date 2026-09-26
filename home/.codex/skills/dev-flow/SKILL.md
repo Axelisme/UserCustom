@@ -21,8 +21,8 @@ On reorientation, run `scripts/plan.py locate <task-id>` from the main checkout 
 
 ## The lifecycle
 
-Use `scripts/section.py <absolute-path>#anchor ...` to open the selected operation sections; one call
-reads several pointers in order.
+Use `mdsec <absolute-path>#anchor ...` to open the selected operation sections; one call reads
+several pointers in order.
 
 - Resume an existing task: [Resume](references/planning.md#resume).
 - Create a task, define scope, or slice tickets: [Plan](references/planning.md#plan) and

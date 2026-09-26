@@ -8,14 +8,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOME = ROOT / "home"
-SECTION = HOME / ".codex/skills/dev-flow/scripts/section.py"
+MDSEC = HOME / ".local/bin/mdsec"
+RETIRED_SECTION = HOME / ".codex/skills/dev-flow/scripts/section.py"
 
 
-def run(*args: str) -> subprocess.CompletedProcess[str]:
-    # section.py resolves bare pointers under ~/; point it at this checkout's home/ tree
+def run(*args: str, script: Path = MDSEC) -> subprocess.CompletedProcess[str]:
+    # mdsec resolves bare pointers under ~/; point it at this checkout's home/ tree
     # rather than whatever the invoking user has installed.
     return subprocess.run(
-        ["python3", str(SECTION), *args],
+        ["python3", str(script), *args],
         capture_output=True,
         text=True,
         cwd=ROOT,
@@ -28,7 +29,15 @@ class SkillPointerTest(unittest.TestCase):
         lane_authority = HOME / ".codex/skills/dev-flow/references/lane-authority.md"
         result = run(f"{lane_authority}#creating-an-evidence-fil")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("#creating-an-evidence-file", result.stderr)
+        self.assertIn("Did you mean '#creating-an-evidence-file'?", result.stderr)
+        self.assertIn("#a-gate-you-cannot-close-honestly", result.stderr)
+
+    def test_the_retired_dev_flow_path_still_reads_sections(self) -> None:
+        # Contracts dispatched before the move cite dev-flow's scripts/section.py.
+        result = run("../dev-flow/references/lane-authority.md#a-gate-you-cannot-close-honestly",
+                     script=RETIRED_SECTION)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("## A gate you cannot close honestly", result.stdout)
 
     def test_check_catches_a_broken_pointer_of_every_kind_it_claims(self) -> None:
         # The corpus being green proves nothing about detection, so plant one break of each kind.

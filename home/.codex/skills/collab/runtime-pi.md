@@ -6,7 +6,7 @@ details here.
 
 ## Routing
 
-Open only the linked section for the current operation, using dev-flow's `scripts/section.py`.
+Open only the linked section for the current operation, using `mdsec`.
 
 - After lane creation, if the repository declares bootstrap: [Managed lane environment](#managed-lane-environment).
 - Before launching a child: [Dispatch](#dispatch) and [Post-launch](#post-launch).

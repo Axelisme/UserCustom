@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 HOME = ROOT / "home"
-SECTION = HOME / ".codex/skills/dev-flow/scripts/section.py"
+MDSEC = HOME / ".local/bin/mdsec"
 
 # An anchored pointer addresses one section, so a heading is an address: renaming one silently
 # breaks every pointer into it. These are the trees whose pointers dev-flow principle 17 governs.
@@ -26,7 +26,7 @@ class SkillPointerCheck(unittest.TestCase):
     def test_every_anchored_pointer_resolves(self) -> None:
         # Bare pointers resolve under ~/; use this checkout's home/ tree, not the installed one.
         result = subprocess.run(
-            ["python3", str(SECTION), "--check", *[str(p) for p in POINTER_ROOTS]],
+            ["python3", str(MDSEC), "--check", *[str(p) for p in POINTER_ROOTS]],
             capture_output=True,
             text=True,
             cwd=ROOT,

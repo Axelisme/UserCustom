@@ -154,6 +154,8 @@ link_one() {
 # 一般設定
 link_each .config
 link_each .local/include
+link_one .local/bin/mdsec
+link_one .local/bin/pi-context-audit
 
 # Codex
 link_each .codex/skills

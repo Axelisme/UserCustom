@@ -34,10 +34,9 @@ code-review under its own contract.
 ## Correct and decide
 
 The Orchestrator classifies the result against the stable claim set. The review record owns candidates,
-verdicts, findings, observation applicability, corrections, and disposition. Tickets reference that
-record rather than duplicating its review history. Non-contract suggestions receive a recorded
-disposition. User-owned behavior, scope, authority, data structure, or responsibility choices go to
-dev-flow ticket handoff while feasible work continues.
+verdicts, findings, observation applicability, corrections, and disposition; tickets link to it.
+Non-contract suggestions receive a recorded disposition. User-owned behavior, scope, authority, data
+structure, or responsibility choices go to dev-flow ticket handoff while feasible work continues.
 
 For supported defects, assign bounded corrections. The Orchestrator changes interfaces and formal
 tests; the implementer changes assigned internal logic. Run affected ticket and batch gates, form a
@@ -50,7 +49,7 @@ only when all its applicable criteria are established on the accepted candidate.
 list is not approval. A changed candidate needs applicable independent judgement before acceptance;
 passing gates alone does not establish it. Findings outside the batch remain with their existing owner.
 
-If correction, verification, or a needed decision cannot proceed, keep the batch and affected tickets
-pending with the concrete blocker and next owner. Continue only after a change, new evidence, or an
-owner decision provides a defensible next action. Review is complete when the record establishes the
-covered claims and each member ticket has an evidence-backed disposition.
+If correction, verification, or a needed decision cannot proceed, record the concrete blocker and next
+owner in the review's Current round. Continue only after a change, new evidence, or an owner decision
+provides a defensible next action. Review is complete when the record establishes the covered claims
+and each member ticket has an evidence-backed disposition.

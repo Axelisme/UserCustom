@@ -110,13 +110,13 @@ writing.
 A gate timeout is incomplete, not passing. Rerun after a new change, new hypothesis, or explicit
 reproduction purpose; repeated unchanged diagnostics stop with the blocker. Use the ticket gates and
 batch assignments established during [Gate preparation](#gate-preparation); passing ticket gates makes
-a delivery candidate, not an accepted ticket.
+a delivery candidate for batch review.
 
 Completion requires a clean committed candidate and a concise handoff tying the final candidate to
 each command or selection, environment, result and exit status, raw run pointer, and limitation. Keep
 bulky output with the run. A blocked result aggregates known obstructions and names the next decision
-or execution owner. The Orchestrator replaces the owning ticket's semantic checkpoint only when that
-conclusion changes how the next owner resumes, verifies, or decides.
+or execution owner. The Orchestrator records the result in its owner record at the phase boundary it
+creates.
 
 ## Results and continuity
 
@@ -128,13 +128,11 @@ result as incomplete. `Residual risks:` carries non-blocking findings. Do not ad
 
 A writer's COMPLETED result attests required gates passed, the checkout is clean and committed, and
 assigned evidence is complete. The Orchestrator checks the actual checkout and evidence before
-delivery judgement and collection. The ticket remains pending for its owning batch review. A
-replacement receives the original assignment, blockers, verified and unverified work, environment,
-authority, and stop conditions.
+delivery judgement and collection. A replacement receives the original assignment, blockers, verified
+and unverified work, environment, authority, and stop conditions.
 
-A role result owns its returned observations until the Orchestrator records the smallest durable
-conclusion in the ticket or review record that owns the claim. Git and the run retain finer history.
-Update INDEX's routing fields only when the conclusion creates a routing edge.
+A role result owns its returned observations until the Orchestrator writes the durable conclusion into
+its owner record at a phase boundary. Git and the run retain finer history.
 
 Questions use the runtime's live parent channel when available. Single-return runtimes use BLOCKED and
 a fresh dispatch after the answer. An interrupted writer requires checkout and result inspection

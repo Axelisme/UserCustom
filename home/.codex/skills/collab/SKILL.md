@@ -13,10 +13,10 @@ A lane is a feature branch and worktree. Integration accumulates task-local resu
 the user's target branch. Every checkout has one writer at a time. A fixed subject is one exact clean
 commit and tree with a baseline and bounded criteria. Every review binds to one fixed subject. The
 Orchestrator owns intent, assignment, formal tests, interface declarations, observation sufficiency,
-acceptance, and final disposition. Durable workflow conclusions go to the owning ticket or review
-record as a semantic checkpoint or bounded review history. INDEX routing fields change only at a
-routing edge; Standing-order changes follow dev-flow custody. Dev-flow defines both terms in
-[record operations](../dev-flow/references/records.md#maintain-the-record).
+acceptance, and final disposition. Durable workflow facts go to their owner record at a phase
+boundary, and INDEX routing fields change at a routing edge; dev-flow's
+[record operations](../dev-flow/references/records.md#maintain-the-record) defines all three terms.
+Standing-order changes follow dev-flow custody.
 
 Existing attempts retain the contract injected at dispatch; a profile currently on disk governs only a
 fresh spawn. Workflow documents being changed are candidate material, not authority to adopt their

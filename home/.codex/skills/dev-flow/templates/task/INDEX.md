@@ -13,13 +13,13 @@ Not yet recorded.
 <scope source>. Read before ticket planning/alignment, a new-scope decision, or a review-driven design change.
 
 ## Current
-<!-- Governing ticket or batch review pointer plus bounded outcome, owner, blocker, and lifecycle state.
-     Update only when this routing edge changes. -->
+<!-- Governing record: the ticket or batch review pointer that owns the active work's state, plus any
+     blocker awaiting the user. Candidates, rounds, and verdicts live in that record. Update at a
+     routing edge: ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->
 Task created.
 
 ## Next
-<!-- One bounded outcome or handoff and its owner. Workflow events within the same routing edge leave
-     this field unchanged. -->
+<!-- The bounded outcome the governing record drives toward, and its owner. Update at a routing edge. -->
 Plan and align the next independent batch. Owner: Orchestrator.
 
 ## Standing orders

@@ -156,6 +156,28 @@ class PiContextAuditTest(unittest.TestCase):
         self.assertEqual(compaction["by_kind"], {"local": 2})
         self.assertEqual(compaction["interval_requests_median"], 2)
 
+    def test_record_upkeep_counts_record_edits_per_commit_and_repeated_commit_ids(self) -> None:
+        session = Session()
+        sha = "a" * 40
+        plans = f"{CWD}/.agent_state/plans/t"
+        session.tool("bash", {"command": "git -C lane commit -m done"}, "ok")
+        session.assistant(("edit", {"path": f"{plans}/INDEX.md", "edits": [{"oldText": "b" * 40, "newText": sha}]}),
+                          ("edit", {"path": f"{plans}/tickets/01/ticket.md",
+                                    "edits": [{"oldText": "x", "newText": f"at {sha}"}]}))
+        session.assistant()
+        session.assistant(("write", {"path": f"{plans}/reviews/01.history.md", "content": "ended round"}))
+        session.assistant(("edit", {"path": f"{plans}/reviews/01.md", "edits": [{"oldText": sha, "newText": "y"}]}))
+        session.tool("write", {"path": f"{CWD}/lib/a.py", "content": sha}, "ok")
+        self.main_session(session)
+
+        upkeep = audit(self.agent)["record_upkeep"]
+
+        self.assertEqual((upkeep["edits"], upkeep["responses"], upkeep["commits"]), (4, 3, 1))
+        self.assertEqual(upkeep["by_record"], {"index": 1, "ticket": 1, "history": 1, "review": 1})
+        self.assertEqual(upkeep["edits_per_commit"], 4)
+        self.assertEqual(upkeep["gap_requests_median"], 1.5)
+        self.assertEqual(upkeep["sha_writes_max"], 2)
+
     def test_usage_totals_cost_and_cache_hit_rate(self) -> None:
         session = Session()
         session.assistant(usage={"input": 100, "cacheRead": 300, "output": 5,

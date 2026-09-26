@@ -5,8 +5,8 @@
 Inputs are a clean delivery candidate, current integration, candidate-bound observations, and the
 owning ticket and review-batch pointers. The Orchestrator checks that the writer stopped, required
 ticket gates passed, evidence is complete, and the change stays within authorized scope. Collect ready
-branches one at a time while independent tickets continue. Collection assembles work for review; it
-does not accept it. Tickets remain pending until their criteria receive batch acceptance.
+branches one at a time while independent tickets continue. Collection assembles work for the batch
+review, which owns acceptance.
 
 Use the selected runtime's collection operation. Before it retires a lane, preserve the commit identity
 and required evidence with their durable owners. Keep resources needed for unfinished correction or
@@ -24,9 +24,8 @@ integration through the runtime route, rerun affected checks, and review importe
 affected task criteria before landing.
 
 Stop collection on conflicts, tracked dirt, candidate mismatch, stale required observations, or missing
-ticket gates. Collection is complete when the delivery candidate is included and the ticket names the
-assembled candidate, batch owner, observations, and pending obligations. Update INDEX's routing fields
-only when integration creates a routing edge.
+ticket gates. Collection is complete when the delivery candidate is included and the owning review
+record's Candidate-bound observations hold its gate results.
 
 ## Land and clean up
 

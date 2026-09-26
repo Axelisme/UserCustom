@@ -4,13 +4,14 @@
 
 Inputs are the task ID or lookup ID and the main checkout. Run `scripts/plan.py locate <task-id>`; for
 an unknown ID, run `list` and use a returned `lookup_id`. Read the located INDEX and its active
-Standing orders. Open the Current or Next record through its current-state anchors in one `section.py`
-call: a ticket's `#outcome`, `#acceptance`, and `#progress`, or a review's `#current-round` and
-`#findings`. Read a record whole only when it predates those headings. Open other sections, records,
-and pointers when the action that uses them starts. The Orchestrator is read-only until it identifies
-the bounded action, owner, checkout, and applicable authority. `size_warnings` names an INDEX, ticket,
-or review record past its byte budget; condense it under
-[Maintain the record](records.md#maintain-the-record) at its next record update.
+Standing orders. Open the governing record named in Current through its current-state anchors in one
+`section.py` call: a ticket's `#outcome`, `#acceptance`, and `#progress`, or a review's
+`#current-round` and `#findings`. Read a record whole only when it predates those headings. When the
+semantic checkpoint names a checkout, its `git log` and `git status` supply the commits since that
+checkpoint. Open other sections, records, and pointers when the action that uses them starts. The
+Orchestrator is read-only until it identifies the bounded action, owner, checkout, and applicable
+authority. `size_warnings` names an INDEX, ticket, or review record past its byte budget; condense it
+under [Maintain the record](records.md#maintain-the-record) at its next record update.
 
 Preserve historical records and the contract of already dispatched attempts. An unknown historical
 state is not acceptance under this workflow. Before resuming unfinished legacy work, record the
@@ -90,10 +91,10 @@ keep them pending for batch acceptance. A blocked member does not stop unrelated
 Before splitting a review batch, record dependency and criterion ownership so no outstanding obligation
 is lost or treated as approved. Dispatch review only when the selected batch is complete and reviewable.
 
-When selection creates a routing edge, INDEX names the active batch and next coordination outcome.
-Ticket files own their semantic checkpoints and evidence. Stop when write scopes collide, dependencies
-are unclear, or a shared choice lacks user confirmation. Selection is complete when each active member
-has one owner, one writer, a ready contract, and an independent completion path.
+When selection creates a routing edge, INDEX names the governing record and its next bounded outcome.
+Stop when write scopes collide, dependencies are unclear, or a shared choice lacks user confirmation.
+Selection is complete when each active member has one owner, one writer, a ready contract, and an
+independent completion path.
 
 ## Design alignment
 

@@ -11,10 +11,10 @@ routed below.
 
 Every task has one container under `.agent_state/plans/<task-id>/`. Every bounded implementation has a
 ticket, including direct Orchestrator work. The approved spec or scope file owns scope. `INDEX.md`
-carries active Standing orders and routes current work. Tickets own their stable contract, semantic
-checkpoint, and terminal disposition. [Record operations](references/records.md#maintain-the-record)
-defines those terms. The Orchestrator owns INDEX, tickets, review records, acceptance checkboxes, and
-lifecycle state.
+carries active Standing orders and routes current work. Each fact has one owner record and is
+written at a phase boundary; [Record operations](references/records.md#maintain-the-record) defines
+owner records, phase boundaries, routing edges, and the semantic checkpoint. The Orchestrator owns
+INDEX, tickets, review records, acceptance checkboxes, and lifecycle state.
 
 On reorientation, run `scripts/plan.py locate <task-id>` from the main checkout and follow
 [Resume](references/planning.md#resume).
@@ -45,12 +45,10 @@ only for delegated record or evidence writes.
   returns to its owner; a new default does not rewrite it.
 - Tests establish observable behavior through interfaces. Direct review establishes prose, structure,
   configuration, repository data, responsibility placement, and other static facts.
-- Update INDEX's routing fields at a routing edge, not for each workflow operation. Maintain Standing
-  orders under [custody](references/custody.md). When INDEX cannot route the next owner, repair the
-  record or ask the decision owner instead of scanning every ticket, artifact, or log.
-- Tickets own delivery evidence; batch review records own review history and criterion coverage.
-  Collection leaves tickets pending; closure requires their covered claims to be accepted.
-- Keep routine candidate-bound verification concise in its ticket or batch review record. Separate
-  evidence files are exceptional and use the assigned method in `references/lane-authority.md`.
+- Update INDEX's routing fields at a routing edge. Maintain Standing orders under
+  [custody](references/custody.md). When INDEX cannot route the next owner, repair the record or ask
+  the decision owner instead of scanning every ticket, artifact, or log.
+- Batch review records own subjects, candidate-bound observations, verdicts, and criterion coverage. A
+  ticket closes when batch acceptance covers every applicable criterion.
 - Capture valuable out-of-scope findings through candidate-backlog. Current acceptance gaps remain in
   this task.

@@ -3,8 +3,8 @@
 
 Reads main sessions under <agent-dir>/sessions and Herdr subagent sessions under
 <agent-dir>/herdr-subagents/sessions, keeps entries inside the time window, and
-reports cost, cache, context composition, policy re-reads, compaction, absorb
-economics, oversized tool results and tool-call batching.
+reports cost, cache, context composition, policy re-reads, compaction, task
+record upkeep, absorb economics, oversized tool results and tool-call batching.
 
 Token counts of message content are estimates (characters / 4); usage and cost
 figures come from the provider usage recorded on each assistant message.
@@ -36,6 +36,9 @@ CODE_FILE = re.compile(r"\.(py|pyi|ts|tsx|js|mjs|cjs|json|toml|ya?ml|sh|c|h|cpp|
 ORCHESTRATION = re.compile(r"^collab_|subagent")
 WORKTREE = re.compile(r"[^\s'\"]*?(\.agent_state/worktrees/[^/\s]+/(lanes/[^/\s]+|integration)|/\.worktrees/[^/\s]+)/")
 AUTHORING = {"edit", "write"}
+RECORD = re.compile(r"\.agent_state/plans/[^/]+/(.+\.md)$")
+COMMIT = re.compile(r"\bgit\b[^|;&]*\bcommit\b")
+SHA = re.compile(r"\b[0-9a-f]{40}\b")
 ABSORB_OFFER = "pi-absorb.offer.v1"
 WAVE_REQUESTS = 10
 BIG_RESULT_CHARS = 32_000
@@ -75,6 +78,30 @@ def classify(subject: str, *, is_path: bool) -> str:
     if re.search(r"\.md\b", subject) and not CODE_FILE.search(subject) and not re.search(r"\bgit\b.*\bdiff\b", subject):
         return "repo_docs"
     return "business"
+
+
+def record_kind(path: str) -> str | None:
+    """Kind of dev-flow task record a path names, or None outside task records."""
+    match = RECORD.search(path)
+    if not match:
+        return None
+    name = match.group(1)
+    if name == "INDEX.md":
+        return "index"
+    if name.endswith("history.md"):
+        return "history"
+    if name.startswith("tickets/"):
+        return "ticket"
+    if name.startswith("reviews/"):
+        return "review"
+    return "other"
+
+
+def authored_text(arguments: Mapping) -> str:
+    """Text an edit or write call puts into its file."""
+    edits = arguments.get("edits") if isinstance(arguments.get("edits"), list) else [arguments]
+    return str(arguments.get("content") or "") + "".join(
+        str(edit.get("newText") or "") for edit in edits if isinstance(edit, dict))
 
 
 def reread_key(subject: str, cwd: str) -> str:
@@ -171,6 +198,11 @@ class Audit:
     compaction_failures: Counter = field(default_factory=Counter)
     waves: list = field(default_factory=list)
     intervals: list = field(default_factory=list)  # (requests, minutes) between consecutive compactions
+    record_edits: Counter = field(default_factory=Counter)  # record kind -> edit/write calls
+    record_turns: int = 0
+    record_gaps: list = field(default_factory=list)  # requests between consecutive record-editing responses
+    commits: int = 0
+    sha_writes: Counter = field(default_factory=Counter)  # commit id -> record edits that write it
     absorb: Counter = field(default_factory=Counter)
     big: Counter = field(default_factory=Counter)  # tool name -> tokens of oversized results
     big_count: int = 0
@@ -207,6 +239,7 @@ def analyse_session(audit: Audit, session: Session) -> None:
     compaction_index = 0
     last_compaction: tuple[dt.datetime, int] | None = None
     requests_seen = 0
+    last_record_request: int | None = None
     since_compaction: int | None = None
     wave = 0.0
     after_absorb = False
@@ -278,6 +311,7 @@ def analyse_session(audit: Audit, session: Session) -> None:
             if since_compaction is not None:
                 since_compaction += 1
             tool_calls = 0
+            edits_record = False
             for block in message.get("content") or []:
                 if not isinstance(block, dict):
                     continue
@@ -291,11 +325,23 @@ def analyse_session(audit: Audit, session: Session) -> None:
                         category = "orchestration"
                     elif name in AUTHORING:  # authored content lands in the file's category
                         category = classify(str(arguments.get("path", "")), is_path=True)
+                        record = record_kind(str(arguments.get("path", "")))
+                        if record:
+                            edits_record = True
+                            audit.record_edits[record] += 1
+                            audit.sha_writes.update(set(SHA.findall(authored_text(arguments))))
                     else:
                         category = "tool_calls"
+                        if name == "bash" and COMMIT.search(str(arguments.get("command", ""))):
+                            audit.commits += 1
                     put(i, category, estimate(written))
                 elif block.get("type") in ("text", "thinking"):
                     put(i, "model_prose", estimate(str(block.get("text") or block.get("thinking") or "")))
+            if edits_record:
+                audit.record_turns += 1
+                if last_record_request is not None:
+                    audit.record_gaps.append(requests_seen - last_record_request)
+                last_record_request = requests_seen
             if session.kind == "main":
                 audit.batching[min(tool_calls, 5)] += 1
             continue
@@ -415,6 +461,7 @@ def build_report(audit: Audit, sessions: list[Session], window: Window, top: int
     absorb["net_cost_usd"] = round(audit.absorb_resident_saved * price_cached
                                    - break_extra * max(0.0, price_uncached - price_cached), 4)
 
+    record_edits = sum(audit.record_edits.values())
     batching_total = sum(audit.batching.values())
     return {
         "window": {"since": window.since.isoformat(), "until": window.until.isoformat(),
@@ -462,6 +509,16 @@ def build_report(audit: Audit, sessions: list[Session], window: Window, top: int
             "reorientation_wave_max": round(max(audit.waves, default=0)),
             "interval_requests_median": median([requests for requests, _ in audit.intervals]),
             "interval_minutes_median": round(median([minutes for _, minutes in audit.intervals]), 1),
+        },
+        "record_upkeep": {
+            "edits": record_edits,
+            "by_record": dict(audit.record_edits.most_common()),
+            "responses": audit.record_turns,
+            "commits": audit.commits,
+            "edits_per_commit": round(share(record_edits, audit.commits), 2),
+            "gap_requests_median": median(audit.record_gaps),
+            "sha_writes_max": max(audit.sha_writes.values(), default=0),
+            "sha_writes_median": median(list(audit.sha_writes.values())),
         },
         "absorb": absorb,
         "big_results": {
@@ -529,6 +586,13 @@ def render(report: dict) -> str:
             f"avg {short(cp['reorientation_wave_avg'])}, max {short(cp['reorientation_wave_max'])}",
             f"median interval between compactions: {cp['interval_requests_median']:.0f} requests, "
             f"{cp['interval_minutes_median']} min", ""]
+    ru = report["record_upkeep"]
+    out += ["## Task record upkeep",
+            f"{ru['edits']} record edits in {ru['responses']} responses ("
+            + ", ".join(f"{kind} {n}" for kind, n in ru["by_record"].items())
+            + f") · {ru['commits']} commits → {ru['edits_per_commit']:.1f} edits/commit",
+            f"median {ru['gap_requests_median']:.0f} requests between record-editing responses · "
+            f"one commit id written up to {ru['sha_writes_max']} times (median {ru['sha_writes_median']:.0f})", ""]
     a = report["absorb"]
     out += ["## Absorb",
             f"offers {a.get('offer_batches', 0)} batches / {a.get('offered_ids', 0)} ids · calls {a.get('calls', 0)} · "

@@ -53,11 +53,10 @@ Awaiting design discussion and user confirmation.
 {{CHECKS}}
 
 ## Progress
-<!-- Keep the current delivery candidate and its gate observations here; move superseded candidates
-     to this ticket's history.md. Reference the owning batch review for verdicts, findings and
-     corrections. Record consumed pending dependency candidates and inherited obligations. Maintain
-     one replaceable semantic checkpoint that tells the next owner how to resume, verify or decide.
-     Collection leaves this ticket pending for batch acceptance.
+<!-- One semantic checkpoint: checkout and branch, bounded outcome in progress, obligations left,
+     and any blocker. Git in that checkout supplies commits; the batch review record holds
+     observations, verdicts, and findings. Name a consumed pending dependency candidate by exact
+     commit. Replace at a phase boundary.
      Procedure: ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->
 Semantic checkpoint: work not started.
 

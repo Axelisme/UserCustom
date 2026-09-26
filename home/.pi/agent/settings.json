@@ -10,10 +10,10 @@
   "compaction": {
     "modelOverrides": {
       "openai-codex/gpt-6-sol": {
-        "reserveTokens": 72000
+        "reserveTokens": 40000
       },
       "openai-codex/gpt-6-astra": {
-        "reserveTokens": 72000
+        "reserveTokens": 40000
       }
     }
   },

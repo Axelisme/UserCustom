@@ -1,0 +1,560 @@
+#!/usr/bin/env python3
+"""Audit how accumulated Pi sessions spend their context window.
+
+Reads main sessions under <agent-dir>/sessions and Herdr subagent sessions under
+<agent-dir>/herdr-subagents/sessions, keeps entries inside the time window, and
+reports cost, cache, context composition, policy re-reads, compaction, absorb
+economics, oversized tool results and tool-call batching.
+
+Token counts of message content are estimates (characters / 4); usage and cost
+figures come from the provider usage recorded on each assistant message.
+
+Usage:
+  pi-context-audit [--days N | --since ISO] [--until ISO] [--project SUBSTR]
+                   [--agent-dir DIR] [--top N] [--json]
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import glob
+import json
+import os
+import re
+import statistics
+import sys
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+
+POLICY = ("skill", "task", "repo_docs")
+SKILL = re.compile(r"(^|/)\.(pi/agent|claude|codex)/skills/|(^|/)SKILL\.md\b|herdr-subagents/profiles/")
+TASK = re.compile(r"\.agent_state/(plans|backlog)/")
+DOC = re.compile(r"\.md\b|(^|/)docs/")
+CODE_FILE = re.compile(r"\.(py|pyi|ts|tsx|js|mjs|cjs|json|toml|ya?ml|sh|c|h|cpp|rs|go)\b")
+ORCHESTRATION = re.compile(r"^collab_|subagent")
+WORKTREE = re.compile(r"[^\s'\"]*?(\.agent_state/worktrees/[^/\s]+/(lanes/[^/\s]+|integration)|/\.worktrees/[^/\s]+)/")
+AUTHORING = {"edit", "write"}
+ABSORB_OFFER = "pi-absorb.offer.v1"
+WAVE_REQUESTS = 10
+BIG_RESULT_CHARS = 32_000
+
+
+def parse_time(value: object) -> dt.datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.timezone.utc)
+
+
+def estimate(text: str) -> float:
+    return len(text) / 4
+
+
+def text_of(content: object) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+    return ""
+
+
+def classify(subject: str, *, is_path: bool) -> str:
+    """Category of a read path, or of a shell command by the files it names."""
+    if SKILL.search(subject):
+        return "skill"
+    if TASK.search(subject):
+        return "task"
+    if is_path:
+        return "repo_docs" if DOC.search(subject) else "business"
+    # A command counts as documentation only when every file it names is Markdown.
+    if re.search(r"\.md\b", subject) and not CODE_FILE.search(subject) and not re.search(r"\bgit\b.*\bdiff\b", subject):
+        return "repo_docs"
+    return "business"
+
+
+def reread_key(subject: str, cwd: str) -> str:
+    """One key for the same document across worktrees, lanes and absolute/relative spellings."""
+    key = re.sub(r"\s+", " ", subject.strip())
+    for root in {cwd, cwd.split("/.agent_state/worktrees/")[0]}:
+        if root:
+            key = key.replace(root.rstrip("/") + "/", "")
+    key = WORKTREE.sub("", key)
+    return re.sub(r"^.*?/skills/", "skills/", key) if SKILL.search(key) else key
+
+
+@dataclass
+class Session:
+    kind: str  # "main" or "sub"
+    role: str
+    cwd: str
+    path: str
+    entries: list[dict]
+
+
+def load_entries(path: str, since: dt.datetime, until: dt.datetime) -> list[dict]:
+    entries = []
+    with open(path, encoding="utf-8", errors="replace") as stream:
+        for line in stream:
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(entry, dict):
+                continue
+            stamp = parse_time(entry.get("timestamp"))
+            if stamp is not None and since <= stamp < until:
+                entry["_t"] = stamp
+                entries.append(entry)
+    return entries
+
+
+def session_cwd(path: str) -> str:
+    try:
+        with open(path, encoding="utf-8", errors="replace") as stream:
+            header = json.loads(stream.readline())
+        return str(header.get("cwd", "")) if isinstance(header, dict) else ""
+    except (OSError, ValueError):
+        return ""
+
+
+def discover(agent_dir: str, since: dt.datetime, until: dt.datetime, project: str) -> list[Session]:
+    found: list[tuple[str, str, str, str]] = []
+    for path in sorted(glob.glob(os.path.join(agent_dir, "sessions", "*", "*.jsonl"))):
+        found.append(("main", "main", session_cwd(path), path))
+    for record in sorted(glob.glob(os.path.join(agent_dir, "herdr-subagents", "sessions", "*", "*", "record.json"))):
+        try:
+            with open(record, encoding="utf-8") as stream:
+                meta = json.load(stream)
+        except (OSError, ValueError):
+            continue
+        for path in sorted(glob.glob(os.path.join(os.path.dirname(record), "sessions", "*.jsonl"))):
+            found.append(("sub", str(meta.get("role") or "unknown"), str(meta.get("cwd") or ""), path))
+    sessions = []
+    for kind, role, cwd, path in found:
+        if project and project not in cwd:
+            continue
+        try:
+            if os.path.getmtime(path) < since.timestamp():
+                continue
+        except OSError:
+            continue
+        entries = load_entries(path, since, until)
+        if any((e.get("message") or {}).get("role") == "assistant" for e in entries):
+            sessions.append(Session(kind, role, cwd, path, entries))
+    return sessions
+
+
+@dataclass
+class Audit:
+    usage: Counter = field(default_factory=Counter)
+    day: dict = field(default_factory=lambda: defaultdict(Counter))
+    added: Counter = field(default_factory=Counter)
+    resident: Counter = field(default_factory=Counter)
+    reread: Counter = field(default_factory=Counter)
+    sources: Counter = field(default_factory=Counter)
+    source_reads: Counter = field(default_factory=Counter)
+    compactions: Counter = field(default_factory=Counter)
+    compaction_failures: Counter = field(default_factory=Counter)
+    waves: list = field(default_factory=list)
+    absorb: Counter = field(default_factory=Counter)
+    big: Counter = field(default_factory=Counter)
+    big_examples: list = field(default_factory=list)
+    batching: Counter = field(default_factory=Counter)
+    per_session: list = field(default_factory=list)
+    input_prices: list = field(default_factory=list)
+    cache_prices: list = field(default_factory=list)
+    steady_input: list = field(default_factory=list)
+    after_absorb_input: list = field(default_factory=list)
+    absorb_resident_saved: float = 0.0
+
+
+def analyse(sessions: list[Session], tz: dt.tzinfo | None) -> Audit:
+    audit = Audit()
+    for session in sessions:
+        analyse_session(audit, session, tz)
+    return audit
+
+
+def analyse_session(audit: Audit, session: Session, tz: dt.tzinfo | None) -> None:
+    entries = session.entries
+    later = [0] * len(entries)  # assistant requests after this entry before the next compaction
+    remaining = 0
+    for i in range(len(entries) - 1, -1, -1):
+        if entries[i].get("type") == "compaction":
+            remaining = 0
+        later[i] = remaining
+        if (entries[i].get("message") or {}).get("role") == "assistant":
+            remaining += 1
+
+    calls: dict[str, dict] = {}
+    seen: dict[str, int] = {}
+    window = 0
+    since_compaction: int | None = None
+    wave = 0.0
+    after_absorb = False
+    totals = Counter()
+
+    def put(i: int, category: str, tokens: float) -> None:
+        audit.added[(session.kind, category)] += tokens
+        audit.resident[(session.kind, category)] += tokens * later[i]
+
+    for i, entry in enumerate(entries):
+        kind = entry.get("type")
+        if kind == "compaction":
+            if since_compaction is not None:
+                audit.waves.append(wave)
+            window += 1
+            since_compaction, wave = 0, 0.0
+            details = entry.get("details") if isinstance(entry.get("details"), dict) else {}
+            if "remoteCompaction" in details:
+                audit.compactions["remote"] += 1
+            elif "remoteCompactionFailure" in details:
+                audit.compactions["remote_failed"] += 1
+                failure = details["remoteCompactionFailure"] or {}
+                audit.compaction_failures[str(failure.get("category", "unknown"))] += 1
+            else:
+                audit.compactions["local"] += 1
+            put(i, "compaction_summary", estimate(str(entry.get("summary", ""))))
+            continue
+        if kind == "custom" and entry.get("customType") == ABSORB_OFFER:
+            ids = (entry.get("data") or {}).get("ids") or []
+            audit.absorb["offer_batches"] += 1
+            audit.absorb["offered_ids"] += len(ids)
+            continue
+        if kind == "custom_message":
+            put(i, "extension", estimate(json.dumps(entry.get("content", ""), ensure_ascii=False)))
+            continue
+        message = entry.get("message") or {}
+        role = message.get("role")
+        if role == "assistant":
+            usage = message.get("usage") or {}
+            cost = usage.get("cost") or {}
+            uncached, cached = usage.get("input", 0) or 0, usage.get("cacheRead", 0) or 0
+            row = {
+                "requests": 1,
+                "uncached": uncached,
+                "cache_read": cached,
+                "cache_write": usage.get("cacheWrite", 0) or 0,
+                "output": usage.get("output", 0) or 0,
+                "cost": cost.get("total", 0) or 0,
+                "cost_uncached": cost.get("input", 0) or 0,
+                "cost_cache_read": cost.get("cacheRead", 0) or 0,
+                "cost_cache_write": cost.get("cacheWrite", 0) or 0,
+                "cost_output": cost.get("output", 0) or 0,
+            }
+            for key, value in row.items():
+                audit.usage[f"{session.kind}:{key}"] += value
+                totals[key] += value
+                audit.day[entry["_t"].astimezone(tz).date().isoformat()][key] += value
+            if uncached and cost.get("input"):
+                audit.input_prices.append(cost["input"] / uncached)
+            if cached and cost.get("cacheRead"):
+                audit.cache_prices.append(cost["cacheRead"] / cached)
+            (audit.after_absorb_input if after_absorb else audit.steady_input).append(uncached)
+            after_absorb = False
+            if since_compaction is not None:
+                since_compaction += 1
+            tool_calls = 0
+            for block in message.get("content") or []:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "toolCall":
+                    tool_calls += 1
+                    calls[str(block.get("id"))] = block
+                    arguments = block.get("arguments") or {}
+                    written = json.dumps(arguments, ensure_ascii=False)
+                    name = str(block.get("name", ""))
+                    if ORCHESTRATION.search(name):
+                        category = "orchestration"
+                    elif name in AUTHORING:  # authored content lands in the file's category
+                        category = classify(str(arguments.get("path", "")), is_path=True)
+                    else:
+                        category = "tool_calls"
+                    put(i, category, estimate(written))
+                elif block.get("type") in ("text", "thinking"):
+                    put(i, "model_prose", estimate(str(block.get("text") or block.get("thinking") or "")))
+            if session.kind == "main":
+                audit.batching[min(tool_calls, 5)] += 1
+            continue
+        if role == "toolResult":
+            body = text_of(message.get("content"))
+            tokens = estimate(body)
+            name = str(message.get("toolName") or "")
+            call = calls.get(str(message.get("toolCallId")), {})
+            arguments = call.get("arguments") or {}
+            if name == "absorb":
+                category = "absorb"
+                details = message.get("details") or {}
+                for outcome in details.get("outcomes") or []:
+                    if outcome.get("status") == "accepted":
+                        audit.absorb["accepted_entries"] += 1
+                        audit.absorb["absorbed_ids"] += len(outcome.get("ids") or [])
+                        saved = (outcome.get("beforeTokens", 0) or 0) - (outcome.get("afterTokens", 0) or 0)
+                        audit.absorb["saved_tokens"] += saved
+                        audit.absorb_resident_saved += saved * later[i]
+                        after_absorb = True
+                    else:
+                        audit.absorb["failed_entries"] += 1
+                audit.absorb["calls"] += 1
+            elif ORCHESTRATION.search(name):
+                category = "orchestration"
+            elif name == "read":
+                subject = str(arguments.get("path", ""))
+                category = classify(subject, is_path=True)
+                if arguments.get("offset") is not None or arguments.get("limit") is not None:
+                    subject = f"{subject}:{arguments.get('offset') or 1}+{arguments.get('limit') or ''}"
+            else:
+                subject = str(arguments.get("command") or arguments.get("path") or "")
+                category = classify(subject, is_path=bool(arguments.get("path")))
+            put(i, category, tokens)
+            if len(body) > BIG_RESULT_CHARS:
+                audit.big[name] += tokens
+                audit.big["_count"] += 1
+                label = str(arguments.get("command") or arguments.get("path") or name)
+                audit.big_examples.append((tokens, name, re.sub(r"\s+", " ", label)[:110]))
+            if category in POLICY and name != "absorb":
+                key = reread_key(subject, session.cwd)
+                if key not in seen:
+                    cause = "first"
+                elif seen[key] < window:
+                    cause = "after_compaction"
+                else:
+                    cause = "same_window"
+                seen[key] = window
+                audit.reread[(session.kind, category, cause)] += tokens
+                audit.sources[(category, key)] += tokens
+                audit.source_reads[(category, key)] += 1
+                if since_compaction is not None and since_compaction <= WAVE_REQUESTS:
+                    wave += tokens
+            continue
+        if role == "user":
+            content = text_of(message.get("content"))
+            injected = sum(len(block) for block in re.findall(r"<skill name=.*?</skill>", content, re.S))
+            if injected:
+                put(i, "skill", injected / 4)
+                audit.reread[(session.kind, "skill", "injected")] += injected / 4
+            put(i, "user", (len(content) - injected) / 4)
+    if since_compaction is not None:
+        audit.waves.append(wave)
+    audit.per_session.append({
+        "kind": session.kind,
+        "role": session.role,
+        "cwd": session.cwd,
+        "session": os.path.basename(session.path),
+        **{key: round(value, 6) for key, value in totals.items()},
+    })
+
+
+def median(values: list[float]) -> float:
+    return statistics.median(values) if values else 0.0
+
+
+def share(part: float, whole: float) -> float:
+    return part / whole if whole else 0.0
+
+
+def build_report(audit: Audit, sessions: list[Session], since: dt.datetime, until: dt.datetime,
+                 project: str, top: int) -> dict:
+    usage = audit.usage
+    kinds = ("main", "sub")
+
+    def total(key: str) -> float:
+        return sum(usage[f"{kind}:{key}"] for kind in kinds)
+
+    prompt = total("uncached") + total("cache_read") + total("cache_write")
+    categories = Counter()
+    resident = Counter()
+    for (kind, category), value in audit.added.items():
+        categories[category] += value
+    for (kind, category), value in audit.resident.items():
+        resident[category] += value
+    added_total, resident_total = sum(categories.values()), sum(resident.values())
+    policy_added = sum(categories[c] for c in POLICY)
+    policy_resident = sum(resident[c] for c in POLICY)
+    price_uncached, price_cached = median(audit.input_prices), median(audit.cache_prices)
+
+    rereads = Counter()
+    for (kind, category, cause), value in audit.reread.items():
+        rereads[cause] += value
+    sources = [
+        {"category": category, "source": key, "tokens": round(tokens), "reads": audit.source_reads[(category, key)]}
+        for (category, key), tokens in sorted(audit.sources.items(), key=lambda item: (-item[1], item[0]))
+        if audit.source_reads[(category, key)] > 1
+    ][:top]
+
+    steady = median(audit.steady_input)
+    break_extra = sum(max(0.0, value - steady) for value in audit.after_absorb_input)
+    absorb = dict(audit.absorb)
+    absorb["adoption"] = share(absorb.get("absorbed_ids", 0), absorb.get("offered_ids", 0))
+    absorb["resident_tokens_saved"] = round(audit.absorb_resident_saved)
+    absorb["cache_break_extra_uncached"] = round(break_extra)
+    absorb["net_cost_usd"] = round(audit.absorb_resident_saved * price_cached
+                                   - break_extra * max(0.0, price_uncached - price_cached), 4)
+
+    batching_total = sum(audit.batching.values())
+    return {
+        "window": {"since": since.isoformat(), "until": until.isoformat(), "project": project or None},
+        "sessions": dict(Counter(s.kind for s in sessions)),
+        "subagent_roles": dict(Counter(s.role for s in sessions if s.kind == "sub")),
+        "usage": {
+            "requests": total("requests"),
+            "uncached_input": total("uncached"),
+            "cache_read": total("cache_read"),
+            "cache_write": total("cache_write"),
+            "output": total("output"),
+            "cache_hit_rate": share(total("cache_read"), prompt),
+            "avg_prompt_per_request": share(prompt, total("requests")),
+            "cost_usd": round(total("cost"), 4),
+            "cost_split_usd": {
+                "cache_read": round(total("cost_cache_read"), 4),
+                "uncached_input": round(total("cost_uncached"), 4),
+                "cache_write": round(total("cost_cache_write"), 4),
+                "output": round(total("cost_output"), 4),
+            },
+            "by_kind": {kind: {k.split(":", 1)[1]: round(v, 4) for k, v in usage.items() if k.startswith(kind + ":")}
+                        for kind in kinds},
+        },
+        "context": {
+            "added_tokens": round(added_total),
+            "categories": {c: {"added": round(v), "added_share": share(v, added_total),
+                               "resident_share": share(resident[c], resident_total)}
+                           for c, v in categories.most_common()},
+            "policy_added_share": share(policy_added, added_total),
+            "policy_resident_share": share(policy_resident, resident_total),
+            # Share of the billed cache reads; content estimates alone undercount CJK text and omit the system prompt.
+            "policy_resident_cost_usd": round(share(policy_resident, resident_total) * total("cost_cache_read"), 4),
+        },
+        "policy_rereads": {
+            "by_cause": {cause: round(v) for cause, v in rereads.most_common()},
+            "reread_share": share(rereads["after_compaction"] + rereads["same_window"], sum(rereads.values())),
+            "top_sources": sources,
+        },
+        "compaction": {
+            "count": sum(audit.compactions.values()),
+            "by_kind": dict(audit.compactions),
+            "failures": dict(audit.compaction_failures),
+            "reorientation_wave_avg": round(share(sum(audit.waves), len(audit.waves))),
+            "reorientation_wave_max": round(max(audit.waves, default=0)),
+        },
+        "absorb": absorb,
+        "big_results": {
+            "threshold_chars": BIG_RESULT_CHARS,
+            "count": audit.big["_count"],
+            "tokens": round(sum(v for k, v in audit.big.items() if k != "_count")),
+            "by_tool": {k: round(v) for k, v in audit.big.items() if k != "_count"},
+            "largest": [{"tokens": round(t), "tool": n, "subject": s}
+                        for t, n, s in sorted(audit.big_examples, reverse=True)[:top]],
+        },
+        "batching": {str(k) if k < 5 else "5+": share(v, batching_total) for k, v in sorted(audit.batching.items())},
+        "days": {day: {k: round(v, 4) for k, v in sorted(row.items())} for day, row in sorted(audit.day.items())},
+        "sessions_by_cost": sorted(audit.per_session, key=lambda s: -s.get("cost", 0))[:top],
+    }
+
+
+def k(value: float) -> str:
+    value = float(value)
+    if abs(value) >= 1e6:
+        return f"{value / 1e6:.1f}M"
+    if abs(value) >= 1e3:
+        return f"{value / 1e3:.0f}k"
+    return f"{value:.0f}"
+
+
+def pct(value: float) -> str:
+    return f"{100 * value:.0f}%"
+
+
+def render(report: dict, tz: dt.tzinfo | None) -> str:
+    w, u, c = report["window"], report["usage"], report["context"]
+    since = dt.datetime.fromisoformat(w["since"]).astimezone(tz).strftime("%Y-%m-%d %H:%M")
+    until = dt.datetime.fromisoformat(w["until"]).astimezone(tz).strftime("%Y-%m-%d %H:%M")
+    s = report["sessions"]
+    out = [f"# pi context audit  {since} → {until}" + (f"  project~{w['project']}" if w["project"] else ""),
+           f"sessions: {s.get('main', 0)} main, {s.get('sub', 0)} sub"
+           + (f" ({', '.join(f'{r} {n}' for r, n in sorted(report['subagent_roles'].items()))})"
+              if report["subagent_roles"] else ""),
+           ""]
+    split = u["cost_split_usd"]
+    out += ["## Cost and cache",
+            f"requests {u['requests']:,} · cost ${u['cost_usd']:.2f} "
+            f"(cache read ${split['cache_read']:.2f}, uncached ${split['uncached_input']:.2f}, "
+            f"output ${split['output']:.2f})",
+            f"cache hit {pct(u['cache_hit_rate'])} · avg prompt {k(u['avg_prompt_per_request'])}/request · "
+            f"uncached {k(u['uncached_input'])} · output {k(u['output'])}", ""]
+    out += ["## Context composition (content estimate; resident = tokens x later requests before compaction)",
+            f"{'category':20}{'added':>9}{'added%':>8}{'resident%':>11}"]
+    for name, row in c["categories"].items():
+        out.append(f"{name:20}{k(row['added']):>9}{pct(row['added_share']):>8}{pct(row['resident_share']):>11}")
+    out += [f"policy (skill+task+repo_docs): added {pct(c['policy_added_share'])}, resident "
+            f"{pct(c['policy_resident_share'])} ≈ ${c['policy_resident_cost_usd']:.2f} cache read", ""]
+    r = report["policy_rereads"]
+    out += ["## Policy re-reads",
+            "by cause: " + ", ".join(f"{cause} {k(v)}" for cause, v in r["by_cause"].items()),
+            f"re-read share {pct(r['reread_share'])}"]
+    for row in r["top_sources"]:
+        out.append(f"  {k(row['tokens']):>6} x{row['reads']:<3} {row['category']:9} {row['source'][:100]}")
+    cp = report["compaction"]
+    out += ["", "## Compaction",
+            f"{cp['count']} total " + " ".join(f"{name} {n}" for name, n in sorted(cp["by_kind"].items()))
+            + (f" · failures {cp['failures']}" if cp["failures"] else ""),
+            f"reorientation wave (policy tokens in first {WAVE_REQUESTS} requests after): "
+            f"avg {k(cp['reorientation_wave_avg'])}, max {k(cp['reorientation_wave_max'])}", ""]
+    a = report["absorb"]
+    out += ["## Absorb",
+            f"offers {a.get('offer_batches', 0)} batches / {a.get('offered_ids', 0)} ids · calls {a.get('calls', 0)} · "
+            f"absorbed {a.get('absorbed_ids', 0)} ids ({pct(a['adoption'])}) · failed entries {a.get('failed_entries', 0)}",
+            f"saved {k(a.get('saved_tokens', 0))} (resident {k(a['resident_tokens_saved'])}) · cache-break extra "
+            f"uncached {k(a['cache_break_extra_uncached'])} · net ${a['net_cost_usd']:+.2f}", ""]
+    b = report["big_results"]
+    out += [f"## Tool results > {b['threshold_chars'] // 1000}k chars",
+            f"{b['count']} results, {k(b['tokens'])} tokens · " + ", ".join(f"{t} {k(v)}" for t, v in b["by_tool"].items())]
+    for row in b["largest"]:
+        out.append(f"  {k(row['tokens']):>6} {row['tool']:6} {row['subject']}")
+    out += ["", "## Tool calls per main-session response",
+            " · ".join(f"{n}: {pct(v)}" for n, v in report["batching"].items())]
+    if len(report["days"]) > 1:
+        out += ["", "## By day", f"{'day':12}{'requests':>9}{'cost':>10}{'hit':>6}{'avg prompt':>12}"]
+        for day, row in report["days"].items():
+            prompt = row.get("uncached", 0) + row.get("cache_read", 0) + row.get("cache_write", 0)
+            out.append(f"{day:12}{row.get('requests', 0):>9.0f}{'$%.2f' % row.get('cost', 0):>10}"
+                       f"{pct(share(row.get('cache_read', 0), prompt)):>6}{k(share(prompt, row.get('requests', 0))):>12}")
+    out += ["", "## Costliest sessions"]
+    for row in report["sessions_by_cost"]:
+        out.append(f"  ${row.get('cost', 0):7.2f} {row.get('requests', 0):5.0f} req  {row['kind']}/{row['role']:18} "
+                   f"{row['session'][:40]}")
+    return "\n".join(out)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    window = parser.add_mutually_exclusive_group()
+    window.add_argument("--days", type=float, default=1.0, help="window length ending at --until (default 1)")
+    window.add_argument("--since", help="window start, ISO 8601")
+    parser.add_argument("--until", help="window end, ISO 8601 (default now)")
+    parser.add_argument("--project", default="", help="keep sessions whose cwd contains this text")
+    parser.add_argument("--agent-dir", default=os.path.expanduser("~/.pi/agent"))
+    parser.add_argument("--top", type=int, default=10)
+    parser.add_argument("--json", action="store_true", help="print the full report as JSON")
+    args = parser.parse_args(argv)
+
+    until = parse_time(args.until) if args.until else dt.datetime.now(dt.timezone.utc)
+    since = parse_time(args.since) if args.since else until - dt.timedelta(days=args.days)
+    if until is None or since is None:
+        parser.error("--since/--until must be ISO 8601 timestamps")
+    tz = None  # local time for day grouping and display
+    sessions = discover(args.agent_dir, since, until, args.project)
+    report = build_report(analyse(sessions, tz), sessions, since, until, args.project, args.top)
+    if args.json:
+        json.dump(report, sys.stdout, ensure_ascii=False, indent=1)
+        print()
+    else:
+        print(render(report, tz))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

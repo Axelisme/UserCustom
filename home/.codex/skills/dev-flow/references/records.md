@@ -18,14 +18,16 @@ Standing orders under [custody](custody.md), independently of routing edges.
 A ticket owns its stable contract, dependencies, acceptance criteria, user decisions, current
 resumable state, and terminal disposition. Prepare contract fields before `pending`. After work starts,
 change them only when current authority changes approved scope, behavior, acceptance, dependency, or a
-decision boundary. Keep implementation results out of the contract. Change an acceptance checkbox only
+decision boundary. Amend the affected contract text in place and move the superseded wording, with its
+authority pointer, to the ticket's history file. Keep implementation results out of the contract. Change an acceptance checkbox only
 when its assigned stable observation supports the conclusion.
 
 A ticket's **semantic checkpoint** is the smallest current statement that changes how the next owner
 resumes, verifies, or decides. Replace only the semantic-checkpoint entry within Progress when a stable
-candidate, gate conclusion, reviewable verdict, blocker, or handoff creates a new checkpoint. Preserve
-its implementation candidate and gate evidence, and point to the owning batch review for verdicts,
-findings, and corrections. Keep file reads, ordinary edits, transient commands, retries, child events,
+candidate, gate conclusion, reviewable verdict, blocker, or handoff creates a new checkpoint. Progress
+keeps the current implementation candidate and its gate evidence and points to the owning batch review
+for verdicts, findings, and corrections. When a new candidate supersedes one, move the superseded
+candidate and its gate evidence to the ticket's history file. Keep file reads, ordinary edits, transient commands, retries, child events,
 and raw logs with Git, the tool, or the role result.
 
 Use this update gate before changing a durable record: would the fact change how a newly arriving
@@ -35,9 +37,18 @@ result, and limitation in the ticket or review record that owns the claim. Raw l
 runs. Use a separate evidence file only for a costly, external, manual, ephemeral, audit-required, or
 user-requested observation, following `lane-authority.md`.
 
-A review record retains each reviewable candidate, verdict, findings, and correction disposition
-because those facts govern fixed-subject acceptance. This bounded review history is not a general
+A review record keeps its current round and one Findings row per finding, with the affected
+criterion, status, and resolving candidate; those facts govern fixed-subject acceptance. When a new
+round starts, move the ended round's candidate, observations, and verdict narrative to the review's
+history file and keep its findings in the table. This bounded review history is not a general
 operation log.
+
+A **history file** holds superseded record content: `history.md` beside a ticket, and
+`<review-id>.history.md` beside a review record. Append to it. It sits outside the resume path and
+outside dispatches; read it only to trace a specific candidate, finding, or decision to its source.
+Every reorientation rereads INDEX, tickets, and review records, so `plan.py locate` reports each one
+past its byte budget in `size_warnings`. Condense a warned record by moving superseded content to its
+history file.
 
 Stop if routing, subject identity, observation ownership, or mutation authority is uncertain. The
 update is complete when the current routing edge and semantic checkpoint are sufficient and every
@@ -60,8 +71,8 @@ criterion and finding ownership; record exclusions without dropping a member's a
 Stop before dispatch if the writer is active, the subject is dirty or mutable, the brief is ambiguous,
 required observations lack owners, or the baseline is missing. A review entry is ready when one
 acceptor can judge the bounded criteria without reconstructing scope from unrelated tickets or INDEX.
-After the verdict, record whether it was reviewable, the candidate, findings with affected criterion
-and ticket IDs, and the next owner as bounded review history. Use Collab's correction procedure for
+After the verdict, update Current round with whether it was reviewable, the candidate, and the next
+owner, and add or update Findings rows with affected criterion and ticket IDs. Use Collab's correction procedure for
 BLOCKED results. Approval establishes only the claims named in the brief on the reviewed subject;
 other work retains its disposition. Keep a per-ticket disposition linking established criteria to the
 accepted candidate. A batch remains pending until all its assigned claims are established.

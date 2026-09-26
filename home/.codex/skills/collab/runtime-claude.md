@@ -73,8 +73,8 @@ Branch on the returned `state`:
   children's outcomes as unrecoverable: inspect the affected checkout's actual state, record the loss
   in the owning ticket or batch review record, and dispatch fresh.
 
-While a child runs, continue independent work. On each wake, reread the exact ticket or batch review
-record named by the dispatch, as in Pi [Post-launch](runtime-pi.md#post-launch).
+While a child runs, continue independent work. On each wake, reread the current-state anchors of the
+ticket or batch review record named by the dispatch, as in Pi [Post-launch](runtime-pi.md#post-launch).
 
 ## Results and decisions
 

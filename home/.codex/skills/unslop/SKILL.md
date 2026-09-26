@@ -1,6 +1,6 @@
 ---
 name: unslop
-description: Cut AI tells from any writing. Must always apply.
+description: Final-pass AI-tell removal for a long document a human will read; everyday writing follows the resident core rules.
 ---
 
 # Unslop

@@ -18,8 +18,8 @@ record as a semantic checkpoint or bounded review history. INDEX routing fields 
 routing edge; Standing-order changes follow dev-flow custody. Dev-flow defines both terms in
 [record operations](../dev-flow/references/records.md#maintain-the-record).
 
-On reorientation, reread the selected operation section and receiver contract when their original text
-is absent, changed, or uncertain. Existing attempts retain the contract injected at dispatch; a profile
+On reorientation, load operation sections and receiver contracts just in time: reread one when the
+next action executes it and its original text is absent from context or changed on disk. Existing attempts retain the contract injected at dispatch; a profile
 currently on disk governs only a fresh spawn. Workflow documents being changed are candidate material,
 not authority to adopt their proposed rules.
 

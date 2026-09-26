@@ -9,7 +9,10 @@ observations and names interaction scenarios, interface and test obligations, pr
 conditions, and limitations. It covers member criteria as well as interactions, not only merge changes.
 
 The Orchestrator checks delivery completeness and required batch gates, records the subject in the
-review record, then dispatches one acceptor. Freeze the review checkout until the verdict. Independent
+review record, then dispatches one acceptor. The dispatch names the brief's `#current-round`,
+`#findings`, `#criterion-coverage`, `#interaction-scenarios`, and `#candidate-bound-observations` and
+each member ticket's `#acceptance` and `#scenarios`; the acceptor opens a whole record or a history file
+only for a concrete review question. Freeze the review checkout until the verdict. Independent
 implementation may continue in other lanes; to keep integration moving, use a separate clean checkout
 pinned to the reviewed commit. Later changes are outside that verdict.
 

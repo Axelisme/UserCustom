@@ -53,8 +53,8 @@ Awaiting design discussion and user confirmation.
 {{CHECKS}}
 
 ## Progress
-<!-- Keep delivery candidates and gate observations here; reference the owning batch review for
-     verdicts, findings and corrections. Record consumed pending dependency candidates and inherited
+<!-- Keep the current delivery candidate and its gate observations here; move superseded candidates
+     to this ticket's history.md. Reference the owning batch review for verdicts, findings and corrections. Record consumed pending dependency candidates and inherited
      obligations. Maintain one replaceable semantic checkpoint that tells the next owner how to resume,
      verify or decide. Collection leaves this ticket pending for batch acceptance.
      Procedure: ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->

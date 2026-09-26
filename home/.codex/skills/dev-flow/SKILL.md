@@ -16,10 +16,11 @@ checkpoint, and terminal disposition. [Record operations](references/records.md#
 defines those terms. The Orchestrator owns INDEX, tickets, review records, acceptance checkboxes, and
 lifecycle state.
 
-On reorientation, run `scripts/plan.py locate <task-id>` from the main checkout. Read the located INDEX,
-all active Standing orders, the ticket or batch review named by Current or Next, and only the pointers
-needed for that action. If the original text of this entry or a selected operation section is absent,
-changed, or uncertain, reread it. A summary never replaces governing text or an authority grant.
+On reorientation, run `scripts/plan.py locate <task-id>` from the main checkout and follow
+[Resume](references/planning.md#resume). Load governing text just in time: reread this entry or an
+operation section when the next action executes it and its original text is absent from context or
+changed on disk; later actions load their own sections when they start. A summary never replaces
+governing text or an authority grant.
 
 ## The lifecycle
 

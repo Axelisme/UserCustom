@@ -700,22 +700,22 @@ class TaskRecordTests(unittest.TestCase):
             )
             self.assertEqual(located["parse_errors"], [])
 
-    def test_locate_warns_only_about_records_past_the_line_limit(self) -> None:
+    def test_locate_warns_only_about_records_past_their_byte_budget(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.assert_ok(run_plan(root, "create", "demo"), "create")
             task = record(root)
-            limit = plan.LINE_WARN_LIMIT
-            (task / "INDEX.md").write_bytes(
-                b"---\ntask_id: demo\nspec: none\n---\n" + b"opaque:\xff\x00\n" * limit
-            )
-            write_ticket(task / "tickets", "T001-long", "pending", "line\n" * limit)
+            budget = plan.SIZE_WARN_BYTES
+            header = b"---\ntask_id: demo\nspec: none\n---\n"
+            (task / "INDEX.md").write_bytes(header + b"\xff" * (budget["index"] + 1 - len(header)))
+            long_ticket = write_ticket(task / "tickets", "T001-long", "pending", "x" * budget["ticket"])
+            (long_ticket.parent / "history.md").write_bytes(b"h" * budget["ticket"] * 4)
             write_ticket(task / "tickets", "T002-short", "pending")
-            write_ticket(task / "tickets", "T003-edge", "pending", "line\n" * (limit - 5))
-            self.assertEqual(
-                len((task / "tickets" / "T003-edge" / "ticket.md").read_text().splitlines()),
-                limit,
-            )
+            reviews = task / "reviews"
+            reviews.mkdir(exist_ok=True)
+            (reviews / "batch.md").write_bytes(b"r" * (budget["review"] + 1))
+            (reviews / "edge.md").write_bytes(b"r" * budget["review"])
+            (reviews / "batch.history.md").write_bytes(b"h" * budget["review"] * 4)
             before = snapshot(task)
 
             located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
@@ -725,10 +725,20 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(
                 located["size_warnings"],
                 [
-                    {"path": ".agent_state/plans/demo/INDEX.md", "lines": limit + 4},
+                    {
+                        "path": ".agent_state/plans/demo/INDEX.md",
+                        "bytes": budget["index"] + 1,
+                        "budget": budget["index"],
+                    },
                     {
                         "path": ".agent_state/plans/demo/tickets/T001-long/ticket.md",
-                        "lines": limit + 5,
+                        "bytes": long_ticket.stat().st_size,
+                        "budget": budget["ticket"],
+                    },
+                    {
+                        "path": ".agent_state/plans/demo/reviews/batch.md",
+                        "bytes": budget["review"] + 1,
+                        "budget": budget["review"],
                     },
                 ],
             )

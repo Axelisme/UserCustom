@@ -90,8 +90,9 @@ return control or use the active goal's yield mechanism and let the terminal not
 session. Blocking on a child does not make it more authoritative.
 
 Yielding means you were away from the lane while it was written. When the terminal notification lands,
-reread the exact ticket or batch review record named by the dispatch. Rebuild judgement from its current
-candidate-bound observations rather than memory or unrelated task history.
+reread the current-state anchors of the ticket or batch review record named by the dispatch: a ticket's
+`#progress`, or a review's `#current-round`, `#findings`, and `#candidate-bound-observations`. Rebuild
+judgement from its current candidate-bound observations rather than memory or unrelated task history.
 
 ## Run control
 

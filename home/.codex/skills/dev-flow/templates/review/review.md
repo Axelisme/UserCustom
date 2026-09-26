@@ -29,15 +29,19 @@ an included ticket's acceptance obligation; regroup membership explicitly if nec
 affected tickets, and observation/owner.>
 
 ## Candidate-bound observations
-<Owner, method or command, selection, environment, result, run pointer, and limitations for each claim.
-Include assigned batch gates. Reassess applicability after assembly or correction.>
+<Owner, method or command, selection, environment, result, run pointer, and limitations for each claim
+on the current candidate. Include assigned batch gates. Reassess applicability after assembly or
+correction; superseded observations move with their round to the history file.>
 
-## Prior findings
-None.
+## Current round
+<Candidate under review, reviewability, verdict, correction owner, verification, and next action. When
+a new round starts, move this round's candidate and narrative to `<review-id>.history.md`. Review
+history belongs to this record rather than to member tickets.>
 
-## Progress
-<Record each candidate, reviewability, verdict, findings with affected criteria/tickets, correction
-owner, verification, and next action. Review history belongs here rather than in member tickets.>
+## Findings
+| ID | Criterion and tickets | Status | Resolved by |
+|---|---|---|---|
+| none | | | |
 
 ## Ticket dispositions
 | Ticket | Established criteria and accepted candidate | Outstanding obligations / owner | Disposition |

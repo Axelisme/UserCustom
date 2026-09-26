@@ -26,8 +26,11 @@ For delegated work, read the receiver's `Dispatch contract` and `Result` section
 runtime operation. The dispatch names:
 
 - exact checkout, branch-local commit authority, exclusive writer, and persistence/push exclusions;
-- exact ticket or brief anchors and assigned criteria/checks;
-- applicable repository instruction and technical skill paths with read conditions, or explicit none;
+- exact ticket or brief anchors and assigned criteria/checks, naming current-state sections such as a
+  ticket's `#acceptance` and `#progress` or a review's `#current-round` and `#findings`; history files
+  stay out of the dispatch;
+- applicable repository instruction and technical skill paths, narrowed to the anchors that apply,
+  with read conditions, or explicit none;
 - runtime, interpreter, environment, caches, test selection, timeout, and cleanup exceptions;
 - prior blockers, stop conditions, escalation owner, and profile source for reorientation;
 - exceptional evidence target and exact method pointer, or none.

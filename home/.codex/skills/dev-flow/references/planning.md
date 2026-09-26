@@ -3,10 +3,13 @@
 ## Resume
 
 Inputs are the task ID or lookup ID and the main checkout. Run `scripts/plan.py locate <task-id>`; for
-an unknown ID, run `list` and use a returned `lookup_id`. Read the located INDEX, active Standing
-orders, the Current/Next ticket or review brief, and pointers required by that action. The Orchestrator
-is read-only until it identifies the bounded action, owner, checkout, and applicable authority.
-`size_warnings` names an INDEX or ticket past the line limit; condense it under
+an unknown ID, run `list` and use a returned `lookup_id`. Read the located INDEX and its active
+Standing orders. Open the Current or Next record through its current-state anchors in one `section.py`
+call: a ticket's `#outcome`, `#acceptance`, and `#progress`, or a review's `#current-round` and
+`#findings`. Read a record whole only when it predates those headings. Open other sections, records,
+and pointers when the action that uses them starts. The Orchestrator is read-only until it identifies
+the bounded action, owner, checkout, and applicable authority. `size_warnings` names an INDEX, ticket,
+or review record past its byte budget; condense it under
 [Maintain the record](records.md#maintain-the-record) at its next record update.
 
 Preserve historical records and the contract of already dispatched attempts. An unknown historical

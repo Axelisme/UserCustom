@@ -34,7 +34,8 @@ on the current candidate. Include assigned batch gates. Reassess applicability a
 correction; superseded observations move with their round to the history file.>
 
 ## Current round
-<Candidate under review, reviewability, verdict, correction owner, verification, and next action. When
+<Candidate under review, reviewability, verdict, blockers, correction owner, verification, and next
+owner and action. When
 a new round starts, move this round's candidate and narrative to `<review-id>.history.md`. Review
 history belongs to this record rather than to member tickets.>
 

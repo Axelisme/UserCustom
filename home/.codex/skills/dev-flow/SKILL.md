@@ -17,10 +17,7 @@ defines those terms. The Orchestrator owns INDEX, tickets, review records, accep
 lifecycle state.
 
 On reorientation, run `scripts/plan.py locate <task-id>` from the main checkout and follow
-[Resume](references/planning.md#resume). Load governing text just in time: reread this entry or an
-operation section when the next action executes it and its original text is absent from context or
-changed on disk; later actions load their own sections when they start. A summary never replaces
-governing text or an authority grant.
+[Resume](references/planning.md#resume).
 
 ## The lifecycle
 

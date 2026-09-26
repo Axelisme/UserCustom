@@ -142,6 +142,20 @@ class PiContextAuditTest(unittest.TestCase):
         self.assertEqual(report["compaction"]["by_kind"], {"remote_failed": 1})
         self.assertEqual(report["compaction"]["failures"], {"service": 1})
 
+    def test_compaction_interval_counts_requests_between_compactions(self) -> None:
+        session = Session()
+        session.assistant()
+        session.compaction()
+        session.assistant()
+        session.assistant()
+        session.compaction()
+        self.main_session(session)
+
+        compaction = audit(self.agent)["compaction"]
+
+        self.assertEqual(compaction["by_kind"], {"local": 2})
+        self.assertEqual(compaction["interval_requests_median"], 2)
+
     def test_usage_totals_cost_and_cache_hit_rate(self) -> None:
         session = Session()
         session.assistant(usage={"input": 100, "cacheRead": 300, "output": 5,

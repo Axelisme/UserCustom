@@ -25,6 +25,7 @@ import re
 import statistics
 import sys
 from collections import Counter, defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 POLICY = ("skill", "task", "repo_docs")
@@ -95,7 +96,16 @@ class Session:
     entries: list[dict]
 
 
-def load_entries(path: str, since: dt.datetime, until: dt.datetime) -> list[dict]:
+@dataclass(frozen=True)
+class Window:
+    """The audited time range and the project filter on session cwd."""
+
+    since: dt.datetime
+    until: dt.datetime
+    project: str
+
+
+def load_entries(path: str, window: Window) -> list[dict]:
     entries = []
     with open(path, encoding="utf-8", errors="replace") as stream:
         for line in stream:
@@ -106,7 +116,7 @@ def load_entries(path: str, since: dt.datetime, until: dt.datetime) -> list[dict
             if not isinstance(entry, dict):
                 continue
             stamp = parse_time(entry.get("timestamp"))
-            if stamp is not None and since <= stamp < until:
+            if stamp is not None and window.since <= stamp < window.until:
                 entry["_t"] = stamp
                 entries.append(entry)
     return entries
@@ -121,7 +131,7 @@ def session_cwd(path: str) -> str:
         return ""
 
 
-def discover(agent_dir: str, since: dt.datetime, until: dt.datetime, project: str) -> list[Session]:
+def discover(agent_dir: str, window: Window) -> list[Session]:
     found: list[tuple[str, str, str, str]] = []
     for path in sorted(glob.glob(os.path.join(agent_dir, "sessions", "*", "*.jsonl"))):
         found.append(("main", "main", session_cwd(path), path))
@@ -135,14 +145,14 @@ def discover(agent_dir: str, since: dt.datetime, until: dt.datetime, project: st
             found.append(("sub", str(meta.get("role") or "unknown"), str(meta.get("cwd") or ""), path))
     sessions = []
     for kind, role, cwd, path in found:
-        if project and project not in cwd:
+        if window.project and window.project not in cwd:
             continue
         try:
-            if os.path.getmtime(path) < since.timestamp():
+            if os.path.getmtime(path) < window.since.timestamp():
                 continue
         except OSError:
             continue
-        entries = load_entries(path, since, until)
+        entries = load_entries(path, window)
         if any((e.get("message") or {}).get("role") == "assistant" for e in entries):
             sessions.append(Session(kind, role, cwd, path, entries))
     return sessions
@@ -150,7 +160,7 @@ def discover(agent_dir: str, since: dt.datetime, until: dt.datetime, project: st
 
 @dataclass
 class Audit:
-    usage: Counter = field(default_factory=Counter)
+    usage: Counter = field(default_factory=Counter)  # (session kind, usage key) -> total
     day: dict = field(default_factory=lambda: defaultdict(Counter))
     added: Counter = field(default_factory=Counter)
     resident: Counter = field(default_factory=Counter)
@@ -160,8 +170,10 @@ class Audit:
     compactions: Counter = field(default_factory=Counter)
     compaction_failures: Counter = field(default_factory=Counter)
     waves: list = field(default_factory=list)
+    intervals: list = field(default_factory=list)  # (requests, minutes) between consecutive compactions
     absorb: Counter = field(default_factory=Counter)
-    big: Counter = field(default_factory=Counter)
+    big: Counter = field(default_factory=Counter)  # tool name -> tokens of oversized results
+    big_count: int = 0
     big_examples: list = field(default_factory=list)
     batching: Counter = field(default_factory=Counter)
     per_session: list = field(default_factory=list)
@@ -172,14 +184,14 @@ class Audit:
     absorb_resident_saved: float = 0.0
 
 
-def analyse(sessions: list[Session], tz: dt.tzinfo | None) -> Audit:
+def analyse(sessions: list[Session]) -> Audit:
     audit = Audit()
     for session in sessions:
-        analyse_session(audit, session, tz)
+        analyse_session(audit, session)
     return audit
 
 
-def analyse_session(audit: Audit, session: Session, tz: dt.tzinfo | None) -> None:
+def analyse_session(audit: Audit, session: Session) -> None:
     entries = session.entries
     later = [0] * len(entries)  # assistant requests after this entry before the next compaction
     remaining = 0
@@ -192,7 +204,9 @@ def analyse_session(audit: Audit, session: Session, tz: dt.tzinfo | None) -> Non
 
     calls: dict[str, dict] = {}
     seen: dict[str, int] = {}
-    window = 0
+    compaction_index = 0
+    last_compaction: tuple[dt.datetime, int] | None = None
+    requests_seen = 0
     since_compaction: int | None = None
     wave = 0.0
     after_absorb = False
@@ -207,7 +221,11 @@ def analyse_session(audit: Audit, session: Session, tz: dt.tzinfo | None) -> Non
         if kind == "compaction":
             if since_compaction is not None:
                 audit.waves.append(wave)
-            window += 1
+            compaction_index += 1
+            if last_compaction is not None:
+                audit.intervals.append((requests_seen - last_compaction[1],
+                                        (entry["_t"] - last_compaction[0]).total_seconds() / 60))
+            last_compaction = (entry["_t"], requests_seen)
             since_compaction, wave = 0, 0.0
             details = entry.get("details") if isinstance(entry.get("details"), dict) else {}
             if "remoteCompaction" in details:
@@ -246,10 +264,11 @@ def analyse_session(audit: Audit, session: Session, tz: dt.tzinfo | None) -> Non
                 "cost_cache_write": cost.get("cacheWrite", 0) or 0,
                 "cost_output": cost.get("output", 0) or 0,
             }
+            requests_seen += 1
             for key, value in row.items():
-                audit.usage[f"{session.kind}:{key}"] += value
+                audit.usage[(session.kind, key)] += value
                 totals[key] += value
-                audit.day[entry["_t"].astimezone(tz).date().isoformat()][key] += value
+                audit.day[entry["_t"].astimezone().date().isoformat()][key] += value
             if uncached and cost.get("input"):
                 audit.input_prices.append(cost["input"] / uncached)
             if cached and cost.get("cacheRead"):
@@ -313,18 +332,18 @@ def analyse_session(audit: Audit, session: Session, tz: dt.tzinfo | None) -> Non
             put(i, category, tokens)
             if len(body) > BIG_RESULT_CHARS:
                 audit.big[name] += tokens
-                audit.big["_count"] += 1
+                audit.big_count += 1
                 label = str(arguments.get("command") or arguments.get("path") or name)
                 audit.big_examples.append((tokens, name, re.sub(r"\s+", " ", label)[:110]))
             if category in POLICY and name != "absorb":
                 key = reread_key(subject, session.cwd)
                 if key not in seen:
                     cause = "first"
-                elif seen[key] < window:
+                elif seen[key] < compaction_index:
                     cause = "after_compaction"
                 else:
                     cause = "same_window"
-                seen[key] = window
+                seen[key] = compaction_index
                 audit.reread[(session.kind, category, cause)] += tokens
                 audit.sources[(category, key)] += tokens
                 audit.source_reads[(category, key)] += 1
@@ -357,15 +376,16 @@ def share(part: float, whole: float) -> float:
     return part / whole if whole else 0.0
 
 
-def build_report(audit: Audit, sessions: list[Session], since: dt.datetime, until: dt.datetime,
-                 project: str, top: int) -> dict:
-    usage = audit.usage
-    kinds = ("main", "sub")
+def prompt_tokens(row: Mapping) -> float:
+    """Tokens billed as prompt: uncached input, cache reads, and cache writes."""
+    return row.get("uncached", 0) + row.get("cache_read", 0) + row.get("cache_write", 0)
 
-    def total(key: str) -> float:
-        return sum(usage[f"{kind}:{key}"] for kind in kinds)
 
-    prompt = total("uncached") + total("cache_read") + total("cache_write")
+def build_report(audit: Audit, sessions: list[Session], window: Window, top: int) -> dict:
+    overall = Counter()
+    for (_kind, key), value in audit.usage.items():
+        overall[key] += value
+    prompt = prompt_tokens(overall)
     categories = Counter()
     resident = Counter()
     for (kind, category), value in audit.added.items():
@@ -397,26 +417,27 @@ def build_report(audit: Audit, sessions: list[Session], since: dt.datetime, unti
 
     batching_total = sum(audit.batching.values())
     return {
-        "window": {"since": since.isoformat(), "until": until.isoformat(), "project": project or None},
+        "window": {"since": window.since.isoformat(), "until": window.until.isoformat(),
+                   "project": window.project or None},
         "sessions": dict(Counter(s.kind for s in sessions)),
         "subagent_roles": dict(Counter(s.role for s in sessions if s.kind == "sub")),
         "usage": {
-            "requests": total("requests"),
-            "uncached_input": total("uncached"),
-            "cache_read": total("cache_read"),
-            "cache_write": total("cache_write"),
-            "output": total("output"),
-            "cache_hit_rate": share(total("cache_read"), prompt),
-            "avg_prompt_per_request": share(prompt, total("requests")),
-            "cost_usd": round(total("cost"), 4),
+            "requests": overall["requests"],
+            "uncached_input": overall["uncached"],
+            "cache_read": overall["cache_read"],
+            "cache_write": overall["cache_write"],
+            "output": overall["output"],
+            "cache_hit_rate": share(overall["cache_read"], prompt),
+            "avg_prompt_per_request": share(prompt, overall["requests"]),
+            "cost_usd": round(overall["cost"], 4),
             "cost_split_usd": {
-                "cache_read": round(total("cost_cache_read"), 4),
-                "uncached_input": round(total("cost_uncached"), 4),
-                "cache_write": round(total("cost_cache_write"), 4),
-                "output": round(total("cost_output"), 4),
+                "cache_read": round(overall["cost_cache_read"], 4),
+                "uncached_input": round(overall["cost_uncached"], 4),
+                "cache_write": round(overall["cost_cache_write"], 4),
+                "output": round(overall["cost_output"], 4),
             },
-            "by_kind": {kind: {k.split(":", 1)[1]: round(v, 4) for k, v in usage.items() if k.startswith(kind + ":")}
-                        for kind in kinds},
+            "by_kind": {kind: {key: round(value, 4) for (owner, key), value in audit.usage.items() if owner == kind}
+                        for kind in ("main", "sub")},
         },
         "context": {
             "added_tokens": round(added_total),
@@ -426,7 +447,7 @@ def build_report(audit: Audit, sessions: list[Session], since: dt.datetime, unti
             "policy_added_share": share(policy_added, added_total),
             "policy_resident_share": share(policy_resident, resident_total),
             # Share of the billed cache reads; content estimates alone undercount CJK text and omit the system prompt.
-            "policy_resident_cost_usd": round(share(policy_resident, resident_total) * total("cost_cache_read"), 4),
+            "policy_resident_cost_usd": round(share(policy_resident, resident_total) * overall["cost_cache_read"], 4),
         },
         "policy_rereads": {
             "by_cause": {cause: round(v) for cause, v in rereads.most_common()},
@@ -439,13 +460,15 @@ def build_report(audit: Audit, sessions: list[Session], since: dt.datetime, unti
             "failures": dict(audit.compaction_failures),
             "reorientation_wave_avg": round(share(sum(audit.waves), len(audit.waves))),
             "reorientation_wave_max": round(max(audit.waves, default=0)),
+            "interval_requests_median": median([requests for requests, _ in audit.intervals]),
+            "interval_minutes_median": round(median([minutes for _, minutes in audit.intervals]), 1),
         },
         "absorb": absorb,
         "big_results": {
             "threshold_chars": BIG_RESULT_CHARS,
-            "count": audit.big["_count"],
-            "tokens": round(sum(v for k, v in audit.big.items() if k != "_count")),
-            "by_tool": {k: round(v) for k, v in audit.big.items() if k != "_count"},
+            "count": audit.big_count,
+            "tokens": round(sum(audit.big.values())),
+            "by_tool": {tool: round(tokens) for tool, tokens in audit.big.items()},
             "largest": [{"tokens": round(t), "tool": n, "subject": s}
                         for t, n, s in sorted(audit.big_examples, reverse=True)[:top]],
         },
@@ -455,7 +478,8 @@ def build_report(audit: Audit, sessions: list[Session], since: dt.datetime, unti
     }
 
 
-def k(value: float) -> str:
+def short(value: float) -> str:
+    """Token count with a k or M suffix."""
     value = float(value)
     if abs(value) >= 1e6:
         return f"{value / 1e6:.1f}M"
@@ -468,10 +492,10 @@ def pct(value: float) -> str:
     return f"{100 * value:.0f}%"
 
 
-def render(report: dict, tz: dt.tzinfo | None) -> str:
+def render(report: dict) -> str:
     w, u, c = report["window"], report["usage"], report["context"]
-    since = dt.datetime.fromisoformat(w["since"]).astimezone(tz).strftime("%Y-%m-%d %H:%M")
-    until = dt.datetime.fromisoformat(w["until"]).astimezone(tz).strftime("%Y-%m-%d %H:%M")
+    since = dt.datetime.fromisoformat(w["since"]).astimezone().strftime("%Y-%m-%d %H:%M")
+    until = dt.datetime.fromisoformat(w["until"]).astimezone().strftime("%Y-%m-%d %H:%M")
     s = report["sessions"]
     out = [f"# pi context audit  {since} → {until}" + (f"  project~{w['project']}" if w["project"] else ""),
            f"sessions: {s.get('main', 0)} main, {s.get('sub', 0)} sub"
@@ -483,45 +507,47 @@ def render(report: dict, tz: dt.tzinfo | None) -> str:
             f"requests {u['requests']:,} · cost ${u['cost_usd']:.2f} "
             f"(cache read ${split['cache_read']:.2f}, uncached ${split['uncached_input']:.2f}, "
             f"output ${split['output']:.2f})",
-            f"cache hit {pct(u['cache_hit_rate'])} · avg prompt {k(u['avg_prompt_per_request'])}/request · "
-            f"uncached {k(u['uncached_input'])} · output {k(u['output'])}", ""]
+            f"cache hit {pct(u['cache_hit_rate'])} · avg prompt {short(u['avg_prompt_per_request'])}/request · "
+            f"uncached {short(u['uncached_input'])} · output {short(u['output'])}", ""]
     out += ["## Context composition (content estimate; resident = tokens x later requests before compaction)",
             f"{'category':20}{'added':>9}{'added%':>8}{'resident%':>11}"]
     for name, row in c["categories"].items():
-        out.append(f"{name:20}{k(row['added']):>9}{pct(row['added_share']):>8}{pct(row['resident_share']):>11}")
+        out.append(f"{name:20}{short(row['added']):>9}{pct(row['added_share']):>8}{pct(row['resident_share']):>11}")
     out += [f"policy (skill+task+repo_docs): added {pct(c['policy_added_share'])}, resident "
             f"{pct(c['policy_resident_share'])} ≈ ${c['policy_resident_cost_usd']:.2f} cache read", ""]
     r = report["policy_rereads"]
     out += ["## Policy re-reads",
-            "by cause: " + ", ".join(f"{cause} {k(v)}" for cause, v in r["by_cause"].items()),
+            "by cause: " + ", ".join(f"{cause} {short(v)}" for cause, v in r["by_cause"].items()),
             f"re-read share {pct(r['reread_share'])}"]
     for row in r["top_sources"]:
-        out.append(f"  {k(row['tokens']):>6} x{row['reads']:<3} {row['category']:9} {row['source'][:100]}")
+        out.append(f"  {short(row['tokens']):>6} x{row['reads']:<3} {row['category']:9} {row['source'][:100]}")
     cp = report["compaction"]
     out += ["", "## Compaction",
             f"{cp['count']} total " + " ".join(f"{name} {n}" for name, n in sorted(cp["by_kind"].items()))
             + (f" · failures {cp['failures']}" if cp["failures"] else ""),
             f"reorientation wave (policy tokens in first {WAVE_REQUESTS} requests after): "
-            f"avg {k(cp['reorientation_wave_avg'])}, max {k(cp['reorientation_wave_max'])}", ""]
+            f"avg {short(cp['reorientation_wave_avg'])}, max {short(cp['reorientation_wave_max'])}",
+            f"median interval between compactions: {cp['interval_requests_median']:.0f} requests, "
+            f"{cp['interval_minutes_median']} min", ""]
     a = report["absorb"]
     out += ["## Absorb",
             f"offers {a.get('offer_batches', 0)} batches / {a.get('offered_ids', 0)} ids · calls {a.get('calls', 0)} · "
             f"absorbed {a.get('absorbed_ids', 0)} ids ({pct(a['adoption'])}) · failed entries {a.get('failed_entries', 0)}",
-            f"saved {k(a.get('saved_tokens', 0))} (resident {k(a['resident_tokens_saved'])}) · cache-break extra "
-            f"uncached {k(a['cache_break_extra_uncached'])} · net ${a['net_cost_usd']:+.2f}", ""]
+            f"saved {short(a.get('saved_tokens', 0))} (resident {short(a['resident_tokens_saved'])}) · cache-break extra "
+            f"uncached {short(a['cache_break_extra_uncached'])} · net ${a['net_cost_usd']:+.2f}", ""]
     b = report["big_results"]
     out += [f"## Tool results > {b['threshold_chars'] // 1000}k chars",
-            f"{b['count']} results, {k(b['tokens'])} tokens · " + ", ".join(f"{t} {k(v)}" for t, v in b["by_tool"].items())]
+            f"{b['count']} results, {short(b['tokens'])} tokens · " + ", ".join(f"{t} {short(v)}" for t, v in b["by_tool"].items())]
     for row in b["largest"]:
-        out.append(f"  {k(row['tokens']):>6} {row['tool']:6} {row['subject']}")
+        out.append(f"  {short(row['tokens']):>6} {row['tool']:6} {row['subject']}")
     out += ["", "## Tool calls per main-session response",
             " · ".join(f"{n}: {pct(v)}" for n, v in report["batching"].items())]
     if len(report["days"]) > 1:
         out += ["", "## By day", f"{'day':12}{'requests':>9}{'cost':>10}{'hit':>6}{'avg prompt':>12}"]
         for day, row in report["days"].items():
-            prompt = row.get("uncached", 0) + row.get("cache_read", 0) + row.get("cache_write", 0)
+            prompt = prompt_tokens(row)
             out.append(f"{day:12}{row.get('requests', 0):>9.0f}{'$%.2f' % row.get('cost', 0):>10}"
-                       f"{pct(share(row.get('cache_read', 0), prompt)):>6}{k(share(prompt, row.get('requests', 0))):>12}")
+                       f"{pct(share(row.get('cache_read', 0), prompt)):>6}{short(share(prompt, row.get('requests', 0))):>12}")
     out += ["", "## Costliest sessions"]
     for row in report["sessions_by_cost"]:
         out.append(f"  ${row.get('cost', 0):7.2f} {row.get('requests', 0):5.0f} req  {row['kind']}/{row['role']:18} "
@@ -531,9 +557,9 @@ def render(report: dict, tz: dt.tzinfo | None) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    window = parser.add_mutually_exclusive_group()
-    window.add_argument("--days", type=float, default=1.0, help="window length ending at --until (default 1)")
-    window.add_argument("--since", help="window start, ISO 8601")
+    span = parser.add_mutually_exclusive_group()
+    span.add_argument("--days", type=float, default=1.0, help="window length ending at --until (default 1)")
+    span.add_argument("--since", help="window start, ISO 8601")
     parser.add_argument("--until", help="window end, ISO 8601 (default now)")
     parser.add_argument("--project", default="", help="keep sessions whose cwd contains this text")
     parser.add_argument("--agent-dir", default=os.path.expanduser("~/.pi/agent"))
@@ -545,14 +571,14 @@ def main(argv: list[str] | None = None) -> int:
     since = parse_time(args.since) if args.since else until - dt.timedelta(days=args.days)
     if until is None or since is None:
         parser.error("--since/--until must be ISO 8601 timestamps")
-    tz = None  # local time for day grouping and display
-    sessions = discover(args.agent_dir, since, until, args.project)
-    report = build_report(analyse(sessions, tz), sessions, since, until, args.project, args.top)
+    window = Window(since, until, args.project)
+    sessions = discover(args.agent_dir, window)
+    report = build_report(analyse(sessions), sessions, window, args.top)
     if args.json:
         json.dump(report, sys.stdout, ensure_ascii=False, indent=1)
         print()
     else:
-        print(render(report, tz))
+        print(render(report))
     return 0
 
 

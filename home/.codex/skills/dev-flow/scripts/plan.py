@@ -20,8 +20,9 @@ TICKET_FIELDS = ("id", "state")
 TICKET_STATES = ("drafted", "pending", "closed", "unknown")
 FRONTMATTER_MAX_BYTES = 16 * 1024
 # A record past its budget still locates; `size_warnings` names it so it can be condensed.
-# Every reorientation re-reads these files whole, so the budget is bytes, not lines. History files
-# (`tickets/<id>/history.md`, `reviews/<id>.history.md`) sit outside the resume path and have none.
+# Resume, dispatch, and wake-up reads pay for these files by the byte, so the budget is bytes, not
+# lines. History files (`tickets/<id>/history.md`, `reviews/<id>.history.md`) sit outside those reads
+# and have no budget.
 SIZE_WARN_BYTES = {"index": 8 * 1024, "ticket": 20 * 1024, "review": 16 * 1024}
 TICKET_FILE = "ticket.md"
 
@@ -565,20 +566,24 @@ def _ticket_counts(directory: Path) -> tuple[dict[str, int | None], dict[str, ob
     return counts, None
 
 
+def _entries(folder: Path) -> list[Path]:
+    """Visible entries of a record folder in name order; a missing folder has none."""
+    try:
+        with os.scandir(folder) as entries:
+            return sorted(Path(entry.path) for entry in entries if not entry.name.startswith("."))
+    except OSError:
+        return []
+
+
 def _size_warnings(root: Path, directory: Path) -> list[dict[str, object]]:
     """Name each INDEX, ticket, or review record past its byte budget; unreadable files belong to parse_errors."""
     candidates = [(directory / "INDEX.md", "index")]
-    for folder, kind in (("tickets", "ticket"), ("reviews", "review")):
-        try:
-            with os.scandir(directory / folder) as entries:
-                names = sorted(entry.name for entry in entries if not entry.name.startswith("."))
-        except OSError:
-            continue
-        if kind == "ticket":
-            candidates += [(directory / folder / name / TICKET_FILE, kind) for name in names]
-        else:
-            candidates += [(directory / folder / name, kind) for name in names
-                           if name.endswith(".md") and not name.endswith(".history.md")]
+    candidates += [(owner / TICKET_FILE, "ticket") for owner in _entries(directory / "tickets")]
+    candidates += [
+        (path, "review")
+        for path in _entries(directory / "reviews")
+        if path.name.endswith(".md") and not path.name.endswith(".history.md")
+    ]
     warnings: list[dict[str, object]] = []
     for path, kind in candidates:
         try:

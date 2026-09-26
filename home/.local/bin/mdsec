@@ -57,11 +57,11 @@ def headings(path: Path) -> list[tuple[int, int, str, str]]:
     return out
 
 
-def walk(root: Path, follow: bool = True) -> list[Path]:
+def walk(root: Path) -> list[Path]:
     """Skill roots are trees of symlinks, which pathlib's `**` declines to enter."""
     return [
         Path(base, name).resolve()
-        for base, _, names in os.walk(root, followlinks=follow)
+        for base, _, names in os.walk(root, followlinks=True)
         for name in names
     ]
 
@@ -162,7 +162,6 @@ def main() -> None:
         help="pointers 'path.md#anchor', read in order; a bare path lists its anchors; roots with --check",
     )
     parser.add_argument("--check", action="store_true", help="verify every pointer under the given roots")
-    parser.add_argument("--list", action="store_true", help="list each document's anchors")
     args = parser.parse_args()
 
     if args.check:
@@ -174,7 +173,7 @@ def main() -> None:
         path, _, anchor = target.partition("#")
         try:
             document = resolve(path)
-            if args.list or not anchor:
+            if not anchor:
                 print(f"== {document}")
                 for n, level, _, s in headings(document):
                     print(f"{n:>5}  {'  ' * (level - 1)}#{s}")

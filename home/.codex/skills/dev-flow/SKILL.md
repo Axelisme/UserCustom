@@ -13,8 +13,8 @@ Every task has one container under `.agent_state/plans/<task-id>/`. Every bounde
 ticket, including direct Orchestrator work. The approved spec or scope file owns scope. `INDEX.md`
 carries active Standing orders and routes current work. Each fact has one owner record and is
 written at a phase boundary; [Record operations](references/records.md#maintain-the-record) defines
-owner records, phase boundaries, routing edges, and the semantic checkpoint. The Orchestrator owns
-INDEX, tickets, review records, acceptance checkboxes, and lifecycle state.
+owner records, phase boundaries, and routing edges. The Orchestrator owns INDEX, tickets, review
+records, acceptance checkboxes, and lifecycle state.
 
 On reorientation, run `scripts/plan.py locate <task-id>` from the main checkout and follow
 [Resume](references/planning.md#resume).
@@ -48,7 +48,6 @@ only for delegated record or evidence writes.
 - Update INDEX's routing fields at a routing edge. Maintain Standing orders under
   [custody](references/custody.md). When INDEX cannot route the next owner, repair the record or ask
   the decision owner instead of scanning every ticket, artifact, or log.
-- Batch review records own subjects, candidate-bound observations, verdicts, and criterion coverage. A
-  ticket closes when batch acceptance covers every applicable criterion.
+- A ticket closes when batch acceptance covers every applicable criterion.
 - Capture valuable out-of-scope findings through candidate-backlog. Current acceptance gaps remain in
   this task.

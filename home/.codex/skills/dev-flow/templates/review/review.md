@@ -43,9 +43,9 @@ round starts, move this round to `<review-id>.history.md`.>
 | none | | | |
 
 ## Ticket dispositions
-| Ticket | Established criteria and accepted candidate | Outstanding obligations / owner | Disposition |
-|---|---|---|---|
-| <ticket-id> | <review and observation pointers> | <none or concrete blocker> | pending |
+| Ticket | Established criteria and accepted candidate | Outstanding obligations / owner |
+|---|---|---|
+| <ticket-id> | <review and observation pointers> | <none or concrete blocker> |
 
 ## Disposition
 <!-- Accepted claims and their subject once review establishes them. Procedure:

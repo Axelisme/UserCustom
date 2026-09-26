@@ -25,19 +25,24 @@ def run(*args: str, script: Path = MDSEC) -> subprocess.CompletedProcess[str]:
 
 
 class SkillPointerTest(unittest.TestCase):
-    def test_a_stale_anchor_fails_loudly_with_the_real_anchors(self) -> None:
-        lane_authority = HOME / ".codex/skills/dev-flow/references/lane-authority.md"
-        result = run(f"{lane_authority}#creating-an-evidence-fil")
+    def test_a_stale_anchor_fails_loudly_with_the_closest_and_real_anchors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = Path(tmp, "doc.md")
+            doc.write_text("# Doc\n\n## Evidence file\n\nbody\n\n## Other rule\n")
+            result = run(f"{doc}#evidence-fil")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("Did you mean '#creating-an-evidence-file'?", result.stderr)
-        self.assertIn("#a-gate-you-cannot-close-honestly", result.stderr)
+        self.assertIn("Did you mean '#evidence-file'?", result.stderr)
+        self.assertIn("#other-rule", result.stderr)
 
     def test_the_retired_dev_flow_path_still_reads_sections(self) -> None:
-        # Contracts dispatched before the move cite dev-flow's scripts/section.py.
-        result = run("../dev-flow/references/lane-authority.md#a-gate-you-cannot-close-honestly",
-                     script=RETIRED_SECTION)
+        # Contracts dispatched before the move cite dev-flow's scripts/section.py; delete with the shim.
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = Path(tmp, "doc.md")
+            doc.write_text("# Doc\n\n## Wanted\n\nkept\n\n## Next\n\ndropped\n")
+            result = run(f"{doc}#wanted", script=RETIRED_SECTION)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("## A gate you cannot close honestly", result.stdout)
+        self.assertIn("kept", result.stdout)
+        self.assertNotIn("dropped", result.stdout)
 
     def test_check_catches_a_broken_pointer_of_every_kind_it_claims(self) -> None:
         # The corpus being green proves nothing about detection, so plant one break of each kind.

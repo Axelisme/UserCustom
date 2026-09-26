@@ -43,8 +43,7 @@ head second; its tree must equal the judged integration tree.
 Inventory owned resources before destructive retirement. Move required evidence to its durable owner,
 then remove task-owned temporary files, processes, worktrees, and branches whose purpose is complete.
 Managed retirement may delete untracked and ignored lane files. Preserve user state and record every
-retained resource's owner and cleanup condition in its ticket or review record. Update INDEX's routing
-fields only when landing or retirement creates a routing edge.
+retained resource's owner and cleanup condition in its ticket or review record.
 
 Stop on missing authority, persistence dirt, live consumer handoff risk, candidate drift, hook failure,
 unaccepted changes, or uncertain custody. Completion requires confirmed integration or landing and

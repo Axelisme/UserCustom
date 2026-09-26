@@ -22,8 +22,8 @@ Orchestrator implementing directly.
 ## Creating an evidence file
 
 Use a separate file only for a costly, external, manual, ephemeral, audit-required, or user-requested
-observation; record routine verification concisely in the ticket. The Orchestrator assigns a fresh
-target beside the ticket; the writer creates it using
+observation; routine verification goes in the review record's Candidate-bound observations. The
+Orchestrator assigns a fresh target beside the ticket; the writer creates it using
 [the evidence template](../templates/ticket/evidence.md). Preserve its Subject, Evidence, and Residuals
 sections with actual observations. Use a fresh target for each workflow and preserve earlier evidence.
 Updating an existing target requires the assignment to identify it as this workflow's evidence.

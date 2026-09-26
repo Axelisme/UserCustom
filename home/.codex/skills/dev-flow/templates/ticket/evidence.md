@@ -1,8 +1,8 @@
 # Validation evidence
 
-<!-- Do not use for routine reproducible checks; record those concisely in the ticket. Create this
-     file only for a costly, external, manual, ephemeral, audit-required, or user-requested
-     observation. Record permissions:
+<!-- Create this file only for a costly, external, manual, ephemeral, audit-required, or
+     user-requested observation; routine reproducible checks go in the review record's
+     Candidate-bound observations. Record permissions:
      ~/.codex/skills/dev-flow/references/lane-authority.md#creating-an-evidence-file -->
 
 ## Subject

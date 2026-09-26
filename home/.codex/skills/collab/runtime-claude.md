@@ -90,7 +90,8 @@ exact-id `query_subagent({ action: "result", subagent_id })`. The MCP differs in
   `subagent_id` is the id named in the notification. A prose response or `steer` does not unblock the
   child, and a steer is rejected while its decision is pending. An unanswered decision gets one
   reminder after five minutes.
-- Record each decision and its answer in the owning ticket or batch review record before the next wait.
+- Before the next wait, record a decision that amends the contract or comes from the user, with its
+  answer, in its owner record.
 
 ## Run control
 

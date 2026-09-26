@@ -89,8 +89,9 @@ through their contribution to that behavior.
 
 Stop when behavior or interface ownership is unconfirmed, a proposed assertion tests prose or internal
 shape instead of observable behavior, the checkout has another writer, or the required environment is
-unavailable. Record the test path, covered criterion and scenario, command/selection, environment,
-expected pre-fix failure when applicable, result, and limitation in Contract starting point or Progress.
+unavailable. Record the test path, covered criterion and scenario, command/selection, environment, and
+expected pre-fix failure when applicable in Contract starting point; results reach the review record's
+Candidate-bound observations when the delivery is collected.
 Test work is complete when the agreed behavior is observable through a shipped interface, the assigned
 gate is recorded, and write ownership is released or explicitly transferred.
 
@@ -115,8 +116,7 @@ a delivery candidate for batch review.
 Completion requires a clean committed candidate and a concise handoff tying the final candidate to
 each command or selection, environment, result and exit status, raw run pointer, and limitation. Keep
 bulky output with the run. A blocked result aggregates known obstructions and names the next decision
-or execution owner. The Orchestrator records the result in its owner record at the phase boundary it
-creates.
+or execution owner.
 
 ## Results and continuity
 

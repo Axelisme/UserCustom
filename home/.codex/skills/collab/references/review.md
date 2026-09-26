@@ -33,10 +33,9 @@ code-review under its own contract.
 
 ## Correct and decide
 
-The Orchestrator classifies the result against the stable claim set. The review record owns candidates,
-verdicts, findings, observation applicability, corrections, and disposition; tickets link to it.
-Non-contract suggestions receive a recorded disposition. User-owned behavior, scope, authority, data
-structure, or responsibility choices go to dev-flow ticket handoff while feasible work continues.
+The Orchestrator classifies the result against the stable claim set and records it in the review
+record. Non-contract suggestions receive a recorded disposition. User-owned behavior, scope, authority,
+data structure, or responsibility choices go to dev-flow ticket handoff while feasible work continues.
 
 For supported defects, assign bounded corrections. The Orchestrator changes interfaces and formal
 tests; the implementer changes assigned internal logic. Run affected ticket and batch gates, form a

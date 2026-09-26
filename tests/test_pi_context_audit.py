@@ -176,7 +176,7 @@ class PiContextAuditTest(unittest.TestCase):
         self.assertEqual(upkeep["by_record"], {"index": 1, "ticket": 1, "history": 1, "review": 1})
         self.assertEqual(upkeep["edits_per_commit"], 4)
         self.assertEqual(upkeep["gap_requests_median"], 1.5)
-        self.assertEqual(upkeep["sha_writes_max"], 2)
+        self.assertEqual(upkeep["commit_id_writes_max"], 2)
 
     def test_usage_totals_cost_and_cache_hit_rate(self) -> None:
         session = Session()

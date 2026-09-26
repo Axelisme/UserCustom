@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Forward to `mdsec`, which replaced this script; dispatched contracts may still cite this path."""
+"""Forward to `mdsec`, which replaced this script; dispatched contracts may still cite this path.
+
+Delete this file and its test once no active task record or running attempt cites
+`scripts/section.py`.
+"""
 
 import os
 import shutil

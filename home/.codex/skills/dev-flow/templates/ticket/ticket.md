@@ -15,7 +15,8 @@ state: {{STATE}}
 {{OUTCOME}}
 
 ## Scope and assumptions
-<!-- Module write scope, exclusions, applicable authority, and runtime assumptions. -->
+<!-- Module write scope, exclusions, and runtime assumptions; authority stays with the approved scope
+     or grant. -->
 {{SCOPE}}
 
 ## Interface changes
@@ -47,17 +48,14 @@ Awaiting design discussion and user confirmation.
      property/criterion, command/selection and working directory, environment, timeout, execution owner,
      and pass condition. Prefer existing checks; new behavior tests use confirmed seams/contracts.
      If none applies, record why and the direct-review alternative with its owner. Distinguish required
-     ticket gates from batch observations and their readiness conditions. Preparation does not require
-     every gate to run or fail at RED. Formal-test edits belong to the Orchestrator.
+     ticket gates from batch observations and their readiness conditions. A prepared gate may wait to
+     run until implementation. Formal-test edits belong to the Orchestrator.
      Procedure: ~/.codex/skills/collab/references/execution.md#gate-preparation -->
 {{CHECKS}}
 
 ## Progress
-<!-- One semantic checkpoint: checkout and branch, bounded outcome in progress, obligations left,
-     and any blocker. Git in that checkout supplies commits; the batch review record holds
-     observations, verdicts, and findings. Name a consumed pending dependency candidate by exact
-     commit. Replace at a phase boundary.
-     Procedure: ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->
+<!-- Semantic checkpoint, replaced at a phase boundary:
+     ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->
 Semantic checkpoint: work not started.
 
 ## User decisions
@@ -66,8 +64,6 @@ Semantic checkpoint: work not started.
 None.
 
 ## Resolution
-<!-- Final accepted candidate, observation pointers, batch review and covered criteria, disposition,
-     and any outstanding work with its owner. Normal closure requires every applicable criterion and
-     batch acceptance. Otherwise stay pending with a concrete blocker.
-     Procedure: ~/.codex/skills/dev-flow/references/records.md#close -->
+<!-- Accepted candidate and a link to the owning batch review record, written at close:
+     ~/.codex/skills/dev-flow/references/records.md#close -->
 Pending.

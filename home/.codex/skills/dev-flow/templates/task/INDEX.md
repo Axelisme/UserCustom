@@ -13,9 +13,8 @@ Not yet recorded.
 <scope source>. Read before ticket planning/alignment, a new-scope decision, or a review-driven design change.
 
 ## Current
-<!-- Governing record: the ticket or batch review pointer that owns the active work's state, plus any
-     blocker awaiting the user. Candidates, rounds, and verdicts live in that record. Update at a
-     routing edge: ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->
+<!-- Governing record pointer, plus any blocker awaiting the user. Update at a routing edge:
+     ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->
 Task created.
 
 ## Next

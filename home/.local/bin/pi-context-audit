@@ -30,15 +30,16 @@ from dataclasses import dataclass, field
 
 POLICY = ("skill", "task", "repo_docs")
 SKILL = re.compile(r"(^|/)\.(pi/agent|claude|codex)/skills/|(^|/)SKILL\.md\b|herdr-subagents/profiles/")
-TASK = re.compile(r"\.agent_state/(plans|backlog)/")
+PLANS = r"\.agent_state/plans/"
+TASK = re.compile(PLANS + r"|\.agent_state/backlog/")
 DOC = re.compile(r"\.md\b|(^|/)docs/")
 CODE_FILE = re.compile(r"\.(py|pyi|ts|tsx|js|mjs|cjs|json|toml|ya?ml|sh|c|h|cpp|rs|go)\b")
 ORCHESTRATION = re.compile(r"^collab_|subagent")
 WORKTREE = re.compile(r"[^\s'\"]*?(\.agent_state/worktrees/[^/\s]+/(lanes/[^/\s]+|integration)|/\.worktrees/[^/\s]+)/")
 AUTHORING = {"edit", "write"}
-RECORD = re.compile(r"\.agent_state/plans/[^/]+/(.+\.md)$")
+RECORD = re.compile(PLANS + r"[^/]+/(.+\.md)$")
 COMMIT = re.compile(r"\bgit\b[^|;&]*\bcommit\b")
-SHA = re.compile(r"\b[0-9a-f]{40}\b")
+COMMIT_ID = re.compile(r"\b[0-9a-f]{40}\b")
 ABSORB_OFFER = "pi-absorb.offer.v1"
 WAVE_REQUESTS = 10
 BIG_RESULT_CHARS = 32_000
@@ -199,10 +200,10 @@ class Audit:
     waves: list = field(default_factory=list)
     intervals: list = field(default_factory=list)  # (requests, minutes) between consecutive compactions
     record_edits: Counter = field(default_factory=Counter)  # record kind -> edit/write calls
-    record_turns: int = 0
+    record_responses: int = 0
     record_gaps: list = field(default_factory=list)  # requests between consecutive record-editing responses
     commits: int = 0
-    sha_writes: Counter = field(default_factory=Counter)  # commit id -> record edits that write it
+    commit_id_writes: Counter = field(default_factory=Counter)  # commit id -> record edits that write it
     absorb: Counter = field(default_factory=Counter)
     big: Counter = field(default_factory=Counter)  # tool name -> tokens of oversized results
     big_count: int = 0
@@ -329,7 +330,8 @@ def analyse_session(audit: Audit, session: Session) -> None:
                         if record:
                             edits_record = True
                             audit.record_edits[record] += 1
-                            audit.sha_writes.update(set(SHA.findall(authored_text(arguments))))
+                            commit_ids = COMMIT_ID.findall(authored_text(arguments))
+                            audit.commit_id_writes.update(set(commit_ids))
                     else:
                         category = "tool_calls"
                         if name == "bash" and COMMIT.search(str(arguments.get("command", ""))):
@@ -338,7 +340,7 @@ def analyse_session(audit: Audit, session: Session) -> None:
                 elif block.get("type") in ("text", "thinking"):
                     put(i, "model_prose", estimate(str(block.get("text") or block.get("thinking") or "")))
             if edits_record:
-                audit.record_turns += 1
+                audit.record_responses += 1
                 if last_record_request is not None:
                     audit.record_gaps.append(requests_seen - last_record_request)
                 last_record_request = requests_seen
@@ -513,12 +515,12 @@ def build_report(audit: Audit, sessions: list[Session], window: Window, top: int
         "record_upkeep": {
             "edits": record_edits,
             "by_record": dict(audit.record_edits.most_common()),
-            "responses": audit.record_turns,
+            "responses": audit.record_responses,
             "commits": audit.commits,
             "edits_per_commit": round(share(record_edits, audit.commits), 2),
             "gap_requests_median": median(audit.record_gaps),
-            "sha_writes_max": max(audit.sha_writes.values(), default=0),
-            "sha_writes_median": median(list(audit.sha_writes.values())),
+            "commit_id_writes_max": max(audit.commit_id_writes.values(), default=0),
+            "commit_id_writes_median": median(list(audit.commit_id_writes.values())),
         },
         "absorb": absorb,
         "big_results": {
@@ -592,7 +594,8 @@ def render(report: dict) -> str:
             + ", ".join(f"{kind} {n}" for kind, n in ru["by_record"].items())
             + f") · {ru['commits']} commits → {ru['edits_per_commit']:.1f} edits/commit",
             f"median {ru['gap_requests_median']:.0f} requests between record-editing responses · "
-            f"one commit id written up to {ru['sha_writes_max']} times (median {ru['sha_writes_median']:.0f})", ""]
+            f"one commit id written up to {ru['commit_id_writes_max']} times "
+            f"(median {ru['commit_id_writes_median']:.0f})", ""]
     a = report["absorb"]
     out += ["## Absorb",
             f"offers {a.get('offer_batches', 0)} batches / {a.get('offered_ids', 0)} ids · calls {a.get('calls', 0)} · "

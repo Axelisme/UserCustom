@@ -12,17 +12,24 @@ Each fact has one **owner record**. Other records link to it.
 | Fact | Owner record |
 |---|---|
 | Standing orders, the governing record, and its next bounded outcome | INDEX |
-| Contract, acceptance criteria, user decisions, semantic checkpoint, terminal disposition | Ticket |
-| Review subject and round, candidate-bound observations, verdicts, findings | Review record |
+| Contract, dependencies, acceptance criteria, user decisions, semantic checkpoint, terminal disposition | Ticket |
+| Claim set, criterion coverage, subject and round, candidate-bound observations, verdicts, findings, corrections, established criteria per ticket | Review record |
 | Commit identity, diffs, and progress between phase boundaries | Git in the lane or integration |
 | Command output and raw gate logs | The run or role result |
 | Source inventories, caller surveys, and design analysis | The `spec/` or `research/` file the contract cites |
-| Lifecycle state | Ticket `state` and checkboxes; review Findings, Ticket dispositions, `disposition` |
+| Ticket lifecycle | Ticket `state` and acceptance checkboxes |
+| Batch lifecycle | Review Findings status and `disposition` |
 | Authority and its limits | The approved scope or the grant that confers it |
 
-Write records at a **phase boundary**: a bounded outcome is set before its work starts, a delivery is
-collected, a subject is frozen for review, a verdict returns, work stops on a blocker or user
-decision, or a ticket closes. At each boundary, write every changed fact once, in its owner record.
+Write records at a **phase boundary**:
+
+- a bounded outcome is set before its work starts;
+- a delivery is collected, or a subject is frozen for review;
+- a verdict returns;
+- work hands off to another owner, or stops on a blocker, a user decision, or the end of the session;
+- a ticket closes.
+
+At each boundary, write every changed fact once, in its owner record.
 Commits, gate runs, retries, and dispatches between boundaries stay with Git, the run, and role
 results. Write record prose as facts that hold now, each sentence carrying a fact that the record's
 fields and linked owners lack.
@@ -42,27 +49,27 @@ Resume, dispatch, and wake-up reads pay for INDEX, tickets, and review records b
 `plan.py locate` reports each one past its byte budget in `size_warnings`. Condense a warned record by
 moving superseded content to its history file.
 
-A ticket owns its stable contract, dependencies, acceptance criteria, user decisions, semantic
-checkpoint, and terminal disposition. Prepare contract fields before `pending`. After work starts,
-change them only when current authority changes approved scope, behavior, acceptance, dependency, or a
-decision boundary. Amend the affected contract text in place and move the superseded wording, with its
-authority pointer, to the ticket's history file. Keep implementation results out of the contract.
-Change an acceptance checkbox only when its assigned stable observation supports the conclusion.
+Prepare a ticket's contract fields before `pending`. After work starts, change them only when current
+authority changes approved scope, behavior, acceptance, dependency, or a decision boundary. Amend the
+affected contract text in place and move the superseded wording, with its authority pointer, to the
+ticket's history file. Keep implementation results out of the contract. Change an acceptance checkbox
+only when its assigned stable observation supports the conclusion.
 
 A ticket's **semantic checkpoint** is the resume point that Git and the review record cannot supply:
 the checkout and branch, the bounded outcome in progress, the obligations left, and any blocker. Git in
 that checkout supplies commit identity and progress since the checkpoint. Replace the checkpoint in
-Progress when a phase boundary changes one of those facts. When the next bounded outcome starts, move
-the finished outcome's contract text to the ticket's history file. Name a consumed pending dependency
+Progress when a phase boundary changes one of those facts. A bounded outcome that needs its own
+contract gets one under Progress, apart from the ticket's stable contract; when the next bounded
+outcome starts, move the finished one to the ticket's history file. Name a consumed pending dependency
 candidate by its exact commit.
 
-A review record keeps its current round, candidate-bound observations, and one Findings row per
-finding with the affected criterion, status, and resolving candidate; those facts govern fixed-subject
-acceptance. When a delivery is collected, add its gate results to Candidate-bound observations: exact
-candidate, command or observer, concise result, run pointer, and limitation. Use a separate evidence
-file only for a costly, external, manual, ephemeral, audit-required, or user-requested observation,
-following `lane-authority.md`. When a new round starts, move the ended round's candidate,
-observations, and verdict narrative to the review's history file and keep its findings in the table.
+Each review finding gets one Findings row with the affected criterion, status, and resolving candidate;
+those rows and the current round govern fixed-subject acceptance. When a delivery is collected, add its
+gate results to Candidate-bound observations: exact candidate, command or observer, concise result, run
+pointer, and limitation. Use a separate evidence file only for a costly, external, manual, ephemeral,
+audit-required, or user-requested observation, following `lane-authority.md`. When a new round starts,
+move the ended round's candidate, observations, and verdict narrative to the review's history file and
+keep its findings in the table.
 
 Stop if routing, subject identity, observation ownership, or mutation authority is uncertain. The
 update is complete when each changed fact sits once in its owner record and Current, Next, and the
@@ -78,10 +85,8 @@ planning; record the exact clean assembled commit/tree in Current round before d
 criterion names its observation method and owner. Batch-only interaction scenarios have their own IDs
 and observations.
 
-The record owns the batch's stable claim set, reviewed candidates, verdicts, corrections, findings,
-observations, and disposition. Tickets link to this record and retain their own contract, semantic
-checkpoint, and terminal disposition. Membership changes preserve criterion and finding ownership;
-record exclusions without dropping a member's acceptance obligations.
+Membership changes preserve criterion and finding ownership; record exclusions without dropping a
+member's acceptance obligations.
 
 Stop before dispatch if the writer is active, the subject is dirty or mutable, the brief is ambiguous,
 required observations lack owners, or the baseline is missing. A review entry is ready when one
@@ -89,8 +94,8 @@ acceptor can judge the bounded criteria without reconstructing scope from unrela
 After the verdict, update Current round with whether it was reviewable, the candidate, and the next
 owner, and add or update Findings rows with affected criterion and ticket IDs. Use Collab's correction
 procedure for BLOCKED results. Approval establishes only the claims named in the brief on the reviewed
-subject; other work retains its disposition. Keep a per-ticket disposition linking established
-criteria to the accepted candidate. A batch remains pending until all its assigned claims are
+subject; other work retains its disposition. Record each member's established criteria and accepted
+candidate in Ticket dispositions. A batch remains pending until all its assigned claims are
 established.
 
 ## Ticket handoff
@@ -103,15 +108,13 @@ disposition, and verification continue while independent tickets run.
 Put each user matter in the owning ticket with the affected scenario, impact, options, and
 recommendation. At the batch boundary, present those decisions together and record the answers. Stop
 when a decision blocks required behavior; record the concrete blocker in the semantic checkpoint.
-Handoff is complete when required choices are settled and the ticket names the next owner. Update
-INDEX's routing fields only when the handoff creates a routing edge.
+Handoff is complete when required choices are settled and the ticket names the next owner.
 
 ## Close
 
 Normal closure requires valid observations for every applicable acceptance criterion and batch
 acceptance covering those criteria on the final candidate. Update the checkboxes, record the accepted
-candidate and a link to the owning review record in Resolution, and set `state: closed`.
-Update INDEX's routing fields when that lifecycle change creates a routing edge. Abandoned or
+candidate and a link to the owning review record in Resolution, and set `state: closed`. Abandoned or
 superseded work may retain unchecked criteria with reasons. Preserve scenarios, alignment, decisions,
 findings, and cited observations.
 

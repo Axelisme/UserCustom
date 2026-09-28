@@ -2,30 +2,24 @@
 
 ## Integrate
 
-Inputs are a clean delivery candidate, current integration, candidate-bound observations, and the
-owning ticket and review-batch pointers. The Orchestrator checks that the writer stopped, required
-ticket gates passed, evidence is complete, and the change stays within authorized scope. Collect ready
-branches one at a time while independent tickets continue. Collection assembles work for the batch
-review, which owns acceptance.
+Collect a ticket after its review rounds have accepted every applicable criterion, the way a PR merges
+after approval. Collect one ticket at a time with the selected runtime's collection operation while
+other tickets continue.
 
-Use the selected runtime's collection operation. Before it retires a lane, preserve the commit identity
-and required evidence with their durable owners. Keep resources needed for unfinished correction or
-handoff, or establish their replacement checkout and environment before resuming work.
+Merge the accepted lane into integration and run the ticket's gates on the result. A clean merge whose
+gates pass is collected: close the ticket with its Log line and retire the lane. A conflict, or a clean
+merge whose gates fail, produces an unreviewed change: fix it on the lane under one writer, rerun the
+gates, and hold one more review round on the fix before collecting. The ticket returns to `review` for
+that round.
 
-Reconcile a stale lane with current integration before collection. Resolve conflicts under one writer,
-run affected checks, and inspect the new clean delivery candidate. Record introduced interactions for
-the owning batch review. Existing review conclusions apply only where their subject and claims remain
-applicable; newly affected claims need review on the assembled candidate.
+Interactions between tickets are an integration ticket's criteria; after its dependencies close, the
+Orchestrator runs its gates on integration and reviews it like any ticket. If persistence moved,
+reconcile it into integration through the runtime route, rerun affected checks, and review the imported
+interactions as an integration ticket before landing.
 
-Same-batch dependencies may consume collected pending work under dev-flow's dependency rules. Keep
-its unconfirmed obligations explicit. When the batch is ready, run assigned integration gates and
-freeze the complete candidate for [Review](review.md#review). If persistence moved, reconcile it into
-integration through the runtime route, rerun affected checks, and review imported interactions and
-affected task criteria before landing.
-
-Stop collection on conflicts, tracked dirt, candidate mismatch, stale required observations, or missing
-ticket gates. Collection is complete when the delivery candidate is included and the owning review
-record's Candidate-bound observations hold its gate results.
+Stop collection on conflicts, tracked dirt, a commit that differs from the accepted one, or missing
+gate results. Collection is complete when integration contains the accepted work, its gates pass, and
+the ticket's Log records the collected commit.
 
 ## Land and clean up
 
@@ -33,18 +27,19 @@ Landing needs a current user message or in-force task grant naming persistence m
 Read dev-flow custody before applying a durable grant. Push needs separate authority. Without landing
 authority, stop at reviewed integration.
 
-Before landing, confirm all task changes in the landing candidate have applicable batch acceptance and
-required gate observations. An accepted earlier snapshot does not approve subsequently collected work.
-Confirm persistence has no staged changes, tracked unstaged changes, or ordinary untracked files.
+Before landing, confirm every ticket in the landing candidate is `closed`, including its integration
+tickets, and that integration's gates pass. Confirm persistence has no staged changes, tracked unstaged
+changes, or ordinary untracked files; ask the user about untracked files you do not recognize.
 Reconcile persistence drift into integration and regain applicable judgement before landing. Managed
 landing creates a two-parent merge with the previous persistence head first and the judged integration
 head second; its tree must equal the judged integration tree.
 
-Inventory owned resources before destructive retirement. Move required evidence to its durable owner,
-then remove task-owned temporary files, processes, worktrees, and branches whose purpose is complete.
-Managed retirement may delete untracked and ignored lane files. Preserve user state and record every
-retained resource's owner and cleanup condition in its ticket or review record.
+Inventory owned resources before retirement, then remove the task-owned temporary files, processes,
+worktrees, and branches whose purpose is complete. Delete only files this task created; stop and ask
+about an unrecognized untracked file. Managed retirement may delete a lane's untracked and ignored
+files, including its gate logs. Record each retained resource's owner and cleanup condition in its
+ticket's Log.
 
 Stop on missing authority, persistence dirt, live consumer handoff risk, candidate drift, hook failure,
-unaccepted changes, or uncertain custody. Completion requires confirmed integration or landing and
+unaccepted changes, or unrecognized files. Completion requires confirmed integration or landing and
 retirement or explicit retention of every execution resource.

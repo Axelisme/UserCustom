@@ -28,9 +28,8 @@ message revokes or replaces it, or the task is archived. Move it intact to the r
 date and reason. Keep overlapping orders separate: the newest governs addressed points and all
 other in-force clauses remain. Ask whether an ambiguous new order narrows or replaces an old one.
 
-**Apply the approved scope.** When a task points to a frozen scope, follow that source before changing
-its boundary. Existing records call the pointer `Envelope`; newer records use `Scope`. Cite the frozen
-artifact, not the pointer slot, and obtain user approval for a changed boundary.
+**Apply the approved scope.** INDEX's `spec:` names the frozen scope. Follow that source before
+changing its boundary, cite the frozen file, and obtain user approval for a changed boundary.
 
 **Mutate from user authority.** A custody change requires either a current user message or an
 in-force task-scoped user grant that names that mutation and whose conditions hold. The record

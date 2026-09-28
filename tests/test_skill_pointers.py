@@ -93,23 +93,20 @@ class SkillPointerTest(unittest.TestCase):
             self.assertIn("skipped 1 symlinked directory", result.stdout)
 
     def test_a_pointer_is_read_at_its_section(self) -> None:
-        result = run("../dev-flow/references/lane-authority.md#a-gate-you-cannot-close-honestly")
+        result = run("../dev-flow/references/records.md#close")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("## A gate you cannot close honestly", result.stdout)
-        self.assertNotIn("## Creating an evidence file", result.stdout)
+        self.assertIn("## Close", result.stdout)
+        self.assertNotIn("## Archive", result.stdout)
 
     def test_several_pointers_are_read_in_order(self) -> None:
-        lane_authority = HOME / ".codex/skills/dev-flow/references/lane-authority.md"
-        result = run(
-            f"{lane_authority}#creating-an-evidence-file",
-            f"{lane_authority}#a-gate-you-cannot-close-honestly",
-        )
+        records = HOME / ".codex/skills/dev-flow/references/records.md"
+        result = run(f"{records}#review-rounds", f"{records}#close")
         self.assertEqual(result.returncode, 0, result.stderr)
-        first = result.stdout.index("#creating-an-evidence-file")
-        second = result.stdout.index("#a-gate-you-cannot-close-honestly")
+        first = result.stdout.index("#review-rounds")
+        second = result.stdout.index("#close")
         self.assertLess(first, second)
-        self.assertIn("## Creating an evidence file", result.stdout)
-        self.assertIn("## A gate you cannot close honestly", result.stdout)
+        self.assertIn("## Review rounds", result.stdout)
+        self.assertIn("## Close", result.stdout)
 
     def test_a_broken_pointer_is_skipped_and_the_rest_still_read(self) -> None:
         lane_authority = HOME / ".codex/skills/dev-flow/references/lane-authority.md"

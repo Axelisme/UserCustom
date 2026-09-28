@@ -9,13 +9,13 @@ Collab owns writer placement, fixed-subject review, correction, Git integration,
 [Dev-flow](../dev-flow/SKILL.md) owns task scope, tickets, review records, and lifecycle state. Read both
 short entries when orchestrating a task, then open only the operation sections routed below.
 
-A lane is a feature branch and worktree. Integration accumulates task-local results. Persistence is
-the user's target branch. Every checkout has one writer at a time. A fixed subject is one exact clean
-commit and tree with a baseline and bounded criteria. Every review binds to one fixed subject. The
-Orchestrator owns intent, assignment, formal tests, interface declarations, observation sufficiency,
-acceptance, and final disposition. Durable workflow facts go to their owner record at a phase
-boundary, and INDEX routing fields change at a routing edge; dev-flow's
-[record operations](../dev-flow/references/records.md#maintain-the-record) defines all three terms.
+A lane is a feature branch and worktree for one ticket. Integration accumulates accepted tickets.
+Persistence is the user's target branch. Every checkout has one writer at a time. A review round binds
+to one exact clean commit and tree with a baseline and named criteria, like a PR review: it happens on
+the lane, and the ticket is collected after it passes. The Orchestrator owns intent, assignment,
+formal tests, interface declarations, observation sufficiency, acceptance, and final disposition, and
+implements most tickets itself. Every status change gets a Log line in the ticket; dev-flow's
+[record operations](../dev-flow/references/records.md#maintain-the-record) list each fact's owner.
 Standing-order changes follow dev-flow custody.
 
 Existing attempts retain the contract injected at dispatch; a profile currently on disk governs only a
@@ -32,7 +32,7 @@ Use `mdsec <absolute-path>#anchor ...` for operation sections.
   [Gate preparation](references/execution.md#gate-preparation), and [Test ownership](references/execution.md#test-ownership).
 - Dispatch implementation or judge its result: [Implement](references/execution.md#implement) and
   [Results and continuity](references/execution.md#results-and-continuity).
-- Prepare and run batch acceptance: [Review](references/review.md#review).
+- Prepare and run a review round: [Review](references/review.md#review).
 - Correct findings or accept covered claims: [Correct and decide](references/review.md#correct-and-decide).
 - Reconcile or collect branches: [Integrate](references/integration.md#integrate).
 - Land and retire resources: [Land and clean up](references/integration.md#land-and-clean-up).
@@ -44,7 +44,7 @@ a blocker, not permission to invent a replacement.
 
 ## Role entries
 
-The Orchestrator reads INDEX, active grants, the current record, the selected operation section, and
+The Orchestrator reads INDEX, active grants, the tickets in flight, the selected operation section, and
 only the receiver's `Dispatch contract` and `Result` sections. A dispatch gives the receiver exact
 paths and anchors for applicable repository instructions, technical skills, contract, observations,
 authority, environment, gates, and stop conditions. It states explicit `none` where a field has no
@@ -58,21 +58,22 @@ Installed role filenames are `collab-implementer` and `collab-acceptor`:
 | Claude | Pi profiles, dispatched through the subagent MCP ([Claude runtime](runtime-claude.md)) | — |
 
 Use `mdsec <absolute-profile-path>#dispatch-contract <absolute-profile-path>#result`. The
-implementer writes one bounded internal change. The acceptor reads one immutable subject and one
-bounded criterion set owned by a batch review record, including singleton batches. Specialized Standards
+implementer writes one bounded internal change and its gate summary. The acceptor judges the criteria
+one review brief names on one immutable commit and writes one verdict file. Specialized Standards
 and Spec review remains a separate code-review assignment, not the default acceptance loop.
 
 ## Core invariants
 
 - Current user authority or an in-force task grant is required for persistence mutation. Push needs
   separate authority.
-- Preserve user dirt and evidence. Never stash, reset, overwrite, or delete them to prepare work.
-- Accept complete, traceable gate observations when candidate, environment, selection, method, result,
-  and limitations still apply. Role changes alone do not require reruns.
-- The acceptor stays read-only and does not run tests, imports, linters, formatters, builds, or runtime
-  gates. Missing or stale observations return to their execution owner.
-- Collect gate-passing delivery candidates without treating collection as acceptance. Batch review
-  covers all member criteria and interactions; unresolved work remains pending until independently
-  accepted on the applicable candidate.
+- Delete only files this task created; stop and ask about an unrecognized untracked file.
+- Accept a gate summary when its commit, environment, selection, method, result, and limitations
+  still apply. Role changes alone do not require reruns.
+- The acceptor changes no checkout and runs no tests, imports, linters, formatters, builds, or runtime
+  gates; its one write is the verdict file. Missing or stale gate results return to their execution
+  owner.
+- Collect a ticket only after a review round accepts it, or, for a gates-only ticket, after the
+  Orchestrator judges its gates. Interactions between tickets are an integration ticket's criteria,
+  accepted on integration.
 - Launch children in the background and continue independent work. Return control rather than polling
   or blocking on them.

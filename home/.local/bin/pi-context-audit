@@ -91,10 +91,10 @@ def record_kind(path: str) -> str | None:
         return "index"
     if name.endswith("history.md"):
         return "history"
+    if name.startswith("reviews/") or re.search(r"^tickets/[^/]+/review-\d+", name):
+        return "review"
     if name.startswith("tickets/"):
         return "ticket"
-    if name.startswith("reviews/"):
-        return "review"
     return "other"
 
 

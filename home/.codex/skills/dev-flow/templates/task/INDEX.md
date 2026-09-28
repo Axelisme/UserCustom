@@ -5,23 +5,14 @@ spec: none
 # {{TASK_ID}}
 
 ## Goal
-<!-- User-visible outcome. -->
+<!-- The user-visible outcome, in one or two sentences. Scope lives in the `spec` file. -->
 Not yet recorded.
 
-## Scope
-<!-- One approved spec or scope pointer and its read condition, not copied scope. -->
-<scope source>. Read before ticket planning/alignment, a new-scope decision, or a review-driven design change.
-
-## Current
-<!-- Governing record pointer, plus any blocker awaiting the user. Update at a routing edge:
-     ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->
-Task created.
-
-## Next
-<!-- The bounded outcome the governing record drives toward, and its owner. Update at a routing edge. -->
-Plan and align the next independent batch. Owner: Orchestrator.
+## Tickets
+<!-- plan.py locate regenerates this section from each ticket's frontmatter and last Log line. -->
+None.
 
 ## Standing orders
-<!-- Keep verbatim active user-marked STDO orders with source and lapse condition. Read every active
-     entry on reorientation. Admission and custody: ~/.codex/skills/dev-flow/references/custody.md -->
+<!-- Active user-marked STDO orders, verbatim, each with source and lapse condition. Read every entry
+     on reorientation. Custody: ~/.codex/skills/dev-flow/references/custody.md -->
 None.

@@ -9,15 +9,14 @@ Dev-flow owns the durable task record. [Collab](../collab/SKILL.md) owns writers
 and landing. Read both short entries when orchestrating a task, then open only the operation sections
 routed below.
 
-Every task has one container under `.agent_state/plans/<task-id>/`. Every bounded implementation has a
-ticket, including direct Orchestrator work. The approved spec or scope file owns scope. `INDEX.md`
-carries active Standing orders and routes current work. Each fact has one owner record and is
-written at a phase boundary; [Record operations](references/records.md#maintain-the-record) defines
-owner records, phase boundaries, and routing edges. The Orchestrator owns INDEX, tickets, review
-records, acceptance checkboxes, and lifecycle state.
+Every task has one container under `.agent_state/plans/<task-id>/`: INDEX with the Goal, a Kanban
+board of tickets, and the Standing orders; the approved scope under `spec/`; and one directory per
+ticket holding the ticket, its review rounds, and its history. Every bounded implementation has a
+ticket, including direct Orchestrator work. Each fact has one owner record;
+[Maintain the record](references/records.md#maintain-the-record) lists them.
 
 On reorientation, run `scripts/plan.py locate <task-id>` from the main checkout and follow
-[Resume](references/planning.md#resume).
+[Resume](references/planning.md#resume). Locate regenerates the INDEX board from ticket frontmatter.
 
 ## The lifecycle
 
@@ -27,27 +26,26 @@ several pointers in order.
 - Resume an existing task: [Resume](references/planning.md#resume).
 - Create a task, define scope, or slice tickets: [Plan](references/planning.md#plan) and
   [Tickets](references/planning.md#tickets).
-- Select execution and review batches: [Parallel batches](references/planning.md#parallel-batches) and
+- Select tickets to run together: [Parallel tickets](references/planning.md#parallel-tickets) and
   [Design alignment](references/planning.md#design-alignment).
-- Record a completed or blocked ticket and collect user decisions: [Ticket handoff](references/records.md#ticket-handoff).
-- Create or update a bounded integration review brief: [Batch review records](references/records.md#batch-review-records).
-- Update INDEX, tickets, observations, or evidence: [Maintain the record](references/records.md#maintain-the-record).
+- Change a ticket's status, write its Log, or record a user decision:
+  [Maintain the record](references/records.md#maintain-the-record).
+- Write a review brief or read a verdict: [Review rounds](references/records.md#review-rounds).
 - Close or archive work: [Close](references/records.md#close) and [Archive](references/records.md#archive).
 
-Each selected section states its inputs, authority, stop conditions, completion condition, and record
-updates. Open [custody](references/custody.md) before admitting or applying a durable grant, changing
-approved scope, landing, or retiring resources. Open [lane authority](references/lane-authority.md)
-only for delegated record or evidence writes.
+Each selected section states its inputs, stop conditions, and completion condition. Open
+[custody](references/custody.md) before admitting or applying a Standing order, changing approved
+scope, or landing. Open [record permissions](references/lane-authority.md) when dispatching a role
+that writes a gate summary or a verdict.
 
 ## Core invariants
 
-- Preserve approved obligations and pre-existing user state. Missing historical authority or scope
-  returns to its owner; a new default does not rewrite it.
+- Preserve approved obligations. Missing historical authority or scope returns to its owner; a new
+  default does not rewrite it.
 - Tests establish observable behavior through interfaces. Direct review establishes prose, structure,
   configuration, repository data, responsibility placement, and other static facts.
-- Update INDEX's routing fields at a routing edge. Maintain Standing orders under
-  [custody](references/custody.md). When INDEX cannot route the next owner, repair the record or ask
-  the decision owner instead of scanning every ticket, artifact, or log.
-- A ticket closes when batch acceptance covers every applicable criterion.
+- Every status change gets a Log line. Maintain Standing orders under [custody](references/custody.md).
+- A ticket closes when a COMPLETED review round, or the gates of a gates-only ticket, covers every
+  applicable criterion and the candidate is collected.
 - Capture valuable out-of-scope findings through candidate-backlog. Current acceptance gaps remain in
   this task.

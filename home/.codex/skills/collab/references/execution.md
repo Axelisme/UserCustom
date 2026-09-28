@@ -9,7 +9,7 @@ Work directly when the Orchestrator already holds the relevant context and the c
 when a small correction joins production and Orchestrator-owned interface or formal-test edits.
 Delegate a settled, independently implementable and verifiable internal change. Investigate or align
 an ambiguous problem before assigning it. Direct work keeps the same ticket, one-writer, checks, and
-batch-review duties.
+review duties.
 
 Stop when the contract is unclear, writer ownership overlaps, or the proposed child would need to make
 a user, interface, test, or architecture decision. Placement is complete when one writer, checkout,
@@ -17,23 +17,24 @@ write scope, authority, and handoff boundary are explicit.
 
 ## Prepare
 
-Inputs are the pending ticket, approved scope, current integration, repository bootstrap instructions,
-and mutation authority. The Orchestrator prepares one safe checkout per concurrent writer. Preserve
-pre-existing dirt and evidence. Run repository-declared worktree bootstrap before dispatch and retain
-the environment through implementation, correction, review, and owner-decision waits.
+Inputs are the ready ticket, approved scope, current integration, repository bootstrap instructions,
+and mutation authority. The Orchestrator prepares one lane per concurrent writer, branched from the
+current integration. Run repository-declared worktree bootstrap before dispatch and keep the lane and
+its environment until the ticket closes. Set the ticket to `doing` with its `branch`, and log the
+dispatch with the subagent id.
 
 For delegated work, read the receiver's `Dispatch contract` and `Result` sections and the selected
 runtime operation. The dispatch names:
 
 - exact checkout, branch-local commit authority, exclusive writer, and persistence/push exclusions;
-- exact ticket or brief anchors and assigned criteria/checks, naming current-state sections such as a
-  ticket's `#acceptance` and `#progress` or a review's `#current-round` and `#findings`; history files
-  stay out of the dispatch;
+- exact ticket anchors and assigned criteria and checks, such as `#outcome`, `#scenarios`,
+  `#contract-starting-point`, `#acceptance`, and `#mechanical-gates`; for a correction, the verdict
+  path and the finding IDs to fix; history files stay out of the dispatch;
 - applicable repository instruction and technical skill paths, narrowed to the anchors that apply,
   with read conditions, or explicit none;
 - runtime, interpreter, environment, caches, test selection, timeout, and cleanup exceptions;
 - prior blockers, stop conditions, escalation owner, and profile source for reorientation;
-- exceptional evidence target and exact method pointer, or none.
+- the lane's `.agent_state/runs/` directory for the gate summary.
 
 Stop on failed bootstrap, missing capability, ambiguous authority, or unexplained checkout changes.
 Preparation is complete when the bounded brief, writer, checkout, environment, and sources are usable
@@ -72,10 +73,10 @@ Setup, import, collection, or unrelated failures are not RED evidence. Other gat
 in RED. Keep behavior tests incremental rather than writing the entire suite before implementation.
 For non-TDD work, complete the same gate preparation before implementation without inventing a RED.
 
-At GREEN and delivery, run required ticket gates. Assign expensive or assembled-candidate checks as
-batch observations during planning, with an owner and readiness condition. They run before batch
-review, not as surprise replacements for ticket obligations. Missing capability or an unusable required
-gate blocks implementation handoff until its owner resolves it. Preparation is complete when the gate
+At GREEN and delivery, run required ticket gates. Expensive checks and checks on assembled work are
+planned up front with an owner: the Orchestrator runs them on the lane before the review round, or
+they belong to an integration ticket. Missing capability or an unusable required gate blocks
+implementation handoff until its owner resolves it. Preparation is complete when the gate
 plan is executable or its justified direct-review alternative is recorded.
 
 ## Test ownership
@@ -90,8 +91,8 @@ through their contribution to that behavior.
 Stop when behavior or interface ownership is unconfirmed, a proposed assertion tests prose or internal
 shape instead of observable behavior, the checkout has another writer, or the required environment is
 unavailable. Record the test path, covered criterion and scenario, command/selection, environment, and
-expected pre-fix failure when applicable in Contract starting point; results reach the review record's
-Candidate-bound observations when the delivery is collected.
+expected pre-fix failure when applicable in Contract starting point; results go in the gate summary of
+the commit that ran them.
 Test work is complete when the agreed behavior is observable through a shipped interface, the assigned
 gate is recorded, and write ownership is released or explicitly transferred.
 
@@ -109,30 +110,28 @@ order and timeout, removes probes, inspects the diff, commits under branch-local
 writing.
 
 A gate timeout is incomplete, not passing. Rerun after a new change, new hypothesis, or explicit
-reproduction purpose; repeated unchanged diagnostics stop with the blocker. Use the ticket gates and
-batch assignments established during [Gate preparation](#gate-preparation); passing ticket gates makes
-a delivery candidate for batch review.
+reproduction purpose; repeated unchanged diagnostics stop with the blocker. Use the ticket gates established during
+[Gate preparation](#gate-preparation); passing them makes a candidate ready for a review round.
 
-Completion requires a clean committed candidate and a concise handoff tying the final candidate to
-each command or selection, environment, result and exit status, raw run pointer, and limitation. Keep
-bulky output with the run. A blocked result aggregates known obstructions and names the next decision
-or execution owner.
+Completion requires a clean committed candidate and its gate summary at
+`<lane>/.agent_state/runs/<short-sha>/summary.md`, beside the raw logs: each command or selection,
+working directory, environment, result and exit status, and limitation. The result names the commit
+and the summary path. A blocked result aggregates known obstructions and names the next decision or
+execution owner.
 
 ## Results and continuity
 
 Role payloads retain the required `outcome` discriminator (`COMPLETED` or `BLOCKED`), optional
 `message`, and required `blocker` on BLOCKED. `outcome` carries status only. A COMPLETED implementer
-puts candidate and verification metadata in `message` unless dispatch named an exact durable record
-that already contains every required item. If neither source contains them, the Orchestrator treats the
-result as incomplete. `Residual risks:` carries non-blocking findings. Do not add a runtime result field.
+names its commit and gate summary path in `message`; an acceptor names its verdict path. A result
+whose named file is missing is incomplete. `Residual risks:` carries non-blocking findings. Do not add
+a runtime result field.
 
-A writer's COMPLETED result attests required gates passed, the checkout is clean and committed, and
-assigned evidence is complete. The Orchestrator checks the actual checkout and evidence before
-delivery judgement and collection. A replacement receives the original assignment, blockers, verified
+A writer's COMPLETED result attests required gates passed and the checkout is clean and committed. The
+Orchestrator checks the actual checkout and gate summary before writing the review brief. A replacement receives the original assignment, blockers, verified
 and unverified work, environment, authority, and stop conditions.
 
-A role result owns its returned observations until the Orchestrator writes the durable conclusion into
-its owner record at a phase boundary. Git and the run retain finer history.
+The Orchestrator records the outcome as a Log line; Git and the run retain finer history.
 
 Questions use the runtime's live parent channel when available. Single-return runtimes use BLOCKED and
 a fresh dispatch after the answer. An interrupted writer requires checkout and result inspection

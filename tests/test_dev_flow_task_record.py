@@ -106,17 +106,31 @@ def record(root: Path, task_id: str = "demo") -> Path:
     return root / ".agent_state" / "plans" / task_id
 
 
-def ticket(ticket_id: str, state: str, body: str = "") -> str:
-    return f"---\nid: {ticket_id}\nstate: {state}\n---\n# arbitrary narrative\n{body}"
+def ticket(ticket_id: str, status: str, body: str = "", *, extra: str = "") -> str:
+    return f"---\nid: {ticket_id}\nstatus: {status}\n{extra}---\n# arbitrary narrative\n{body}"
 
 
-def write_ticket(tickets: Path, ticket_id: str, state: str, body: str = "") -> Path:
+def write_ticket(
+    tickets: Path, ticket_id: str, status: str, body: str = "", *, extra: str = ""
+) -> Path:
     """Place one lifecycle ticket in its own directory, as the record shape requires."""
     owner = tickets / ticket_id
     owner.mkdir(parents=True, exist_ok=True)
     path = owner / "ticket.md"
-    path.write_text(ticket(ticket_id, state, body), encoding="utf-8")
+    path.write_text(ticket(ticket_id, status, body, extra=extra), encoding="utf-8")
     return path
+
+
+def init_repo(path: Path) -> None:
+    """A Git repository that ignores `.agent_state`, as `create` requires."""
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
+    (path / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
+
+
+def board_section(index: Path) -> str:
+    """The generated Tickets section of an INDEX, without its heading."""
+    text = index.read_text(encoding="utf-8")
+    return text.split("## Tickets\n", 1)[1].split("\n## ", 1)[0].strip()
 
 
 def counts(**states: int) -> dict[str, int | None]:
@@ -413,7 +427,6 @@ class TaskRecordTests(unittest.TestCase):
                     ".agent_state/plans/demo/INDEX.md",
                     ".agent_state/plans/demo/decisions",
                     ".agent_state/plans/demo/research",
-                    ".agent_state/plans/demo/reviews",
                     ".agent_state/plans/demo/scripts",
                     ".agent_state/plans/demo/spec",
                     ".agent_state/plans/demo/standing-orders",
@@ -426,7 +439,7 @@ class TaskRecordTests(unittest.TestCase):
             self.assertFalse((record(root) / "artifacts").exists())
             self.assertEqual(
                 sorted(path.name for path in record(root).iterdir()),
-                ["INDEX.md", "decisions", "research", "reviews", "scripts", "spec", "standing-orders", "tickets"],
+                ["INDEX.md", "decisions", "research", "scripts", "spec", "standing-orders", "tickets"],
             )
             created = (record(root) / "INDEX.md").read_text(encoding="utf-8")
             frontmatter = created.split("---", 2)[1].strip().splitlines()
@@ -490,7 +503,7 @@ class TaskRecordTests(unittest.TestCase):
 
     def test_per_ticket_templates_are_not_shipped_inside_the_task_template(self) -> None:
         templates = SCRIPT.parent.parent / "templates"
-        for name in ("ticket.md", "evidence.md"):
+        for name in ("ticket.md", "review.md", "verdict.md"):
             self.assertTrue((templates / "ticket" / name).is_file(), name)
         # A shipped ticket.md would be parsed by locate, and its placeholder id fails validation:
         # one unreadable ticket makes every count null, degrading orientation from birth.
@@ -502,7 +515,7 @@ class TaskRecordTests(unittest.TestCase):
             root = Path(temporary)
             self.assert_ok(run_plan(root, "create", "demo"), "create")
             tickets = record(root) / "tickets"
-            write_ticket(tickets, "q13-feed", "pending")
+            write_ticket(tickets, "q13-feed", "ready")
             for kind in ("admission", "validation", "acceptance"):
                 (tickets / "q13-feed" / f"{kind}.md").write_text("evidence", encoding="utf-8")
             (tickets / "q13-feed" / "gate-20260814T120000Z.log").write_text("log", encoding="utf-8")
@@ -510,7 +523,7 @@ class TaskRecordTests(unittest.TestCase):
             located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
             self.assertEqual(
                 located["tickets"],
-                counts(pending=1),
+                counts(ready=1),
                 "evidence sharing the ticket directory is not itself a ticket",
             )
 
@@ -518,8 +531,8 @@ class TaskRecordTests(unittest.TestCase):
         cases = {
             "missing ticket.md": lambda owner: owner.mkdir(parents=True),
             "id disagreeing with the directory": lambda owner: write_ticket(
-                owner.parent, owner.name, "pending"
-            ).write_text(ticket("other-id", "pending"), encoding="utf-8"),
+                owner.parent, owner.name, "ready"
+            ).write_text(ticket("other-id", "ready"), encoding="utf-8"),
         }
         for label, prepare in cases.items():
             with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
@@ -552,7 +565,7 @@ class TaskRecordTests(unittest.TestCase):
                 "## Acceptance\n- [ ] **A1** — deliberately unchecked\n"
                 "## Resolution\nPending. Misleading lifecycle claim: pending.\n"
             )
-            write_ticket(task / "tickets", "T001-first", "pending", legacy_body)
+            write_ticket(task / "tickets", "T001-first", "ready", legacy_body)
             write_ticket(task / "tickets", "T002-done", "closed", new_body)
             before = snapshot(task)
 
@@ -566,32 +579,36 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(located["spec"], "none")
             self.assertEqual(
                 located["tickets"],
-                counts(pending=1, closed=1),
+                counts(ready=1, closed=1),
             )
             self.assertEqual(located["orientation"], "available")
             self.assertEqual(located["parse_errors"], [])
             rendered = json.dumps(located)
             self.assertNotIn("T001-first.md", rendered)
-            self.assertNotIn("depends_on", rendered)
             for forbidden in ("health", "current", "artifacts", "then_run", "lint", "stale"):
                 self.assertNotIn(forbidden, located)
 
-    def test_locate_counts_drafted_tickets_beside_pending_and_closed(self) -> None:
+    def test_locate_counts_statuses_and_writes_only_the_index_board(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.assert_ok(run_plan(root, "create", "demo"), "create")
             task = record(root)
-            write_ticket(task / "tickets", "T001-fog", "drafted")
-            write_ticket(task / "tickets", "T002-ready", "pending")
+            write_ticket(task / "tickets", "T001-fog", "todo")
+            write_ticket(task / "tickets", "T002-ready", "ready")
             write_ticket(task / "tickets", "T003-done", "closed")
-            before = snapshot(task)
+            index_before = (task / "INDEX.md").read_text(encoding="utf-8")
+            tickets_before = snapshot(task / "tickets")
 
             located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
 
-            self.assertEqual(snapshot(task), before, "locate must not write")
+            self.assertEqual(snapshot(task / "tickets"), tickets_before, "locate must not write tickets")
+            index_after = (task / "INDEX.md").read_text(encoding="utf-8")
+            outside_board = lambda text: re.sub(r"## Tickets\n.*?(?=\n## )", "", text, flags=re.S)
+            self.assertEqual(outside_board(index_after), outside_board(index_before))
+            self.assertIs(located["index_updated"], True)
             self.assertEqual(
                 located["tickets"],
-                counts(drafted=1, pending=1, closed=1),
+                counts(todo=1, ready=1, closed=1),
             )
             self.assertEqual(located["orientation"], "available")
             self.assertEqual(located["parse_errors"], [])
@@ -687,7 +704,7 @@ class TaskRecordTests(unittest.TestCase):
             )
             (task / "tickets" / "T001").mkdir(parents=True)
             (task / "tickets" / "T001" / "ticket.md").write_bytes(
-                b"---\nid: T001\nstate: pending\n---\nopaque:\xff\x00body"
+                b"---\nid: T001\nstatus: ready\n---\nopaque:\xff\x00body"
             )
 
             located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
@@ -696,7 +713,7 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(located["spec"], "artifacts/spec.md")
             self.assertEqual(
                 located["tickets"],
-                counts(pending=1),
+                counts(ready=1),
             )
             self.assertEqual(located["parse_errors"], [])
 
@@ -708,14 +725,10 @@ class TaskRecordTests(unittest.TestCase):
             budget = plan.SIZE_WARN_BYTES
             header = b"---\ntask_id: demo\nspec: none\n---\n"
             (task / "INDEX.md").write_bytes(header + b"\xff" * (budget["index"] + 1 - len(header)))
-            long_ticket = write_ticket(task / "tickets", "T001-long", "pending", "x" * budget["ticket"])
+            long_ticket = write_ticket(task / "tickets", "T001-long", "ready", "x" * budget["ticket"])
             (long_ticket.parent / "history.md").write_bytes(b"h" * budget["ticket"] * 4)
-            write_ticket(task / "tickets", "T002-short", "pending")
-            reviews = task / "reviews"
-            reviews.mkdir(exist_ok=True)
-            (reviews / "batch.md").write_bytes(b"r" * (budget["review"] + 1))
-            (reviews / "edge.md").write_bytes(b"r" * budget["review"])
-            (reviews / "batch.history.md").write_bytes(b"h" * budget["review"] * 4)
+            write_ticket(task / "tickets", "T002-short", "ready")
+            (long_ticket.parent / "review-01.md").write_bytes(b"r" * budget["ticket"] * 4)
             before = snapshot(task)
 
             located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
@@ -734,11 +747,6 @@ class TaskRecordTests(unittest.TestCase):
                         "path": ".agent_state/plans/demo/tickets/T001-long/ticket.md",
                         "bytes": long_ticket.stat().st_size,
                         "budget": budget["ticket"],
-                    },
-                    {
-                        "path": ".agent_state/plans/demo/reviews/batch.md",
-                        "bytes": budget["review"] + 1,
-                        "budget": budget["review"],
                     },
                 ],
             )
@@ -761,7 +769,7 @@ class TaskRecordTests(unittest.TestCase):
             with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 task = record(root, label)
-                write_ticket(task / "tickets", "T001", "pending")
+                write_ticket(task / "tickets", "T001", "ready")
                 index = task / "INDEX.md"
                 index.write_text(index_text, encoding="utf-8")
                 before = snapshot(task)
@@ -775,7 +783,7 @@ class TaskRecordTests(unittest.TestCase):
                 self.assertIsNone(located["spec"])
                 self.assertEqual(
                     located["tickets"],
-                    counts(pending=1),
+                    counts(ready=1),
                 )
                 self.assertEqual(len(located["parse_errors"]), 1)
                 self.assertEqual(
@@ -787,7 +795,7 @@ class TaskRecordTests(unittest.TestCase):
             root = Path(temporary)
             self.assert_ok(run_plan(root, "create", "demo"), "create")
             tickets = record(root) / "tickets"
-            write_ticket(tickets, "T001", "pending")
+            write_ticket(tickets, "T001", "ready")
             (tickets / "T002").mkdir(parents=True)
             (tickets / "T002" / "ticket.md").write_text(
                 "state: closed in prose only\n", encoding="utf-8"
@@ -810,7 +818,7 @@ class TaskRecordTests(unittest.TestCase):
             root = Path(temporary)
             self.assert_ok(run_plan(root, "create", "demo"), "create")
             tickets = record(root) / "tickets"
-            write_ticket(tickets, "T001", "pending")
+            write_ticket(tickets, "T001", "ready")
             tickets.chmod(0)
             try:
                 try:
@@ -995,6 +1003,134 @@ class TaskRecordTests(unittest.TestCase):
                     candidate.chmod(0o700)
 
 
+class TicketBoardTests(unittest.TestCase):
+    """`locate` regenerates INDEX's Tickets board from ticket frontmatter and last lines only."""
+
+    def locate(self, root: Path) -> dict[str, object]:
+        done = run_plan(root, "locate", "demo")
+        self.assertEqual(done.returncode, 0, done.stderr or done.stdout)
+        return payload(done)
+
+    def test_board_resolves_dependencies_marks_startable_tickets_and_shows_latest_log(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_plan(root, "create", "demo")
+            tickets = record(root) / "tickets"
+            write_ticket(tickets, "01-base", "closed", "## Log\n- 09-28 13:47 → closed: R02 COMPLETED\n")
+            write_ticket(
+                tickets, "02-next", "ready", "## Log\n",
+                extra="depends_on: [01-base]\n",
+            )
+            write_ticket(
+                tickets, "03-wait", "ready", "## Log\n- 09-28 10:00 → ready: seed a|b\n",
+                extra="depends_on: [01-base, 02-next]\nbranch: wave/demo/03\n",
+            )
+            write_ticket(tickets, "04-lost", "blocked", extra="depends_on: [99-missing]\n")
+
+            located = self.locate(root)
+
+            rows = {row["id"]: row for row in located["board"]}
+            self.assertIs(rows["02-next"]["startable"], True)
+            self.assertIs(rows["03-wait"]["startable"], False)
+            self.assertEqual(
+                rows["03-wait"]["depends_on"],
+                [{"id": "01-base", "status": "closed"}, {"id": "02-next", "status": "ready"}],
+            )
+            self.assertEqual(rows["04-lost"]["depends_on"], [{"id": "99-missing", "status": "?"}])
+            self.assertEqual(rows["01-base"]["latest"], "09-28 13:47 → closed: R02 COMPLETED")
+            self.assertEqual(rows["02-next"]["latest"], "—", "a Log heading without entries has no latest line")
+            board = board_section(record(root) / "INDEX.md")
+            self.assertIn("| 02-next | ready ▶ | 01-base (closed) | — | — |", board)
+            self.assertIn(
+                "| 03-wait | ready | 01-base (closed), 02-next (ready) | wave/demo/03 | 09-28 10:00 → ready: seed a\\|b |",
+                board,
+            )
+            self.assertIn("| 04-lost | blocked | 99-missing (?) |", board)
+
+    def test_board_is_rewritten_only_when_it_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_plan(root, "create", "demo")
+            write_ticket(record(root) / "tickets", "01-a", "doing")
+
+            self.assertIs(self.locate(root)["index_updated"], True)
+            before = snapshot(record(root))
+            self.assertIs(self.locate(root)["index_updated"], False)
+            self.assertEqual(snapshot(record(root)), before)
+
+            write_ticket(record(root) / "tickets", "01-a", "review")
+            self.assertIs(self.locate(root)["index_updated"], True)
+            self.assertIn("| 01-a | review |", board_section(record(root) / "INDEX.md"))
+
+    def test_board_keeps_every_section_outside_tickets(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_plan(root, "create", "demo")
+            index = record(root) / "INDEX.md"
+            text = index.read_text(encoding="utf-8")
+            text = text.replace("Not yet recorded.", "Ship the demo.")
+            text = text.replace("## Standing orders\n", "## Standing orders\n- STDO-1: 「keep this」\n")
+            index.write_text(text, encoding="utf-8")
+            write_ticket(record(root) / "tickets", "01-a", "todo")
+
+            self.locate(root)
+
+            after = index.read_text(encoding="utf-8")
+            self.assertIn("## Goal\n<!--", after)
+            self.assertIn("Ship the demo.", after)
+            self.assertIn("- STDO-1: 「keep this」", after)
+            self.assertLess(after.index("## Tickets"), after.index("| 01-a | todo |"))
+            self.assertLess(after.index("| 01-a | todo |"), after.index("## Standing orders"))
+
+    def test_unreadable_tickets_stay_on_the_board(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_plan(root, "create", "demo")
+            tickets = record(root) / "tickets"
+            write_ticket(tickets, "01-ok", "ready", extra="depends_on: []\n")
+            write_ticket(tickets, "02-bad-list", "ready", extra="depends_on: 01-ok\n")
+            write_ticket(tickets, "03-bad-field", "ready", extra="owner: someone\n")
+
+            located = self.locate(root)
+
+            self.assertEqual(located["orientation"], "partial")
+            statuses = {row["id"]: row["status"] for row in located["board"]}
+            self.assertEqual(
+                statuses, {"01-ok": "ready", "02-bad-list": "unreadable", "03-bad-field": "unreadable"}
+            )
+            self.assertIn("| 02-bad-list | unreadable |", board_section(record(root) / "INDEX.md"))
+
+    def test_archived_records_keep_their_index(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_plan(root, "create", "demo")
+            write_ticket(record(root) / "tickets", "01-a", "closed")
+            run_plan(root, "archive", "demo")
+            archived = root / ".agent_state" / "archives" / "demo"
+            before = snapshot(archived)
+
+            located = self.locate(root)
+
+            self.assertEqual(located["location"], "archived")
+            self.assertIs(located["index_updated"], False)
+            self.assertEqual(snapshot(archived), before)
+
+    def test_create_refuses_a_repository_that_would_track_agent_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary) / "repo"
+            repo.mkdir()
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+
+            refused = run_production(repo, "create", "demo")
+            self.assertEqual(refused.returncode, 1, refused.stdout)
+            self.assertEqual(payload(refused)["error"]["code"], "agent_state_not_ignored")
+            self.assertFalse((repo / ".agent_state" / "plans" / "demo").exists())
+
+            (repo / ".gitignore").write_text(".agent_state/\n", encoding="utf-8")
+            created = run_production(repo, "create", "demo")
+            self.assertEqual(created.returncode, 0, created.stdout)
+
+
 class RootSelectionProductionTests(unittest.TestCase):
     """Production-entrypoint coverage for S1-S3 omitted by the in-process helper.
 
@@ -1055,7 +1191,7 @@ class RootSelectionProductionTests(unittest.TestCase):
             base = Path(tmp)
             repo = base / "repo"
             repo.mkdir()
-            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            init_repo(repo)
             nested = repo / "nested" / "deep"
             nested.mkdir(parents=True)
             # Without --repo, CWD inside nested directory must discover the worktree root.
@@ -1103,7 +1239,7 @@ class RootSelectionProductionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"
             repo.mkdir()
-            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            init_repo(repo)
             # Success payloads include absolute control_root.
             created = self.assert_ok(run_production(repo, "create", "demo"), "create")
             self.assertEqual(created["control_root"], str(repo.resolve()))
@@ -1144,7 +1280,7 @@ class RootSelectionProductionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"
             repo.mkdir()
-            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            init_repo(repo)
             with tempfile.TemporaryDirectory() as tmp_cwd:
                 other = Path(tmp_cwd)
                 # Create via explicit --repo from another CWD, outside Git.

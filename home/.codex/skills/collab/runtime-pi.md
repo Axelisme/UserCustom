@@ -13,7 +13,7 @@ Open only the linked section for the current operation, using `mdsec`.
 - When a child returns or asks a question: [Results and decisions](#results-and-decisions).
 - When interrupted work needs inspection, steering, or recovery: [Run control](#run-control).
 - For a gates-only assignment: [Placement](#placement).
-- After checking a delivery candidate for collection: [Collection](#collection).
+- After a ticket's review rounds accept it, to collect it: [Collection](#collection).
 - Before selecting a managed Git operation or retiring resources: [Operations](#operations).
 
 ## Managed lane environment
@@ -90,9 +90,9 @@ return control or use the active goal's yield mechanism and let the terminal not
 session. Blocking on a child does not make it more authoritative.
 
 Yielding means you were away from the lane while it was written. When the terminal notification lands,
-reread the current-state anchors of the ticket or batch review record named by the dispatch: a ticket's
-`#progress`, or a review's `#current-round`, `#findings`, and `#candidate-bound-observations`. Rebuild
-judgement from its current candidate-bound observations rather than memory or unrelated task history.
+reread the ticket named by the dispatch (`#acceptance`, `#plan`, and the tail of `#log`) and the file the
+child names: an implementer's gate summary or an acceptor's verdict. Rebuild judgement from those files
+rather than memory or unrelated task history.
 
 ## Run control
 
@@ -112,8 +112,8 @@ examine its changed files and commit state before choosing the next owner.
 
 ## Placement
 
-For a gates-only lane, spawn `collab-implementer` onto the exact managed lane worktree. This lane
-has no reviewer, so the direct writer dispatch is not a handwritten worker/reviewer loop. After the
+For a gates-only ticket ([Review](references/review.md#review)), spawn `collab-implementer` onto the
+exact managed lane worktree. This lane has no reviewer, so the direct writer dispatch is not a handwritten worker/reviewer loop. After the
 writer stops, an in-scope correction is another ordinary spawn onto the same lane, and the
 Orchestrator judges the writer's mechanical-gate result before collection.
 
@@ -121,10 +121,10 @@ Orchestrator judges the writer's mechanical-gate result before collection.
 
 `collab_lane` with `action: collect` carries its own stale-lane behavior and is the default
 collection path. A `collected` result completes collection. A `reconciled` result stops before
-collection: apply the core reconciliation checks to the reconciled delivery candidate. Have the
-Orchestrator check delivery completeness again before retrying collection and record affected claims
-for batch review. Collection does not dispatch a per-ticket acceptor. A `conflicted` result returns to
-the Orchestrator. `collab_lane` with `action: reconcile` remains
+collection: rerun the ticket's gates on the reconciled lane. If the reconcile needed conflict
+resolution or the gates fail, hold one more review round on the fix under
+[Integrate](references/integration.md#integrate) before retrying collection. A `conflicted` result
+returns to the Orchestrator. `collab_lane` with `action: reconcile` remains
 available but is not an extra default pre-step.
 
 ## Operations

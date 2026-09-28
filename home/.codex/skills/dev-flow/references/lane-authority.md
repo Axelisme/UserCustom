@@ -1,34 +1,20 @@
 # Record permissions
 
-Use this reference before granting a writer access to the task record. These permissions are separate
-from permission to edit or commit the implementation branch.
+The Orchestrator writes INDEX, tickets, review briefs, and acceptance checkboxes. Two role writes
+exist, each to one file named in the dispatch:
 
-## Ticket ownership
+- The **implementer** writes the gate summary for its final commit at
+  `<lane>/.agent_state/runs/<short-sha>/summary.md`, beside the raw logs: for each gate, the command
+  or selection, working directory, environment, result and exit status, and limitations. The
+  dispatch names the `runs/` directory; the implementer adds the commit's short SHA.
+- The **acceptor** writes `review-NN.verdict.md` at the absolute path its review brief names.
 
-The Orchestrator owns ticket prose, acceptance checkboxes, dependencies, state, Resolution, and INDEX.
-Writers report progress and observations to the Orchestrator; reviewers read only.
-Checkboxes record the Orchestrator's conclusions, supported by the assigned observations.
-
-Writers may use their assigned ticket's `scripts/` subtree for helpers. Separate evidence is
-exceptional; its writes require an exact target and covered claims in the assignment. Each grant is
-confined to its named operation and target. The Orchestrator retains contract edits; persistence mutations require user authority.
+The Orchestrator's own gate runs go to `orchestrator.md` in the same `runs/<short-sha>/` directory of
+the checkout where they ran. A manual or external observation is recorded the same way, by whoever
+performed it.
 
 ## A gate you cannot close honestly
 
 Keep each check's required property intact. When satisfying it exceeds the assigned scope or authority,
-report the check, obstruction, and decision needed. This applies to both a delegated writer and the
+report the check, obstruction, and decision needed. This applies to a delegated writer and to the
 Orchestrator implementing directly.
-
-## Creating an evidence file
-
-Use a separate file only for a costly, external, manual, ephemeral, audit-required, or user-requested
-observation; routine verification goes in the review record's Candidate-bound observations. The
-Orchestrator assigns a fresh target beside the ticket; the writer creates it using
-[the evidence template](../templates/ticket/evidence.md). Preserve its Subject, Evidence, and Residuals
-sections with actual observations. Use a fresh target for each workflow and preserve earlier evidence.
-Updating an existing target requires the assignment to identify it as this workflow's evidence.
-Corrections update that assigned file sequentially for the new candidate.
-
-Bind observations to the exact candidate, covered claims, method, results, and limitations. If a
-required observation or evidence file remains incomplete, report `BLOCKED`. Evidence creation requires
-an assigned path. Routine check output remains with its run.

@@ -71,10 +71,10 @@ Branch on the returned `state`:
   belong to the session that spawned them, so exact-id `result` from the new session cannot find them.
   To collect them, resume the previous Claude session. If that session is unavailable, treat those
   children's outcomes as unrecoverable: inspect the affected checkout's actual state, record the loss
-  in the owning ticket or batch review record, and dispatch fresh.
+  as a Log line in the owning ticket, and dispatch fresh.
 
-While a child runs, continue independent work. On each wake, reread the current-state anchors of the
-ticket or batch review record named by the dispatch, as in Pi [Post-launch](runtime-pi.md#post-launch).
+While a child runs, continue independent work. On each wake, reread the ticket and the file the child
+names, as in Pi [Post-launch](runtime-pi.md#post-launch).
 
 ## Results and decisions
 

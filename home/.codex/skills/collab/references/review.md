@@ -2,53 +2,53 @@
 
 ## Review
 
-The acceptance unit is a review batch, which may contain one ticket. Inputs are one exact clean
-assembled candidate commit/tree, the batch baseline, confirmation the subject's writer stopped, and a
-stable `reviews/<review-id>.md` brief. The brief maps every included ticket's acceptance criteria to
-observations and names interaction scenarios, interface and test obligations, prior findings, stop
-conditions, and limitations. It covers member criteria as well as interactions, not only merge changes.
+A review round is a PR review of one ticket on its lane, before collection. A **gates-only** ticket
+skips the round: a trivial change with no behavior or contract at stake, such as formatting or a
+comment, whose every acceptance criterion is a mechanical gate. The Orchestrator judges those gates,
+checks the boxes, and collects it; anything the gates cannot establish needs a review round.
 
-The Orchestrator checks delivery completeness and required batch gates, records the subject in the
-review record, then dispatches one acceptor. The dispatch names the brief's `#current-round`,
-`#findings`, `#criterion-coverage`, `#interaction-scenarios`, and `#candidate-bound-observations` and
-each member ticket's `#acceptance` and `#scenarios`; the acceptor opens a whole record or a history file
-only for a concrete review question. Freeze the review checkout until the verdict. Independent
-implementation may continue in other lanes; to keep integration moving, use a separate clean checkout
-pinned to the reviewed commit. Later changes are outside that verdict.
+A round's inputs are one exact clean commit and tree, the baseline, the stopped writer, the gate
+summaries for that commit, and the criteria the round judges. Reconcile the lane with current
+integration and rerun gates first, the way a PR is rebased before review.
 
-The acceptor reads the candidate, tests, declarations, callers, and supplied observations. It reviews
-every assigned criterion and directly related instances. It directly judges prose, structure,
-configuration, repository data, responsibility placement, test assertions, and gate sufficiency. It
-does not execute runtime gates.
+The Orchestrator writes `tickets/<id>/review-NN.md` from the dev-flow
+[review round](../../dev-flow/references/records.md#review-rounds) template, sets the ticket to
+`review` with a Log line, and dispatches one acceptor whose dispatch names only that brief and the
+verdict path. The brief is the dispatch: its content lives in the file, not in the message. Freeze the
+review checkout until the verdict. To keep working on the ticket's next milestone, give the acceptor a
+detached worktree at the subject commit and continue in the lane.
 
-A missing baseline, mutable or dirty subject, active writer in the review checkout, ambiguous criterion,
-missing authority, or unavailable required observation makes the assignment unreviewable. Repair that
-concrete input and use a fresh dispatch. Repeated failure to prepare the same missing input stops with
-its owner rather than spawning indefinitely.
+The acceptor reads the brief, the ticket's `#acceptance` and `#scenarios`, the diff, declarations,
+callers, tests, and gate summaries. It judges every criterion the round names and directly related
+instances, including prose, structure, configuration, repository data, responsibility placement, test
+assertions, and gate sufficiency. It runs no gates and changes no checkout; it writes the verdict file.
 
-Review completes with `COMPLETED` approving only the named claims on that exact subject, or `BLOCKED`
-containing all supported defects with locations, violated criterion IDs, evidence, affected tickets and
-interaction scenarios, and bounded advisory fixes. Specialized Standards and Spec review uses
-code-review under its own contract.
+A missing baseline, mutable or dirty subject, active writer, ambiguous criterion, missing authority, or
+unavailable gate summary makes the round `UNREVIEWABLE`. Repair that input and start the next round.
+Repeated failure to prepare the same input stops with its owner.
+
+Review completes when the verdict file exists with outcome `COMPLETED`, approving only the named
+criteria on that exact commit, or `BLOCKED`, listing every supported defect with location, criterion,
+evidence, and a bounded suggested fix. Specialized Standards and Spec review uses code-review under its
+own contract.
 
 ## Correct and decide
 
-The Orchestrator classifies the result against the stable claim set and records it in the review
-record. Non-contract suggestions receive a recorded disposition. User-owned behavior, scope, authority,
-data structure, or responsibility choices go to dev-flow ticket handoff while feasible work continues.
+Read the verdict. For each finding decide: fix it, decline it with a reason, or move it to a user
+decision under dev-flow's [Maintain the record](../../dev-flow/references/records.md#maintain-the-record)
+while feasible work continues. A user-owned choice of behavior, scope, authority, data structure, or
+responsibility is never decided inside a correction.
 
-For supported defects, assign bounded corrections. The Orchestrator changes interfaces and formal
-tests; the implementer changes assigned internal logic. Run affected ticket and batch gates, form a
-new clean assembled candidate, and dispatch a fresh acceptor with the same bounded criteria and prior
-findings. Reassess the applicability of earlier observations to the new subject. Review covers the
-corrections and their interactions while accounting for every assigned criterion.
+For fixes, set the ticket back to `doing` and assign bounded corrections by pointing at the verdict
+path and finding IDs. The Orchestrator changes interfaces and formal tests; the implementer changes
+assigned internal logic. Rerun every gate, then write the next brief with each previous finding's
+disposition. The next round judges those findings, the new diff, and the interactions it touches; it
+does not reopen unrelated history.
 
-A COMPLETED verdict plus valid observations allows acceptance of the covered claims. Close a ticket
-only when all its applicable criteria are established on the accepted candidate. Absence from a defect
-list is not approval. A changed candidate needs applicable independent judgement before acceptance;
-passing gates alone does not establish it. Findings outside the batch remain with their existing owner.
+On `COMPLETED`, check the boxes the round established and log it. When every applicable criterion is
+checked, collect the ticket under [Integrate](integration.md#integrate). A changed commit needs a new
+round before acceptance; passing gates alone does not establish it.
 
-If correction, verification, or a needed decision cannot proceed, record the concrete blocker and next
-owner in the review's Current round. Continue only after a change, new evidence, or an owner decision
-provides a defensible next action. Review is complete when the record establishes the covered claims
-and each member ticket has an evidence-backed disposition.
+If correction, verification, or a needed decision cannot proceed, set the ticket to `blocked` with a
+Log line naming the blocker and its owner. Continue only after a change, new evidence, or an owner
+decision provides a defensible next action.

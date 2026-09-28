@@ -96,8 +96,9 @@ to keep in sync.
 
 Before release, walk these cases against the candidate: direct Orchestrator work, a fresh implementer
 and acceptor, dependent tickets, independent parallel tickets, an integration ticket, RED gate
-preparation, non-TDD direct review, correction and re-review, a milestone review from a detached
-checkout while the lane continues, a merge conflict after acceptance, blocked gates, an unreviewable
+preparation, non-TDD direct review, correction and re-review, a review round that runs while the
+Orchestrator works the next frontier ticket, a milestone review from a detached checkout while the
+lane continues, a merge conflict after acceptance, blocked gates, an unreviewable
 assignment, stale gate results, persistence drift, and a profile update between old and fresh
 attempts. Check each path's authority, stop, completion, criterion coverage, and record owner.
 

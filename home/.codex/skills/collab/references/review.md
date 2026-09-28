@@ -15,8 +15,10 @@ The Orchestrator writes `tickets/<id>/review-NN.md` from the dev-flow
 [review round](../../dev-flow/references/records.md#review-rounds) template, sets the ticket to
 `review` with a Log line, and dispatches one acceptor whose dispatch names only that brief and the
 verdict path. The brief is the dispatch: its content lives in the file, not in the message. Freeze the
-review checkout until the verdict. To keep working on the ticket's next milestone, give the acceptor a
-detached worktree at the subject commit and continue in the lane.
+review checkout until the verdict, and while the round is out, work the next
+[frontier](../../dev-flow/references/planning.md#parallel-tickets) ticket. To keep working on the
+ticket's next milestone instead, give the acceptor a detached worktree at the subject commit and
+continue in the lane.
 
 The acceptor reads the brief, the ticket's `#acceptance` and `#scenarios`, the diff, declarations,
 callers, tests, and gate summaries. It judges every criterion the round names and directly related

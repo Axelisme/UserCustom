@@ -65,12 +65,15 @@ settled, and independently checkable.
 
 ## Parallel tickets
 
-Select the largest set of `ready ▶` tickets whose write scopes do not collide, and materialize shared
-interface prerequisites first. Present the tickets' relationships, align each one, and dispatch a
-ticket as soon as its contract, seed, gates, checkout, and environment are ready. While children run,
-prepare or judge other tickets. A blocked ticket does not stop unrelated work.
+The **frontier** is the `ready ▶` tickets on the board; to-tickets shapes it through the slicing and
+its blocking edges. Work the frontier: select the largest set of frontier tickets whose write scopes
+do not collide, and materialize shared interface prerequisites first. Tickets whose write scopes
+collide run in turn. Present the tickets' relationships, align each one, and dispatch a ticket as
+soon as its contract, seed, gates, checkout, and environment are ready. While children run or a
+review round is out, implement, prepare, or judge the next frontier ticket. A blocked ticket does not
+stop unrelated work.
 
-Stop when write scopes collide, dependencies are unclear, or a shared choice lacks user confirmation.
+Stop when dependencies are unclear or a shared choice lacks user confirmation.
 Selection is complete when each active ticket has one owner, one writer, a ready contract, and an
 independent completion path.
 

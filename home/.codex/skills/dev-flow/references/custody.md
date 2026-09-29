@@ -17,19 +17,21 @@ entries on each reorientation. Supporting proposals may live at exact pointers a
 the order itself stays inline. Retain existing valid orders under their original conditions until
 they lapse or the user revokes or replaces them.
 
-**Resolve ratification by address.** Before asking for assent, persist the proposal; then store the
-user's quote and a pointer to that frozen text. Preserve the approved text and obtain new ratification
+**Resolve ratification by address.** Before asking for assent, persist the proposal; then write
+the user's quote to `decisions/NNNN-slug.md` with a pointer to that frozen text. Preserve the approved text and obtain new ratification
 for amendments. An antecedent recovered after the fact carries an explicit `reconstructed` label.
 
 **Keep verbatim quotes on one line.** A verbatim `「...」` quote must open and close on one physical line because line wrapping makes exact custody ambiguous.
 
-**Retire by user authority.** An order lapses only when its stated condition fires, a later user
-message revokes or replaces it, or the task is archived. Move it intact to the retired record with
-date and reason. Keep overlapping orders separate: the newest governs addressed points and all
+**Retire by user authority.** An order lapses only when its stated condition fires or a later user
+message revokes or replaces it; archiving the task leaves INDEX as it stood. Move a lapsed order
+intact from INDEX to `decisions/NNNN-retire-<slug>.md` with date and reason, quoting a revocation
+verbatim there. Keep overlapping orders separate: the newest governs addressed points and all
 other in-force clauses remain. Ask whether an ambiguous new order narrows or replaces an old one.
 
-**Apply the approved scope.** INDEX's `spec:` names the frozen scope. Follow that source before
-changing its boundary, cite the frozen file, and obtain user approval for a changed boundary.
+**Apply the approved scope.** `spec/scope.md` states the approved scope and links the frozen decisions
+and proposals that govern it. Follow it before changing its boundary, cite the frozen file, and obtain
+user approval for a changed boundary.
 
 **Mutate from user authority.** A custody change requires either a current user message or an
 in-force task-scoped user grant that names that mutation and whose conditions hold. The record

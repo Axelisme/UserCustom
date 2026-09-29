@@ -49,7 +49,8 @@ Awaiting design discussion and user confirmation.
 {{CHECKS}}
 
 ## User decisions
-<!-- Each entry: scenario, impact, options, recommendation, and the user's answer. -->
+<!-- Each entry: the question (scenario, impact, options, recommendation) and a link to the user's
+     answer in `../../decisions/NNNN-slug.md`. -->
 None.
 
 ## Plan
@@ -57,4 +58,5 @@ None.
 
 ## Log
 <!-- Always the last section; locate shows its last line on the INDEX board. Append one line per
-     event, newest last: `- MM-DD HH:MM → <status>: <reason or pointer>`. -->
+     event, newest last: `- MM-DD HH:MM → <status>: <reason or pointer>`. Append with
+     printf -- "- $(date '+%m-%d %H:%M') → <status>: <reason>\n" >> <this file> -->

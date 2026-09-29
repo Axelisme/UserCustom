@@ -61,8 +61,9 @@ mechanical gates applicable to each ticket. Prefer existing focused behavior tes
 checks, and relevant typecheck, lint, or build commands. Add behavior tests only at confirmed seams or
 contracts under [Test ownership](#test-ownership). Read the tdd skill when using red-green cycles.
 
-In Mechanical gates, record the checked property and criterion, command/selection and working directory,
-environment, timeout, execution owner, and pass condition. Verify the command and prerequisites are
+In Mechanical gates, record the checked property and criterion, command/selection and working directory
+(with the path and sha256 of a script that lives outside the commit), environment, timeout,
+execution owner, and pass condition. Verify the command and prerequisites are
 usable. If no mechanical gate applies, state why and name the direct-review observation and owner.
 Review prose, document wording, static content, configuration values, and repository data directly;
 do not create tests of those facts to fill the gate list. A validation driver may run checks, but its

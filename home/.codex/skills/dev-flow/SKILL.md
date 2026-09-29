@@ -10,8 +10,9 @@ and landing. Read both short entries when orchestrating a task, then open only t
 routed below.
 
 Every task has one container under `.agent_state/plans/<task-id>/`: INDEX with the Goal, a Kanban
-board of tickets, and the Standing orders; the approved scope under `spec/`; and one directory per
-ticket holding the ticket, its review rounds, and its history. Every bounded implementation has a
+board of tickets, and the Standing orders; the approved scope in `spec/scope.md`; the user's answers
+under `decisions/`; investigation output and inventories under `research/`; task scripts under
+`scripts/`; and one directory per ticket holding the ticket, its review rounds, and its history. The `tracker` ticket carries the task's own status. Every bounded implementation has a
 ticket, including direct Orchestrator work. Each fact has one owner record;
 [Maintain the record](references/records.md#maintain-the-record) lists them.
 
@@ -36,7 +37,7 @@ several pointers in order.
 Each selected section states its inputs, stop conditions, and completion condition. Open
 [custody](references/custody.md) before admitting or applying a Standing order, changing approved
 scope, or landing. Open [record permissions](references/lane-authority.md) when dispatching a role
-that writes a gate summary or a verdict.
+that writes a gate summary or a verdict, and before running gates yourself.
 
 ## Core invariants
 
@@ -46,6 +47,7 @@ that writes a gate summary or a verdict.
   configuration, repository data, responsibility placement, and other static facts.
 - Every status change gets a Log line. Maintain Standing orders under [custody](references/custody.md).
 - A ticket closes when a COMPLETED review round, or the gates of a gates-only ticket, covers every
-  applicable criterion and the candidate is collected.
+  applicable criterion and its candidate, if any, is collected. The tracker stays `doing` until the
+  user completes or abandons the task.
 - Capture valuable out-of-scope findings through candidate-backlog. Current acceptance gaps remain in
   this task.

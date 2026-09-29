@@ -11,9 +11,10 @@ route to a few self-contained operation documents, which lowers routine reading 
 authority or completion rules behind an implied second read.
 
 The record follows conventions agents already know, so it needs few rules: the INDEX board is a Kanban
-view, a ticket is a GitHub issue with an append-only Log as its comment thread, and a review round is a
-PR review that happens before merge. Each file has one writer and a next reader, so a missing file
-surfaces at the step that needs it rather than going stale unnoticed.
+view, a ticket is a GitHub issue with an append-only Log as its comment thread, the tracker is the
+task's tracking issue, and a review round is a PR review that happens before merge. Each file has one
+writer and a next reader, so a missing file surfaces at the step that needs it rather than going
+stale unnoticed.
 
 The Orchestrator implements most work itself. Implementers run weaker models, and a writer that can
 edit the tests it must pass tends to weaken them, so the Orchestrator keeps formal tests and
@@ -38,7 +39,7 @@ another brief.
 
 | Role | Routine input | Writes | Excluded unless a concrete question requires it |
 |---|---|---|---|
-| Orchestrator | Both short entries, INDEX, selected operation sections, the tickets in flight, receiver contract and result | INDEX Goal and Standing orders, tickets, review briefs, its own gate summaries | Other operations, complete profile bodies, inactive tickets and logs |
+| Orchestrator | Both short entries, INDEX, selected operation sections, the tickets in flight, receiver contract and result | INDEX Goal and Standing orders, tickets including the tracker, decisions, review briefs, its own gate summaries | Other operations, complete profile bodies, inactive tickets and logs |
 | Implementer | Injected profile, bounded dispatch, named contract anchors, repository instructions, technical skills, seed/caller/test locations, environment, gates, verdict findings for a correction | The lane and its gate summary | INDEX, other tickets, landing and archive rules |
 | Acceptor | Injected profile and one review brief: subject, baseline, criteria, gate summary paths, prior finding dispositions | One verdict file | Implementation sequence, provisioning, scheduling, landing, gate execution procedures |
 

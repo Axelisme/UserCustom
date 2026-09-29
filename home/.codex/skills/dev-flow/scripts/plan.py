@@ -15,8 +15,8 @@ from typing import NoReturn
 
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 # Frontmatter schemas: field name -> value kind. A "list" is a flow sequence of flat scalars.
-INDEX_FIELDS = {"task_id": "scalar", "spec": "scalar"}
-INDEX_REQUIRED = ("task_id", "spec")
+INDEX_FIELDS = {"task_id": "scalar"}
+INDEX_REQUIRED = ("task_id",)
 TICKET_FIELDS = {"id": "scalar", "status": "scalar", "depends_on": "list", "branch": "scalar"}
 TICKET_REQUIRED = ("id", "status")
 # The Kanban lifecycle. "unknown" is a reporting bucket, not an authorable status.
@@ -24,9 +24,12 @@ TICKET_STATES = ("todo", "ready", "doing", "review", "blocked", "closed", "dropp
 FRONTMATTER_MAX_BYTES = 16 * 1024
 # A record past its budget still locates; `size_warnings` names it so it can be condensed.
 # Resume, dispatch, and wake-up reads pay for these files by the byte, so the budget is bytes, not
-# lines. A ticket's history.md and its review rounds sit outside those reads and have no budget.
-SIZE_WARN_BYTES = {"index": 8 * 1024, "ticket": 20 * 1024}
+# lines. A ticket's history.md and its review rounds sit outside those reads and have no budget. INDEX's
+# budget leaves out the generated board, which an author cannot shorten.
+SIZE_WARN_BYTES = {"index": 4 * 1024, "ticket": 20 * 1024}
 TICKET_FILE = "ticket.md"
+# The task-level status thread ships with every task and heads the board, like a pinned issue.
+TRACKER_ID = "tracker"
 # INDEX's generated board: `locate` owns everything from this heading to the next `## ` heading.
 BOARD_HEADING = "## Tickets"
 BOARD_NOTE = (
@@ -531,26 +534,26 @@ def _read_yaml_frontmatter(
                 return _plain_yaml_frontmatter(b"".join(chunks).decode("utf-8"), fields, required)
 
 
-def _read_index(directory: Path) -> tuple[str | None, str | None, dict[str, object] | None]:
+def _read_index(directory: Path) -> tuple[str | None, dict[str, object] | None]:
     index = directory / "INDEX.md"
     if index.is_symlink() or not index.is_file():
-        return None, None, {"code": "index_frontmatter_unavailable", "message": "INDEX.md is not a regular file"}
+        return None, {"code": "index_frontmatter_unavailable", "message": "INDEX.md is not a regular file"}
     try:
         values = _read_yaml_frontmatter(index, INDEX_FIELDS, INDEX_REQUIRED)
     except (OSError, UnicodeError, ValueError) as exc:
-        return None, None, {"code": "index_frontmatter_unavailable", "message": str(exc)}
-    task_id, spec = str(values["task_id"]), str(values["spec"])
+        return None, {"code": "index_frontmatter_unavailable", "message": str(exc)}
+    task_id = str(values["task_id"])
     if not SAFE_ID.fullmatch(task_id) or not task_id.isascii():
-        return None, None, {
+        return None, {
             "code": "index_frontmatter_unavailable",
             "message": "task id is invalid",
         }
     if task_id != directory.name:
-        return None, None, {
+        return None, {
             "code": "index_frontmatter_unavailable",
             "message": "task id does not match its container",
         }
-    return task_id, spec, None
+    return task_id, None
 
 
 def _empty_ticket_counts(*, unknown: bool = False) -> dict[str, int | None]:
@@ -641,7 +644,7 @@ def _scan_tickets(
         with os.scandir(tickets) as entries:
             directories = sorted(
                 (Path(entry.path) for entry in entries if not entry.name.startswith(".")),
-                key=lambda path: path.name,
+                key=lambda path: (path.name != TRACKER_ID, path.name),
             )
     except OSError:
         return *_unavailable_ticket_counts("ticket_directory_unreadable", None), None
@@ -733,6 +736,17 @@ def _entries(folder: Path) -> list[Path]:
         return []
 
 
+def _bytes_outside_board(data: bytes) -> int:
+    """INDEX's size without the generated board rows; the Tickets heading itself still counts."""
+    lines = data.split(b"\n")
+    heading = BOARD_HEADING.encode()
+    for start, line in enumerate(lines):
+        if line.rstrip() == heading:
+            end = next((n for n in range(start + 1, len(lines)) if lines[n].startswith(b"## ")), len(lines))
+            return len(b"\n".join([*lines[: start + 1], *lines[end:]]))
+    return len(data)
+
+
 def _size_warnings(root: Path, directory: Path) -> list[dict[str, object]]:
     """Name the INDEX or each ticket past its byte budget; unreadable files belong to parse_errors."""
     candidates = [(directory / "INDEX.md", "index")]
@@ -742,7 +756,7 @@ def _size_warnings(root: Path, directory: Path) -> list[dict[str, object]]:
         try:
             if path.parent.is_symlink() or path.is_symlink() or not path.is_file():
                 continue
-            size = path.stat().st_size
+            size = _bytes_outside_board(path.read_bytes()) if kind == "index" else path.stat().st_size
         except OSError:
             continue
         if size > SIZE_WARN_BYTES[kind]:
@@ -825,7 +839,6 @@ def command_locate(root: Path, arguments: argparse.Namespace, *, control_root: s
             container=relative(root, expected),
             index=relative(root, expected / "INDEX.md"),
             task_id=None,
-            spec=None,
             tickets=_empty_ticket_counts(unknown=True),
             orientation="unavailable",
             parse_errors=[],
@@ -852,7 +865,6 @@ def command_locate(root: Path, arguments: argparse.Namespace, *, control_root: s
             index=None,
             candidates=candidates,
             task_id=None,
-            spec=None,
             tickets=_empty_ticket_counts(unknown=True),
             orientation="unavailable",
             parse_errors=[],
@@ -871,7 +883,7 @@ def command_locate(root: Path, arguments: argparse.Namespace, *, control_root: s
             "Make the named record path a real directory.",
             (relative(root, directory),),
         )
-    task_id, spec, index_error = _read_index(directory)
+    task_id, index_error = _read_index(directory)
     tickets, ticket_error, rows = _scan_tickets(directory)
     errors = [error for error in (index_error, ticket_error) if error is not None]
     orientation = "unavailable" if index_error else "partial" if ticket_error else "available"
@@ -891,7 +903,6 @@ def command_locate(root: Path, arguments: argparse.Namespace, *, control_root: s
         container=relative(root, directory),
         index=relative(root, directory / "INDEX.md"),
         task_id=task_id,
-        spec=spec,
         tickets=tickets,
         orientation=orientation,
         parse_errors=errors,

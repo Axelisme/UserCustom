@@ -6,6 +6,8 @@ Collect a ticket after its review rounds have accepted every applicable criterio
 after approval. Collect one ticket at a time with the selected runtime's collection operation while
 other tickets continue.
 
+Integration is the branch `wave/<task>/integration`, checked out at
+`.agent_state/worktrees/<task>/integration`, and each lane branches from it as `wave/<task>/<ticket>`.
 Merge the accepted lane into integration and run the ticket's gates on the result. A clean merge whose
 gates pass is collected: close the ticket with its Log line and retire the lane. A conflict, or a clean
 merge whose gates fail, produces an unreviewed change: fix it on the lane under one writer, rerun the
@@ -28,7 +30,8 @@ Read dev-flow custody before applying a durable grant. Push needs separate autho
 authority, stop at reviewed integration.
 
 Before landing, confirm every ticket in the landing candidate is `closed`, including its integration
-tickets, and that integration's gates pass. Confirm persistence has no staged changes, tracked unstaged
+tickets (the tracker delivers no candidate and stays `doing` until archive), and that integration's
+gates pass. Confirm persistence has no staged changes, tracked unstaged
 changes, or ordinary untracked files; ask the user about untracked files you do not recognize.
 Reconcile persistence drift into integration and regain applicable judgement before landing. Managed
 landing creates a two-parent merge with the previous persistence head first and the judged integration
@@ -38,7 +41,7 @@ Inventory owned resources before retirement, then remove the task-owned temporar
 worktrees, and branches whose purpose is complete. Delete only files this task created; stop and ask
 about an unrecognized untracked file. Managed retirement may delete a lane's untracked and ignored
 files, including its gate logs. Record each retained resource's owner and cleanup condition in its
-ticket's Log.
+ticket's Log, or in the tracker's when no ticket owns it.
 
 Stop on missing authority, persistence dirt, live consumer handoff risk, candidate drift, hook failure,
 unaccepted changes, or unrecognized files. Completion requires confirmed integration or landing and

@@ -11,7 +11,8 @@ exist, each to one file named in the dispatch:
 
 The Orchestrator's own gate runs go to `orchestrator.md` in the same `runs/<short-sha>/` directory of
 the checkout where they ran. A manual or external observation is recorded the same way, by whoever
-performed it.
+performed it; for the user's own, the Orchestrator quotes their report. Run a baseline in the lane, on
+its starting commit, so its results never share a directory with another task's.
 
 ## A gate you cannot close honestly
 

@@ -1,11 +1,11 @@
 ---
 task_id: {{TASK_ID}}
-spec: none
 ---
 # {{TASK_ID}}
 
 ## Goal
-<!-- The user-visible outcome, in one or two sentences. Scope lives in the `spec` file. -->
+<!-- The outcome the user asked for, in one or two sentences; it changes only when the user redefines
+     it. Scope is `spec/scope.md`, decisions are `decisions/`, and progress is the board below. -->
 Not yet recorded.
 
 ## Tickets

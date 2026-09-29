@@ -5,24 +5,30 @@
 Run `scripts/plan.py locate <task-id>`; for an unknown ID, run `list` and use a returned `lookup_id`.
 Locate regenerates the INDEX board. Read INDEX: Goal, the board, and every active Standing order.
 
-On the board, the tickets in `doing`, `review`, and `blocked` are the work in flight, and `ready ▶`
-marks tickets that can start. For each ticket in flight, read its `#acceptance`, `#plan`, and the
-tail of `#log` in one `mdsec` call, and for a ticket in `review`, its latest `review-NN.md` and
-verdict. When a Log line names a checkout, its `git log` and `git status` supply the commits since.
-Open contracts, specs, and source when the action that uses them starts.
+The tracker heads the board; its latest line is the task's phase and whom it waits on. The tickets in
+`doing`, `review`, and `blocked`, and the `todo` ticket the tracker names, are the work in flight, and
+`ready ▶` marks tickets that can start. For each ticket in flight, read its `#acceptance` and `#plan`
+in one `mdsec` call and the last lines of its Log with `tail -n 5 <ticket.md>`, and for a ticket in
+`review`, its latest `review-NN.md` and verdict. When a Log line names a checkout, its `git log` and
+`git status` supply the commits since. Open contracts, specs, and source when the action that uses
+them starts.
 
 The Orchestrator stays read-only until it has one bounded action, its owner, its checkout, and the
-applicable authority. When the board or a Log cannot say what a ticket is doing, repair that ticket's
+applicable authority. When the board cannot name the next action, record the task's phase and whom
+it waits on in the tracker's Log. When a Log cannot say what a ticket is doing, repair that ticket's
 record from its checkout and Git, or ask the user when the choice is theirs. Resume is complete when
 one bounded action and owner are known.
 
 ## Plan
 
 Inputs are the requested outcome, repository facts that affect scope, and current user authority.
-Create the task with `scripts/plan.py create`, write Goal, and set `spec:` to the approved scope
-file. Put confirmed scope in `spec/`, not INDEX. The task records only authority that differs from
-the skill and repository defaults. Read the scope before ticket planning, alignment, new-scope
-choices, or review-driven design changes.
+Create the task with `scripts/plan.py create`, which adds the tracker and a draft `spec/scope.md`;
+write Goal and the scope. Put confirmed scope in `spec/scope.md` and the user's answers in
+`decisions/`, not INDEX. Create the task when the first investigation starts, with the tracker
+reading `planning: investigating`; investigation output and inventories go to `research/`, rerunnable
+scripts to `scripts/`, and a proposal awaiting the user's answer to `spec/`. The task records only
+authority that differs from the skill and repository defaults. Read the scope before ticket
+planning, alignment, new-scope choices, or review-driven design changes.
 
 Design the smallest end-to-end increment that meets the request. Read codebase-design when deciding
 module boundaries or public interfaces. Use to-spec for a frozen implementation contract and

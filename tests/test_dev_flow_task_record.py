@@ -133,12 +133,15 @@ def board_section(index: Path) -> str:
     return text.split("## Tickets\n", 1)[1].split("\n## ", 1)[0].strip()
 
 
-def counts(**states: int) -> dict[str, int | None]:
+def counts(*, tracker: bool = True, **states: int) -> dict[str, int | None]:
     """Expected `locate` ticket counts, keyed from the script's own state list.
 
     Keying off `plan.TICKET_STATES` rather than a literal is what makes these
-    assertions notice a new state instead of ignoring it.
+    assertions notice a new state instead of ignoring it. `create` ships the
+    tracker, which counts as one `doing` ticket unless the test removed it.
     """
+    if tracker:
+        states["doing"] = states.get("doing", 0) + 1
     unreadable = states.pop("unreadable", 0)
     unknown = sorted(set(states) - set(plan.TICKET_STATES))
     assert not unknown, unknown
@@ -429,21 +432,32 @@ class TaskRecordTests(unittest.TestCase):
                     ".agent_state/plans/demo/research",
                     ".agent_state/plans/demo/scripts",
                     ".agent_state/plans/demo/spec",
-                    ".agent_state/plans/demo/standing-orders",
+                    ".agent_state/plans/demo/spec/scope.md",
                     ".agent_state/plans/demo/tickets",
+                    ".agent_state/plans/demo/tickets/tracker",
+                    ".agent_state/plans/demo/tickets/tracker/ticket.md",
                 ],
             )
-            for scaffolded in ("tickets", "spec", "research", "decisions", "standing-orders"):
+            for scaffolded in ("research", "decisions", "scripts"):
                 self.assertTrue((record(root) / scaffolded).is_dir(), scaffolded)
                 self.assertEqual(list((record(root) / scaffolded).iterdir()), [], scaffolded)
             self.assertFalse((record(root) / "artifacts").exists())
             self.assertEqual(
                 sorted(path.name for path in record(root).iterdir()),
-                ["INDEX.md", "decisions", "research", "scripts", "spec", "standing-orders", "tickets"],
+                ["INDEX.md", "decisions", "research", "scripts", "spec", "tickets"],
+            )
+            self.assertEqual(
+                (record(root) / "spec" / "scope.md").read_text(encoding="utf-8").splitlines()[0],
+                "Status: draft",
+            )
+            tracker = (record(root) / "tickets" / "tracker" / "ticket.md").read_text(encoding="utf-8")
+            self.assertEqual(
+                tracker.split("---", 2)[1].strip().splitlines(),
+                ["id: tracker", "status: doing", "depends_on: []"],
             )
             created = (record(root) / "INDEX.md").read_text(encoding="utf-8")
             frontmatter = created.split("---", 2)[1].strip().splitlines()
-            self.assertEqual(frontmatter, ["task_id: demo", "spec: none"])
+            self.assertEqual(frontmatter, ["task_id: demo"])
             self.assertNotIn("{{", created, "every placeholder the script owns must be substituted")
 
             create_help = run_plan(root, "create", "--help")
@@ -505,10 +519,14 @@ class TaskRecordTests(unittest.TestCase):
         templates = SCRIPT.parent.parent / "templates"
         for name in ("ticket.md", "review.md", "verdict.md"):
             self.assertTrue((templates / "ticket" / name).is_file(), name)
-        # A shipped ticket.md would be parsed by locate, and its placeholder id fails validation:
-        # one unreadable ticket makes every count null, degrading orientation from birth.
+        # A shipped ticket.md would be parsed by locate, and a placeholder id fails validation: one
+        # unreadable ticket makes every count null, degrading orientation from birth. The tracker is
+        # the one ticket a task is born with, and its id is real.
         self.assertEqual(list((templates / "task" / "tickets").glob("*.md")), [])
-        self.assertEqual(list((templates / "task").rglob("ticket.md")), [])
+        self.assertEqual(
+            list((templates / "task").rglob("ticket.md")),
+            [templates / "task" / "tickets" / plan.TRACKER_ID / "ticket.md"],
+        )
 
     def test_a_ticket_is_its_directory_and_evidence_beside_it_is_not_counted(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -553,7 +571,7 @@ class TaskRecordTests(unittest.TestCase):
             self.assert_ok(run_plan(root, "create", "demo"), "create")
             task = record(root)
             (task / "INDEX.md").write_text(
-                "---\ntask_id: demo\nspec: none\n---\nNo conventional narrative sections.\n",
+                "---\ntask_id: demo\n---\nNo conventional narrative sections.\n",
                 encoding="utf-8",
             )
             legacy_body = (
@@ -576,7 +594,6 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(located["container"], ".agent_state/plans/demo")
             self.assertEqual(located["index"], ".agent_state/plans/demo/INDEX.md")
             self.assertEqual(located["task_id"], "demo")
-            self.assertEqual(located["spec"], "none")
             self.assertEqual(
                 located["tickets"],
                 counts(ready=1, closed=1),
@@ -625,18 +642,18 @@ class TaskRecordTests(unittest.TestCase):
 
             tickets = located["tickets"]
             for state in plan.TICKET_STATES:
-                self.assertEqual(tickets[state], 1, state)
-            self.assertEqual(tickets["total"], len(plan.TICKET_STATES))
+                self.assertEqual(tickets[state], 1 + (state == "doing"), state)
+            self.assertEqual(tickets["total"], len(plan.TICKET_STATES) + 1)
             self.assertEqual(
                 sorted(tickets),
                 sorted([*plan.TICKET_STATES, "total", "unreadable"]),
             )
 
-    def test_locate_reads_comments_and_hashes_in_flat_scalar_frontmatter(self) -> None:
+    def test_locate_reads_comments_and_quotes_in_flat_scalar_frontmatter(self) -> None:
         cases = (
-            ("artifacts/spec.md # frozen pointer", "artifacts/spec.md"),
-            ('"artifacts/spec#v1.md" # frozen pointer', "artifacts/spec#v1.md"),
-            ("'artifacts/spec#v2.md' # frozen pointer", "artifacts/spec#v2.md"),
+            ("demo # the task", "demo"),
+            ('"demo" # the task', "demo"),
+            ("'demo' # the task", "demo"),
         )
         for source, expected in cases:
             with self.subTest(source=source), tempfile.TemporaryDirectory() as temporary:
@@ -644,13 +661,13 @@ class TaskRecordTests(unittest.TestCase):
                 self.assert_ok(run_plan(root, "create", "demo"), "create")
                 index = record(root) / "INDEX.md"
                 index.write_text(
-                    index.read_text(encoding="utf-8").replace("spec: none", f"spec: {source}"),
+                    index.read_text(encoding="utf-8").replace("task_id: demo", f"task_id: {source}"),
                     encoding="utf-8",
                 )
 
                 located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
 
-                self.assertEqual(located["spec"], expected)
+                self.assertEqual(located["task_id"], expected)
                 self.assertEqual(located["orientation"], "available")
 
     def test_unsupported_yaml_degrades_orientation_instead_of_guessing(self) -> None:
@@ -659,14 +676,13 @@ class TaskRecordTests(unittest.TestCase):
             self.assert_ok(run_plan(root, "create", "demo"), "create")
             index = record(root) / "INDEX.md"
             index.write_text(
-                index.read_text(encoding="utf-8").replace("spec: none", "spec: [artifacts/spec.md]"),
+                index.read_text(encoding="utf-8").replace("task_id: demo", "task_id: [demo]"),
                 encoding="utf-8",
             )
 
             located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
 
             self.assertIsNone(located["task_id"])
-            self.assertIsNone(located["spec"])
             self.assertEqual(located["orientation"], "unavailable")
             self.assertEqual(
                 located["parse_errors"][0]["code"], "index_frontmatter_unavailable"
@@ -688,7 +704,6 @@ class TaskRecordTests(unittest.TestCase):
             self.assertEqual(located["container"], ".agent_state/plans/demo")
             self.assertEqual(located["index"], ".agent_state/plans/demo/INDEX.md")
             self.assertIsNone(located["task_id"])
-            self.assertIsNone(located["spec"])
             self.assertEqual(located["orientation"], "unavailable")
             self.assertEqual(
                 located["parse_errors"][0]["code"], "index_frontmatter_unavailable"
@@ -700,7 +715,7 @@ class TaskRecordTests(unittest.TestCase):
             self.assert_ok(run_plan(root, "create", "demo"), "create")
             task = record(root)
             (task / "INDEX.md").write_bytes(
-                b"---\ntask_id: demo\nspec: artifacts/spec.md\n---\nopaque:\xff\x00body"
+                b"---\ntask_id: demo\n---\nopaque:\xff\x00body"
             )
             (task / "tickets" / "T001").mkdir(parents=True)
             (task / "tickets" / "T001" / "ticket.md").write_bytes(
@@ -710,12 +725,38 @@ class TaskRecordTests(unittest.TestCase):
             located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
 
             self.assertEqual(located["orientation"], "available")
-            self.assertEqual(located["spec"], "artifacts/spec.md")
             self.assertEqual(
                 located["tickets"],
                 counts(ready=1),
             )
             self.assertEqual(located["parse_errors"], [])
+
+    def test_index_budget_leaves_out_the_generated_board(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assert_ok(run_plan(root, "create", "demo"), "create")
+            task = record(root)
+            for number in range(60):
+                write_ticket(task / "tickets", f"T{number:03d}-{'x' * 30}", "todo")
+            index = task / "INDEX.md"
+
+            located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+
+            self.assertGreater(index.stat().st_size, plan.SIZE_WARN_BYTES["index"], "the board alone is over budget")
+            self.assertEqual(located["size_warnings"], [], "an author cannot shorten the generated board")
+
+            index.write_text(
+                index.read_text(encoding="utf-8").replace(
+                    "Not yet recorded.", "g" * plan.SIZE_WARN_BYTES["index"], 1
+                ),
+                encoding="utf-8",
+            )
+            located = self.assert_ok(run_plan(root, "locate", "demo"), "locate")
+
+            self.assertEqual(
+                [warning["path"] for warning in located["size_warnings"]],
+                [".agent_state/plans/demo/INDEX.md"],
+            )
 
     def test_locate_warns_only_about_records_past_their_byte_budget(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -723,7 +764,7 @@ class TaskRecordTests(unittest.TestCase):
             self.assert_ok(run_plan(root, "create", "demo"), "create")
             task = record(root)
             budget = plan.SIZE_WARN_BYTES
-            header = b"---\ntask_id: demo\nspec: none\n---\n"
+            header = b"---\ntask_id: demo\n---\n"
             (task / "INDEX.md").write_bytes(header + b"\xff" * (budget["index"] + 1 - len(header)))
             long_ticket = write_ticket(task / "tickets", "T001-long", "ready", "x" * budget["ticket"])
             (long_ticket.parent / "history.md").write_bytes(b"h" * budget["ticket"] * 4)
@@ -764,7 +805,7 @@ class TaskRecordTests(unittest.TestCase):
         for label, index_text in (
             ("malformed", "---\ntask_id: malformed\nno closing marker\n"),
             ("legacy", "# legacy\n| task_id | legacy |\n## Current\nDo not parse me.\n"),
-            ("mismatched", "---\ntask_id: other\nspec: none\n---\n"),
+            ("mismatched", "---\ntask_id: other\n---\n"),
         ):
             with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
@@ -780,10 +821,9 @@ class TaskRecordTests(unittest.TestCase):
                 self.assertEqual(located["location"], "active")
                 self.assertEqual(located["orientation"], "unavailable")
                 self.assertIsNone(located["task_id"])
-                self.assertIsNone(located["spec"])
                 self.assertEqual(
                     located["tickets"],
-                    counts(ready=1),
+                    counts(ready=1, tracker=False),
                 )
                 self.assertEqual(len(located["parse_errors"]), 1)
                 self.assertEqual(
@@ -1047,6 +1087,29 @@ class TicketBoardTests(unittest.TestCase):
             )
             self.assertIn("| 04-lost | blocked | 99-missing (?) |", board)
 
+    def test_board_lists_the_tracker_first_and_shows_its_last_log_line(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_plan(root, "create", "demo")
+            tickets = record(root) / "tickets"
+            write_ticket(tickets, "00-first", "todo")
+            write_ticket(tickets, "a-later", "ready")
+
+            located = self.locate(root)
+
+            self.assertEqual([row["id"] for row in located["board"]], ["tracker", "00-first", "a-later"])
+            self.assertEqual(located["board"][0]["latest"], "—", "a fresh tracker has no Log entry yet")
+            with (tickets / "tracker" / "ticket.md").open("a", encoding="utf-8") as log:
+                log.write("- 09-29 20:00 planning: six tickets drafted, waiting on the user's choice of X\n")
+
+            located = self.locate(root)
+
+            self.assertEqual(
+                located["board"][0]["latest"],
+                "09-29 20:00 planning: six tickets drafted, waiting on the user's choice of X",
+            )
+            self.assertIn("| tracker | doing | — | — | 09-29 20:00 planning:", board_section(record(root) / "INDEX.md"))
+
     def test_board_is_rewritten_only_when_it_changes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -1096,7 +1159,8 @@ class TicketBoardTests(unittest.TestCase):
             self.assertEqual(located["orientation"], "partial")
             statuses = {row["id"]: row["status"] for row in located["board"]}
             self.assertEqual(
-                statuses, {"01-ok": "ready", "02-bad-list": "unreadable", "03-bad-field": "unreadable"}
+                statuses,
+                {"tracker": "doing", "01-ok": "ready", "02-bad-list": "unreadable", "03-bad-field": "unreadable"},
             )
             self.assertIn("| 02-bad-list | unreadable |", board_section(record(root) / "INDEX.md"))
 

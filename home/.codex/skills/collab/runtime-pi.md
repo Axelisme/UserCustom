@@ -90,7 +90,8 @@ return control or use the active goal's yield mechanism and let the terminal not
 session. Blocking on a child does not make it more authoritative.
 
 Yielding means you were away from the lane while it was written. When the terminal notification lands,
-reread the ticket named by the dispatch (`#acceptance`, `#plan`, and the tail of `#log`) and the file the
+reread the ticket named by the dispatch (`#acceptance`, `#plan`, and its last Log lines with
+`tail -n 5`) and the file the
 child names: an implementer's gate summary or an acceptor's verdict. Rebuild judgement from those files
 rather than memory or unrelated task history.
 

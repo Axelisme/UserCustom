@@ -4,15 +4,16 @@ The Orchestrator writes INDEX, tickets, review briefs, and acceptance checkboxes
 exist, each to one file named in the dispatch:
 
 - The **implementer** writes the gate summary for its final commit at
-  `<lane>/.agent_state/runs/<short-sha>/summary.md`, beside the raw logs: for each gate, the command
-  or selection, working directory, environment, result and exit status, and limitations. The
-  dispatch names the `runs/` directory; the implementer adds the commit's short SHA.
+  `runs/<short-sha>/summary.md` in the task container, beside the raw logs: for each gate, the
+  command or selection, working directory, environment, result and exit status, and limitations. The
+  dispatch names the absolute `runs/` path; the implementer adds the commit's short SHA.
 - The **acceptor** writes `review-NN.verdict.md` at the absolute path its review brief names.
 
-The Orchestrator's own gate runs go to `orchestrator.md` in the same `runs/<short-sha>/` directory of
-the checkout where they ran. A manual or external observation is recorded the same way, by whoever
-performed it; for the user's own, the Orchestrator quotes their report. Run a baseline in the lane, on
-its starting commit, so its results never share a directory with another task's.
+The Orchestrator's own gate runs go to `orchestrator.md` in the same `runs/<short-sha>/` directory.
+A manual or external observation is recorded the same way, by whoever performed it; for the user's
+own, the Orchestrator quotes their report. Run a baseline in the lane, on its starting commit.
+Only runs on a clean commit are recorded; a run on uncommitted work stays in stdout or a temporary
+file, so to keep a red run, commit the failing test first.
 
 ## A gate you cannot close honestly
 

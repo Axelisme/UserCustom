@@ -12,9 +12,10 @@ routed below.
 Every task has one container under `.agent_state/plans/<task-id>/`: INDEX with the Goal, a Kanban
 board of tickets, and the Standing orders; the approved scope in `spec/scope.md`; the user's answers
 under `decisions/`; investigation output and inventories under `research/`; task scripts under
-`scripts/`; and one directory per ticket holding the ticket, its review rounds, and its history. The `tracker` ticket carries the task's own status. Every bounded implementation has a
-ticket, including direct Orchestrator work. Each fact has one owner record;
-[Maintain the record](references/records.md#maintain-the-record) lists them.
+`scripts/`; gate results per commit under `runs/`; and one directory per ticket holding the ticket,
+its review rounds, and its history. The `tracker` ticket carries the task's own status. Every
+bounded implementation has a ticket, including direct Orchestrator work. Each fact has one owner
+record; [Maintain the record](references/records.md#maintain-the-record) lists them.
 
 On reorientation, run `scripts/plan.py locate <task-id>` from the main checkout and follow
 [Resume](references/planning.md#resume). Locate regenerates the INDEX board from ticket frontmatter.

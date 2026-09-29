@@ -430,6 +430,7 @@ class TaskRecordTests(unittest.TestCase):
                     ".agent_state/plans/demo/INDEX.md",
                     ".agent_state/plans/demo/decisions",
                     ".agent_state/plans/demo/research",
+                    ".agent_state/plans/demo/runs",
                     ".agent_state/plans/demo/scripts",
                     ".agent_state/plans/demo/spec",
                     ".agent_state/plans/demo/spec/scope.md",
@@ -438,13 +439,13 @@ class TaskRecordTests(unittest.TestCase):
                     ".agent_state/plans/demo/tickets/tracker/ticket.md",
                 ],
             )
-            for scaffolded in ("research", "decisions", "scripts"):
+            for scaffolded in ("research", "decisions", "scripts", "runs"):
                 self.assertTrue((record(root) / scaffolded).is_dir(), scaffolded)
                 self.assertEqual(list((record(root) / scaffolded).iterdir()), [], scaffolded)
             self.assertFalse((record(root) / "artifacts").exists())
             self.assertEqual(
                 sorted(path.name for path in record(root).iterdir()),
-                ["INDEX.md", "decisions", "research", "scripts", "spec", "tickets"],
+                ["INDEX.md", "decisions", "research", "runs", "scripts", "spec", "tickets"],
             )
             self.assertEqual(
                 (record(root) / "spec" / "scope.md").read_text(encoding="utf-8").splitlines()[0],

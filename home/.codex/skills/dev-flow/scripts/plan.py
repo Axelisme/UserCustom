@@ -357,7 +357,7 @@ def git_executable() -> str:
 
 
 def require_agent_state_ignored(root: Path, task_id: str) -> None:
-    """Refuse a Git root that would track `.agent_state`; lanes keep gate logs under it too.
+    """Refuse a Git root that would track `.agent_state`; lane worktrees live under it too.
 
     A root outside Git (an explicit `--repo` directory) has nothing to track, so it passes.
     """

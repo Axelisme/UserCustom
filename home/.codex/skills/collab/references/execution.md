@@ -34,7 +34,7 @@ runtime operation. The dispatch names:
   with read conditions, or explicit none;
 - runtime, interpreter, environment, caches, test selection, timeout, and cleanup exceptions;
 - prior blockers, stop conditions, escalation owner, and profile source for reorientation;
-- the lane's `.agent_state/runs/` directory for the gate summary.
+- the task's absolute `runs/` path for the gate summary.
 
 Stop on failed bootstrap, missing capability, ambiguous authority, or unexplained checkout changes.
 Preparation is complete when the bounded brief, writer, checkout, environment, and sources are usable
@@ -114,8 +114,8 @@ A gate timeout is incomplete, not passing. Rerun after a new change, new hypothe
 reproduction purpose; repeated unchanged diagnostics stop with the blocker. Use the ticket gates established during
 [Gate preparation](#gate-preparation); passing them makes a candidate ready for a review round.
 
-Completion requires a clean committed candidate and its gate summary at
-`<lane>/.agent_state/runs/<short-sha>/summary.md`, beside the raw logs: each command or selection,
+Completion requires a clean committed candidate and its gate summary at the task's
+`runs/<short-sha>/summary.md`, beside the raw logs: each command or selection,
 working directory, environment, result and exit status, and limitation. The result names the commit
 and the summary path. A blocked result aggregates known obstructions and names the next decision or
 execution owner.

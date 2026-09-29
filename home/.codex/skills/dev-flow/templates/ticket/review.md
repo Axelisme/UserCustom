@@ -11,7 +11,7 @@
 <!-- The acceptance criteria this round judges, by ID; other criteria of the ticket stay open. -->
 
 ## Observations
-<!-- Paths to the gate summaries for this subject, such as <lane>/.agent_state/runs/<sha>/summary.md.
+<!-- Paths to the gate summaries for this subject, such as ../../runs/<sha>/summary.md.
      Point to them; the acceptor reads them directly. -->
 
 ## Prior findings

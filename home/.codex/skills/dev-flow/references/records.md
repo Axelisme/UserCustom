@@ -18,7 +18,7 @@ Each fact has one **owner record**. Other records link to it.
 | Status, branch, milestones, and what happened | Ticket frontmatter, `## Plan`, and `## Log` |
 | One review round's brief | `tickets/<id>/review-NN.md`, written by the Orchestrator |
 | One review round's judgement | `tickets/<id>/review-NN.verdict.md`, written by the acceptor |
-| Gate results for a commit | `<checkout>/.agent_state/runs/<short-sha>/`, written by whoever ran the gates |
+| Gate results for a clean commit | `runs/<short-sha>/`, written by whoever ran the gates |
 | Commits, diffs, and progress between events | Git |
 | Investigation output, inventories, caller surveys, design analysis | `research/`, or `spec/` when it freezes a contract; the ticket cites it |
 | A proposal awaiting the user's answer | `spec/`, frozen once proposed |
@@ -113,8 +113,8 @@ Orchestrator's gate judgement for a gates-only ticket, on the collected candidat
 `status: closed` and end the Log with `→ closed: RNN COMPLETED, collected <commit>`.
 Dropped work keeps its unchecked criteria and a Log line with the reason and any replacement ticket.
 A replacement ticket may cite a criterion the original already passed as `accepted in <ticket> RNN`
-and check it. Gate logs and summaries retire with the lane, like CI logs; the verdict is the lasting
-record, so do not copy them.
+and check it. Gate logs and summaries stay in `runs/` and archive with the task, like CI logs kept
+with a PR; rounds and verdicts point to them rather than copy them.
 
 Closure is complete when the board shows the ticket closed and its lane is retired or has an owner
 and cleanup condition in the Log.

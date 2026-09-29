@@ -40,8 +40,8 @@ head second; its tree must equal the judged integration tree.
 Inventory owned resources before retirement, then remove the task-owned temporary files, processes,
 worktrees, and branches whose purpose is complete. Delete only files this task created; stop and ask
 about an unrecognized untracked file. Managed retirement may delete a lane's untracked and ignored
-files, including its gate logs. Record each retained resource's owner and cleanup condition in its
-ticket's Log, or in the tracker's when no ticket owns it.
+files; gate logs live in the task's `runs/` and stay. Record each retained resource's owner and
+cleanup condition in its ticket's Log, or in the tracker's when no ticket owns it.
 
 Stop on missing authority, persistence dirt, live consumer handoff risk, candidate drift, hook failure,
 unaccepted changes, or unrecognized files. Completion requires confirmed integration or landing and

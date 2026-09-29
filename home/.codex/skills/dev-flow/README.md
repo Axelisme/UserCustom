@@ -16,7 +16,7 @@ Other readable status values count as unknown without declaring their work accep
 without a `## Tickets` heading, an unreadable INDEX, and archived records are left unchanged.
 `create` scaffolds the task from `templates/task/`, including the `tracker` ticket and a draft
 `spec/scope.md`, and refuses a Git repository that would track `.agent_state`, because task records
-and lane gate logs both live there. The board lists the tracker first, like a pinned issue.
+and lane worktrees both live there. The board lists the tracker first, like a pinned issue.
 
 The record design follows four conventions agents already know: the INDEX board is a Kanban view,
 a ticket is a GitHub issue whose Log is its comment thread, the tracker is the task's tracking

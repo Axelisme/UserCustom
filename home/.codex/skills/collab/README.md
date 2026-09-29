@@ -68,8 +68,8 @@ The Orchestrator owns formal behavior tests and public interface declarations. I
 formal tests and use temporary probes, but return test or interface changes to the Orchestrator.
 Direct Orchestrator work keeps the same alignment, one-writer, gate, and review duties.
 
-Whoever runs a gate writes its summary beside the raw logs under the checkout's
-`.agent_state/runs/<short-sha>/`. The review brief points to those summaries; nobody retypes them.
+Whoever runs a gate on a clean commit writes its summary beside the raw logs in the task's
+`runs/<short-sha>/`. The review brief points to those summaries; nobody retypes them.
 Reuse a result when the exact commit, environment, selection, method, result, and limitations still
 apply. Missing summaries, changed subjects, wrong selections, timeouts, flaky results, or
 contradictions return to the execution owner. Acceptors read the summaries but never run tests,

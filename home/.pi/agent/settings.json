@@ -5,11 +5,14 @@
     "threshold": 2000
   },
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-6-astra",
-  "defaultThinkingLevel": "medium",
+  "defaultModel": "gpt-6-sol",
+  "defaultThinkingLevel": "xhigh",
   "compaction": {
     "modelOverrides": {
       "openai-codex/gpt-6-sol": {
+        "reserveTokens": 40000
+      },
+      "openai-codex/gpt-6.1-sol": {
         "reserveTokens": 40000
       },
       "openai-codex/gpt-6-astra": {
@@ -30,6 +33,7 @@
   "enabledModels": [
     "openai-codex/gpt-6-astra",
     "openai-codex/gpt-6-sol",
+    "openai-codex/gpt-6.1-sol",
     "openai-codex/gpt-6-luna",
     "antigravity/gemini-3.8-flash",
     "antigravity/claude-sonnet-4-6"

@@ -1,17 +1,22 @@
 {
-  "lastChangelogVersion": "0.87.1",
-  "theme": "dark",
+  "lastChangelogVersion": "0.99.1",
+  "theme": "legacy-dark",
   "absorb": {
     "threshold": 2000
   },
-  "defaultProvider": "openai-codex",
+  "selfCompact": {
+    "budgetTokens": 200000,
+    "warnRemainingTokens": 30000
+  },
+  "defaultProvider": "openai",
   "defaultModel": "gpt-6.1-sol",
   "defaultThinkingLevel": "high",
+  "defaultTools": [
+    "+codemode",
+    "+tool_search"
+  ],
   "compaction": {
     "modelOverrides": {
-      "openai-codex/gpt-6-sol": {
-        "reserveTokens": 40000
-      },
       "openai-codex/gpt-6.1-sol": {
         "reserveTokens": 40000
       },
@@ -24,28 +29,29 @@
     "/home/axel/Documents/VSCode/Typescript/pi-goal",
     "/home/axel/Documents/VSCode/Typescript/pi-herdr-subagents",
     "/home/axel/Documents/VSCode/Typescript/pi-absorb",
-    "/home/axel/Documents/VSCode/Typescript/pi-openai-server-compaction",
-    "npm:pi-mcp-adapter",
-    "npm:pi-openai-fast-mode",
-    "npm:pi-antigravity",
+    "/home/axel/Documents/VSCode/Typescript/pi-self-compact",
+    "npm:pi-openai-fast-mode@0.5.0",
+    "npm:pi-antigravity@0.8.1",
     "/home/axel/Documents/VSCode/Typescript/cache-stats"
   ],
   "enabledModels": [
-    "openai-codex/gpt-6-astra",
-    "openai-codex/gpt-6-sol",
-    "openai-codex/gpt-6.1-sol",
-    "openai-codex/gpt-6-luna",
+    "openai/gpt-6-astra",
+    "openai/gpt-6.1-sol",
+    "openai/gpt-6-luna",
     "antigravity/gemini-3.8-flash",
     "antigravity/claude-sonnet-4-6"
   ],
   "herdrSubagents": {
     "allowExtensions": [
+      "builtin:codemode",
+      "builtin:tool-search",
+      "builtin:mcp",
       "/home/axel/Documents/VSCode/Typescript/pi-absorb",
-      "/home/axel/Documents/VSCode/Typescript/pi-openai-server-compaction",
-      "npm:pi-openai-fast-mode",
-      "npm:pi-antigravity",
+      "npm:pi-openai-fast-mode@0.5.0",
+      "npm:pi-antigravity@0.8.1",
       "/home/axel/Documents/VSCode/Typescript/cache-stats",
       "/home/axel/UserCustom/home/.pi/agent/workarounds/herdr-first-prompt/index.ts"
     ]
-  }
+  },
+  "deviceId": "3cdcc3bc-d760-4ef0-923f-dba06b98f455"
 }

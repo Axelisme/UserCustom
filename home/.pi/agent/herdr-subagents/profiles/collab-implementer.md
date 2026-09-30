@@ -2,7 +2,7 @@
 name: collab-implementer
 description: Implement one bounded internal change as the sole writer and write its gate summary.
 modelList:
-  - openai-codex/gpt-6.1-sol:high
+  - openai/gpt-6.1-sol:high
 tools:
   - read
   - edit

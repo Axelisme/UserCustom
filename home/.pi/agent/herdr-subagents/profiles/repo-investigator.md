@@ -4,7 +4,7 @@ description: Build a read-only, source-grounded map of local code, call sites, t
 modelList:
   - antigravity/gemini-3.8-flash:high
   - antigravity/claude-sonnet-4-6:high
-  - openai-codex/gpt-6-luna:max
+  - openai/gpt-6-luna:max
 tools:
   - read
   - bash

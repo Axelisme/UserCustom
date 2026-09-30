@@ -57,6 +57,9 @@
       "showTrash": false,
       "trashFileManager": "default",
       "trashCustomCommand": "",
+      "magnification": false,
+      "magnificationScale": 130,
+      "magnificationProfile": "parabolic",
       "order": [],
       "widgets": [
         {
@@ -440,5 +443,5 @@
     }
   },
   "frameMode": "separate",
-  "configVersion": 34
+  "configVersion": 36
 }

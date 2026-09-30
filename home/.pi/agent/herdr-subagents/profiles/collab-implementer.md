@@ -4,6 +4,7 @@ description: Implement one bounded internal change as the sole writer and write 
 modelList:
   - openai/gpt-6.1-sol:high
 tools:
+  - codemode
   - read
   - edit
   - write

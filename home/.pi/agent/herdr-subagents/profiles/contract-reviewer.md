@@ -4,6 +4,7 @@ description: Judge every pinned contract option from one dispatched angle and sc
 modelList:
   - openai/gpt-6.1-sol:xhigh
 tools:
+  - codemode
   - read
   - bash
   - write

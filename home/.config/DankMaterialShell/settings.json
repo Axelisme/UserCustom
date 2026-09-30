@@ -280,7 +280,8 @@
       "barInsetPadding": 4,
       "batteryColorMode": "level",
       "surfaceColor": "default",
-      "barLengthMode": "full"
+      "barLengthMode": "full",
+      "widgetFollowInterfaceStyle": true
     },
     {
       "id": "dot1790348172767",
@@ -415,7 +416,8 @@
       "widgetPadding": 10,
       "barInsetPadding": 4,
       "batteryColorMode": "level",
-      "dot": true
+      "dot": true,
+      "widgetFollowInterfaceStyle": true
     }
   ],
   "builtInPluginSettings": {
@@ -438,5 +440,5 @@
     }
   },
   "frameMode": "separate",
-  "configVersion": 30
+  "configVersion": 34
 }

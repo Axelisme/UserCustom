@@ -6,6 +6,7 @@ modelList:
   - antigravity/claude-sonnet-4-6:high
   - openai/gpt-6-luna:max
 tools:
+  - codemode
   - read
   - bash
   - absorb

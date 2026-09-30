@@ -5,8 +5,8 @@
     "threshold": 2000
   },
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-6-sol",
-  "defaultThinkingLevel": "xhigh",
+  "defaultModel": "gpt-6.1-sol",
+  "defaultThinkingLevel": "high",
   "compaction": {
     "modelOverrides": {
       "openai-codex/gpt-6-sol": {

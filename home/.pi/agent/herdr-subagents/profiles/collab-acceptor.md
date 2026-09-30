@@ -2,7 +2,7 @@
 name: collab-acceptor
 description: Review one ticket's immutable commit against the criteria a review brief names and write the verdict.
 modelList:
-  - openai-codex/gpt-6-sol:max
+  - openai-codex/gpt-6.1-sol:xhigh
 tools:
   - read
   - bash

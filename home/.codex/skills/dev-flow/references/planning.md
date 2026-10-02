@@ -5,20 +5,23 @@
 Run `scripts/plan.py locate <task-id>`; for an unknown ID, run `list` and use a returned `lookup_id`.
 Locate regenerates the INDEX board. Read INDEX: Goal, the board, and every active Standing order.
 
-The tracker heads the board; its latest line is the task's phase and whom it waits on. The tickets in
-`doing`, `review`, and `blocked`, and the `todo` ticket the tracker names, are the work in flight, and
-`ready ▶` marks tickets that can start. For each ticket in flight, read its `#acceptance` and `#plan`
-in one `mdsec` call and the last lines of its Log with `tail -n 5 <ticket.md>`, and for a ticket in
-`review`, its logged round identity and verdict if available. Use the logged child ID and the runtime's
-run-control route to recover an active attempt; a separate brief file is not required. When a Log line
-names a checkout, its `git log` and `git status` supply the commits since. Open contracts, specs, and
-source when the action that uses them starts.
+The tracker heads the board. Read its Plan for task-level unfinished items, waiting conditions, and
+owner pointers. If a pending item disagrees with its question or decision owner, verify that original
+and repair the Plan. An unchecked item does not mean an answer is missing; an answer does not prove
+that a writer resumed. The tickets in `doing`, `review`, and `blocked`, and the `todo` ticket its Plan names,
+are the work in flight; `ready ▶` marks tickets that can start. Read the relevant ticket's
+`#acceptance` and `#plan` in one `mdsec` call. For execution or review, read the corresponding
+dispatch or round record in its Log and the verdict if available. Match the candidate and round,
+then use the child ID and the runtime's run-control route to verify the attempt. A past event is not
+current runtime state. If no unique correspondence or confirmed executor is available, stop.
+Use the named checkout's `git log` and `git status` to observe commits and local state. Open contracts,
+specs, and source when the action that uses them starts.
 
 The Orchestrator stays read-only until it has one bounded action, its owner, its checkout, and the
-applicable authority. When the board cannot name the next action, record the task's phase and whom
-it waits on in the tracker's Log. When a Log cannot say what a ticket is doing, repair that ticket's
-record from its checkout and Git, or ask the user when the choice is theirs. Resume is complete when
-one bounded action and owner are known.
+applicable authority. If the board and tracker Plan cannot name that action, repair the Plan from
+known owner records and observed Git/runtime facts, or ask the owner for the missing decision.
+Do not infer an action by scanning the task graph or treating the last Log line as current state.
+Resume is complete when one bounded action and owner are known.
 
 ## Handoff
 
@@ -26,10 +29,11 @@ Use this operation before handing off Orchestrator context for compaction or a s
 It prepares recovery through [Resume](#resume). Parent-to-child dispatch remains a complete bounded
 assignment under Collab; a recovery entry is not a substitute for that assignment.
 
-1. Update durable facts in their [owner records](records.md#maintain-the-record) before handoff.
-   Record decisions, progress, blockers, and the next bounded action where they belong. Use
-   `scripts/plan.py locate <task-id>` to refresh the INDEX board. Repair missing record state rather
-   than making the handoff its only copy.
+1. Check the necessary facts against their [owner records](records.md#maintain-the-record).
+   Repair missing authority, decisions, execution identities, blockers, or acceptance results before
+   handoff. If the required facts are already recorded and unchanged, make no task changes. Refresh
+   the INDEX board with `scripts/plan.py locate <task-id>` when changed frontmatter requires it.
+   A handoff message must not become the only copy of a durable fact.
 2. Give the minimal recovery entry: control root, task ID, and INDEX path. Add exact source
    paths/anchors only when needed for the next action and not already reachable through that entry.
    Refer to recorded goals, instructions, authority, decisions, progress, and evidence; leave their
@@ -54,9 +58,10 @@ their authority.
 Inputs are the requested outcome, repository facts that affect scope, and current user authority.
 Create the task with `scripts/plan.py create`, which adds the tracker and a draft `spec/scope.md`;
 write Goal and the scope. Put confirmed scope in `spec/scope.md` and the user's answers in
-`decisions/`, not INDEX. Create the task when the first investigation starts, with the tracker
-reading `planning: investigating`; investigation output and inventories go to `research/`, rerunnable
-scripts to `scripts/`, and a proposal awaiting the user's answer to `spec/`. The task records only
+`decisions/`, not INDEX. Create the task when the first investigation starts, with the tracker's
+Plan pointing to the unfinished scope question or planning deliverable. Assigned research deliverables
+follow the [record rules](records.md#maintain-the-record); rerunnable task scripts go to `scripts/`,
+and a proposal awaiting the user's answer to `spec/`. The task records only
 authority that differs from the skill and repository defaults. Read the scope before ticket
 planning, alignment, new-scope choices, or review-driven design changes.
 

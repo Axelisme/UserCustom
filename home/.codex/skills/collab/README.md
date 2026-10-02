@@ -11,7 +11,7 @@ route to a few self-contained operation documents, which lowers routine reading 
 authority or completion rules behind an implied second read.
 
 The record follows conventions agents already know, so it needs few rules: the INDEX board is a Kanban
-view, a ticket is a GitHub issue with an append-only Log as its comment thread, the tracker is the
+view, a ticket is a GitHub issue whose append-only Log indexes necessary events, the tracker is the
 task's tracking issue, and a review round is a PR review that happens before merge. Each file has one
 writer and a next reader, so a missing file surfaces at the step that needs it rather than going
 stale unnoticed.

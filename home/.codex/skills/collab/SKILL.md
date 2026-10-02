@@ -14,8 +14,9 @@ Persistence is the user's target branch. Every checkout has one writer at a time
 to one exact clean commit and tree with a baseline and named criteria, like a PR review: it happens on
 the lane, and the ticket is collected after it passes. The Orchestrator owns intent, assignment,
 formal tests, interface declarations, observation sufficiency, acceptance, and final disposition, and
-implements most tickets itself. Every status change gets a Log line in the ticket; dev-flow's
-[record operations](../dev-flow/references/records.md#maintain-the-record) list each fact's owner.
+implements most tickets itself. Dev-flow's
+[record operations](../dev-flow/references/records.md#maintain-the-record) define which changed facts
+to save and each fact's owner.
 Standing-order changes follow dev-flow custody.
 
 Existing attempts retain the contract injected at dispatch; a profile currently on disk governs only a

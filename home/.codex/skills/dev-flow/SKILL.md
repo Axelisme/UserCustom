@@ -9,9 +9,11 @@ Dev-flow owns the durable task record. [Collab](../collab/SKILL.md) owns writers
 and landing. Read both short entries when orchestrating a task, then open only the operation sections
 routed below.
 
+The task record preserves delivery agreements, collaboration continuity, and acceptance evidence.
+
 Every task has one container under `.agent_state/plans/<task-id>/`: INDEX with the Goal, a Kanban
 board of tickets, and the Standing orders; the approved scope in `spec/scope.md`; the user's answers
-under `decisions/`; investigation output and inventories under `research/`; task scripts under
+under `decisions/`; assigned research deliverables under `research/`; task scripts under
 `scripts/`; gate results per commit under `runs/`; and one directory per ticket holding the ticket,
 its review rounds, and its history. The `tracker` ticket carries the task's own status. Every
 bounded implementation has a ticket, including direct Orchestrator work. Each fact has one owner
@@ -47,7 +49,8 @@ that writes a gate summary or a verdict, and before running gates yourself.
   default does not rewrite it.
 - Tests establish observable behavior through interfaces. Direct review establishes prose, structure,
   configuration, repository data, responsibility placement, and other static facts.
-- Every status change gets a Log line. Maintain Standing orders under [custody](references/custody.md).
+- Update changed facts under [Maintain the record](references/records.md#maintain-the-record).
+  Maintain Standing orders under [custody](references/custody.md).
 - A ticket closes when a COMPLETED review round, or the gates of a gates-only ticket, covers every
   applicable criterion and its candidate, if any, is collected. The tracker stays `doing` until the
   user completes or abandons the task.

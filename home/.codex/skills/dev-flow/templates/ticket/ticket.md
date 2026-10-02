@@ -57,6 +57,5 @@ None.
 <!-- Optional milestones when the ticket is built and reviewed in parts; tag each with its criteria. -->
 
 ## Log
-<!-- Always the last section; locate shows its last line on the INDEX board. Append one line per
-     event, newest last: `- MM-DD HH:MM → <status>: <reason or pointer>`. Append with
-     printf -- "- $(date '+%m-%d %H:%M') → <status>: <reason>\n" >> <this file> -->
+<!-- Necessary collaboration events and acceptance grounds, newest last. Status lives in frontmatter.
+     Recording rules: ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->

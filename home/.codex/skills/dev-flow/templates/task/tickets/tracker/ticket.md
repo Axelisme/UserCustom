@@ -16,11 +16,10 @@ ends when the user completes or abandons it.
 - [ ] A1: The user declares the task complete or abandoned. Check: user.
 
 ## Plan
-<!-- Optional. -->
+<!-- Task-level unfinished items and waiting conditions, with pointers to their owners.
+     Recording rules: ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->
+- [ ] Settle the scope and ticket contracts; see `spec/scope.md`.
 
 ## Log
-<!-- Always the last section; locate shows its last line at the top of the INDEX board, so write the
-     present state first: the task's phase and whom it waits on. Events a ticket owns go in that
-     ticket's Log. Append with
-     printf -- "- $(date '+%m-%d %H:%M') <phase>: <state, waiting on whom>\n" \
-       >> .agent_state/plans/{{TASK_ID}}/tickets/tracker/ticket.md -->
+<!-- Necessary task-level events and source pointers. Ticket-owned events stay in that ticket.
+     Recording rules: ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->

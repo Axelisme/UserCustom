@@ -9,7 +9,7 @@ task_id: {{TASK_ID}}
 Not yet recorded.
 
 ## Tickets
-<!-- plan.py locate regenerates this section from each ticket's frontmatter and last Log line. -->
+<!-- plan.py locate regenerates this section from each ticket's frontmatter. -->
 None.
 
 ## Standing orders

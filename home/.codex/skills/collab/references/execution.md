@@ -132,7 +132,9 @@ A writer's COMPLETED result attests required gates passed and the checkout is cl
 Orchestrator checks the actual checkout and gate summary before preparing the review dispatch. A replacement receives the original assignment, blockers, verified
 and unverified work, environment, authority, and stop conditions.
 
-The Orchestrator records the outcome as a Log line; Git and the run retain finer history.
+The Orchestrator saves new outcome facts under dev-flow's
+[record operations](../../dev-flow/references/records.md#maintain-the-record); Git and the run retain
+finer history.
 
 Questions use the runtime's live parent channel when available. Single-return runtimes use BLOCKED and
 a fresh dispatch after the answer. An interrupted writer requires checkout and result inspection

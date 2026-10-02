@@ -1045,25 +1045,25 @@ class TaskRecordTests(unittest.TestCase):
 
 
 class TicketBoardTests(unittest.TestCase):
-    """`locate` regenerates INDEX's Tickets board from ticket frontmatter and last lines only."""
+    """`locate` regenerates INDEX's Tickets board from ticket frontmatter."""
 
     def locate(self, root: Path) -> dict[str, object]:
         done = run_plan(root, "locate", "demo")
         self.assertEqual(done.returncode, 0, done.stderr or done.stdout)
         return payload(done)
 
-    def test_board_resolves_dependencies_marks_startable_tickets_and_shows_latest_log(self) -> None:
+    def test_board_resolves_dependencies_and_marks_startable_tickets(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             run_plan(root, "create", "demo")
             tickets = record(root) / "tickets"
-            write_ticket(tickets, "01-base", "closed", "## Log\n- 09-28 13:47 → closed: R02 COMPLETED\n")
+            write_ticket(tickets, "01-base", "closed")
             write_ticket(
                 tickets, "02-next", "ready", "## Log\n",
                 extra="depends_on: [01-base]\n",
             )
             write_ticket(
-                tickets, "03-wait", "ready", "## Log\n- 09-28 10:00 → ready: seed a|b\n",
+                tickets, "03-wait", "ready",
                 extra="depends_on: [01-base, 02-next]\nbranch: wave/demo/03\n",
             )
             write_ticket(tickets, "04-lost", "blocked", extra="depends_on: [99-missing]\n")
@@ -1078,17 +1078,10 @@ class TicketBoardTests(unittest.TestCase):
                 [{"id": "01-base", "status": "closed"}, {"id": "02-next", "status": "ready"}],
             )
             self.assertEqual(rows["04-lost"]["depends_on"], [{"id": "99-missing", "status": "?"}])
-            self.assertEqual(rows["01-base"]["latest"], "09-28 13:47 → closed: R02 COMPLETED")
-            self.assertEqual(rows["02-next"]["latest"], "—", "a Log heading without entries has no latest line")
             board = board_section(record(root) / "INDEX.md")
-            self.assertIn("| 02-next | ready ▶ | 01-base (closed) | — | — |", board)
-            self.assertIn(
-                "| 03-wait | ready | 01-base (closed), 02-next (ready) | wave/demo/03 | 09-28 10:00 → ready: seed a\\|b |",
-                board,
-            )
             self.assertIn("| 04-lost | blocked | 99-missing (?) |", board)
 
-    def test_board_lists_the_tracker_first_and_shows_its_last_log_line(self) -> None:
+    def test_board_lists_the_tracker_first(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             run_plan(root, "create", "demo")
@@ -1099,17 +1092,6 @@ class TicketBoardTests(unittest.TestCase):
             located = self.locate(root)
 
             self.assertEqual([row["id"] for row in located["board"]], ["tracker", "00-first", "a-later"])
-            self.assertEqual(located["board"][0]["latest"], "—", "a fresh tracker has no Log entry yet")
-            with (tickets / "tracker" / "ticket.md").open("a", encoding="utf-8") as log:
-                log.write("- 09-29 20:00 planning: six tickets drafted, waiting on the user's choice of X\n")
-
-            located = self.locate(root)
-
-            self.assertEqual(
-                located["board"][0]["latest"],
-                "09-29 20:00 planning: six tickets drafted, waiting on the user's choice of X",
-            )
-            self.assertIn("| tracker | doing | — | — | 09-29 20:00 planning:", board_section(record(root) / "INDEX.md"))
 
     def test_board_is_rewritten_only_when_it_changes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

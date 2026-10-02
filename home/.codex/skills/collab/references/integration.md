@@ -9,8 +9,9 @@ other tickets continue.
 Integration is the branch `wave/<task>/integration`, checked out at
 `.agent_state/worktrees/<task>/integration`, and each lane branches from it as `wave/<task>/<ticket>`.
 Merge the accepted lane into integration and run the ticket's gates on the result. A clean merge whose
-gates pass is collected: close the ticket with its Log line and retire the lane. A conflict, or a clean
-merge whose gates fail, produces an unreviewed change: fix it on the lane under one writer, rerun the
+gates pass is collected: [close the ticket](../../dev-flow/references/records.md#close) and retire the
+lane. A conflict, or a clean merge whose gates fail, produces an unreviewed change: fix it on the lane
+under one writer, rerun the
 gates, and hold one more review round on the fix before collecting. The ticket returns to `review` for
 that round.
 

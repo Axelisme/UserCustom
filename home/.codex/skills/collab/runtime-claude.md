@@ -78,8 +78,10 @@ Branch on the returned `state`:
   children's outcomes as unrecoverable: inspect the affected checkout's actual state, record the loss
   as a Log line in the owning ticket, and dispatch fresh.
 
-While a child runs, continue independent work. On each wake, reread the ticket and the file the child
-names, as in Pi [Post-launch](runtime-pi.md#post-launch).
+While a child runs, continue independent work. On each wake, match the dispatched identity and reread
+the corresponding ticket record and the file the child names, as in Pi
+[Post-launch](runtime-pi.md#post-launch). Acknowledging a redelivered notification does not itself
+create a new task fact; apply dev-flow's [record rules](../dev-flow/references/records.md#maintain-the-record).
 
 ## Results and decisions
 

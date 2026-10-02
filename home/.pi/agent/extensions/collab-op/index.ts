@@ -3185,6 +3185,64 @@ async function restoreLandingWorktree(
   );
 }
 
+// Native merge can overwrite ignored paths and can alter a local directory
+// replacement even when it later refuses. Inspect only the accepted transition
+// before mutation; never follow local symlinks or move local content aside.
+async function requireLandingPathsSafe(
+  repo: Repository,
+  worktree: string,
+  beforeSha: string,
+  integrationSha: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const changed = await nulPathList(repo, worktree,
+    ["diff", "--no-renames", "--name-only", "-z", beforeSha, integrationSha, "--"], signal);
+  const dirty = await nulPathList(repo, worktree, ["diff", "--name-only", "-z", "--"], signal);
+  const tracked = new Set(await nulPathList(repo, worktree,
+    ["ls-tree", "-r", "--name-only", "-z", beforeSha], signal));
+  const collisions = new Set(dirty.filter(local => changed.some(target => pathOverlaps(local, target))));
+
+  async function inspect(pathname: string): Promise<void> {
+    if (collisions.size >= 32) return;
+    const metadata = await pathMetadata(path.join(worktree, pathname));
+    if (metadata === null) return;
+    if (!metadata.isDirectory()) {
+      if (!tracked.has(pathname)) collisions.add(pathname);
+      return;
+    }
+    // A directory replacing a tracked leaf is local state, even if empty.
+    if (tracked.has(pathname)) {
+      collisions.add(pathname);
+      return;
+    }
+    const children = await readdir(path.join(worktree, pathname));
+    if (children.length === 0) collisions.add(`${pathname}/`);
+    for (const child of children) await inspect(`${pathname}/${child}`);
+  }
+
+  for (const pathname of changed) {
+    const parts = pathname.split("/");
+    for (let i = 1; i <= parts.length; i += 1) {
+      const prefix = parts.slice(0, i).join("/");
+      const metadata = await pathMetadata(path.join(worktree, prefix));
+      if (metadata === null) break;
+      if (!metadata.isDirectory()) {
+        if (!tracked.has(prefix)) collisions.add(prefix);
+        break;
+      }
+      if (i === parts.length) await inspect(prefix);
+    }
+  }
+  if (collisions.size > 0) {
+    throw new CollabOpError(
+      "path_collision",
+      "accepted integration paths overlap local persistence changes",
+      "Preserve or resolve the listed local paths before retrying landing.",
+      { paths: [...collisions].sort().slice(0, 32) },
+    );
+  }
+}
+
 async function integrationLand(
   run: GitRunner,
   cwd: string,
@@ -3200,7 +3258,7 @@ async function integrationLand(
   const integrationSha = integration.tip;
   const persistence = await requirePersistenceCheckout(repo, task, persistBranch, signal);
   const persistenceWorktree = persistence.record.worktree!;
-  // S4 native checkout contract: refuse staged, unstaged tracked, ordinary untracked before mutation
+  // Keep unreviewed index content out of the native merge commit.
   if (await hasMergeOrConflictState(repo, persistenceWorktree, signal)) {
     throw new CollabOpError(
       "dirty_worktree",
@@ -3213,24 +3271,6 @@ async function integrationLand(
       "dirty_index",
       "persistence index contains staged changes",
       "Commit or unstage persistence index changes before landing.",
-    );
-  }
-  const ordinaryUntracked = await nulPathList(repo, persistenceWorktree, ["ls-files", "--others", "--exclude-standard", "-z", "--"], signal);
-  if (ordinaryUntracked.length > 0) {
-    throw new CollabOpError(
-      "path_collision",
-      "persistence worktree has ordinary untracked files",
-      "Move or clean the untracked persistence paths before landing; ignored files are allowed.",
-      { paths: [...new Set(ordinaryUntracked)].slice(0, 32) },
-    );
-  }
-  const unstagedTracked = await nulPathList(repo, persistenceWorktree, ["diff", "--name-only", "-z", "--"], signal);
-  if (unstagedTracked.length > 0) {
-    throw new CollabOpError(
-      "dirty_worktree",
-      "persistence worktree has unstaged tracked changes",
-      "Commit or discard the unstaged tracked changes in the persistence checkout before landing.",
-      { paths: [...new Set(unstagedTracked)].slice(0, 32) },
     );
   }
   if (!(await isAncestor(controlRepository(repo), persistence.tip, integrationSha, signal))) {
@@ -3249,10 +3289,11 @@ async function integrationLand(
     );
   }
   const beforeSha = persistence.tip;
+  await requireLandingPathsSafe(repo, persistenceWorktree, beforeSha, integrationSha, signal);
   // S1: create a non-fast-forward merge commit with ordered parents, hooks run natively
   const mergeResult = await repo.git(
     persistenceWorktree,
-    ["merge", "--no-ff", "-m", `${message}\n\nTask: ${taskId}\nLanded: ${integrationSha}`, integrationSha],
+    ["merge", "--no-ff", "--no-overwrite-ignore", "-m", `${message}\n\nTask: ${taskId}\nLanded: ${integrationSha}`, integrationSha],
     signal,
   );
   if (mergeResult.code !== 0) {

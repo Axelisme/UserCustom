@@ -42,8 +42,10 @@ Read Collab [Prepare](references/execution.md#prepare),
 
 `spawn_subagent({ cwd, role, dispatch })` launches one fresh child and returns its `subagent_id`.
 `cwd` is the exact prepared checkout: the lane worktree for `collab-implementer`, and the frozen
-review checkout for `collab-acceptor`. `dispatch` is the whole bounded brief. Each correction,
-rereview, and replacement is its own spawn; no call resumes a child with a new brief. Pi
+review checkout for `collab-acceptor`. `dispatch` is the whole bounded brief. A new correction,
+rereview, or replacement assignment uses a fresh spawn; no call resumes a child with a new brief.
+Whether a changed review candidate needs another assignment follows
+[Subject changes](references/review.md#subject-changes). Pi
 [Dispatch](runtime-pi.md#dispatch) describes the independent registry snapshots and the parameters
 the schema rejects. The MCP places each child in its own pane. That does not lift the parent-pane
 prerequisite in [Capability check](#capability-check).

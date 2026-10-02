@@ -57,7 +57,8 @@ Missing tools, unavailable roles, and invalid registries are blockers.
 
 Collab uses `collab-implementer` and `collab-acceptor` in Pi and through the subagent MCP in Claude.
 The implementer writes one bounded internal change and its gate summary. The acceptor judges the criteria
-one review brief names on one immutable commit and writes one verdict file. Specialized Standards
+its dispatch names on one frozen commit and writes one verdict file. For later candidate changes,
+the Orchestrator applies [Subject changes](references/review.md#subject-changes). Specialized Standards
 and Spec review remains a separate code-review assignment, not the default acceptance loop.
 
 ## Core invariants

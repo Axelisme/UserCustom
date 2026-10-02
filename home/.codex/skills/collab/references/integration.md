@@ -19,9 +19,10 @@ Orchestrator runs its gates on integration and reviews it like any ticket. If pe
 reconcile it into integration through the runtime route, rerun affected checks, and review the imported
 interactions as an integration ticket before landing.
 
-Stop collection on conflicts, tracked dirt, a commit that differs from the accepted one, or missing
-gate results. Collection is complete when integration contains the accepted work, its gates pass, and
-the ticket's Log records the collected commit.
+Stop collection on conflicts, tracked dirt, missing gate results, or a commit without accepted
+coverage. A different commit needs a new verdict or the Orchestrator's recorded non-semantic reuse
+decision under [Subject changes](review.md#subject-changes). Collection is complete when integration
+contains the accepted work, its gates pass, and the ticket's Log records the collected commit.
 
 ## Land and clean up
 
@@ -31,8 +32,12 @@ authority, stop at reviewed integration.
 
 Before landing, confirm every ticket in the landing candidate is `closed`, including its integration
 tickets (the tracker delivers no candidate and stays `doing` until archive), and that integration's
-gates pass. Confirm persistence has no staged changes, tracked unstaged
-changes, or ordinary untracked files; ask the user about untracked files you do not recognize.
+gates pass. Inspect persistence's local state for conflicts, overwrite risk, and index changes that
+could enter the merge commit. Unrelated local modifications may remain when the runtime can preserve
+them without including them in the landed commit. A globally clean checkout is not the policy.
+Check the selected runtime's admission and failure behavior before mutation; stricter runtime limits
+remain blockers, not permission to discard, commit, or stash unrelated work.
+
 Reconcile persistence drift into integration and regain applicable judgement before landing. Managed
 landing creates a two-parent merge with the previous persistence head first and the judged integration
 head second; its tree must equal the judged integration tree.
@@ -43,6 +48,8 @@ about an unrecognized untracked file. Managed retirement may delete a lane's unt
 files; gate logs live in the task's `runs/` and stay. Record each retained resource's owner and
 cleanup condition in its ticket's Log, or in the tracker's when no ticket owns it.
 
-Stop on missing authority, persistence dirt, live consumer handoff risk, candidate drift, hook failure,
-unaccepted changes, or unrecognized files. Completion requires confirmed integration or landing and
+Stop on missing authority, conflicts, local-state overwrite or inclusion risk, unsupported runtime
+preservation, live consumer handoff risk, candidate drift, hook failure, or unaccepted changes. Ask
+before handling unrecognized files; their presence alone does not authorize cleanup. Completion
+requires confirmed integration or landing, verification that retained local state is preserved, and
 retirement or explicit retention of every execution resource.

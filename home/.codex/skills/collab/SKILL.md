@@ -36,6 +36,8 @@ Use `mdsec <absolute-path>#anchor ...` for operation sections.
 - Correct findings or accept covered claims: [Correct and decide](references/review.md#correct-and-decide).
 - Reconcile or collect branches: [Integrate](references/integration.md#integrate).
 - Land and retire resources: [Land and clean up](references/integration.md#land-and-clean-up).
+- Present reviewed integration for a landing decision or report delivered work:
+  [Delivery summary](references/delivery-summary.md#delivery-summary).
 
 Before a runtime operation, open [Pi routing](runtime-pi.md#routing) or
 [Claude routing](runtime-claude.md#routing), then its selected section. Pi and Claude are the supported

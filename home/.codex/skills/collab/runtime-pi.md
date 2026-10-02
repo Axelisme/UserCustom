@@ -153,7 +153,7 @@ another Git worktree root. Freshness is ordinary branch ancestry and shared head
 
 **Dirt** means staged or unstaged tracked changes. Ordinary untracked and ignored paths do not
 count as dirt in status or report warnings. Operation-specific admission and overwrite checks still
-apply, including landing's current untracked-file rejection below. Active merge/conflict state and
+apply, including landing's index and collision checks below. Active merge/conflict state and
 unclassifiable Git state keep their explicit protections.
 
 Custody follows the Git operation used or modeled, which no schema states:
@@ -164,13 +164,16 @@ Custody follows the Git operation used or modeled, which no schema states:
 - `drop` force-retires without advancing integration, discarding uncollected work, and warns when
   the lane is dirty, conflicted, or incomplete.
 - Landing policy permits unrelated local state under [Land and clean up](references/integration.md#land-and-clean-up).
-  The current [`integrationLand`](../../../.pi/agent/extensions/collab-op/index.ts) implementation is
-  stricter: before merge it rejects any
-  staged state (`dirty_index`), unstaged tracked changes (`dirty_worktree`), or ordinary untracked
-  paths (`path_collision`), even when unrelated. Ignored paths pass this admission check; that is not
-  an overwrite-preservation guarantee. This runtime does not yet support the policy's local-state
-  preservation cases. Changing the policy text alone does not lift its preflight rejection.
-- Landing runs native `git merge --no-ff` in persistence with hooks enabled. Persistence advances
+  [`integrationLand`](../../../.pi/agent/extensions/collab-op/index.ts) admits unrelated unstaged,
+  untracked, and ignored paths. It refuses staged or intent-to-add entries (`dirty_index`) to keep
+  unreviewed index content out of the merge, and active merge/conflict state (`dirty_worktree`).
+  A read-only preflight refuses overlapping local paths (`path_collision`), including ignored files,
+  symlinks, and directory replacements. It examines the accepted transition and does not follow
+  local symlinks. Native merge errors still return `git_error`. Separate local hunks in a file
+  changed by integration are refused; landing does not merge local edits.
+- Landing runs native `git merge --no-ff --no-overwrite-ignore` in persistence with hooks enabled.
+  It does not stash, discard, or commit local work. Hooks retain their native side effects.
+  Persistence advances
   before the tool validates the merge tree against accepted integration, the ordered parents, and
   the commit message. Only after those checks does it advance integration. A merge, hook, or
   post-merge validation failure can leave changed Git state; inspect it before retrying. No automatic

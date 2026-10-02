@@ -25,6 +25,7 @@ On reorientation, run `scripts/plan.py locate <task-id>` from the main checkout 
 Use `mdsec <absolute-path>#anchor ...` to open the selected operation sections; one call reads
 several pointers in order.
 
+- Hand off context before compaction or a session transfer: [Handoff](references/planning.md#handoff).
 - Resume an existing task: [Resume](references/planning.md#resume).
 - Create a task, define scope, or slice tickets: [Plan](references/planning.md#plan) and
   [Tickets](references/planning.md#tickets).

@@ -20,6 +20,35 @@ it waits on in the tracker's Log. When a Log cannot say what a ticket is doing, 
 record from its checkout and Git, or ask the user when the choice is theirs. Resume is complete when
 one bounded action and owner are known.
 
+## Handoff
+
+Use this operation before handing off Orchestrator context for compaction or a session transfer.
+It prepares recovery through [Resume](#resume). Parent-to-child dispatch remains a complete bounded
+assignment under Collab; a recovery entry is not a substitute for that assignment.
+
+1. Update durable facts in their [owner records](records.md#maintain-the-record) before handoff.
+   Record decisions, progress, blockers, and the next bounded action where they belong. Use
+   `scripts/plan.py locate <task-id>` to refresh the INDEX board. Repair missing record state rather
+   than making the handoff its only copy.
+2. Give the minimal recovery entry: control root, task ID, and INDEX path. Add exact source
+   paths/anchors only when needed for the next action and not already reachable through that entry.
+   Refer to recorded goals, instructions, authority, decisions, progress, and evidence; leave their
+   content in the owning sources. Avoid recreating the record's pointer graph in the message.
+3. Carry only remaining working context that the sources cannot recover. Label an unverified
+   hypothesis, interrupted reasoning, unrecorded dialogue, or transient operation detail explicitly;
+   include its next observation or intended record when needed. Write `None` when there is no such
+   context. For mutable Git or child state, give only needed lookup information not already recorded,
+   and have the receiver reobserve it rather than trust a handoff snapshot.
+
+If required record repair is blocked, identify the affected record and blocker. Preserve otherwise
+lost input as explicitly unrecorded material, with its source or verbatim text. It grants no authority
+to proceed; the receiver must restore the governing source before acting on it.
+
+Handoff is complete when durable updates are recorded or their blocked repair is explicit, the entry
+leads to the next bounded action, and the message contains no duplicate task recap. The receiver uses
+Resume and reads governing originals before acting; a handoff neither replaces them nor changes
+their authority.
+
 ## Plan
 
 Inputs are the requested outcome, repository facts that affect scope, and current user authority.

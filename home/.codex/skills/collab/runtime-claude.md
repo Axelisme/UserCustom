@@ -1,8 +1,8 @@
 # Collab: Claude runtime
 
-Claude's binding delta, and nothing else. [Collab](SKILL.md) owns policy; the Pi role profiles own
-receiver contracts and Results. Claude dispatches Collab roles only through the herdr subagent MCP,
-which runs each child as a Pi subagent. Claude-native agents remain available for work outside Collab
+Claude's binding delta, and nothing else. [Collab](SKILL.md) owns policy; the shared role contracts
+own receiver inputs, authority, and results. Claude dispatches Collab roles only through the herdr
+subagent MCP, which runs each child as a Pi subagent. Claude-native agents remain available for work outside Collab
 roles, never as a `collab-implementer` or `collab-acceptor` substitute.
 
 ## Routing
@@ -23,13 +23,16 @@ parent Claude session only when that session runs inside a usable Herdr pane, as
 [Dispatch](runtime-pi.md#dispatch) states for Pi parents. Outside one, the tools are inactive. Require the MCP
 tools `spawn_subagent`, `wait_subagent_events`, `query_subagent`, and `control_subagent` (exposed as
 `mcp__subagents__*`; load deferred schemas before the first call). Then require
-`collab-implementer` or `collab-acceptor` in `query_subagent({ action: "roles" })`. Those roles are the
-Pi profiles under `~/.pi/agent/herdr-subagents/profiles/`. If a required tool or role is missing,
-report `BLOCKED` naming the missing item. Do not substitute a Claude-native agent, shell process, or
-cached tool catalogue.
+`collab-implementer` or `collab-acceptor` among the role/description summaries returned by
+`query_subagent({ action: "roles" })`. Fetch the selected contract with
+`query_subagent({ action: "role", role })` before preparing the assignment. The MCP returns the full
+public summary and contract in text. If a required tool or role is missing, or registry validation
+fails, report `BLOCKED` naming the problem. Do not substitute a Claude-native agent, shell process,
+profile-file read, or cached tool catalogue.
 
-The profile's declared tools and Result contract are authoritative. Optional planning, monitoring,
-artifact, scheduling, or messaging tools add no Collab lifecycle operation.
+The shared contract defines receiver obligations. The runtime owns child model and tool admission;
+the parent does not need those private fields. Optional planning, monitoring, artifact, scheduling,
+or messaging tools add no Collab lifecycle operation.
 
 ## Dispatch
 
@@ -41,9 +44,9 @@ Read Collab [Prepare](references/execution.md#prepare),
 `cwd` is the exact prepared checkout: the lane worktree for `collab-implementer`, and the frozen
 review checkout for `collab-acceptor`. `dispatch` is the whole bounded brief. Each correction,
 rereview, and replacement is its own spawn; no call resumes a child with a new brief. Pi
-[Dispatch](runtime-pi.md#dispatch) describes the profile registry and the parameters the schema
-rejects. The MCP places each child in its own pane. That does not lift the parent-pane prerequisite in
-[Capability check](#capability-check).
+[Dispatch](runtime-pi.md#dispatch) describes the independent registry snapshots and the parameters
+the schema rejects. The MCP places each child in its own pane. That does not lift the parent-pane
+prerequisite in [Capability check](#capability-check).
 
 A child can ask its parent a question, so brief it to request a decision through `contact_parent`
 and stay live rather than ending `BLOCKED` with a question.

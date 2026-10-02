@@ -27,7 +27,7 @@ interfaces and delegates only settled internal changes when it chooses to.
 | Task scope, tickets, status, Log, review round files | `dev-flow` |
 | Writer placement, dispatch, tests, review procedure, correction | `collab` |
 | Git integration, landing, resource cleanup | `collab` plus dev-flow custody |
-| Receiver inputs and Result wording | Each installed role profile |
+| Receiver scope, inputs, authority, and results | The role profile's shared `parent` contract, retrieved through role queries |
 | Pi and Claude mechanics | `runtime-pi.md` and `runtime-claude.md` |
 | Specialized Standards plus Spec report | `code-review`, unchanged by this workflow |
 
@@ -39,9 +39,9 @@ another brief.
 
 | Role | Routine input | Writes | Excluded unless a concrete question requires it |
 |---|---|---|---|
-| Orchestrator | Both short entries, INDEX, selected operation sections, the tickets in flight, receiver contract and result | INDEX Goal and Standing orders, tickets including the tracker, decisions, review briefs, its own gate summaries | Other operations, complete profile bodies, inactive tickets and logs |
-| Implementer | Injected profile, bounded dispatch, named contract anchors, repository instructions, technical skills, seed/caller/test locations, environment, gates, verdict findings for a correction | The lane and its gate summary | INDEX, other tickets, landing and archive rules |
-| Acceptor | Injected profile and one review brief: subject, baseline, criteria, gate summary paths, prior finding dispositions | One verdict file | Implementation sequence, provisioning, scheduling, landing, gate execution procedures |
+| Orchestrator | Both short entries, INDEX, selected operation sections, the tickets in flight, role summaries and the selected public contract | INDEX Goal and Standing orders, tickets including the tracker, decisions, review briefs, its own gate summaries | Other operations, private profile fields and child procedures, inactive tickets and logs |
+| Implementer | Injected shared contract and child instructions, bounded dispatch, named contract anchors, repository instructions, technical skills, seed/caller/test locations, environment, gates, verdict findings for a correction | The lane and its gate summary | INDEX, other tickets, landing and archive rules |
+| Acceptor | Injected shared contract and child instructions, and one review brief: subject, baseline, criteria, gate summary paths, prior finding dispositions | One verdict file | Implementation sequence, provisioning, scheduling, landing, gate execution procedures |
 
 A dispatch states exact repository instruction and technical skill paths with read conditions, and
 names explicit absence. "Follow relevant rules" is not a usable source pointer.
@@ -89,9 +89,12 @@ differ. Do not update a verified runtime hash merely because policy prose change
 at spawn is an attempt's frozen contract; the current disk profile applies to a fresh spawn. Candidate
 workflow files under review are data, not an invitation for the reviewer to adopt them.
 
-Maintain the two Pi profiles manually: Markdown files with live `contact_parent`, Pi model lists, and
-tools. Claude dispatches the same profiles through the subagent MCP, so there is no second profile set
-to keep in sync.
+Maintain one Markdown profile per role. Frontmatter keeps the runtime's model lists and tools,
+`description` supplies the discovery summary, and `parent` holds the shared contract. The body holds
+child-only procedures. Put shared obligations in `parent` once, not in both contract and body.
+The runtime injects the shared contract, child instructions, and dispatch into the child prompt.
+Parents use role discovery and contract lookup without reading profile sources. Claude dispatches
+the same Pi profiles through the subagent MCP, so there is no second profile set to keep in sync.
 
 ## Walkthrough and evaluation
 

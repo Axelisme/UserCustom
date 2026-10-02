@@ -151,9 +151,10 @@ Select by step:
 Every tool resolves the acting repository from the session working directory unless `repo` names
 another Git worktree root. Freshness is ordinary branch ancestry and shared heads.
 
-**Dirt** means staged or unstaged tracked changes. Ordinary untracked and ignored paths raise no
-dirt, presence, preservation, status, or report warning on their own; active merge/conflict state
-and unclassifiable Git state keep their explicit protections.
+**Dirt** means staged or unstaged tracked changes. Ordinary untracked and ignored paths do not
+count as dirt in status or report warnings. Operation-specific admission and overwrite checks still
+apply, including landing's current untracked-file rejection below. Active merge/conflict state and
+unclassifiable Git state keep their explicit protections.
 
 Custody follows the Git operation used or modeled, which no schema states:
 
@@ -162,9 +163,18 @@ Custody follows the Git operation used or modeled, which no schema states:
   conflict keeps the lane instead, with a custody warning.
 - `drop` force-retires without advancing integration, discarding uncollected work, and warns when
   the lane is dirty, conflicted, or incomplete.
-- Landing requires no staged, no unstaged tracked, and no ordinary untracked persistence state
-  before it mutates; ignored files are allowed. It verifies the merge commit's tree equals the
-  accepted integration tree before advancing either branch.
+- Landing policy permits unrelated local state under [Land and clean up](references/integration.md#land-and-clean-up).
+  The current [`integrationLand`](../../../.pi/agent/extensions/collab-op/index.ts) implementation is
+  stricter: before merge it rejects any
+  staged state (`dirty_index`), unstaged tracked changes (`dirty_worktree`), or ordinary untracked
+  paths (`path_collision`), even when unrelated. Ignored paths pass this admission check; that is not
+  an overwrite-preservation guarantee. This runtime does not yet support the policy's local-state
+  preservation cases. Changing the policy text alone does not lift its preflight rejection.
+- Landing runs native `git merge --no-ff` in persistence with hooks enabled. Persistence advances
+  before the tool validates the merge tree against accepted integration, the ordered parents, and
+  the commit message. Only after those checks does it advance integration. A merge, hook, or
+  post-merge validation failure can leave changed Git state; inspect it before retrying. No automatic
+  rollback is promised.
 - Merge-backed reconciliation and stale collection keep native `git merge` collision behavior. Hooks
   execute natively, and a merge or hook failure surfaces as an actionable Git error exposing Git's
   resulting state, with no synthetic publication and no dirt-preservation rollback.

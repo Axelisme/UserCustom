@@ -6,7 +6,6 @@ modelList:
 tools:
   - read
   - bash
-  - absorb
 parent: |
   # 使用條件
 

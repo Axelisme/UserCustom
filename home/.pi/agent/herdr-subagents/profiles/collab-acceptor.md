@@ -8,7 +8,6 @@ tools:
   - read
   - bash
   - write
-  - absorb
 parent: |
   # Scope and authority
 

@@ -30,7 +30,6 @@
   "packages": [
     "/home/axel/Documents/VSCode/Typescript/pi-goal",
     "/home/axel/Documents/VSCode/Typescript/pi-herdr-subagents",
-    "/home/axel/Documents/VSCode/Typescript/pi-absorb",
     "/home/axel/Documents/VSCode/Typescript/pi-self-compact",
     "npm:pi-openai-fast-mode@0.5.0",
     "npm:pi-antigravity@0.9.0",
@@ -48,7 +47,6 @@
       "builtin:codemode",
       "builtin:tool-search",
       "builtin:mcp",
-      "/home/axel/Documents/VSCode/Typescript/pi-absorb",
       "npm:pi-openai-fast-mode@0.5.0",
       "npm:pi-antigravity@0.9.0",
       "/home/axel/Documents/VSCode/Typescript/cache-stats",

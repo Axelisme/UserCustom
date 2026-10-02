@@ -7,7 +7,6 @@ tools:
   - codemode
   - read
   - bash
-  - absorb
 parent: |
   # Scope and authority
 

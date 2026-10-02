@@ -9,7 +9,6 @@ tools:
   - edit
   - write
   - bash
-  - absorb
 parent: |
   # Scope and authority
 

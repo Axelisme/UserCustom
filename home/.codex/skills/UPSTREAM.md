@@ -46,14 +46,14 @@ Also not taken at the `3cca18b` sync:
 
 - `implement-spec`: its branch, PR and merger-subagent workflow overlaps local `dev-flow` / `collab`
   without their mutation-authority rules. Keep ticket execution with the local workflow.
-- `retro`: upstream's bucket README still labels it a non-functional stub. Its assumption that a
-  reviewer needs no exploration also does not fit local review. Reassess when upstream removes the
-  stub designation and the review assumptions fit this fleet.
 
-Also not taken at the `c55ee46` sync:
+Not installed as a separate skill:
 
-- `pr`: it shapes a GitHub pull request body, and agents here do not interact with GitHub for now.
-  Reassess if agents start opening PRs.
+- `pr`: its change view, before/after evidence and recovery-risk methods are absorbed into
+  [collab's delivery summary](collab/references/delivery-summary.md) for general task delivery.
+  The source and Dex Horthy / Humanlayer `show-me` credit are recorded there. The upstream skill
+  formats a PR body; it does not itself open or publish one. No GitHub authority changes with this
+  absorption.
 
 ## Skills from other upstreams
 
@@ -87,9 +87,10 @@ then the sync point below is a hand-maintained claim, with the staleness that im
 
 `dev-flow`, `collab`, `candidate-backlog`, `simplify`, `dictator`.
 
-They may reference upstream skills as producers, but the reference runs **one way**: no upstream
-skill mentions them. `ask-matt` is the single exception — as the router it names both workflows,
-which is what keeps the coupling out of every other file.
+They may reference upstream skills as producers. Local adaptations introduce two reverse bindings:
+`ask-matt` names the local workflows as their router, and `retro` delegates candidate storage to
+`candidate-backlog`. Keep those bindings at their entry points rather than copying local lifecycle
+rules into upstream skills.
 
 ## Deviations
 
@@ -200,3 +201,15 @@ hand-maintained list could perform on itself.
     `/collab` as something to reach for when you want delegated review goes with it: `collab` is the
     path here, not an option. Deviation 14 reaches only the validation criterion in the router's
     `/implement` sentence, not this one.
+20. **`retro` is adopted with local evidence and role bindings.** It stays user-invoked and keeps
+    upstream's seven categories. A specific session event must support each candidate; an absent
+    guardrail alone is not a finding, and no candidates is a valid result. Prior-session reading is
+    bounded to the requested source. Current-task gaps stay with that task; `candidate-backlog`
+    owns cross-task candidate admission, deduplication, storage and lifecycle. Capture grants no
+    implementation authority. Relevant standards apply before implementation and during review;
+    reviewers may need callers, declarations and evidence beyond the diff. Document locations follow
+    the repo's conventions, and static prose/configuration receives direct review rather than tests.
+    The vendored snapshot still holds retro under `skills/in-progress/retro`; its SKILL.md was
+    byte-identical to upstream's promoted `skills/engineering/retro` at `d81f3a18` before these local
+    edits. Adoption does not move the subtree sync point. When a later sync brings that directory
+    rename, retarget `home/.codex/skills/retro` and preserve these bindings.

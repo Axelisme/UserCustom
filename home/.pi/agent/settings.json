@@ -1,8 +1,10 @@
 {
-  "lastChangelogVersion": "0.99.1",
+  "lastChangelogVersion": "1.0.0",
   "theme": "legacy-dark",
   "absorb": {
-    "threshold": 2000
+    "threshold": 4000,
+    "mode": "dynamic",
+    "preset": "reference-v1"
   },
   "selfCompact": {
     "budgetTokens": 200000,
@@ -17,10 +19,10 @@
   ],
   "compaction": {
     "modelOverrides": {
-      "openai-codex/gpt-6.1-sol": {
+      "openai/gpt-6.1-sol": {
         "reserveTokens": 40000
       },
-      "openai-codex/gpt-6-astra": {
+      "openai/gpt-6-astra": {
         "reserveTokens": 40000
       }
     }

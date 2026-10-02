@@ -87,6 +87,95 @@
   "windSpeedUnit": "ms",
   "barElevationEnabled": false,
   "blurredWallpaperLayer": true,
+  "controlCenterWidgets": [
+    {
+      "id": "user",
+      "enabled": true,
+      "w": 5,
+      "h": 1
+    },
+    {
+      "id": "settings",
+      "enabled": true,
+      "w": 1,
+      "h": 1,
+      "small": true
+    },
+    {
+      "id": "lock",
+      "enabled": true,
+      "w": 1,
+      "h": 1,
+      "small": true
+    },
+    {
+      "id": "power",
+      "enabled": true,
+      "w": 1,
+      "h": 1,
+      "small": true
+    },
+    {
+      "id": "brightnessSlider",
+      "enabled": true,
+      "w": 4,
+      "h": 1
+    },
+    {
+      "id": "volumeSlider",
+      "enabled": true,
+      "w": 4,
+      "h": 1
+    },
+    {
+      "id": "wifi",
+      "enabled": true,
+      "w": 4,
+      "h": 1
+    },
+    {
+      "id": "bluetooth",
+      "enabled": true,
+      "w": 4,
+      "h": 1
+    },
+    {
+      "id": "audioOutput",
+      "enabled": true,
+      "w": 4,
+      "h": 1
+    },
+    {
+      "id": "audioInput",
+      "enabled": true,
+      "w": 4,
+      "h": 1
+    },
+    {
+      "id": "darkMode",
+      "enabled": true,
+      "w": 2,
+      "h": 1
+    },
+    {
+      "id": "doNotDisturb",
+      "enabled": true,
+      "w": 2,
+      "h": 1
+    },
+    {
+      "id": "battery",
+      "enabled": true,
+      "w": 4,
+      "h": 1
+    },
+    {
+      "id": "builtin_tailscale",
+      "enabled": true,
+      "w": 4,
+      "h": 1
+    }
+  ],
   "clockDateFormat": "MM-dd",
   "greeterAutoLogin": true,
   "sortAppsAlphabetically": true,
@@ -139,6 +228,8 @@
   "maxFprintTries": 3,
   "osdMediaPlaybackEnabled": true,
   "updaterCheckOnStart": true,
+  "updaterIntervalSeconds": 1800,
+  "updaterPauseOnBattery": true,
   "updaterReopenAfterUpgrade": false,
   "screenPreferences": {
     "notepad": [
@@ -210,10 +301,6 @@
         },
         {
           "id": "idleInhibitor",
-          "enabled": true
-        },
-        {
-          "id": "dankscale",
           "enabled": true
         },
         {

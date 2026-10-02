@@ -9,7 +9,8 @@ tools:
   - codemode
   - read
   - bash
-  - absorb
+denyExtensions:
+  - /home/axel/Documents/VSCode/Typescript/pi-absorb
 parent: |
   # Scope and authority
 

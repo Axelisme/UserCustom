@@ -21,7 +21,7 @@ None.
 
 ## Sources
 <!-- Repository instruction and technical skill paths with read conditions, or None.
-     Exact profile source path for recovery and verdict template path. -->
+     Recovery instructions for the original injected contract and verdict template path. -->
 
 ## Authority and stops
 <!-- Read-only review checkout; the verdict is the one permitted file write.

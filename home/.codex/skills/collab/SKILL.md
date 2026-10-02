@@ -45,20 +45,18 @@ a blocker, not permission to invent a replacement.
 ## Role entries
 
 The Orchestrator reads INDEX, active grants, the tickets in flight, the selected operation section, and
-only the receiver's `Dispatch contract` and `Result` sections. A dispatch gives the receiver exact
-paths and anchors for applicable repository instructions, technical skills, contract, observations,
+the receiver's public role contract. A dispatch gives the receiver exact paths and anchors for
+applicable repository instructions, technical skills, contract, observations,
 authority, environment, gates, and stop conditions. It states explicit `none` where a field has no
 source. A receiver does not scan INDEX or the task graph to infer its brief.
 
-Installed role filenames are `collab-implementer` and `collab-acceptor`:
+Use the selected runtime's role queries to discover available roles and retrieve the chosen role's
+current contract before preparing a fresh assignment. The contract supplies the receiver's scope,
+required inputs, authority, and results. This operation needs no profile path or Markdown anchors.
+Missing tools, unavailable roles, and invalid registries are blockers.
 
-| Runtime | Directory | Format |
-|---|---|---|
-| Pi | `~/.pi/agent/herdr-subagents/profiles/` | `.md` |
-| Claude | Pi profiles, dispatched through the subagent MCP ([Claude runtime](runtime-claude.md)) | — |
-
-Use `mdsec <absolute-profile-path>#dispatch-contract <absolute-profile-path>#result`. The
-implementer writes one bounded internal change and its gate summary. The acceptor judges the criteria
+Collab uses `collab-implementer` and `collab-acceptor` in Pi and through the subagent MCP in Claude.
+The implementer writes one bounded internal change and its gate summary. The acceptor judges the criteria
 its dispatch names on one frozen commit and writes one verdict file. For later candidate changes,
 the Orchestrator applies [Subject changes](references/review.md#subject-changes). Specialized Standards
 and Spec review remains a separate code-review assignment, not the default acceptance loop.

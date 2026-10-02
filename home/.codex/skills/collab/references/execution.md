@@ -23,8 +23,8 @@ current integration. Run repository-declared worktree bootstrap before dispatch 
 its environment until the ticket closes. Set the ticket to `doing` with its `branch`, and log the
 dispatch with the subagent id.
 
-For delegated work, read the receiver's `Dispatch contract` and `Result` sections and the selected
-runtime operation. The dispatch names:
+For delegated work, use the receiver's public contract from [Role entries](../SKILL.md#role-entries)
+and the selected runtime operation. The dispatch names:
 
 - exact checkout, branch-local commit authority, exclusive writer, and persistence/push exclusions;
 - exact ticket anchors and assigned criteria and checks, such as `#outcome`, `#scenarios`,
@@ -33,7 +33,7 @@ runtime operation. The dispatch names:
 - applicable repository instruction and technical skill paths, narrowed to the anchors that apply,
   with read conditions, or explicit none;
 - runtime, interpreter, environment, caches, test selection, timeout, and cleanup exceptions;
-- prior blockers, stop conditions, escalation owner, and profile source for reorientation;
+- prior blockers, stop conditions, and escalation owner;
 - the task's absolute `runs/` path for the gate summary.
 
 Stop on failed bootstrap, missing capability, ambiguous authority, or unexplained checkout changes.

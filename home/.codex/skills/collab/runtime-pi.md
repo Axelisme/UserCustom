@@ -46,11 +46,16 @@ The profile owns the child's models and tools, and the tool schema rejects calle
 effort, profile, tool, plugin, extension, path, session, and id fields. There is nothing to omit
 and no override to authorize.
 
-Role profiles live at `~/.pi/agent/herdr-subagents/profiles/<role>.md`; Collab ships
-`collab-implementer` and `collab-acceptor` there. `query_subagent({ action: "roles" })` returns
-the current valid role ids without restarting the session. An empty or missing profile directory
-exposes no roles at all, so an unknown-role failure on a first spawn means the registry, not the
-brief.
+Call `query_subagent({ action: "roles" })` to discover sorted `{ role, description }` summaries.
+Select an available role, then call `query_subagent({ action: "role", role })` before preparing the
+dispatch. That lookup returns `{ role, description, parent }`; `parent` is the complete shared
+contract. Both views appear in model-facing text, with the public receipt also in Pi details.
+These queries omit profile paths, models, tools, and child-only instructions.
+
+Each query reads the current registry independently. Neither pins a profile version for spawn,
+which reads the registry again. An empty or missing profile directory exposes no roles. An invalid
+registry or unavailable selected role blocks dispatch; repair the registry rather than replacing
+the query with a profile-file read.
 
 **All three tools exist only inside a Herdr pane** — the package registers `spawn_subagent`,
 `query_subagent` and `control_subagent` only when the session has `HERDR_ENV=1` and a non-empty

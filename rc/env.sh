@@ -18,6 +18,9 @@ fi
 export PYTHONPYCACHEPREFIX=/tmp
 # use multithread to unzip xz file
 export XZ_DEFAULTS='-T0'
+
+# Keep Antigravity models, but disable its optional model-facing tools.
+export ANTIGRAVITY_NO_EXTRA_TOOLS=1
 # no .gnupg in home directory
 export GNUPGHOME="${XDG_DATA_HOME:-$HOME/.local/share}/gnupg"
 # go LANG

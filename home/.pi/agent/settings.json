@@ -33,7 +33,7 @@
     "/home/axel/Documents/VSCode/Typescript/pi-absorb",
     "/home/axel/Documents/VSCode/Typescript/pi-self-compact",
     "npm:pi-openai-fast-mode@0.5.0",
-    "npm:pi-antigravity@0.8.1",
+    "npm:pi-antigravity@0.9.0",
     "/home/axel/Documents/VSCode/Typescript/cache-stats"
   ],
   "enabledModels": [
@@ -50,7 +50,7 @@
       "builtin:mcp",
       "/home/axel/Documents/VSCode/Typescript/pi-absorb",
       "npm:pi-openai-fast-mode@0.5.0",
-      "npm:pi-antigravity@0.8.1",
+      "npm:pi-antigravity@0.9.0",
       "/home/axel/Documents/VSCode/Typescript/cache-stats",
       "/home/axel/UserCustom/home/.pi/agent/workarounds/herdr-first-prompt/index.ts"
     ]

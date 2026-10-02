@@ -1,13 +1,13 @@
 # Record permissions
 
-The Orchestrator writes INDEX, tickets, review briefs, and acceptance checkboxes. Two role writes
+The Orchestrator writes INDEX, tickets, dispatches, and acceptance checkboxes. Two role writes
 exist, each to one file named in the dispatch:
 
 - The **implementer** writes the gate summary for its final commit at
   `runs/<short-sha>/summary.md` in the task container, beside the raw logs: for each gate, the
   command or selection, working directory, environment, result and exit status, and limitations. The
   dispatch names the absolute `runs/` path; the implementer adds the commit's short SHA.
-- The **acceptor** writes `review-NN.verdict.md` at the absolute path its review brief names.
+- The **acceptor** writes `review-NN.verdict.md` at the absolute path its dispatch names.
 
 The Orchestrator's own gate runs go to `orchestrator.md` in the same `runs/<short-sha>/` directory.
 A manual or external observation is recorded the same way, by whoever performed it; for the user's

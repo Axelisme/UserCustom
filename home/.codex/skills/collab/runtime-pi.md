@@ -38,8 +38,9 @@ control-strength decision before adding enforcement.
 
 `spawn_subagent({ cwd, role, dispatch })` launches one child and returns a `subagent_id`. `cwd` is
 the exact managed lane worktree, `role` names a profile, and `dispatch` is the whole bounded brief.
-Every call creates a new durable subagent, so a correction, a rereview, and a replacement are each
-their own spawn — there is no resume-with-a-new-brief.
+Every call creates a new durable subagent. A new correction, rereview, or replacement assignment
+uses a fresh spawn, not resume-with-a-new-brief. Whether a changed review candidate needs that new
+assignment follows [Subject changes](references/review.md#subject-changes).
 
 The profile owns the child's models and tools, and the tool schema rejects caller-supplied model,
 effort, profile, tool, plugin, extension, path, session, and id fields. There is nothing to omit

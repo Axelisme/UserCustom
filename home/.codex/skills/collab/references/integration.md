@@ -19,9 +19,10 @@ Orchestrator runs its gates on integration and reviews it like any ticket. If pe
 reconcile it into integration through the runtime route, rerun affected checks, and review the imported
 interactions as an integration ticket before landing.
 
-Stop collection on conflicts, tracked dirt, a commit that differs from the accepted one, or missing
-gate results. Collection is complete when integration contains the accepted work, its gates pass, and
-the ticket's Log records the collected commit.
+Stop collection on conflicts, tracked dirt, missing gate results, or a commit without accepted
+coverage. A different commit needs a new verdict or the Orchestrator's recorded non-semantic reuse
+decision under [Subject changes](review.md#subject-changes). Collection is complete when integration
+contains the accepted work, its gates pass, and the ticket's Log records the collected commit.
 
 ## Land and clean up
 

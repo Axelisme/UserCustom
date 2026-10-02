@@ -16,7 +16,7 @@ Each fact has one **owner record**. Other records link to it.
 | A user decision: the answer and its effect | `decisions/NNNN-slug.md`, one per decision |
 | Contract, dependencies, acceptance, and open user questions | Ticket contract sections |
 | Status, branch, milestones, and what happened | Ticket frontmatter, `## Plan`, and `## Log` |
-| One review round's brief | `tickets/<id>/review-NN.md`, written by the Orchestrator |
+| One review round's assignment | Child dispatch, sent by the Orchestrator; round, child ID, subject commit/tree, baseline, criterion IDs, and verdict path in the ticket Log |
 | One review round's judgement | `tickets/<id>/review-NN.verdict.md`, written by the acceptor |
 | Gate results for a clean commit | `runs/<short-sha>/`, written by whoever ran the gates |
 | Commits, diffs, and progress between events | Git |
@@ -94,17 +94,23 @@ The update is complete when every changed fact sits once in its owner record and
 A round judges named acceptance criteria of one ticket on one fixed commit. Round numbers are two
 digits and continue across the ticket's lifetime, including rounds that cover later milestones.
 
-- `review-NN.md` is the acceptor's whole brief, created from `../templates/ticket/review.md` before
-  dispatch and left unchanged afterwards: subject commit and tree, baseline, review checkout, the
-  criteria judged, paths to the gate summaries, and, from round 2, every previous finding's
-  disposition (fixed with its commit, declined with a reason, or moved to a user decision).
+- The dispatch is the whole bounded assignment. Use `../templates/ticket/review.md` as a message
+  template, not a required task file. Include subject commit/tree, baseline, frozen review checkout,
+  writer state, criterion IDs with ticket anchors, gate summary paths, applicable instruction/skill
+  paths and read conditions, profile source, verdict template and absolute output path, authority,
+  and stop conditions. State explicit none for absent sources. From round 2, include each previous
+  finding's disposition: fixed with its commit, declined with a reason, or moved to a user decision.
+- The ticket Log records round number, child ID, subject commit/tree, baseline, criterion IDs, and
+  absolute verdict path so an interrupted parent can locate the live attempt without its old messages.
 - `review-NN.verdict.md` is the acceptor's judgement, created from `../templates/ticket/verdict.md`
-  at the absolute path the brief names. Its frontmatter `outcome` is `COMPLETED`, `BLOCKED`, or
+  at the absolute path the dispatch names. It records the reviewed subject, baseline, criteria,
+  evidence references, and findings. Its frontmatter `outcome` is `COMPLETED`, `BLOCKED`, or
   `UNREVIEWABLE`; finding IDs are `RNN-F<m>`.
 
-A contract change during a round voids the round; the next brief states what changed. After the
-verdict, the Orchestrator checks the boxes it establishes, sets the status, and adds the Log line; the
-findings stay in the verdict file.
+Subject and contract changes follow Collab's [Subject changes](../../collab/references/review.md#subject-changes).
+After the verdict, the Orchestrator checks the boxes it establishes, sets the status, and adds the Log
+line; the findings stay in the verdict file. Any coverage reused for a later commit has its own
+Orchestrator decision in the ticket Log; it does not change the verdict's reviewed subject.
 
 ## Close
 

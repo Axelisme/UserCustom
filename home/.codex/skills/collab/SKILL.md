@@ -59,7 +59,8 @@ Installed role filenames are `collab-implementer` and `collab-acceptor`:
 
 Use `mdsec <absolute-profile-path>#dispatch-contract <absolute-profile-path>#result`. The
 implementer writes one bounded internal change and its gate summary. The acceptor judges the criteria
-one review brief names on one immutable commit and writes one verdict file. Specialized Standards
+its dispatch names on one frozen commit and writes one verdict file. For later candidate changes,
+the Orchestrator applies [Subject changes](references/review.md#subject-changes). Specialized Standards
 and Spec review remains a separate code-review assignment, not the default acceptance loop.
 
 ## Core invariants

@@ -1,27 +1,34 @@
 # {{TICKET_ID}} review {{NN}}
 
-<!-- The acceptor's whole brief: its dispatch names only this file and the verdict path. Written once by
-     the Orchestrator before dispatch, then left unchanged. Procedure:
-     ~/.codex/skills/collab/references/review.md#review -->
+<!-- Message template: send the filled body as the child dispatch. No review-NN.md task file is
+     required. Procedure: ~/.codex/skills/collab/references/review.md#review -->
 
 ## Subject
-<!-- Commit and tree, baseline commit, review checkout path, and whether the writer has stopped. -->
+<!-- Exact commit/tree, baseline commit, frozen review checkout, and stopped-writer confirmation. -->
 
 ## Criteria
-<!-- The acceptance criteria this round judges, by ID; other criteria of the ticket stay open. -->
+<!-- Assigned criterion IDs and exact ticket #acceptance and #scenarios paths.
+     Other criteria of the ticket stay open. -->
 
 ## Observations
-<!-- Paths to the gate summaries for this subject, such as ../../runs/<sha>/summary.md.
-     Point to them; the acceptor reads them directly. -->
+<!-- Absolute gate summary paths for this subject, or None with the direct-review alternative.
+     Point to the evidence; the acceptor reads it directly. -->
 
 ## Prior findings
-<!-- From round 2 on: every finding of the previous verdict with its disposition, one of fixed (commit),
-     declined (reason), or moved to a user decision (decisions/ pointer). Write None for round 1. -->
+<!-- From round 2: previous verdict paths and each finding's disposition, one of fixed (commit),
+     declined (reason), or moved to a user decision (exact decisions/ path). -->
 None.
 
 ## Sources
-<!-- Repository instruction and technical skill paths the acceptor applies, each with its read
-     condition, or None. -->
+<!-- Repository instruction and technical skill paths with read conditions, or None.
+     Exact profile source path for recovery and verdict template path. -->
+
+## Authority and stops
+<!-- Read-only review checkout; the verdict is the one permitted file write.
+     No tests, imports, linters, formatters, builds, or runtime gates.
+     Missing/ambiguous required inputs or an unexplained/dirty review subject are UNREVIEWABLE.
+     Use contact_parent for a decision while remaining live.
+     Review the frozen subject; the Orchestrator owns later non-semantic coverage reuse. -->
 
 ## Verdict path
-<!-- Absolute path of review-{{NN}}.verdict.md beside this file. -->
+<!-- Absolute path of tickets/<id>/review-{{NN}}.verdict.md. -->

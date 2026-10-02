@@ -32,7 +32,7 @@ several pointers in order.
   [Design alignment](references/planning.md#design-alignment).
 - Change a ticket's status, write its Log, or record a user decision:
   [Maintain the record](references/records.md#maintain-the-record).
-- Write a review brief or read a verdict: [Review rounds](references/records.md#review-rounds).
+- Prepare a review dispatch or read a verdict: [Review rounds](references/records.md#review-rounds).
 - Close or archive work: [Close](references/records.md#close) and [Archive](references/records.md#archive).
 
 Each selected section states its inputs, stop conditions, and completion condition. Open

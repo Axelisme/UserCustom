@@ -9,9 +9,10 @@ The tracker heads the board; its latest line is the task's phase and whom it wai
 `doing`, `review`, and `blocked`, and the `todo` ticket the tracker names, are the work in flight, and
 `ready ▶` marks tickets that can start. For each ticket in flight, read its `#acceptance` and `#plan`
 in one `mdsec` call and the last lines of its Log with `tail -n 5 <ticket.md>`, and for a ticket in
-`review`, its latest `review-NN.md` and verdict. When a Log line names a checkout, its `git log` and
-`git status` supply the commits since. Open contracts, specs, and source when the action that uses
-them starts.
+`review`, its logged round identity and verdict if available. Use the logged child ID and the runtime's
+run-control route to recover an active attempt; a separate brief file is not required. When a Log line
+names a checkout, its `git log` and `git status` supply the commits since. Open contracts, specs, and
+source when the action that uses them starts.
 
 The Orchestrator stays read-only until it has one bounded action, its owner, its checkout, and the
 applicable authority. When the board cannot name the next action, record the task's phase and whom

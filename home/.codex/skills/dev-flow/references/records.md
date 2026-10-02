@@ -97,9 +97,10 @@ digits and continue across the ticket's lifetime, including rounds that cover la
 - The dispatch is the whole bounded assignment. Use `../templates/ticket/review.md` as a message
   template, not a required task file. Include subject commit/tree, baseline, frozen review checkout,
   writer state, criterion IDs with ticket anchors, gate summary paths, applicable instruction/skill
-  paths and read conditions, profile source, verdict template and absolute output path, authority,
-  and stop conditions. State explicit none for absent sources. From round 2, include each previous
-  finding's disposition: fixed with its commit, declined with a reason, or moved to a user decision.
+  paths and read conditions, recovery instructions for the original injected contract, verdict
+  template and absolute output path, authority, and stop conditions. State explicit none for absent
+  sources. From round 2, include each previous finding's disposition: fixed with its commit, declined
+  with a reason, or moved to a user decision.
 - The ticket Log records round number, child ID, subject commit/tree, baseline, criterion IDs, and
   absolute verdict path so an interrupted parent can locate the live attempt without its old messages.
 - `review-NN.verdict.md` is the acceptor's judgement, created from `../templates/ticket/verdict.md`

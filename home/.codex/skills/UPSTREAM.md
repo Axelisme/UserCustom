@@ -87,10 +87,10 @@ then the sync point below is a hand-maintained claim, with the staleness that im
 
 `dev-flow`, `collab`, `candidate-backlog`, `simplify`, `dictator`.
 
-They may reference upstream skills as producers. Local adaptations introduce two reverse bindings:
-`ask-matt` names the local workflows as their router, and `retro` delegates candidate storage to
-`candidate-backlog`. Keep those bindings at their entry points rather than copying local lifecycle
-rules into upstream skills.
+They may reference upstream skills as producers, and local adaptations can route back to these
+owners. For example, `ask-matt` names the local workflows as their router, and `retro` delegates
+candidate storage to `candidate-backlog`. Keep these references as pointers to the owning skills
+rather than copying their lifecycle rules into upstream skills.
 
 ## Deviations
 

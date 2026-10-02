@@ -129,7 +129,7 @@ whose named file is missing is incomplete. `Residual risks:` carries non-blockin
 a runtime result field.
 
 A writer's COMPLETED result attests required gates passed and the checkout is clean and committed. The
-Orchestrator checks the actual checkout and gate summary before writing the review brief. A replacement receives the original assignment, blockers, verified
+Orchestrator checks the actual checkout and gate summary before preparing the review dispatch. A replacement receives the original assignment, blockers, verified
 and unverified work, environment, authority, and stop conditions.
 
 The Orchestrator records the outcome as a Log line; Git and the run retain finer history.

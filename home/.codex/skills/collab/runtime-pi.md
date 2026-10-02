@@ -38,8 +38,9 @@ control-strength decision before adding enforcement.
 
 `spawn_subagent({ cwd, role, dispatch })` launches one child and returns a `subagent_id`. `cwd` is
 the exact managed lane worktree, `role` names a profile, and `dispatch` is the whole bounded brief.
-Every call creates a new durable subagent, so a correction, a rereview, and a replacement are each
-their own spawn — there is no resume-with-a-new-brief.
+Every call creates a new durable subagent. A new correction, rereview, or replacement assignment
+uses a fresh spawn, not resume-with-a-new-brief. Whether a changed review candidate needs that new
+assignment follows [Subject changes](references/review.md#subject-changes).
 
 The profile owns the child's models and tools, and the tool schema rejects caller-supplied model,
 effort, profile, tool, plugin, extension, path, session, and id fields. There is nothing to omit
@@ -150,9 +151,10 @@ Select by step:
 Every tool resolves the acting repository from the session working directory unless `repo` names
 another Git worktree root. Freshness is ordinary branch ancestry and shared heads.
 
-**Dirt** means staged or unstaged tracked changes. Ordinary untracked and ignored paths raise no
-dirt, presence, preservation, status, or report warning on their own; active merge/conflict state
-and unclassifiable Git state keep their explicit protections.
+**Dirt** means staged or unstaged tracked changes. Ordinary untracked and ignored paths do not
+count as dirt in status or report warnings. Operation-specific admission and overwrite checks still
+apply, including landing's index and collision checks below. Active merge/conflict state and
+unclassifiable Git state keep their explicit protections.
 
 Custody follows the Git operation used or modeled, which no schema states:
 
@@ -161,9 +163,21 @@ Custody follows the Git operation used or modeled, which no schema states:
   conflict keeps the lane instead, with a custody warning.
 - `drop` force-retires without advancing integration, discarding uncollected work, and warns when
   the lane is dirty, conflicted, or incomplete.
-- Landing requires no staged, no unstaged tracked, and no ordinary untracked persistence state
-  before it mutates; ignored files are allowed. It verifies the merge commit's tree equals the
-  accepted integration tree before advancing either branch.
+- Landing policy permits unrelated local state under [Land and clean up](references/integration.md#land-and-clean-up).
+  [`integrationLand`](../../../.pi/agent/extensions/collab-op/index.ts) admits unrelated unstaged,
+  untracked, and ignored paths. It refuses staged or intent-to-add entries (`dirty_index`) to keep
+  unreviewed index content out of the merge, and active merge/conflict state (`dirty_worktree`).
+  A read-only preflight refuses overlapping local paths (`path_collision`), including ignored files,
+  symlinks, and directory replacements. It examines the accepted transition and does not follow
+  local symlinks. Native merge errors still return `git_error`. Separate local hunks in a file
+  changed by integration are refused; landing does not merge local edits.
+- Landing runs native `git merge --no-ff --no-overwrite-ignore` in persistence with hooks enabled.
+  It does not stash, discard, or commit local work. Hooks retain their native side effects.
+  Persistence advances
+  before the tool validates the merge tree against accepted integration, the ordered parents, and
+  the commit message. Only after those checks does it advance integration. A merge, hook, or
+  post-merge validation failure can leave changed Git state; inspect it before retrying. No automatic
+  rollback is promised.
 - Merge-backed reconciliation and stale collection keep native `git merge` collision behavior. Hooks
   execute natively, and a merge or hook failure surfaces as an actionable Git error exposing Git's
   resulting state, with no synthetic publication and no dirt-preservation rollback.

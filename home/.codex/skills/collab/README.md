@@ -24,7 +24,7 @@ interfaces and delegates only settled internal changes when it chooses to.
 
 | Concern | Owner |
 |---|---|
-| Task scope, tickets, status, Log, review round files | `dev-flow` |
+| Task scope, tickets, status, Log, review round records | `dev-flow` |
 | Writer placement, dispatch, tests, review procedure, correction | `collab` |
 | Git integration, landing, resource cleanup | `collab` plus dev-flow custody |
 | Receiver inputs and Result wording | Each installed role profile |
@@ -39,9 +39,9 @@ another brief.
 
 | Role | Routine input | Writes | Excluded unless a concrete question requires it |
 |---|---|---|---|
-| Orchestrator | Both short entries, INDEX, selected operation sections, the tickets in flight, receiver contract and result | INDEX Goal and Standing orders, tickets including the tracker, decisions, review briefs, its own gate summaries | Other operations, complete profile bodies, inactive tickets and logs |
+| Orchestrator | Both short entries, INDEX, selected operation sections, the tickets in flight, receiver contract and result | INDEX Goal and Standing orders, tickets including the tracker, decisions, dispatches, its own gate summaries | Other operations, complete profile bodies, inactive tickets and logs |
 | Implementer | Injected profile, bounded dispatch, named contract anchors, repository instructions, technical skills, seed/caller/test locations, environment, gates, verdict findings for a correction | The lane and its gate summary | INDEX, other tickets, landing and archive rules |
-| Acceptor | Injected profile and one review brief: subject, baseline, criteria, gate summary paths, prior finding dispositions | One verdict file | Implementation sequence, provisioning, scheduling, landing, gate execution procedures |
+| Acceptor | Injected profile and full dispatch: subject, baseline, criteria, gate summary paths, prior finding dispositions | One verdict file | Implementation sequence, provisioning, scheduling, landing, gate execution procedures |
 
 A dispatch states exact repository instruction and technical skill paths with read conditions, and
 names explicit absence. "Follow relevant rules" is not a usable source pointer.
@@ -58,9 +58,14 @@ still reject; an interface needed early becomes its own small ticket. Interactio
 the acceptance criteria of an integration ticket, reviewed on integration after its dependencies
 close. A merge that conflicts or fails gates after acceptance gets one more round on the fix.
 
-Re-review judges the previous findings, the new diff, and the interactions it touches, while every
-gate reruns. Review stays single-ticket and bounded, so rounds converge; the board's Latest column
-shows the round count for a human to judge when they do not.
+Re-review judges the previous findings, the new diff, and the interactions it touches, with applicable
+gate evidence. Semantic changes need a fresh dispatch. For non-semantic changes, the Orchestrator
+may reuse coverage under [Subject changes](references/review.md#subject-changes), considering time,
+token cost, and risk. The frozen review checkout and original verdict keep their exact subject identity.
+
+The full assignment travels in dispatch; the verdict remains a Markdown file with subject, criteria,
+and evidence references. The ticket Log records enough round identity to recover an active child.
+This avoids maintaining a second copy of the assignment solely to survive child compaction.
 
 ## Tests and gate results
 
@@ -69,7 +74,7 @@ formal tests and use temporary probes, but return test or interface changes to t
 Direct Orchestrator work keeps the same alignment, one-writer, gate, and review duties.
 
 Whoever runs a gate on a clean commit writes its summary beside the raw logs in the task's
-`runs/<short-sha>/`. The review brief points to those summaries; nobody retypes them.
+`runs/<short-sha>/`. The dispatch points to those summaries; nobody retypes them.
 Reuse a result when the exact commit, environment, selection, method, result, and limitations still
 apply. Missing summaries, changed subjects, wrong selections, timeouts, flaky results, or
 contradictions return to the execution owner. Acceptors read the summaries but never run tests,

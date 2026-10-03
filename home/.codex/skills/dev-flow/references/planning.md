@@ -117,7 +117,9 @@ soon as its contract, seed, gates, checkout, and environment are ready. While ch
 review round is out, implement, prepare, or judge the next frontier ticket. A blocked ticket does not
 stop unrelated work.
 
-Stop when dependencies are unclear or a shared choice lacks user confirmation.
+Stop when dependencies are unclear. Classify shared choices under
+[Document authority](records.md#document-authority); stop for user confirmation only when that
+classification requires a user decision.
 Selection is complete when each active ticket has one owner, one writer, a ready contract, and an
 independent completion path.
 

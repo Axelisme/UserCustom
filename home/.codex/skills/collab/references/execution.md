@@ -51,8 +51,10 @@ internal implementation sequence in Contract starting point. A complete existing
 seed. The implementer may choose private organization but returns interface, formal-test, public
 behavior, performance, or responsibility changes to the Orchestrator.
 
-Stop until the user confirms a material design change. The seed is complete when the public contract
-and observations are explicit enough for a bounded internal implementation and independent review.
+Classify seed revisions under dev-flow's
+[Document authority](../../dev-flow/references/records.md#document-authority); stop for user
+confirmation when the revision requires a user decision. The seed is complete when the public
+contract and observations are explicit enough for a bounded internal implementation and independent review.
 
 ## Gate preparation
 

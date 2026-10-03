@@ -226,6 +226,8 @@
   "matugenTemplateDgop": false,
   "matugenTemplateVscode": false,
   "maxFprintTries": 3,
+  "notificationTimeoutLow": 1000,
+  "notificationTimeoutNormal": 1000,
   "osdMediaPlaybackEnabled": true,
   "updaterCheckOnStart": true,
   "updaterIntervalSeconds": 1800,

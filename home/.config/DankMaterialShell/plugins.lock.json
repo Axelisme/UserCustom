@@ -3,16 +3,16 @@
   "plugins": {
     "aiQuotas": {
       "repo": "https://github.com/agneswd/dms-ai-quotas",
-      "commit": "7e5f7cbad1982b0472e53e9ba4816dbfb84addf3"
+      "commit": "f8bcfb2fed740e9f9d184604f656999dcdf6fb0a"
     },
     "calculator": {
       "repo": "https://github.com/rochacbruno/DankCalculator",
-      "commit": "1db5865419a40a33171a475855a59e0b8bf7187f"
+      "commit": "c9fbbe921e9afeb92f4e92390e9fc05f006f0373"
     },
     "dankKDEConnect": {
       "repo": "https://github.com/AvengeMedia/dms-plugins",
       "path": "DankKDEConnect",
-      "commit": "bb90a1db7d540e64ae049c5906afba9b24baa865"
+      "commit": "e774a9756f2a50499c37a5513f28bee4ebe81d73"
     },
     "dankscale": {
       "repo": "https://github.com/dwright134/dms-dankscale",

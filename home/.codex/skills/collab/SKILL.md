@@ -24,7 +24,8 @@ Use `mdsec <absolute-path>#anchor ...` for the action's sections.
   [Results and continuity](references/execution.md#results-and-continuity).
 - Review: [Review](references/review.md#review), then [Correct and decide](references/review.md#correct-and-decide).
 - Reconcile/collect: [Integrate](references/integration.md#integrate).
-- Land or retire resources: [Land and clean up](references/integration.md#land-and-clean-up).
+- Land: [Land and clean up](references/integration.md#land-and-clean-up).
+- Retire resources: [Resource custody](references/integration.md#resource-custody).
 - Present reviewed integration or report delivery: [Delivery summary](references/delivery-summary.md#delivery-summary).
 
 Before runtime operations, read [Pi routing](runtime-pi.md#routing) or

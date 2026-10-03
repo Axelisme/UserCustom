@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "1.0.0",
+  "lastChangelogVersion": "1.0.1",
   "theme": "legacy-dark",
   "absorb": {
     "threshold": 4000,
@@ -40,7 +40,7 @@
     "openai/gpt-6.1-sol",
     "openai/gpt-6-luna",
     "antigravity/gemini-3.8-flash",
-    "antigravity/claude-sonnet-4-6"
+    "antigravity/claude-sonnet-5-5"
   ],
   "herdrSubagents": {
     "allowExtensions": [

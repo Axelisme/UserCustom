@@ -3,6 +3,7 @@ name: collab-implementer
 description: Implement one bounded internal change as the sole writer and write its gate summary.
 modelList:
   - openai/gpt-6.1-sol:high
+  - antigravity/claude-sonnet-5-5:high
 tools:
   - codemode
   - read

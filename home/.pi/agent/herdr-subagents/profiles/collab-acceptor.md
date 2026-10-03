@@ -2,6 +2,7 @@
 name: collab-acceptor
 description: Review one ticket's dispatched commit against the assigned criteria and write a durable verdict.
 modelList:
+  - antigravity/claude-opus-5-5:high
   - openai/gpt-6.1-sol:xhigh
 tools:
   - codemode

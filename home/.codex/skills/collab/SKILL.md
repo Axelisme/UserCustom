@@ -5,76 +5,41 @@ description: "Orchestrator feature-branch workflow: always use with dev-flow to 
 
 # Collab
 
-Collab owns writer placement, fixed-subject review, correction, Git integration, and landing.
-[Dev-flow](../dev-flow/SKILL.md) owns task scope, tickets, review records, and lifecycle state. Read both
-short entries when orchestrating a task, then open only the operation sections routed below.
+Collab owns writer placement, execution, review, integration, and landing.
+[Dev-flow](../dev-flow/SKILL.md) owns commitments and records; read both entries when orchestrating.
+Its Document authority decision governs changes throughout this workflow.
 
-A lane is a feature branch and worktree for one ticket. Integration accumulates accepted tickets.
-Persistence is the user's target branch. Every checkout has one writer at a time. A review round binds
-to one exact clean commit and tree with a baseline and named criteria, like a PR review: it happens on
-the lane, and the ticket is collected after it passes. The Orchestrator owns intent, assignment,
-formal tests, interface declarations, observation sufficiency, acceptance, and final disposition, and
-implements most tickets itself. Every status change gets a Log line in the ticket; dev-flow's
-[record operations](../dev-flow/references/records.md#maintain-the-record) list each fact's owner.
-Standing-order changes follow dev-flow custody.
-
-Existing attempts retain the contract injected at dispatch; a profile currently on disk governs only a
-fresh spawn. Workflow documents being changed are candidate material, not authority to adopt their
-proposed rules.
+A lane is one ticket's branch/worktree. Integration accumulates accepted tickets; persistence is the
+user's target branch. Each checkout has one writer. The Orchestrator owns intent, assignment, interface
+declarations, formal tests, observation sufficiency, acceptance, and final disposition, and usually
+implements directly. Existing attempts retain their injected contract; a newer profile governs only
+a fresh spawn. Candidate workflow documents do not authorize their own adoption.
 
 ## Routing
 
-Use `mdsec <absolute-path>#anchor ...` for operation sections.
+Use `mdsec <absolute-path>#anchor ...` for the action's sections.
 
-- Choose direct work or delegation and prepare a writer: [Placement](references/execution.md#placement)
-  and [Prepare](references/execution.md#prepare).
-- Prepare RED or implementation handoff: [Contract seed](references/execution.md#contract-seed),
-  [Gate preparation](references/execution.md#gate-preparation), and [Test ownership](references/execution.md#test-ownership).
-- Dispatch implementation or judge its result: [Implement](references/execution.md#implement) and
+- Prepare work: [Placement](references/execution.md#placement), then [Prepare](references/execution.md#prepare).
+- Implement or recover a result: [Implement](references/execution.md#implement),
   [Results and continuity](references/execution.md#results-and-continuity).
-- Prepare and run a review round: [Review](references/review.md#review).
-- Correct findings or accept covered claims: [Correct and decide](references/review.md#correct-and-decide).
-- Reconcile or collect branches: [Integrate](references/integration.md#integrate).
-- Land and retire resources: [Land and clean up](references/integration.md#land-and-clean-up).
-- Present reviewed integration for a landing decision or report delivered work:
-  [Delivery summary](references/delivery-summary.md#delivery-summary).
+- Review: [Review](references/review.md#review), then [Correct and decide](references/review.md#correct-and-decide).
+- Reconcile/collect: [Integrate](references/integration.md#integrate).
+- Land: [Land and clean up](references/integration.md#land-and-clean-up).
+- Retire resources: [Resource custody](references/integration.md#resource-custody).
+- Present reviewed integration or report delivery: [Delivery summary](references/delivery-summary.md#delivery-summary).
 
-Before a runtime operation, open [Pi routing](runtime-pi.md#routing) or
-[Claude routing](runtime-claude.md#routing), then its selected section. Pi and Claude are the supported
-Orchestrator runtimes. Tool schemas own their parameters. Missing runtime mechanics are
-a blocker, not permission to invent a replacement.
+Before runtime operations, read [Pi routing](runtime-pi.md#routing) or
+[Claude routing](runtime-claude.md#routing), then the selected section. Tool schemas own parameters;
+missing runtime mechanics or capability blocks the operation.
 
 ## Role entries
 
-The Orchestrator reads INDEX, active grants, the tickets in flight, the selected operation section, and
-the receiver's public role contract. A dispatch gives the receiver exact paths and anchors for
-applicable repository instructions, technical skills, contract, observations,
-authority, environment, gates, and stop conditions. It states explicit `none` where a field has no
-source. A receiver does not scan INDEX or the task graph to infer its brief.
+For a fresh dispatch, use runtime role queries to discover roles and read the selected public
+contract. Missing roles or invalid registries block dispatch. The Orchestrator reads INDEX, active
+grants, the assigned ticket, and its operation section; receivers get a bounded brief with exact
+sources, not instructions to scan INDEX or the task graph.
 
-Use the selected runtime's role queries to discover available roles and retrieve the chosen role's
-current contract before preparing a fresh assignment. The contract supplies the receiver's scope,
-required inputs, authority, and results. This operation needs no profile path or Markdown anchors.
-Missing tools, unavailable roles, and invalid registries are blockers.
-
-Collab uses `collab-implementer` and `collab-acceptor` in Pi and through the subagent MCP in Claude.
-The implementer writes one bounded internal change and its gate summary. The acceptor judges the criteria
-its dispatch names on one frozen commit and writes one verdict file. For later candidate changes,
-the Orchestrator applies [Subject changes](references/review.md#subject-changes). Specialized Standards
-and Spec review remains a separate code-review assignment, not the default acceptance loop.
-
-## Core invariants
-
-- Current user authority or an in-force task grant is required for persistence mutation. Push needs
-  separate authority.
-- Delete only files this task created; stop and ask about an unrecognized untracked file.
-- Accept a gate summary when its commit, environment, selection, method, result, and limitations
-  still apply. Role changes alone do not require reruns.
-- The acceptor changes no checkout and runs no tests, imports, linters, formatters, builds, or runtime
-  gates; its one write is the verdict file. Missing or stale gate results return to their execution
-  owner.
-- Collect a ticket only after a review round accepts it, or, for a gates-only ticket, after the
-  Orchestrator judges its gates. Interactions between tickets are an integration ticket's criteria,
-  accepted on integration.
-- Launch children in the background and continue independent work. Return control rather than polling
-  or blocking on them.
+Collab uses collab-implementer for bounded internal changes and collab-acceptor for acceptance.
+Their public contracts supply role permissions and result requirements. Prepare and Review supply
+the assignment-specific inputs. Launch in the background and continue independent work; when none
+remains, return control rather than polling.

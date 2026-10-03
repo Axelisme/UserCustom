@@ -5,8 +5,7 @@ depends_on: []
 ---
 # {{TICKET_ID}}: {{TITLE}}
 
-<!-- The sections through User decisions are the contract, settled before `ready` and rarely edited
-     after. Plan and Log are the working area. Status values and when to write:
+<!-- Fill the ticket contract below. Record operations:
      ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->
 
 ## Outcome
@@ -32,20 +31,18 @@ depends_on: []
 {{SCENARIOS}}
 
 ## Alignment
-<!-- The user's confirmation pointer. Shared design may be referenced; this ticket names its own
-     differences. Procedure: ~/.codex/skills/dev-flow/references/planning.md#design-alignment -->
-Awaiting design discussion and user confirmation.
+<!-- Cite the governing decision or contract and this ticket's differences. Identify any unresolved
+     user decision. Procedure: ~/.codex/skills/dev-flow/references/planning.md#design-alignment -->
+Not yet recorded.
 
 ## Acceptance
-<!-- The unchecked boxes are the work left. Each criterion names its observation and owner: tests for
-     observable behavior, direct review for prose, structure, configuration, data, and placement.
-     A box is checked when the review round covering it returns COMPLETED. -->
+<!-- Each criterion names the required observation and its owner. -->
 - [ ] A1: <observable criterion>. Check: <command, acceptor, Orchestrator, user, or external operator>.
 
 ## Mechanical gates
-<!-- For each gate: property/criterion, command and working directory, environment, timeout, execution
-     owner, and pass condition. Prefer existing checks. If none applies, name the direct-review
-     alternative. Procedure: ~/.codex/skills/collab/references/execution.md#gate-preparation -->
+<!-- Property/criterion, command/selection, cwd, environment, timeout, owner, pass condition;
+     or reason no gate applies and direct-review alternative. Preparation:
+     ~/.codex/skills/collab/references/execution.md#gate-preparation -->
 {{CHECKS}}
 
 ## User decisions
@@ -54,9 +51,8 @@ Awaiting design discussion and user confirmation.
 None.
 
 ## Plan
-<!-- Optional milestones when the ticket is built and reviewed in parts; tag each with its criteria. -->
+<!-- Optional execution milestones, tagged with criterion IDs. -->
 
 ## Log
-<!-- Always the last section; locate shows its last line on the INDEX board. Append one line per
-     event, newest last: `- MM-DD HH:MM → <status>: <reason or pointer>`. Append with
-     printf -- "- $(date '+%m-%d %H:%M') → <status>: <reason>\n" >> <this file> -->
+<!-- Necessary collaboration events and acceptance grounds, newest last. Status lives in frontmatter.
+     Recording rules: ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->

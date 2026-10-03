@@ -10,8 +10,9 @@ profile synchronization duties, walkthrough, and measurement limits live in
 rules here. This README is maintainer material and is not part of routine agent startup.
 
 `plan.py locate` counts tickets by Kanban status and regenerates INDEX's `## Tickets` board. It reads
-only ticket frontmatter and each ticket file's last non-empty line, so the board never depends on
-parsing narrative Markdown; the ticket template keeps the Log as the final section for that reason.
+only ticket frontmatter. The board has Ticket, Status, Depends on, and Branch columns; its JSON rows
+also report dependency status and startability. Task-level pending work stays in tracker Plan, and
+execution identities stay in the relevant dispatch or round records, not a latest-line projection.
 Other readable status values count as unknown without declaring their work accepted. An INDEX
 without a `## Tickets` heading, an unreadable INDEX, and archived records are left unchanged.
 `create` scaffolds the task from `templates/task/`, including the `tracker` ticket and a draft
@@ -19,6 +20,9 @@ without a `## Tickets` heading, an unreadable INDEX, and archived records are le
 and lane worktrees both live there. The board lists the tracker first, like a pinned issue.
 
 The record design follows four conventions agents already know: the INDEX board is a Kanban view,
-a ticket is a GitHub issue whose Log is its comment thread, the tracker is the task's tracking
+a ticket is a GitHub issue whose Log indexes necessary events, the tracker is the task's tracking
 issue, and a review round is a PR review.
 Each file has one writer and a next reader, so a missing file surfaces at the step that needs it.
+
+These rules apply to tasks created under the current record convention. Legacy-task resumption and
+migration are not supported; the reader does not detect or convert earlier narrative layouts.

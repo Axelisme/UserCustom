@@ -95,11 +95,12 @@ Launch asynchronously so the Orchestrator can continue independent work. In an i
 return control or use the active goal's yield mechanism and let the terminal notification wake the
 session. Blocking on a child does not make it more authoritative.
 
-Yielding means you were away from the lane while it was written. When the terminal notification lands,
-reread the ticket named by the dispatch (`#acceptance`, `#plan`, and its last Log lines with
-`tail -n 5`) and the file the
-child names: an implementer's gate summary or an acceptor's verdict. Rebuild judgement from those files
-rather than memory or unrelated task history.
+When the terminal notification lands, reread the dispatched ticket's `#acceptance`, `#plan`, and
+the corresponding dispatch or round record. Match child, candidate, and round rather than assuming
+the last few Log lines identify this attempt; follow a retained history pointer when needed.
+Read the file the child names: an implementer's gate summary or an acceptor's verdict. Rebuild
+judgement from those sources and observed checkout/runtime state. Record new facts under dev-flow's
+[record operations](../dev-flow/references/records.md#maintain-the-record).
 
 ## Run control
 

@@ -2,54 +2,52 @@
 
 ## Integrate
 
-Collect a ticket after its review rounds have accepted every applicable criterion, the way a PR merges
-after approval. Collect one ticket at a time with the selected runtime's collection operation while
-other tickets continue.
+Collect one ticket at a time through the selected runtime after every applicable criterion has
+accepted review coverage or the gates-only judgement. Other tickets may continue.
 
-Integration is the branch `wave/<task>/integration`, checked out at
-`.agent_state/worktrees/<task>/integration`, and each lane branches from it as `wave/<task>/<ticket>`.
-Merge the accepted lane into integration and run the ticket's gates on the result. A clean merge whose
-gates pass is collected: close the ticket with its Log line and retire the lane. A conflict, or a clean
-merge whose gates fail, produces an unreviewed change: fix it on the lane under one writer, rerun the
-gates, and hold one more review round on the fix before collecting. The ticket returns to `review` for
-that round.
+Integration is `wave/<task>/integration` at `.agent_state/worktrees/<task>/integration`; lanes
+branch from it as `wave/<task>/<ticket>`. Reconcile before acceptance. Before collection, perform
+[Resource custody](#resource-custody)'s preflight; managed collect retires the lane during the operation.
+Collect the accepted lane, then run ticket gates on integration. When they pass, close the ticket
+and retire any remaining lane resources through the same custody procedure.
+A conflict or failed result gate leaves an unreviewed change: prepare a repair lane if collection
+already retired the original, assign one writer, fix, rerun gates, and review before accepting it.
 
-Interactions between tickets are an integration ticket's criteria; after its dependencies close, the
-Orchestrator runs its gates on integration and reviews it like any ticket. If persistence moved,
-reconcile it into integration through the runtime route, rerun affected checks, and review the imported
-interactions as an integration ticket before landing.
+Stop for tracked dirt, conflicts, missing results, or absent accepted coverage. Changed commits
+follow [Subject changes](review.md#subject-changes). Finish when integration holds accepted work,
+its gates pass, and Log records the collected commit.
 
-Stop collection on conflicts, tracked dirt, missing gate results, or a commit without accepted
-coverage. A different commit needs a new verdict or the Orchestrator's recorded non-semantic reuse
-decision under [Subject changes](review.md#subject-changes). Collection is complete when integration
-contains the accepted work, its gates pass, and the ticket's Log records the collected commit.
+Integration tickets observe interactions after dependencies close. Persistence drift enters through
+the runtime reconciliation route; rerun affected checks and review imported interactions in an
+integration ticket before landing.
 
 ## Land and clean up
 
-Landing needs a current user message or in-force task grant naming persistence mutation and conditions.
-Read dev-flow custody before applying a durable grant. Push needs separate authority. Without landing
-authority, stop at reviewed integration.
+Landing requires current user authority or an in-force task grant naming persistence mutation and
+conditions; apply dev-flow custody. Push requires separate authority. Otherwise retain reviewed
+integration.
 
-Before landing, confirm every ticket in the landing candidate is `closed`, including its integration
-tickets (the tracker delivers no candidate and stays `doing` until archive), and that integration's
-gates pass. Inspect persistence's local state for conflicts, overwrite risk, and index changes that
-could enter the merge commit. Unrelated local modifications may remain when the runtime can preserve
-them without including them in the landed commit. A globally clean checkout is not the policy.
-Check the selected runtime's admission and failure behavior before mutation; stricter runtime limits
-remain blockers, not permission to discard, commit, or stash unrelated work.
+Before mutation, confirm every delivering ticket is closed (including integration tickets; tracker
+delivers no candidate), and integration gates pass. Inspect persistence conflicts, overwrite risks,
+and index changes that could enter the merge. Unrelated edits may remain only when runtime preserves
+them without inclusion; inspect its admission/failure behavior. Stricter limits block landing,
+not authorize discarding, committing, or stashing unrelated work.
 
-Reconcile persistence drift into integration and regain applicable judgement before landing. Managed
-landing creates a two-parent merge with the previous persistence head first and the judged integration
-head second; its tree must equal the judged integration tree.
+Reconcile drift and regain applicable judgement first. Managed landing creates a two-parent merge:
+previous persistence first, judged integration second, with the judged integration tree.
+Stop on missing authority, conflicts, overwrite/inclusion risk, unsupported preservation, live
+consumer handoff risk, candidate drift, hook failure, or unaccepted changes.
 
-Inventory owned resources before retirement, then remove the task-owned temporary files, processes,
-worktrees, and branches whose purpose is complete. Delete only files this task created; stop and ask
-about an unrecognized untracked file. Managed retirement may delete a lane's untracked and ignored
-files; gate logs live in the task's `runs/` and stay. Record each retained resource's owner and
-cleanup condition in its ticket's Log, or in the tracker's when no ticket owns it.
+After landing, apply [Resource custody](#resource-custody) to remaining execution resources.
+Finish with observed landing, preserved local state, and retired or explicitly retained resources.
 
-Stop on missing authority, conflicts, local-state overwrite or inclusion risk, unsupported runtime
-preservation, live consumer handoff risk, candidate drift, hook failure, or unaccepted changes. Ask
-before handling unrecognized files; their presence alone does not authorize cleanup. Completion
-requires confirmed integration or landing, verification that retained local state is preserved, and
-retirement or explicit retention of every execution resource.
+## Resource custody
+
+Preflight any operation that retires resources by inventorying owned files, processes, worktrees,
+and branches. Remove only task-created resources whose purpose is complete. Ask about unrecognized untracked files; their
+presence gives no deletion authority. Managed retirement may delete untracked/ignored lane files,
+so preserve evidence in task runs first. Record retained owner/cleanup conditions in the owning
+ticket's Log, or tracker when no ticket owns the resource.
+
+Proceed only after ownership is established and evidence is safe. After the operation, verify actual
+retirement and preservation of retained local state; record any incomplete cleanup and its owner.

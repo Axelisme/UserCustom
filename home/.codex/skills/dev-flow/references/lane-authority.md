@@ -1,22 +1,21 @@
 # Record permissions
 
-The Orchestrator writes INDEX, tickets, dispatches, and acceptance checkboxes. Two role writes
-exist, each to one file named in the dispatch:
+The Orchestrator writes task records and acceptance checkboxes. Delegated roles have one evidence
+write each, at the location named in dispatch:
 
-- The **implementer** writes the gate summary for its final commit at
-  `runs/<short-sha>/summary.md` in the task container, beside the raw logs: for each gate, the
-  command or selection, working directory, environment, result and exit status, and limitations. The
-  dispatch names the absolute `runs/` path; the implementer adds the commit's short SHA.
-- The **acceptor** writes `review-NN.verdict.md` at the absolute path its dispatch names.
+- Implementer: `runs/<short-sha>/summary.md`, under the absolute runs path supplied by dispatch.
+- Acceptor: the exact absolute `review-NN.verdict.md` path.
 
-The Orchestrator's own gate runs go to `orchestrator.md` in the same `runs/<short-sha>/` directory.
-A manual or external observation is recorded the same way, by whoever performed it; for the user's
-own, the Orchestrator quotes their report. Run a baseline in the lane, on its starting commit.
-Only runs on a clean commit are recorded; a run on uncommitted work stays in stdout or a temporary
-file, so to keep a red run, commit the failing test first.
+Gate evidence names the commit, each command/selection, working directory, environment, result,
+exit status, and limitations, beside raw logs. The Orchestrator uses `orchestrator.md` in the same
+commit directory. Manual/external observations are recorded by their performer; the Orchestrator
+quotes user reports. Baseline observations run in the lane at its starting commit.
+
+Only clean-commit runs become durable evidence. Uncommitted observations stay in stdout or temporary
+files; commit a failing test before retaining its RED run. A summary remains usable when its commit,
+environment, selection, method, result, and limitations apply; a role change alone needs no rerun.
 
 ## A gate you cannot close honestly
 
-Keep each check's required property intact. When satisfying it exceeds the assigned scope or authority,
-report the check, obstruction, and decision needed. This applies to a delegated writer and to the
-Orchestrator implementing directly.
+Preserve the required property. If a check exceeds assigned scope or authority, report the check,
+obstruction, and decision needed, whether implementing directly or through a delegate.

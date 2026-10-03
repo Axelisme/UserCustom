@@ -66,8 +66,11 @@ authority that differs from the skill and repository defaults. Read the scope be
 planning, alignment, new-scope choices, or review-driven design changes.
 
 Design the smallest end-to-end increment that meets the request. Read codebase-design when deciding
-module boundaries or public interfaces. Use to-spec for a frozen implementation contract and
-to-tickets for explicit slicing; keep their artifacts under `spec/`.
+module boundaries or public interfaces. Use to-spec for the specification contract and
+to-tickets for explicit slicing; keep their artifacts under `spec/`. Apply
+[Document authority](records.md#document-authority) to these helpers' confirmation steps: ticket
+granularity, blocking edges, and verification arrangements are execution planning, unless the user
+has fixed them as a decision or they change a contract commitment.
 
 Stop for unresolved deployment, compatibility, trust, authority, or public-behavior choices that can
 change correctness or scope. Planning is complete when the next tickets have bounded outcomes, known
@@ -120,8 +123,9 @@ independent completion path.
 
 ## Design alignment
 
-Inputs are current code, the approved scope, and the proposed ticket or tickets. The Orchestrator
-shows:
+Inputs are current code, the specification contract, and the proposed ticket or tickets. Classify
+proposed changes under [Document authority](records.md#document-authority). When a user decision is
+needed, the Orchestrator presents:
 
 - module responsibilities and callers;
 - key data structures, owners, lifecycle, and role in the scenarios;
@@ -129,9 +133,8 @@ shows:
 - deliberate exclusions such as compatibility, recovery, abstractions, and extension points.
 
 For several tickets, explain shared design once. Each ticket records its differences, scenarios, and
-the same confirmation pointer. The user decides public behavior, responsibilities, data structures
-affecting correctness or maintenance cost, and scope. Implementers retain local coding choices within
-the confirmed plan.
+the governing decision or contract pointer. For changes within that authority, the Orchestrator records
+the alignment without another approval request. Implementers retain their assigned local coding choices.
 
-Stop while a material question remains. Alignment is complete only when the user confirms the resulting
-proposal and each covered ticket records that confirmation in Scenarios, Alignment, and Acceptance.
+Stop while a required user decision is unresolved. Alignment is complete when each ticket's Scenarios,
+Alignment, and Acceptance identify its contract and the authority for any changed commitment.

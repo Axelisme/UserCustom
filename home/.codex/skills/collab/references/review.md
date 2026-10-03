@@ -38,8 +38,9 @@ own contract.
 
 Read the verdict. For each finding decide: fix it, decline it with a reason, or move it to a user
 decision under dev-flow's [Maintain the record](../../dev-flow/references/records.md#maintain-the-record)
-while feasible work continues. A user-owned choice of behavior, scope, authority, data structure, or
-responsibility is never decided inside a correction.
+while feasible work continues. Classify proposed changes under dev-flow's
+[Document authority](../../dev-flow/references/records.md#document-authority). A user-owned choice of
+behavior, scope, authority, data structure, or responsibility is never decided inside a correction.
 
 For fixes, set the ticket back to `doing` and assign bounded corrections by pointing at the verdict
 path and finding IDs. The Orchestrator changes interfaces and formal tests; the implementer changes

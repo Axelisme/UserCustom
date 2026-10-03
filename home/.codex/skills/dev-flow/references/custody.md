@@ -18,8 +18,10 @@ the order itself stays inline. Retain existing valid orders under their original
 they lapse or the user revokes or replaces them.
 
 **Resolve ratification by address.** Before asking for assent, persist the proposal; then write
-the user's quote to `decisions/NNNN-slug.md` with a pointer to that frozen text. Preserve the approved text and obtain new ratification
-for amendments. An antecedent recovered after the fact carries an explicit `reconstructed` label.
+the user's quote to `decisions/NNNN-slug.md` with a pointer to that frozen text. Preserve that text as the
+ratification source. Classify proposed revisions under [Document authority](records.md#document-authority);
+obtain new ratification for a changed user decision or contract commitment. An antecedent recovered
+after the fact carries an explicit `reconstructed` label.
 
 **Keep verbatim quotes on one line.** A verbatim `「...」` quote must open and close on one physical line because line wrapping makes exact custody ambiguous.
 

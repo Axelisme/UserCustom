@@ -16,7 +16,8 @@ ends when the user completes or abandons it.
 - [ ] A1: The user declares the task complete or abandoned. Check: user.
 
 ## Plan
-<!-- Task-level unfinished items and waiting conditions, with pointers to their owners.
+<!-- Execution plan: task-level unfinished items and waiting conditions, with pointers to their owners.
+     Change authority: ~/.codex/skills/dev-flow/references/records.md#document-authority
      Recording rules: ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->
 - [ ] Settle the scope and ticket contracts; see `spec/scope.md`.
 

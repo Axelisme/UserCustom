@@ -5,8 +5,9 @@ depends_on: []
 ---
 # {{TICKET_ID}}: {{TITLE}}
 
-<!-- The sections through User decisions are the contract, settled before `ready` and rarely edited
-     after. Plan and Log are the working area. Status values and when to write:
+<!-- The sections through User decisions hold the specification contract, settled before `ready`.
+     Change authority: ~/.codex/skills/dev-flow/references/records.md#document-authority
+     Plan is execution planning; Log indexes necessary events. Status values and when to write:
      ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->
 
 ## Outcome
@@ -32,9 +33,9 @@ depends_on: []
 {{SCENARIOS}}
 
 ## Alignment
-<!-- The user's confirmation pointer. Shared design may be referenced; this ticket names its own
-     differences. Procedure: ~/.codex/skills/dev-flow/references/planning.md#design-alignment -->
-Awaiting design discussion and user confirmation.
+<!-- Cite the governing decision or contract and this ticket's differences. Identify any unresolved
+     user decision. Procedure: ~/.codex/skills/dev-flow/references/planning.md#design-alignment -->
+Not yet recorded.
 
 ## Acceptance
 <!-- The unchecked boxes are the work left. Each criterion names its observation and owner: tests for
@@ -54,7 +55,8 @@ Awaiting design discussion and user confirmation.
 None.
 
 ## Plan
-<!-- Optional milestones when the ticket is built and reviewed in parts; tag each with its criteria. -->
+<!-- Execution plan: optional milestones, tagged with their criteria.
+     Change authority: ~/.codex/skills/dev-flow/references/records.md#document-authority -->
 
 ## Log
 <!-- Necessary collaboration events and acceptance grounds, newest last. Status lives in frontmatter.

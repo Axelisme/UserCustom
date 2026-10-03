@@ -33,6 +33,7 @@ several pointers in order.
   [Tickets](references/planning.md#tickets).
 - Select tickets to run together: [Parallel tickets](references/planning.md#parallel-tickets) and
   [Design alignment](references/planning.md#design-alignment).
+- Classify a proposed decision, contract, or plan change: [Document authority](references/records.md#document-authority).
 - Change a ticket's status, write its Log, or record a user decision:
   [Maintain the record](references/records.md#maintain-the-record).
 - Prepare a review dispatch or read a verdict: [Review rounds](references/records.md#review-rounds).

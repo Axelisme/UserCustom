@@ -5,9 +5,7 @@ depends_on: []
 ---
 # {{TICKET_ID}}: {{TITLE}}
 
-<!-- The sections through User decisions hold the specification contract, settled before `ready`.
-     Change authority: ~/.codex/skills/dev-flow/references/records.md#document-authority
-     Plan is execution planning; Log indexes necessary events. Status values and when to write:
+<!-- Fill the ticket contract below. Record operations:
      ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->
 
 ## Outcome
@@ -38,15 +36,13 @@ depends_on: []
 Not yet recorded.
 
 ## Acceptance
-<!-- The unchecked boxes are the work left. Each criterion names its observation and owner: tests for
-     observable behavior, direct review for prose, structure, configuration, data, and placement.
-     A box is checked when the review round covering it returns COMPLETED. -->
+<!-- Each criterion names the required observation and its owner. -->
 - [ ] A1: <observable criterion>. Check: <command, acceptor, Orchestrator, user, or external operator>.
 
 ## Mechanical gates
-<!-- For each gate: property/criterion, command and working directory, environment, timeout, execution
-     owner, and pass condition. Prefer existing checks. If none applies, name the direct-review
-     alternative. Procedure: ~/.codex/skills/collab/references/execution.md#gate-preparation -->
+<!-- Property/criterion, command/selection, cwd, environment, timeout, owner, pass condition;
+     or reason no gate applies and direct-review alternative. Preparation:
+     ~/.codex/skills/collab/references/execution.md#gate-preparation -->
 {{CHECKS}}
 
 ## User decisions
@@ -55,8 +51,7 @@ Not yet recorded.
 None.
 
 ## Plan
-<!-- Execution plan: optional milestones, tagged with their criteria.
-     Change authority: ~/.codex/skills/dev-flow/references/records.md#document-authority -->
+<!-- Optional execution milestones, tagged with criterion IDs. -->
 
 ## Log
 <!-- Necessary collaboration events and acceptance grounds, newest last. Status lives in frontmatter.

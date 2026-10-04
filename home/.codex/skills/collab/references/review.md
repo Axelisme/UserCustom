@@ -21,7 +21,9 @@ When one range is too large for a reviewer to read well, split it into consecuti
 one acceptor each. Size decides only the split, never the timing.
 
 Run applicable gates on the head and send the filled `../../dev-flow/templates/ticket/review.md` as
-the dispatch. Integration may keep moving while the acceptor reads; the review covers only the named
+the dispatch. When the repository declares import contracts, list the package-level import edges the
+range adds; the acceptor treats an added edge that no contract covers as a finding, fixed by adding
+a contract or stating why the edge is legitimate. Integration may keep moving while the acceptor reads; the review covers only the named
 head. The acceptor judges the named criteria and the logic of the diff from contract, declarations,
 callers, tests, and gate results. It runs no tests, imports, linters, formatters, builds, or runtime
 gates, and writes only the verdict. A missing input that prevents judgement is a BLOCKED finding.

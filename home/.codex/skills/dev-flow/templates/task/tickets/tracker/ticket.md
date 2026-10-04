@@ -15,8 +15,9 @@ ends when the user completes or abandons it.
 - [ ] A1: The user declares the task complete or abandoned. Check: user.
 
 ## Plan
-<!-- Task-level unfinished work and waiting conditions, with pointers to their owners. -->
-- [ ] Settle the scope and ticket contracts; see `spec/scope.md`.
+<!-- One line per line of work in flight: `Next: <action> — waiting on <who>`, pointing to the owning
+     ticket, question, or decision. Rewrite the whole section on every change. -->
+- Next: settle the scope and ticket contracts in `spec/scope.md` — waiting on Orchestrator.
 
 ## Resources
 <!-- Task-created resources the collab tools do not track and that outlive a lane: background

@@ -22,8 +22,11 @@ Records hold only what an agent needs now or later and cannot recover from code,
 tools; the user rarely reads them. Mutable sections (Plan, Notes, Resources, the decision routing
 list, gate summaries) are rewritten whole as snapshots instead of appended, so they cannot grow into
 a diary. Only decision files accumulate, and `decisions/README.md` routes them by domain.
-User decisions bind; `spec/` is design reference the Orchestrator may redesign. Review covers ranges
-of integration rather than tickets; see Collab's `references/review.md`.
+User decisions bind; `spec/` is design reference the Orchestrator may redesign. A decision file
+carries the user's verbatim answer with the adopted option in full, so a redesign can consult the
+user's own words; anything without a user quote belongs in `spec/`. Tracker Plan holds one `Next:`
+line per line of work in flight, which Resume reads; there is no separate handoff record. Review
+covers ranges of integration rather than tickets; see Collab's `references/review.md`.
 
 These rules apply to tasks created under the current record convention. Legacy-task resumption and
 migration are not supported; the reader does not detect or convert earlier narrative layouts.

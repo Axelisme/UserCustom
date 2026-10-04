@@ -7,15 +7,16 @@ happens later, over ranges of integration ([Range review](review.md#range-review
 continue.
 
 Integration is `wave/<task>/integration` at `.agent_state/worktrees/<task>/integration`; lanes
-branch from it as `wave/<task>/<ticket>`. Reconcile before collection. Before collection, perform
-[Resource custody](#resource-custody)'s preflight; managed collect retires the lane during the operation.
-Collect the lane, then run ticket gates on integration. When they pass, close the ticket
-and retire any remaining lane resources through the same custody procedure.
-A conflict or failed result gate needs a fix: prepare a repair lane if collection already retired
-the original, assign one writer, fix, and rerun gates.
+branch from it as `wave/<task>/<ticket>`. Collection fast-forwards integration to the lane tip
+(native Git: `git merge --ff-only`), so the lane tip's gate record already covers integration; do
+not rerun the ticket's gates there. A stale lane is reconciled first and its gates rerun on the lane.
+Before collection, perform [Resource custody](#resource-custody)'s preflight; managed collect retires
+the lane during the operation. After collection, close the ticket and retire any remaining lane
+resources through the same custody procedure. A conflict or failed gate needs a fix on the lane, or
+on a repair lane if collection already retired the original: assign one writer, fix, and rerun gates.
 
 Stop for tracked dirt, conflicts, or missing results. Finish when integration holds the collected
-work and its gates pass.
+lane tip and that tip's gates passed.
 
 Integration tickets observe interactions after dependencies close. Persistence drift enters through
 the runtime reconciliation route; rerun affected checks, and the next range review judges the merge

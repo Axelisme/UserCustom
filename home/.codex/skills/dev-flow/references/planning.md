@@ -3,37 +3,24 @@
 ## Resume
 
 Run `scripts/plan.py locate <task-id>`; for an unknown ID, use `list` and its returned lookup_id.
-Read INDEX Goal, board, and all active Standing orders. Tracker Plan names task-level unfinished
-work and waiting conditions. If it disagrees with a question or decision, read that original and
-repair Plan. An unchecked item does not prove an answer is missing; an answer does not prove work resumed.
+Read INDEX Goal, board, and all active Standing orders, then the tracker Plan's `Next:` lines. Each
+line names one action in flight or waiting, whom it waits on, and its owning ticket, question, or
+decision.
 
-Follow Plan to the relevant todo ticket and the doing or blocked work in flight. Read the selected
-ticket's Acceptance, Plan, and Notes. Observe the named checkout with Git log/status and the collab
-status tool; past records are not current runtime state. Stop if the checkout or executor state is
-uncertain.
+For the selected line, read the ticket's Acceptance, Plan, and Notes. Observe the named checkout with
+Git log/status and the collab status tool; past records are not current runtime state. Stop if the
+checkout or executor state is uncertain. When a `Next:` line disagrees with Git or a decision, the
+observed fact or the decision wins; repair the line.
 
 Remain read-only until one bounded action, owner, checkout, and applicable authority are known.
-If INDEX and Plan cannot name it, repair Plan from known owners and observed Git/runtime facts,
-or ask for the missing decision. Do not scan the task graph to infer state.
+If Plan cannot name it, repair Plan from known owners and observed Git/runtime facts, or ask for the
+missing decision. Do not scan the task graph to infer state.
 Open other contracts and source when that action needs them.
 
-## Handoff
-
-Before compaction or session transfer, compare needed facts with their
-[owners](records.md#maintain-the-record). Repair missing authority, decisions,
-blockers, or acceptance results. If facts are already saved and unchanged, make no task changes.
-Refresh the board only when changed frontmatter requires it.
-
-Give control root, task ID, and INDEX path. Add exact source pointers only when needed for the next
-action and not reachable from that entry. Leave durable content in its owners rather than copying
-a task recap or pointer graph. Carry only otherwise unrecoverable working context, labelled as
-hypothesis, interrupted reasoning, unrecorded dialogue, or transient detail; use None if absent.
-Mutable Git facts need reobservation, not a trusted snapshot.
-
-If repair is blocked, name its record and blocker, and preserve otherwise lost input explicitly as
-unrecorded material with source or verbatim text. It grants no authority. Handoff is complete when
-the entry leads to the next bounded action and durable repairs are saved or explicitly blocked.
-The receiver uses Resume and governing originals; child dispatch still needs its complete assignment.
+Before compaction or a session change, keep the `Next:` lines and Notes current; snapshot records
+leave nothing else to save. A context transfer message, such as a runtime handoff tool's, gives the
+INDEX path plus only what records cannot hold: an unverified hypothesis, interrupted reasoning, or
+user dialogue not yet recorded, each labelled. It grants no authority and copies no record content.
 
 ## Plan
 
@@ -56,19 +43,12 @@ observable acceptance, and named owners. Later uncertain work stays todo.
 ## Tickets
 
 Use `../templates/ticket/ticket.md`. The Orchestrator owns its contract, dependencies, status,
-criteria, checkboxes, Plan, and Notes. Before ready, check current code and instructions and supply:
-
-- outcome, write scope, exclusions, dependencies, runtime assumptions, and decision boundaries;
-- existing interface owners and authorized public changes;
-- scenarios and an Alignment pointer;
-- criteria with observation and execution owners;
-- a complete existing contract or exact seed/interface/caller/test locations and remaining work;
-- executable gates or a justified direct-review alternative.
-
-Prepare the checkout, contract, and observations through Collab's
-[preparation sequence](../../collab/references/execution.md#prepare). Missing interface ownership,
-unresolved decisions from Plan, or observations without owners stop implementation. Preparation ends
-with a settled, independently checkable contract, seed, and gates; then mark ready.
+criteria, checkboxes, Plan, and Notes. Fill the template's sections against current code and
+instructions. A ticket is ready when its Mechanical gates list commands that run as written and, for
+TDD, a formal test fails for the intended missing behavior. An unresolved user decision or an unknown
+interface owner keeps it todo. Collab's [Prepare](../../collab/references/execution.md#prepare) sets up
+the checkout and gates; a delegated ticket also needs its
+[Delegate](../../collab/references/execution.md#delegate) brief.
 
 Start after dependencies close (gates passed and collected). If a downstream needs an interface early,
 give the interface a small prerequisite ticket. Before a ticket starts using a public interface from an unreviewed range of integration, run a

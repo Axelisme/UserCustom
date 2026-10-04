@@ -36,7 +36,7 @@ or messaging tools add no Collab lifecycle operation.
 
 ## Dispatch
 
-Read Collab [Prepare](references/execution.md#prepare),
+Read Collab [Prepare](references/execution.md#prepare), [Delegate](references/execution.md#delegate),
 [Results and continuity](references/execution.md#results-and-continuity), and
 [Correct and decide](references/review.md#correct-and-decide) for the portable loop.
 

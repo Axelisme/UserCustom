@@ -23,7 +23,7 @@ depends_on: []
 ## Contract starting point
 <!-- Existing complete contract, or the Orchestrator's seed commit with exact interface, declaration,
      shipped caller, formal-test locations, expected failures, and remaining internal implementation.
-     Procedure: ~/.codex/skills/collab/references/execution.md#contract-seed -->
+     Procedure: ~/.codex/skills/collab/references/execution.md#delegate -->
 {{CONTRACT_STARTING_POINT}}
 
 ## Scenarios
@@ -40,14 +40,16 @@ Not yet recorded.
 - [ ] A1: <observable criterion>. Check: <command, acceptor, Orchestrator, user, or external operator>.
 
 ## Mechanical gates
-<!-- Property/criterion, command/selection, cwd, environment, timeout, owner, pass condition;
-     or reason no gate applies and direct-review alternative. Preparation:
+<!-- One line per gate: the criterion it checks and a command that runs as written, with its cwd; or
+     why no gate applies and the direct observation that replaces it. Run results go to
+     runs/<short-sha>/summary.md. Preparation:
      ~/.codex/skills/collab/references/execution.md#gate-preparation -->
 {{CHECKS}}
 
 ## User decisions
-<!-- Each entry: the question (scenario, impact, options, recommendation) and a link to the user's
-     answer in `../../decisions/NNNN-slug.md`. -->
+<!-- Open question: scenario, impact, options, recommendation. Once answered, replace the entry with
+     a link to `../../decisions/NNNN-slug.md`, which holds the question, adopted option, and verbatim
+     answer. Rules: ~/.codex/skills/dev-flow/references/records.md#user-decisions -->
 None.
 
 ## Plan

@@ -21,8 +21,7 @@ for both skills, including helper-generated plans and review corrections.
 
 Open operation sections with `mdsec <absolute-path>#anchor ...`.
 
-- Resume: [Resume](references/planning.md#resume).
-- Transfer context: [Handoff](references/planning.md#handoff).
+- Resume, or prepare for compaction or a new session: [Resume](references/planning.md#resume).
 - Plan or change work: [Plan](references/planning.md#plan), then [Tickets](references/planning.md#tickets).
 - Schedule concurrent work: [Parallel tickets](references/planning.md#parallel-tickets).
 - Record shared design and scenarios: [Design alignment](references/planning.md#design-alignment).

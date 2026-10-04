@@ -2,14 +2,15 @@
 
 Preserve user-issued authority with its original conditions. A custody mutation needs a current user
 message or an in-force task grant naming that mutation. When a grant activates another skill,
-reference that skill's contract for its grants and exclusions. Scope cites its governing decisions
-and frozen proposals; revisions enter dev-flow's shared Document authority decision.
+reference that skill's contract for its grants and exclusions. Scope cites its governing decisions;
+revisions enter dev-flow's shared Document authority decision.
 
 ## Ratification
 
-Persist a proposal before asking for assent. Save the user's verbatim answer with a pointer to that
-frozen text in decisions; keep the ratification source intact. An antecedent recovered afterward is
-explicitly labelled reconstructed. Keep each verbatim `「...」` quote on one physical line.
+Write the question and its options into the record before asking, so the user answers text that
+exists. The decision file copies the question and the adopted option in full and quotes the answer
+verbatim; keep no separate frozen copy or hash. A question recovered after the user answered it is
+labelled reconstructed. Keep each verbatim `「...」` quote on one physical line.
 
 ## Standing orders
 

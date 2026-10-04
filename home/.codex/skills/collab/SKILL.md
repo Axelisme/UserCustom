@@ -20,6 +20,7 @@ a fresh spawn. Candidate workflow documents do not authorize their own adoption.
 Use `mdsec <absolute-path>#anchor ...` for the action's sections.
 
 - Prepare work: [Placement](references/execution.md#placement), then [Prepare](references/execution.md#prepare).
+- Hand work to an implementer: [Delegate](references/execution.md#delegate).
 - Implement or recover a result: [Implement](references/execution.md#implement),
   [Results and continuity](references/execution.md#results-and-continuity).
 - Review: [Range review](references/review.md#range-review), then [Correct and decide](references/review.md#correct-and-decide).

@@ -1,57 +1,42 @@
 # Review and correction
 
-## Review
+## Range review
 
-Review one ticket's candidate before collection. A gates-only ticket may skip the round only if it
-is trivial, has no behavior/contract at stake, and every criterion is mechanical; the Orchestrator
-judges its gates. Any criterion gates cannot establish needs review.
+Review covers ranges of integration commits, not tickets. Every product-code and test change must be
+read in some range review before landing. Gates and the Orchestrator check documents, prose, and
+configuration directly. Fewer reviews cost less time and tokens; the price is finding defects later.
 
-Reconcile the lane with current integration and run applicable gates. Prepare an exact clean commit
-and tree, baseline, stopped writer, gate summaries, and named criteria. Send the complete assignment
-under dev-flow [Review rounds](../../dev-flow/references/records.md#review-rounds), mark review, and
-save its round identity. Freeze the checkout until the verdict. To continue the next milestone,
-give the acceptor a detached worktree at the subject and work in the lane; otherwise work independent
-tickets.
+The Git ref `refs/collab/<task>/reviewed` marks the last integration commit a review has read. Before
+the first review it does not exist, and the range starts at the commit integration was created from.
+Commits brought in from persistence by reconciliation were reviewed there; judge only their merge
+resolution.
 
-The acceptor judges assigned criteria and directly related instances from the contract, diff,
-declarations, callers, tests, and observations, including static facts and gate sufficiency. It keeps
-checkouts unchanged and runs no tests, imports, linters, formatters, builds, or runtime gates.
-Its only write is the dispatched verdict; missing/stale observations return to their execution owner.
+Review a range at two points only:
 
-Missing baseline/authority/evidence, dirty or mutable subject, active writer, or ambiguous criteria
-makes a round UNREVIEWABLE. Repair the input and start the next round; repeated preparation failure
-stops with its owner. A verdict completes the judgement as COMPLETED for named criteria at that
-commit, or BLOCKED with all supported defects, locations, criteria, evidence, and bounded fixes.
-Specialized Standards and Spec review uses code-review's separate contract.
+- Before landing, review `reviewed..HEAD` of integration.
+- Before a ticket starts using a public interface that sits in the unreviewed range, review a range
+  that covers that interface. Downstream work then never builds on an interface a review may reject.
+
+When one range is too large for a reviewer to read well, split it into consecutive commit sub-ranges,
+one acceptor each. Size decides only the split, never the timing.
+
+Run applicable gates on the head and send the filled `../../dev-flow/templates/ticket/review.md` as
+the dispatch. Integration may keep moving while the acceptor reads; the review covers only the named
+head. The acceptor judges the named criteria and the logic of the diff from contract, declarations,
+callers, tests, and gate results. It runs no tests, imports, linters, formatters, builds, or runtime
+gates, and writes only the verdict. A missing input that prevents judgement is a BLOCKED finding.
+
+After a verdict, COMPLETED or BLOCKED, move the ref to the reviewed head with
+`git update-ref refs/collab/<task>/reviewed <head>`. For a split, move it only after every sub-range
+has a verdict, in order. The ref records what was read; open findings are tracked separately below.
 
 ## Correct and decide
 
 Read the verdict and choose fix, decline with reason, or refer to a user decision for every finding.
-Revisions enter dev-flow Plan's common change decision; corrections do not have a separate approval
-policy. Continue feasible independent work while a decision is pending.
+Refer only a finding whose fix would contradict a user decision; settle the rest under dev-flow's
+[Document authority](../../dev-flow/references/records.md#document-authority). Keep open findings in
+tracker Plan with the verdict path.
 
-For fixes, set doing and assign verdict path/finding IDs to the proper writer: Orchestrator for
-interfaces/formal tests, implementer for assigned internal logic. Rerun applicable gates and use
-Subject changes below. The next dispatch includes all prior finding dispositions and judges fixes,
-new diff, and touched interactions rather than unrelated history.
-
-On COMPLETED, check established criteria and save the verdict pointer. Once all applicable criteria
-have coverage, [collect](integration.md#integrate). Gates alone cannot establish review coverage.
-If correction/verification/decision cannot proceed, mark blocked and record blocker/owner; resume
-after a change, new evidence, or owner decision supplies a defensible action.
-
-## Subject changes
-
-Semantic changes need a fresh dispatch. Meaning includes behavior, contract, document content,
-configuration, responsibility placement, and validation sufficiency; diff size proves no equivalence.
-A changed review contract voids the round; identify the change in the next numbered dispatch.
-
-For non-semantic changes, inspect the delta and decide reuse versus another round by risk and cost.
-Log old/new commits and trees, affected criterion IDs, evidence of unchanged meaning, gate
-applicability, and time/token/risk rationale. Keep summaries at actual execution commits; their owner
-supplies missing observations. If equivalence or applicability is uncertain, dispatch again.
-
-An active acceptor may finish on its frozen subject while the lane changes elsewhere. Its verdict
-always keeps that subject; only the Orchestrator's recorded decision carries completed coverage
-forward. BLOCKED/UNREVIEWABLE cannot become approval through reuse, and a dirty or unexplained
-review checkout remains UNREVIEWABLE.
+Fix through a ticket on a lane like any other change: gates, collection, close. The next range review
+covers the fix commits and names the findings they address in Prior findings. Landing needs the ref at
+integration HEAD and the latest verdict COMPLETED with every prior finding resolved or declined.

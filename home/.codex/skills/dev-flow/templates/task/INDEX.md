@@ -5,7 +5,8 @@ task_id: {{TASK_ID}}
 
 ## Goal
 <!-- The outcome the user asked for, in one or two sentences; it changes only when the user redefines
-     it. Scope is `spec/scope.md`, decisions are `decisions/`, and progress is the board below. -->
+     it. Scope is `spec/scope.md`, decisions are routed by `decisions/README.md`, and progress is the
+     board below. -->
 Not yet recorded.
 
 ## Tickets

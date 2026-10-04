@@ -22,7 +22,7 @@ Use `mdsec <absolute-path>#anchor ...` for the action's sections.
 - Prepare work: [Placement](references/execution.md#placement), then [Prepare](references/execution.md#prepare).
 - Implement or recover a result: [Implement](references/execution.md#implement),
   [Results and continuity](references/execution.md#results-and-continuity).
-- Review: [Review](references/review.md#review), then [Correct and decide](references/review.md#correct-and-decide).
+- Review: [Range review](references/review.md#range-review), then [Correct and decide](references/review.md#correct-and-decide).
 - Reconcile/collect: [Integrate](references/integration.md#integrate).
 - Land: [Land and clean up](references/integration.md#land-and-clean-up).
 - Retire resources: [Resource custody](references/integration.md#resource-custody).
@@ -40,6 +40,6 @@ grants, the assigned ticket, and its operation section; receivers get a bounded 
 sources, not instructions to scan INDEX or the task graph.
 
 Collab uses collab-implementer for bounded internal changes and collab-acceptor for acceptance.
-Their public contracts supply role permissions and result requirements. Prepare and Review supply
-the assignment-specific inputs. Launch in the background and continue independent work; when none
+Their public contracts supply role permissions and result requirements. Prepare and Range review
+supply the assignment-specific inputs. Launch in the background and continue independent work; when none
 remains, return control rather than polling.

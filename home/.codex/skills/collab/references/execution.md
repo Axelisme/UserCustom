@@ -61,7 +61,7 @@ For TDD, read tdd and prepare the plan during RED; the focused behavior test mus
 missing behavior, not setup/import/collection errors. Add tests incrementally. Other gates need not
 run or fail in RED; non-TDD work needs preparation without an invented RED.
 Run required gates at GREEN and delivery. Plan expensive/assembled checks with an owner: run on the
-lane before review or assign an integration ticket. Record observations under dev-flow
+lane before collection or assign an integration ticket. Record observations under dev-flow
 [Record permissions](../../dev-flow/references/lane-authority.md).
 
 ## Test ownership
@@ -88,7 +88,7 @@ A timeout is incomplete. Rerun after a change, new hypothesis, or explicit repro
 unchanged repeated diagnostics stop with their blocker.
 
 Completion requires a clean committed candidate and gate summary beside raw logs under
-`runs/<short-sha>/summary.md` (Orchestrator uses orchestrator.md). Return commit and summary path.
+`runs/<short-sha>/summary.md`. Return commit and summary path.
 A blocked result names all known obstructions and the next decision/execution owner.
 
 ## Results and continuity
@@ -97,7 +97,7 @@ Role payloads keep outcome COMPLETED or BLOCKED, optional message, and required 
 A COMPLETED implementer names commit/summary in message; an acceptor names its verdict. Missing named
 files make a result incomplete. Use `Residual risks:` for non-blocking findings, not a new result field.
 
-Inspect actual checkout and gate evidence before sending a writer's candidate to review; its result
+Inspect actual checkout and gate evidence before collecting a writer's candidate; its result
 does not substitute for observation. Save new outcome facts under dev-flow record operations.
 For interruption, inspect checkout, result, and executor state before resuming or replacing.
 A replacement receives original assignment, blockers, verified/unverified work, environment,

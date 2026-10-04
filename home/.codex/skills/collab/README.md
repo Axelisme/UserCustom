@@ -10,11 +10,11 @@ together. Most actions need one branch of that workflow. The short entries retai
 route to a few self-contained operation documents, which lowers routine reading without hiding
 authority or completion rules behind an implied second read.
 
-The record follows conventions agents already know, so it needs few rules: the INDEX board is a Kanban
-view, a ticket is a GitHub issue whose append-only Log indexes necessary events, the tracker is the
-task's tracking issue, and a review round is a PR review that happens before merge. Each file has one
-writer and a next reader, so a missing file surfaces at the step that needs it rather than going
-stale unnoticed.
+Task records hold only what an agent needs now or later and cannot recover from code, Git, or the
+collab tools. Mutable sections are rewritten whole as snapshots, so no record grows into a diary.
+User decisions in `decisions/` bind; `spec/` is design reference the Orchestrator may redesign after
+weighing implementation cost, so agents stop to ask only when a change would contradict a user
+decision.
 
 The Orchestrator implements most work itself. Implementers run weaker models, and a writer that can
 edit the tests it must pass tends to weaken them, so the Orchestrator keeps formal tests and
@@ -24,7 +24,7 @@ interfaces and delegates only settled internal changes when it chooses to.
 
 | Concern | Owner |
 |---|---|
-| Task scope, tickets, status, Log, review round records | `dev-flow` |
+| Task scope, tickets, status, decisions, Notes, Resources | `dev-flow` |
 | Writer placement, dispatch, tests, review procedure, correction | `collab` |
 | Git integration, landing, resource cleanup | `collab` plus dev-flow custody |
 | Receiver scope, inputs, authority, and results | The role profile's shared `parent` contract, retrieved through role queries |
@@ -41,31 +41,22 @@ another brief.
 |---|---|---|---|
 | Orchestrator | Both short entries, INDEX, selected operation sections, the tickets in flight, role summaries and the selected public contract | INDEX Goal and Standing orders, tickets including the tracker, decisions, dispatches, its own gate summaries | Other operations, private profile fields and child procedures, inactive tickets and logs |
 | Implementer | Injected shared contract and child instructions, bounded dispatch, named contract anchors, repository instructions, technical skills, seed/caller/test locations, environment, gates, verdict findings for a correction | The lane and its gate summary | INDEX, other tickets, landing and archive rules |
-| Acceptor | Injected shared contract and child instructions, and full dispatch: subject, baseline, criteria, gate summary paths, prior finding dispositions | One verdict file | Implementation sequence, provisioning, scheduling, landing, gate execution procedures |
+| Acceptor | Injected shared contract and child instructions, and full dispatch: commit range, tickets and criteria, gate summary path, prior findings | One verdict file | Implementation sequence, provisioning, scheduling, landing, gate execution procedures |
 
 A dispatch states exact repository instruction and technical skill paths with read conditions, and
 names explicit absence. "Follow relevant rules" is not a usable source pointer.
 
-## Ticket review
+## Range review
 
-The acceptance unit is one ticket, reviewed on its lane before collection, like a PR reviewed before
-merge. One acceptor judges the criteria a round names on one exact clean commit with a baseline and a
-stopped writer. Questions, missing baselines, mutable subjects, and withdrawn prerequisites are
-assignment failures, not defect verdicts.
+Every product-code and test change is read once in a review of an integration commit range, not once
+per ticket. A ref, `refs/collab/<task>/reviewed`, marks how far review has read, so "everything was
+reviewed" is a Git fact checked before landing. Merging reviews saves time and tokens; the cost is
+finding defects later. The one early review guards the expensive case: a ticket about to build on a
+public interface that no review has read yet. Size only splits a range among acceptors.
 
-Tickets wait for their dependencies to close, so downstream work never builds on code a review may
-still reject; an interface needed early becomes its own small ticket. Interactions between tickets are
-the acceptance criteria of an integration ticket, reviewed on integration after its dependencies
-close. A merge that conflicts or fails gates after acceptance gets one more round on the fix.
-
-Re-review judges the previous findings, the new diff, and the interactions it touches, with applicable
-gate evidence. Semantic changes need a fresh dispatch. For non-semantic changes, the Orchestrator
-may reuse coverage under [Subject changes](references/review.md#subject-changes), considering time,
-token cost, and risk. The frozen review checkout and original verdict keep their exact subject identity.
-
-The full assignment travels in dispatch; the verdict remains a Markdown file with subject, criteria,
-and evidence references. The ticket Log records enough round identity to recover an active child.
-This avoids maintaining a second copy of the assignment solely to survive child compaction.
+Tickets close on gates and collection. Findings become fix tickets, and the next range review reads
+the fix commits. Review inputs are pointers, not copies, and the review checkout is not frozen; the
+verdict records the head it read.
 
 ## Tests and gate results
 
@@ -73,10 +64,10 @@ The Orchestrator owns formal behavior tests and public interface declarations. I
 formal tests and use temporary probes, but return test or interface changes to the Orchestrator.
 Direct Orchestrator work keeps the same alignment, one-writer, gate, and review duties.
 
-Whoever runs a gate on a clean commit writes its summary beside the raw logs in the task's
-`runs/<short-sha>/`. The dispatch points to those summaries; nobody retypes them.
-Reuse a result when the exact commit, environment, selection, method, result, and limitations still
-apply. Missing summaries, changed subjects, wrong selections, timeouts, flaky results, or
+Whoever runs gates on a commit writes `runs/<short-sha>/summary.md` with fixed fields beside the
+raw logs, only for a lane tip about to be collected or an integration head about to be reviewed.
+Ordinary TDD cycles keep nothing; a bug reproduction keeps its RED run. The dispatch points to those
+summaries; nobody retypes them. Missing summaries, wrong selections, timeouts, flaky results, or
 contradictions return to the execution owner. Acceptors read the summaries but never run tests,
 imports, linters, formatters, builds, or runtime workflows.
 
@@ -105,11 +96,10 @@ the same Pi profiles through the subagent MCP, so there is no second profile set
 
 Before release, walk these cases against the candidate: direct Orchestrator work, a fresh implementer
 and acceptor, dependent tickets, independent parallel tickets, an integration ticket, RED gate
-preparation, non-TDD direct review, correction and re-review, a review round that runs while the
-Orchestrator works the next frontier ticket, a milestone review from a detached checkout while the
-lane continues, a merge conflict after acceptance, blocked gates, an unreviewable
-assignment, stale gate results, persistence drift, and a profile update between old and fresh
-attempts. Check each path's authority, stop, completion, criterion coverage, and record owner.
+preparation, a bug reproduction, a range review before landing, an early range review before a
+downstream ticket uses an unreviewed interface, a split range, findings fixed and read by the next
+range, a merge conflict after collection, blocked gates, stale gate results, persistence drift, and a
+profile update between old and fresh attempts. Check each path's authority, stop, completion, criterion coverage, and record owner.
 
 `pi-context-audit` measures a real window: cost, context composition, record upkeep, and tool-call
 batching. Document size alone is not tokenizer output, cumulative prompt savings, or proof that agents

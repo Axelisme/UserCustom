@@ -27,7 +27,7 @@ Open operation sections with `mdsec <absolute-path>#anchor ...`.
 - Schedule concurrent work: [Parallel tickets](references/planning.md#parallel-tickets).
 - Record shared design and scenarios: [Design alignment](references/planning.md#design-alignment).
 - Save changed facts: [Maintain the record](references/records.md#maintain-the-record).
-- Prepare review records: [Review rounds](references/records.md#review-rounds).
+- Record a user answer: [User decisions](references/records.md#user-decisions).
 - Finish a ticket or task: [Close](references/records.md#close), [Archive](references/records.md#archive).
 
 Read [custody](references/custody.md) when recording or applying user authority, including standing

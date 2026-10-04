@@ -1,34 +1,28 @@
-# {{TICKET_ID}} review {{NN}}
+# Range review {{NN}}
 
-<!-- Message template: send the filled body as the child dispatch. No review-NN.md task file is
-     required. Procedure: ~/.codex/skills/collab/references/review.md#review -->
+<!-- Message template: send the filled body as the child dispatch. No task file is required.
+     Procedure: ~/.codex/skills/collab/references/review.md#range-review -->
 
-## Subject
-<!-- Exact commit/tree, baseline commit, frozen review checkout, and stopped-writer confirmation. -->
+## Range
+<!-- Integration checkout, base commit (refs/collab/<task>/reviewed, or the commit integration was
+     created from), and head commit. A split names its commit sub-range. -->
 
-## Criteria
-<!-- Assigned criterion IDs and exact ticket #acceptance and #scenarios paths.
-     Other criteria of the ticket stay open. -->
+## Tickets and criteria
+<!-- Tickets whose changes fall in the range, with exact #acceptance and #scenarios paths. Name the
+     criteria that need judgement; gates already establish the rest. -->
 
-## Observations
-<!-- Absolute gate summary paths for this subject, or None with the direct-review alternative.
-     Point to the evidence; the acceptor reads it directly. -->
+## Gate results
+<!-- Absolute path of runs/<head-short-sha>/summary.md, or None. -->
 
 ## Prior findings
-<!-- From round 2: previous verdict paths and each finding's disposition, one of fixed (commit),
-     declined (reason), or moved to a user decision (exact decisions/ path). -->
-None.
+<!-- Findings from earlier reviews that this range fixes, each with its fix commit; or None. -->
 
 ## Sources
-<!-- Repository instruction and technical skill paths with read conditions, or None.
-     Recovery instructions for the original injected contract and verdict template path. -->
+<!-- Repository instruction and technical skill paths with read conditions, or None. -->
 
-## Authority and stops
-<!-- Read-only review checkout; the verdict is the one permitted file write.
-     No tests, imports, linters, formatters, builds, or runtime gates.
-     Missing/ambiguous required inputs or an unexplained/dirty review subject are UNREVIEWABLE.
-     Use contact_parent for a decision while remaining live.
-     Review the frozen subject; the Orchestrator owns later non-semantic coverage reuse. -->
+## Authority
+<!-- Read-only. The verdict file is the one permitted write. No tests, imports, linters, formatters,
+     builds, or runtime gates. Ask the parent through contact_parent when a decision is needed. -->
 
 ## Verdict path
-<!-- Absolute path of tickets/<id>/review-{{NN}}.verdict.md. -->
+<!-- Absolute path of runs/<head-short-sha>/review.md. -->

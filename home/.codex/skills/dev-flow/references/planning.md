@@ -7,21 +7,20 @@ Read INDEX Goal, board, and all active Standing orders. Tracker Plan names task-
 work and waiting conditions. If it disagrees with a question or decision, read that original and
 repair Plan. An unchecked item does not prove an answer is missing; an answer does not prove work resumed.
 
-Follow Plan to the relevant todo ticket and the doing, review, or blocked work in flight. Read the
-selected ticket's Acceptance and Plan, then the corresponding dispatch/round in Log and its verdict
-when available. Follow exact history pointers when an identity moved there. Verify the child by
-its ID through runtime run-control; observe the named checkout with Git log/status. Past events
-are not current runtime state. Stop if correspondence or executor state is uncertain.
+Follow Plan to the relevant todo ticket and the doing or blocked work in flight. Read the selected
+ticket's Acceptance, Plan, and Notes. Observe the named checkout with Git log/status and the collab
+status tool; past records are not current runtime state. Stop if the checkout or executor state is
+uncertain.
 
 Remain read-only until one bounded action, owner, checkout, and applicable authority are known.
 If INDEX and Plan cannot name it, repair Plan from known owners and observed Git/runtime facts,
-or ask for the missing decision. Do not scan the task graph or infer state from the latest Log line.
+or ask for the missing decision. Do not scan the task graph to infer state.
 Open other contracts and source when that action needs them.
 
 ## Handoff
 
 Before compaction or session transfer, compare needed facts with their
-[owners](records.md#maintain-the-record). Repair missing authority, decisions, execution identities,
+[owners](records.md#maintain-the-record). Repair missing authority, decisions,
 blockers, or acceptance results. If facts are already saved and unchanged, make no task changes.
 Refresh the board only when changed frontmatter requires it.
 
@@ -29,7 +28,7 @@ Give control root, task ID, and INDEX path. Add exact source pointers only when 
 action and not reachable from that entry. Leave durable content in its owners rather than copying
 a task recap or pointer graph. Carry only otherwise unrecoverable working context, labelled as
 hypothesis, interrupted reasoning, unrecorded dialogue, or transient detail; use None if absent.
-Mutable Git/child facts need lookup information and reobservation, not a trusted snapshot.
+Mutable Git facts need reobservation, not a trusted snapshot.
 
 If repair is blocked, name its record and blocker, and preserve otherwise lost input explicitly as
 unrecorded material with source or verbatim text. It grants no authority. Handoff is complete when
@@ -57,7 +56,7 @@ observable acceptance, and named owners. Later uncertain work stays todo.
 ## Tickets
 
 Use `../templates/ticket/ticket.md`. The Orchestrator owns its contract, dependencies, status,
-criteria, checkboxes, Plan, and Log. Before ready, check current code and instructions and supply:
+criteria, checkboxes, Plan, and Notes. Before ready, check current code and instructions and supply:
 
 - outcome, write scope, exclusions, dependencies, runtime assumptions, and decision boundaries;
 - existing interface owners and authorized public changes;
@@ -71,9 +70,10 @@ Prepare the checkout, contract, and observations through Collab's
 unresolved decisions from Plan, or observations without owners stop implementation. Preparation ends
 with a settled, independently checkable contract, seed, and gates; then mark ready.
 
-Start after dependencies close (accepted and collected). If a downstream needs an interface early,
-give the interface a small prerequisite ticket. An integration ticket owns interaction scenarios,
-depends on the interacting tickets, and is reviewed on integration after they close; defects become
+Start after dependencies close (gates passed and collected). If a downstream needs an interface early,
+give the interface a small prerequisite ticket. Before a ticket starts using a public interface from an unreviewed range of integration, run a
+[range review](../../collab/references/review.md#range-review) covering that interface. An
+integration ticket owns interaction scenarios and depends on the interacting tickets; defects become
 fix tickets.
 
 ## Parallel tickets

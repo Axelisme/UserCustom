@@ -53,6 +53,7 @@ None.
 ## Plan
 <!-- Optional execution milestones, tagged with criterion IDs. -->
 
-## Log
-<!-- Necessary collaboration events and acceptance grounds, newest last. Status lives in frontmatter.
-     Recording rules: ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->
+## Notes
+<!-- Facts a later agent needs that code, Git, and decisions cannot supply: dead ends, non-obvious
+     reasons, constraints found during work. Rewrite the whole section on every write; keep only what
+     is still true and useful. Rules: ~/.codex/skills/dev-flow/references/records.md#maintain-the-record -->

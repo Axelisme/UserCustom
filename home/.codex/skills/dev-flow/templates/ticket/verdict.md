@@ -1,27 +1,23 @@
 ---
-outcome: {{COMPLETED|BLOCKED|UNREVIEWABLE}}
+outcome: {{COMPLETED|BLOCKED}}
 ---
-# {{TICKET_ID}} review {{NN}} verdict
+# Range review {{NN}} verdict
 
-<!-- Written by the acceptor, once, at the absolute path its dispatch names.
-     This file must identify what was judged without the original parent conversation. -->
+<!-- Written by the acceptor, once, at the absolute path its dispatch names. -->
 
-## Subject
-<!-- Reviewed commit/tree, baseline commit, and review checkout. Preserve actual reviewed identity.
-     For UNREVIEWABLE, distinguish dispatched identity from observed identity; mark unknowns. -->
+## Range
+<!-- Base and head commit actually read. -->
 
-## Criteria and evidence
-<!-- Assigned criterion IDs with exact ticket anchors, verdict for each, and evidence references,
-     including gate summary paths, applicability, and limitations.
-     Include applicable instruction/skill sources. State None or unavailable explicitly. -->
+## Criteria
+<!-- Each named criterion with its ticket anchor: met or not, with evidence. -->
 
 ## Prior findings
-<!-- From round 2 on: each previous finding ID, resolved or still open, with evidence. -->
+<!-- Each earlier finding this range fixes: resolved or still open, with evidence. None if none. -->
 
 ## Findings
-<!-- One subsection per finding, ID `R{{NN}}-F<m>`: criterion, location, evidence, and a bounded suggested
-     fix. Keep contract defects apart from new scope or design proposals. Write None when there are
-     none. For UNREVIEWABLE, name the missing or broken input instead. -->
+<!-- One subsection per finding, ID `R{{NN}}-F<m>`: location, evidence, and a bounded suggested fix.
+     Keep defects against the contract apart from new design proposals. None if none. A missing input
+     that prevents judgement is a finding too. -->
 
 ## Residual risks
-<!-- Non-blocking findings, or None. -->
+<!-- Non-blocking observations, or None. -->

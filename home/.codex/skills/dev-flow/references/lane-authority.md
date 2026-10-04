@@ -1,19 +1,24 @@
 # Record permissions
 
-The Orchestrator writes task records and acceptance checkboxes. Delegated roles have one evidence
-write each, at the location named in dispatch:
+The Orchestrator writes task records and acceptance checkboxes. Delegated roles have one write each,
+at the absolute path the dispatch names:
 
-- Implementer: `runs/<short-sha>/summary.md`, under the absolute runs path supplied by dispatch.
-- Acceptor: the exact absolute `review-NN.verdict.md` path.
+- Implementer: `runs/<short-sha>/summary.md` for its candidate commit.
+- Acceptor: `runs/<head-short-sha>/review.md` for the range it reviewed.
 
-Gate evidence names the commit, each command/selection, working directory, environment, result,
-exit status, and limitations, beside raw logs. The Orchestrator uses `orchestrator.md` in the same
-commit directory. Manual/external observations are recorded by their performer; the Orchestrator
-quotes user reports. Baseline observations run in the lane at its starting commit.
+Manual or external observations are recorded by their performer; the Orchestrator quotes user reports.
 
-Only clean-commit runs become durable evidence. Uncommitted observations stay in stdout or temporary
-files; commit a failing test before retaining its RED run. A summary remains usable when its commit,
-environment, selection, method, result, and limitations apply; a role change alone needs no rerun.
+## Gate records
+
+Whoever runs gates on a commit writes `runs/<short-sha>/summary.md`, with raw logs beside it as
+`runs/<short-sha>/<gate>.log`. The summary has these fields, one entry per gate: commit, command or
+selection, working directory, environment, result, exit status, raw log path, and limitations.
+Rerunning gates on the same commit rewrites the summary.
+
+Keep gate records only for a lane tip about to be collected and an integration head about to be
+reviewed. Other runs, including ordinary TDD cycles, stay in stdout; do not commit a failing test
+just to keep its RED run. The exception is a bug reproduction: commit the reproducing test and keep
+its RED run, because it shows the defect existed.
 
 ## A gate you cannot close honestly
 

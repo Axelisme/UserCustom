@@ -12,8 +12,7 @@ Open only the linked section for the current operation, using `mdsec`.
 - Before launching a child: [Dispatch](#dispatch) and [Post-launch](#post-launch).
 - When a child returns or asks a question: [Results and decisions](#results-and-decisions).
 - When interrupted work needs inspection, steering, or recovery: [Run control](#run-control).
-- For a gates-only assignment: [Placement](#placement).
-- After a ticket's review rounds accept it, to collect it: [Collection](#collection).
+- After a ticket's gates pass, to collect it: [Collection](#collection).
 - Before selecting a managed Git operation or retiring resources: [Operations](#operations).
 
 ## Managed lane environment
@@ -39,8 +38,7 @@ control-strength decision before adding enforcement.
 `spawn_subagent({ cwd, role, dispatch })` launches one child and returns a `subagent_id`. `cwd` is
 the exact managed lane worktree, `role` names a profile, and `dispatch` is the whole bounded brief.
 Every call creates a new durable subagent. A new correction, rereview, or replacement assignment
-uses a fresh spawn, not resume-with-a-new-brief. Whether a changed review candidate needs that new
-assignment follows [Subject changes](references/review.md#subject-changes).
+uses a fresh spawn, not resume-with-a-new-brief.
 
 The profile owns the child's models and tools, and the tool schema rejects caller-supplied model,
 effort, profile, tool, plugin, extension, path, session, and id fields. There is nothing to omit
@@ -95,10 +93,8 @@ Launch asynchronously so the Orchestrator can continue independent work. In an i
 return control or use the active goal's yield mechanism and let the terminal notification wake the
 session. Blocking on a child does not make it more authoritative.
 
-When the terminal notification lands, reread the dispatched ticket's `#acceptance`, `#plan`, and
-the corresponding dispatch or round record. Match child, candidate, and round rather than assuming
-the last few Log lines identify this attempt; follow a retained history pointer when needed.
-Read the file the child names: an implementer's gate summary or an acceptor's verdict. Rebuild
+When the terminal notification lands, reread the dispatched ticket's `#acceptance` and `#plan`, or
+the dispatched range for a review. Read the file the child names: an implementer's gate summary or an acceptor's verdict. Rebuild
 judgement from those sources and observed checkout/runtime state. Record new facts under dev-flow's
 [record operations](../dev-flow/references/records.md#maintain-the-record).
 
@@ -118,20 +114,13 @@ Guide a live child with `control_subagent({ action: "steer" })`, relaunch an int
 `action: "resume"`, and end one with `action: "terminate"`. After a writing child is interrupted,
 examine its changed files and commit state before choosing the next owner.
 
-## Placement
-
-For a gates-only ticket ([Review](references/review.md#review)), spawn `collab-implementer` onto the
-exact managed lane worktree. This lane has no reviewer, so the direct writer dispatch is not a handwritten worker/reviewer loop. After the
-writer stops, an in-scope correction is another ordinary spawn onto the same lane, and the
-Orchestrator judges the writer's mechanical-gate result before collection.
-
 ## Collection
 
 `collab_lane` with `action: collect` carries its own stale-lane behavior and is the default
 collection path. A `collected` result completes collection. A `reconciled` result stops before
 collection: rerun the ticket's gates on the reconciled lane. If the reconcile needed conflict
-resolution or the gates fail, hold one more review round on the fix under
-[Integrate](references/integration.md#integrate) before retrying collection. A `conflicted` result
+resolution or the gates fail, fix under [Integrate](references/integration.md#integrate) before
+retrying collection; the next range review judges the resolution. A `conflicted` result
 returns to the Orchestrator. `collab_lane` with `action: reconcile` remains
 available but is not an extra default pre-step.
 

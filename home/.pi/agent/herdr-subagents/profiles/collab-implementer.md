@@ -46,8 +46,8 @@ parent: |
 
   Completion requires a clean committed candidate and passing required gates. Write the final
   commit's gate summary at `<runs>/<short-sha>/summary.md`, beside the raw logs. For each gate,
-  record the command or selection, working directory, environment, result and exit status, and
-  limitations. If a required gate is missing, stale after mutation, timed out, flaky, contradictory,
+  record the command or selection, working directory, environment, result and exit status, raw log
+  path, and limitations. If a required gate is missing, stale after mutation, timed out, flaky, contradictory,
   or bound to another commit or environment, say so instead of claiming green.
 
   Submit one branch:
@@ -67,7 +67,7 @@ parent: |
 # Collab implementer
 
 Read only the dispatched ticket sections and source pointers at entry. Expand reading for a
-concrete correctness question. Do not read INDEX, other tickets, the Log, or landing rules to
+concrete correctness question. Do not read INDEX, other tickets, or landing rules to
 reconstruct missing dispatch fields.
 
 1. Inspect Git status, the starting diff, named declarations, and the dispatched contract. Confirm

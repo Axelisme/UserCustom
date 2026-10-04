@@ -100,12 +100,12 @@ class SkillPointerTest(unittest.TestCase):
 
     def test_several_pointers_are_read_in_order(self) -> None:
         records = HOME / ".codex/skills/dev-flow/references/records.md"
-        result = run(f"{records}#review-rounds", f"{records}#close")
+        result = run(f"{records}#user-decisions", f"{records}#close")
         self.assertEqual(result.returncode, 0, result.stderr)
-        first = result.stdout.index("#review-rounds")
+        first = result.stdout.index("#user-decisions")
         second = result.stdout.index("#close")
         self.assertLess(first, second)
-        self.assertIn("## Review rounds", result.stdout)
+        self.assertIn("## User decisions", result.stdout)
         self.assertIn("## Close", result.stdout)
 
     def test_a_broken_pointer_is_skipped_and_the_rest_still_read(self) -> None:

@@ -41,11 +41,9 @@ Read Collab [Prepare](references/execution.md#prepare),
 [Correct and decide](references/review.md#correct-and-decide) for the portable loop.
 
 `spawn_subagent({ cwd, role, dispatch })` launches one fresh child and returns its `subagent_id`.
-`cwd` is the exact prepared checkout: the lane worktree for `collab-implementer`, and the frozen
-review checkout for `collab-acceptor`. `dispatch` is the whole bounded brief. A new correction,
-rereview, or replacement assignment uses a fresh spawn; no call resumes a child with a new brief.
-Whether a changed review candidate needs another assignment follows
-[Subject changes](references/review.md#subject-changes). Pi
+`cwd` is the exact prepared checkout: the lane worktree for `collab-implementer`, and the
+integration worktree for `collab-acceptor`. `dispatch` is the whole bounded brief. A new correction,
+rereview, or replacement assignment uses a fresh spawn; no call resumes a child with a new brief. Pi
 [Dispatch](runtime-pi.md#dispatch) describes the independent registry snapshots and the parameters
 the schema rejects. The MCP places each child in its own pane. That does not lift the parent-pane
 prerequisite in [Capability check](#capability-check).
@@ -75,8 +73,7 @@ Branch on the returned `state`:
 - `session_changed`: the MCP rebound to a new Claude session. Children, notifications, and results
   belong to the session that spawned them, so exact-id `result` from the new session cannot find them.
   To collect them, resume the previous Claude session. If that session is unavailable, treat those
-  children's outcomes as unrecoverable: inspect the affected checkout's actual state, record the loss
-  as a Log line in the owning ticket, and dispatch fresh.
+  children's outcomes as unrecoverable: inspect the affected checkout's actual state and dispatch fresh.
 
 While a child runs, continue independent work. On each wake, match the dispatched identity and reread
 the corresponding ticket record and the file the child names, as in Pi

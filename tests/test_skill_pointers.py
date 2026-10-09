@@ -9,7 +9,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOME = ROOT / "home"
 MDSEC = HOME / ".local/bin/mdsec"
-RETIRED_SECTION = HOME / ".codex/skills/dev-flow/scripts/section.py"
 
 
 def run(*args: str, script: Path = MDSEC) -> subprocess.CompletedProcess[str]:
@@ -34,22 +33,12 @@ class SkillPointerTest(unittest.TestCase):
         self.assertIn("Did you mean '#evidence-file'?", result.stderr)
         self.assertIn("#other-rule", result.stderr)
 
-    def test_the_retired_dev_flow_path_still_reads_sections(self) -> None:
-        # Contracts dispatched before the move cite dev-flow's scripts/section.py; delete with the shim.
-        with tempfile.TemporaryDirectory() as tmp:
-            doc = Path(tmp, "doc.md")
-            doc.write_text("# Doc\n\n## Wanted\n\nkept\n\n## Next\n\ndropped\n")
-            result = run(f"{doc}#wanted", script=RETIRED_SECTION)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("kept", result.stdout)
-        self.assertNotIn("dropped", result.stdout)
-
     def test_check_catches_a_broken_pointer_of_every_kind_it_claims(self) -> None:
         # The corpus being green proves nothing about detection, so plant one break of each kind.
         pointers = {
             "link": "[x](missing-doc.md)",
             "link anchor": "[x](real.md#no-such-heading)",
-            "bare rooted": "`~/.codex/skills/dev-flow/references/no-such-doc.md`",
+            "bare rooted": "`~/.codex/skills/task-flow/no-such-doc.md`",
             "bare anchor": "`real.md#no-such-heading`",
         }
         for kind, pointer in pointers.items():
@@ -93,32 +82,32 @@ class SkillPointerTest(unittest.TestCase):
             self.assertIn("skipped 1 symlinked directory", result.stdout)
 
     def test_a_pointer_is_read_at_its_section(self) -> None:
-        result = run("../dev-flow/references/records.md#close")
+        result = run("../task-flow/SKILL.md#land")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("## Close", result.stdout)
-        self.assertNotIn("## Archive", result.stdout)
+        self.assertIn("## Land", result.stdout)
+        self.assertNotIn("## Close", result.stdout)
 
     def test_several_pointers_are_read_in_order(self) -> None:
-        records = HOME / ".codex/skills/dev-flow/references/records.md"
-        result = run(f"{records}#user-decisions", f"{records}#close")
+        skill = HOME / ".codex/skills/task-flow/SKILL.md"
+        result = run(f"{skill}#resume", f"{skill}#close")
         self.assertEqual(result.returncode, 0, result.stderr)
-        first = result.stdout.index("#user-decisions")
+        first = result.stdout.index("#resume")
         second = result.stdout.index("#close")
         self.assertLess(first, second)
-        self.assertIn("## User decisions", result.stdout)
+        self.assertIn("## Resume", result.stdout)
         self.assertIn("## Close", result.stdout)
 
     def test_a_broken_pointer_is_skipped_and_the_rest_still_read(self) -> None:
-        lane_authority = HOME / ".codex/skills/dev-flow/references/lane-authority.md"
+        skill = HOME / ".codex/skills/task-flow/SKILL.md"
         result = run(
-            f"{lane_authority}#no-such-heading",
-            "../dev-flow/references/no-such-doc.md#anything",
-            f"{lane_authority}#a-gate-you-cannot-close-honestly",
+            f"{skill}#no-such-heading",
+            "../task-flow/no-such-doc.md#anything",
+            f"{skill}#gates",
         )
         self.assertEqual(result.returncode, 1)
         self.assertIn("#no-such-heading", result.stderr)
         self.assertIn("no-such-doc.md", result.stderr)
-        self.assertIn("## A gate you cannot close honestly", result.stdout)
+        self.assertIn("## Gates", result.stdout)
 
 
 if __name__ == "__main__":

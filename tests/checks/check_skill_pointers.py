@@ -12,10 +12,10 @@ HOME = ROOT / "home"
 MDSEC = HOME / ".local/bin/mdsec"
 
 # An anchored pointer addresses one section, so a heading is an address: renaming one silently
-# breaks every pointer into it. These are the trees whose pointers dev-flow principle 17 governs.
+# breaks every pointer into it. These are the trees whose pointers must keep resolving.
 POINTER_ROOTS = (
-    HOME / ".codex/skills/dev-flow",
-    HOME / ".codex/skills/collab",
+    HOME / ".codex/skills/task-flow",
+    HOME / ".codex/skills/advisor",
     HOME / ".claude/agents",
     HOME / ".codex/agents",
     HOME / ".pi/agent/herdr-subagents/profiles",

@@ -44,16 +44,14 @@ here). Also not taken: `to-questionnaire` (sending someone else a questionnaire)
 
 Also not taken at the `3cca18b` sync:
 
-- `implement-spec`: its branch, PR and merger-subagent workflow overlaps local `dev-flow` / `collab`
-  without their mutation-authority rules. Keep ticket execution with the local workflow.
+- `implement-spec`: its branch, PR and merger-subagent workflow overlaps local `task-flow` without
+  its mutation-authority rules. Keep ticket execution with task-flow, which borrows its frontier
+  and pointer-only dispatch.
 
 Not installed as a separate skill:
 
-- `pr`: its change view, before/after evidence and recovery-risk methods are absorbed into
-  [collab's delivery summary](collab/references/delivery-summary.md) for general task delivery.
-  The source and Dex Horthy / Humanlayer `show-me` credit are recorded there. The upstream skill
-  formats a PR body; it does not itself open or publish one. No GitHub authority changes with this
-  absorption.
+- `pr`: not installed. task-flow's land review ends in a report to the user; the upstream skill
+  formats a PR body and does not itself open or publish one.
 
 ## Skills from other upstreams
 
@@ -85,7 +83,7 @@ then the sync point below is a hand-maintained claim, with the staleness that im
 
 ## Local skills — not upstream, never overwrite
 
-`dev-flow`, `collab`, `candidate-backlog`, `simplify`, `dictator`.
+`task-flow`, `advisor`, `candidate-backlog`, `simplify`, `dictator`.
 
 They may reference upstream skills as producers, and local adaptations can route back to these
 owners. For example, `ask-matt` names the local workflows as their router, and `retro` delegates
@@ -120,8 +118,10 @@ rather than copying their lifecycle rules into upstream skills.
 7. **`tdd` renames upstream's "One slice at a time" to "One cycle at a time"** — `slice` collides
    with `to-tickets`' tracer-bullet slices. Content unchanged.
 8. **Invocation policy** — `to-spec` and `to-tickets` are model-invocable here (upstream makes them
-   user-invoked) so `dev-flow` can drive them. `wayfinder` stays user-invoked deliberately: it is the
-   heavyweight flow a human should choose to enter.
+   user-invoked) so `task-flow` and `advisor` can drive them. `wayfinder` stays user-invoked
+   deliberately: it is the heavyweight flow a human should choose to enter. Its description also
+   scopes it to exploration that ends in decisions, so an effort that ends in landed code goes to
+   `advisor` instead.
 9. **`writing-for-agents` adds `PORTING.md`** and a `## Porting` section in `SKILL-MECHANICS.md`
    pointing at it — a checklist for adopting a skill written for another ecosystem. No upstream
    equivalent. (Upstream renamed this skill from `writing-great-skills` and dropped its
@@ -141,9 +141,8 @@ rather than copying their lifecycle rules into upstream skills.
     `simplify`'s whole-tree mode is the tool the section's first rule assumes.
 12. **`code-review` adds the Reinvented Wheel smell** to the baseline. No upstream equivalent; the
     baseline covers duplication within a change but not a change that duplicates a declared
-    dependency. Pairs with `dev-flow`'s S0 dependency check (local skill, v7), which is where the
-    reason for rejecting a package is supposed to be recorded — this smell is what notices when
-    nothing was recorded. Upstream's sentence introducing the baseline calls it "a fixed set of
+    dependency. The reason for rejecting a package belongs in the change itself — this smell is what
+    notices when nothing was recorded. Upstream's sentence introducing the baseline calls it "a fixed set of
     Fowler code smells (*Refactoring*, ch.3)"; since that sentence is pasted verbatim into the
     Standards sub-agent prompt, it is amended here to say Fowler's plus one local addition, and the
     entry itself is marked. Take upstream's wording again only if this smell is dropped.
@@ -167,22 +166,21 @@ hand-maintained list could perform on itself.
     own scope note (deviation 6) rather than restated; the full suite qualified as the *applicable*
     one, for repositories with more than one; review bound to a fixed subject; no unilateral commit
     or history mutation without applicable user authority; and explicit completion criteria. Upstream's version commits to the current branch on its own, which is incompatible with
-    `collab` owning landing authority. The same validation criterion appears in `ask-matt`, in the
+    `task-flow` owning landing authority. The same validation criterion appears in `ask-matt`, in the
     one sentence the router spends on `/implement`; upstream's is concrete there too, so both files
     are kept concrete rather than trading a directive for adjectives.
 15. **`handoff` is rewritten as routing rather than factual authority** — it points at each owning
     spec, ticket, task record, ADR, commit or evidence artifact instead of copying them, routes
-    Dev-flow work to the active guidance, task `INDEX.md` and handed-off ticket, and covers the Pi
-    `handoff_context` transition without authorizing it. A handoff that restates content becomes a
-    second status store, which `dev-flow` exists to prevent.
+    task-flow work to the skill, task `INDEX.md` and handed-off ticket (advisor work to the map), and
+    covers the Pi `handoff_context` transition without authorizing it. A handoff that restates
+    content becomes a second status store, which the task records exist to prevent.
 16. **`code-review` gains `references/wip-review.md`** — the advisory procedure for reviewing dirty
     work in progress, which the skill's own description already promises and upstream has no
     equivalent of. Upstream's procedure pins a fixed candidate and has nothing to say about staged,
     unstaged, or untracked files.
 17. **`tdd` gains `gate.md`, `contract-review.md` and `assets/gate.sh`** — the delegated red/green
-    validation gate and the fixed red-surface contract review. `collab` points at `gate.md` for
-    delegated validation needing several commands, a fixed working directory, or owned temporary
-    state, so a local skill depends on this addition.
+    validation gate and the fixed red-surface contract review. They were added for the retired
+    `collab` skill's delegated validation; no local skill depends on them now.
 18. **`writing-for-agents` adds the load-bearing noun rule** — define the term a rule's obligation
     rests on where the rule uses it. An undefined one does not read as missing: each agent supplies
     a plausible meaning and obeys the rule it invented, so the defect surfaces as inconsistent
@@ -200,7 +198,8 @@ hand-maintained list could perform on itself.
     collab, rather than pointing at `Jurisdiction`, which no longer carries a routing criterion. The clause offering
     `/collab` as something to reach for when you want delegated review goes with it: `collab` is the
     path here, not an option. Deviation 14 reaches only the validation criterion in the router's
-    `/implement` sentence, not this one.
+    `/implement` sentence, not this one. `ask-matt` is not installed now; its vendored text still routes to the retired
+    `dev-flow` and `collab`, so rewrite that routing to `task-flow` and `advisor` before adopting it.
 20. **`retro` is adopted with local evidence and role bindings.** It stays user-invoked and keeps
     upstream's seven categories. A specific session event must support each candidate; an absent
     guardrail alone is not a finding, and no candidates is a valid result. Prior-session reading is
@@ -213,3 +212,7 @@ hand-maintained list could perform on itself.
     byte-identical to upstream's promoted `skills/engineering/retro` at `d81f3a18` before these local
     edits. Adoption does not move the subtree sync point. When a later sync brings that directory
     rename, retarget `home/.codex/skills/retro` and preserve these bindings.
+21. **`code-review` finds a task's spec through task-flow** — when the work belongs to a task-flow
+    task, the Spec reviewer reads that task's `spec.md`, and landing after the report defers to
+    task-flow's Land section. Upstream locates the spec only through its tracker conventions and
+    says nothing about landing authority.

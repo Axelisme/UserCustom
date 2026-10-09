@@ -10,10 +10,10 @@ point to each owning spec, ticket, task record, ADR, issue, commit, diff, or evi
 of copying or summarizing its contents. Carry inline only receiver guidance and operational facts that
 have no owning document.
 
-For Dev-flow work, route the receiver first to the active Dev-flow guidance, task `INDEX.md`, and the
-handed-off ticket. Add only the current-work pointers those sources require. When they cannot identify
-the next action, stop and repair the owning record rather than scanning the ticket DAG or task history
-to infer one.
+For task-flow work, route the receiver first to the task-flow skill, the task `INDEX.md`, and the
+handed-off ticket; for an advisor effort, to the advisor skill and the map's `MAP.md`. Add only the
+current-work pointers those sources require. When they cannot identify the next action, point the
+receiver at the governing skill's resume procedure rather than at the ticket DAG or task history.
 
 Save a user-requested file handoff in the operating system's temporary directory, outside the current
 workspace. Use the same content contract when preparing an authorized Pi `handoff_context`

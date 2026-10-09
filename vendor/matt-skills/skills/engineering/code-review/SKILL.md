@@ -49,8 +49,8 @@ applicable green evidence all name or reproduce against the same `candidate_sha`
 Locate the originating spec in this order:
 
 1. Use the explicit path, tracker item, URL, or contents supplied by the caller.
-2. When the work belongs to a dev-flow task, run that skill's `locate` command, read the located
-   `INDEX.md`, and follow its spec pointer when present.
+2. When the work belongs to a task-flow task, use that task's `spec.md` under
+   `.agent_state/plans/<task-id>/`.
 3. Follow issue references in commit messages (`#123`, `Closes #45`, GitLab `!67`, etc.) through the
    repository's documented issue-tracker workflow.
 4. Search the repository's documented spec locations, then `docs/`, `specs/`, or `.scratch/` for a
@@ -58,7 +58,7 @@ Locate the originating spec in this order:
 5. If nothing is found, ask the user where the spec is. If they say there is none, omit the **Spec**
    reviewer and report "no spec available".
 
-Do not replace an explicit source or dev-flow INDEX pointer with a lower-priority match. This step is
+Do not replace an explicit source or a task's `spec.md` with a lower-priority match. This step is
 complete when the Spec reviewer has one exact source or is explicitly omitted.
 
 ### 3. Identify the standards sources
@@ -125,9 +125,8 @@ End with a one-line summary: total findings per axis, and the worst issue _withi
 This step is complete when both axes remain separately attributable to the same fixed subject and
 every missing axis or residual limitation is explicit.
 
-Code-review grants no landing authority. When landing is considered after this report, read collab's
-[Land](../collab/SKILL.md#land) section; it owns the authority and fallback-method rules shared by both
-review procedures, and its guidance ends once integration has moved into the persistence branch.
+Code-review grants no landing authority. When landing is considered after this report, read
+task-flow's [Land](../task-flow/SKILL.md#land) section; it owns landing authority.
 
 ## Why two axes
 

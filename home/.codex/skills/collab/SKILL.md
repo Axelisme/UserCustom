@@ -1,6 +1,6 @@
 ---
 name: collab
-description: "Orchestrator feature-branch workflow for legacy dev-flow tasks (with a tickets/tracker/ directory): always use with dev-flow to assign implementation or review, judge results, integrate, or land."
+description: "Orchestrator feature-branch workflow for legacy dev-flow tasks (no spec.md at the task root): always use with dev-flow to assign implementation or review, judge results, integrate, or land."
 ---
 
 # Collab

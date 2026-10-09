@@ -1,6 +1,6 @@
 ---
 name: task-flow
-description: "Task delivery from spec to landing: plan a task into a spec and tickets, run the ticket frontier in parallel lanes, review once, land. Use when starting, resuming, or landing a task under .agent_state/plans/ that has no tickets/tracker/ directory."
+description: "Task delivery from spec to landing: plan a task into a spec and tickets, run the ticket frontier in parallel lanes, review once, land. Use when starting a task, or resuming or landing one whose directory under .agent_state/plans/ has spec.md at its root."
 ---
 
 # Task flow

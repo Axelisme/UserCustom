@@ -16,7 +16,7 @@ MAP_SECTIONS = (
     "Out of scope",
     "Standing orders",
 )
-DECISION_NAME = re.compile(r"^\d{4}-[a-z0-9-]+\.md$")
+DECISION_NAME = re.compile(r"^\d{4}-[^/]+\.md$")
 TASK_LINE = re.compile(
     r"^- (\S+) — step \d+ — Base: \S+ — herdr: \S+ — (planned|running|landed)$"
 )

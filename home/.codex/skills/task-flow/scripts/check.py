@@ -11,8 +11,8 @@ from pathlib import Path
 TOP_LEVEL = {"INDEX.md", "spec.md", "spec", "decisions", "tickets", "retired", "scratch", ".collab_op"}
 INDEX_SECTIONS = ("Goal", "Standing orders")
 STATUSES = ("ready", "doing", "done")
-TICKET_NAME = re.compile(r"^(\d{2,})-[a-z0-9-]+\.md$")
-DECISION_NAME = re.compile(r"^\d{4}-[a-z0-9-]+\.md$")
+TICKET_NAME = re.compile(r"^(\d{2,})-[^/]+\.md$")
+DECISION_NAME = re.compile(r"^\d{4}-[^/]+\.md$")
 
 
 def check_index(task: Path, problems: list[str]) -> None:

@@ -1,6 +1,6 @@
 ---
 name: dev-flow
-description: "Orchestrator task records: always use with collab to plan, resume, hand off, close, or archive a task."
+description: "Orchestrator task records for legacy tasks that have a tickets/tracker/ directory: always use with collab to resume, hand off, close, or archive one. New tasks use task-flow."
 ---
 
 # Dev-flow

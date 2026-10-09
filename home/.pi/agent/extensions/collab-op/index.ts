@@ -935,6 +935,65 @@ async function integrationCreate(
   };
 }
 
+async function integrationRetarget(
+  run: GitRunner,
+  cwd: string,
+  request: Record<string, unknown>,
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>> {
+  const repo = await discoverRepository(run, cwd, signal);
+  const taskId = requireIdentifier(request.task_id, "task id");
+  const task = new TaskLayout(repo, taskId);
+  const previous = await taskPersistenceBranch(repo, task, signal);
+  const persistBranch = await requireLocalBranch(repo, request.persist, "persist", signal);
+  if (persistBranch.name.startsWith(`wave/${taskId}/`)) {
+    throw new CollabOpError(
+      "invalid_branch",
+      "persist must not be one of the task's own branches",
+      "Name the branch the base task landed into, such as main.",
+      { persist: persistBranch.name },
+    );
+  }
+  const persistSha = await localBranchTip(repo, persistBranch, "persist", signal);
+  const previousSha = await commitAt(repo, previous.ref, signal);
+  if (previousSha === null) {
+    throw new CollabOpError(
+      "task_state_invalid",
+      `current persistence branch ${previous.name} does not resolve to a commit`,
+      "Retarget before removing the base task's integration branch.",
+      { previous_persist: previous.name },
+    );
+  }
+  if (!(await isAncestor(repo, previousSha, persistSha, signal))) {
+    throw new CollabOpError(
+      "persistence_not_contained",
+      `persist does not contain the current persistence branch ${previous.name}`,
+      `Land ${previous.name} into ${persistBranch.name} before retargeting.`,
+      { persist: persistBranch.name, previous_persist: previous.name, previous_sha: previousSha },
+    );
+  }
+  await requireGit(
+    repo.git,
+    repo.worktreeRoot,
+    ["symbolic-ref", task.persistenceRef, persistBranch.ref],
+    signal,
+  );
+
+  const warnings: string[] = [];
+  const telemetryWarning = await recordEvent(task, "integration-retarget", "success", {
+    subject_sha: persistSha,
+    previous_persist: previous.name,
+    persist: persistBranch.name,
+  });
+  if (telemetryWarning) warnings.push(telemetryWarning);
+  return {
+    ok: true,
+    operation: "integration-retarget",
+    tool_version: TOOL_VERSION,
+    ...(warnings.length ? { warnings } : {}),
+  };
+}
+
 async function integrationAdopt(
   run: GitRunner,
   cwd: string,
@@ -3654,6 +3713,23 @@ async function integrationRemoveBestEffort(
       "Use a current managed task identifier or inspect the repository inventory before retrying.",
     );
   }
+  const persistenceRefs = await refSnapshot(controlRepository(repo), ["refs/orchestrate/"], signal);
+  const stackedTasks = [...persistenceRefs]
+    .filter(
+      ([name, record]) =>
+        name !== task.persistenceRef &&
+        name.endsWith("/persistence") &&
+        record.symbolicTarget === integrationBranchRef,
+    )
+    .map(([name]) => name.slice("refs/orchestrate/".length, -"/persistence".length));
+  if (stackedTasks.length > 0) {
+    throw new CollabOpError(
+      "integration_in_use",
+      `integration ${task.integrationBranch} is the persistence of stacked tasks: ${stackedTasks.join(", ")}`,
+      "Retarget each stacked task to the branch this task landed into, then remove.",
+      { stacked_tasks: stackedTasks },
+    );
+  }
   const laneIds = new Set(removalLaneIds(task, inventory.ownedBranches));
   const lanePrefix = `refs/heads/wave/${task.taskId}/`;
   for (const record of inventory.registeredUnderRoot) {
@@ -3941,10 +4017,14 @@ const registeredIntegrationParameters = {
     repo: registeredRepo,
     action: {
       type: "string",
-      enum: ["create", "land", "remove"],
+      enum: ["create", "land", "retarget", "remove"],
       description: "Integration lifecycle action to perform.",
     },
     task_id: registeredTaskId,
+    persist: {
+      ...registeredBranch,
+      description: "Short name of the local branch that becomes task persistence; required for and valid only for retarget.",
+    },
     message: {
       type: "string",
       minLength: 1,
@@ -4221,7 +4301,7 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "collab_integration",
     label: "Manage Collab integration",
-    description: "Manage the Git-managed integration lifecycle. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. `create` makes an integration worktree from the acting worktree's attached local branch and HEAD; that branch becomes task persistence. `land` merges accepted integration into persistence and accepts optional message. `remove` best-effort force-retires recognizable managed integration resources. Create may append /.agent_state/ to the common Git info/exclude before creating resources; higher-precedence ignore rules can still cause refusal.",
+    description: "Manage the Git-managed integration lifecycle. Omit repo to act from the session working directory; otherwise pass an absolute path whose symlink-resolved value is exactly a Git worktree root. `create` makes an integration worktree from the acting worktree's attached local branch and HEAD; that branch becomes task persistence. `land` merges accepted integration into persistence and accepts optional message. `retarget` rebinds task persistence to the local branch named by persist, which must already contain the current persistence branch; use it when a stacked task's base task has landed. `remove` best-effort force-retires recognizable managed integration resources, and refuses while another task's persistence is this integration. Create may append /.agent_state/ to the common Git info/exclude before creating resources; higher-precedence ignore rules can still cause refusal.",
     parameters: registeredIntegrationParameters,
     async execute(_toolCallId, request, signal, _onUpdate, ctx: ExtensionContext) {
       const result = await executeRegisteredTool(
@@ -4233,14 +4313,22 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
             value,
             "collab_integration",
             ["action", "task_id"],
-            ["action", "task_id", "message"],
+            ["action", "task_id", "message", "persist"],
           );
           const action = params.action as string;
-          if (!["create", "land", "remove"].includes(action)) {
+          if (!["create", "land", "retarget", "remove"].includes(action)) {
             throw new CollabOpError(
               "invalid_parameters",
-              "action must be one of create, land, remove",
-              "Pass action as create, land, or remove.",
+              "action must be one of create, land, retarget, remove",
+              "Pass action as create, land, retarget, or remove.",
+              { action },
+            );
+          }
+          if ((params.persist !== undefined) !== (action === "retarget")) {
+            throw new CollabOpError(
+              "invalid_parameters",
+              "persist is required for action retarget and valid only there",
+              "Pass persist with retarget, and omit it for other actions.",
               { action },
             );
           }
@@ -4260,6 +4348,10 @@ export default function collabOpExtension(pi: ExtensionAPI): void {
             if (action === "land") {
               const landed = await integrationLand(runGit, lockedCwd, lockedRequest, lockedSignal);
               return registeredMutationResult(landed);
+            }
+            if (action === "retarget") {
+              const retargeted = await integrationRetarget(runGit, lockedCwd, lockedRequest, lockedSignal);
+              return registeredMutationResult(retargeted);
             }
             const removed = await integrationRemoveBestEffort(runGit, lockedCwd, lockedRequest, lockedSignal);
             return registeredMutationResult(removed);

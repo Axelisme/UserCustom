@@ -62,10 +62,10 @@ class CollabOpExtensionRegisteredToolTests(unittest.TestCase):
             integration_schema = observed["schemas"]["collab_integration"]["parameters"]
             self.assertEqual(
                 set(integration_schema["properties"]),
-                {"action", "task_id", "message", "repo"},
+                {"action", "task_id", "message", "persist", "repo"},
             )
             self.assertEqual(integration_schema["required"], ["action", "task_id"])
-            self.assertEqual(integration_schema["properties"]["action"]["enum"], ["create", "land", "remove"])
+            self.assertEqual(integration_schema["properties"]["action"]["enum"], ["create", "land", "retarget", "remove"])
             lane_schema = observed["schemas"]["collab_lane"]["parameters"]
             self.assertEqual(
                 lane_schema["properties"]["action"]["enum"],

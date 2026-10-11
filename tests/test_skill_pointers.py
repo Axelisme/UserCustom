@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from tests import _support as support
+
 ROOT = Path(__file__).resolve().parents[1]
-MDSEC = ROOT / "home/.local/bin/mdsec"
+MDSEC_PATH = ROOT / "home/.local/bin/mdsec"
+MDSEC = support.load_script(MDSEC_PATH)
 SKILL = "# Flow\n\n## Resume\n\nresume body\n\n## Gates\n\ngates body\n\n## Land\n\nland body\n\n## Close\n\nclose body\n"
 
 
@@ -28,13 +31,7 @@ class SkillPointerTest(unittest.TestCase):
         (skills / "bridged").symlink_to(bridged, target_is_directory=True)
 
     def run_mdsec(self, *args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            ["python3", str(MDSEC), *args],
-            capture_output=True,
-            text=True,
-            cwd=self.home,
-            env={**os.environ, "HOME": str(self.home)},
-        )
+        return support.run_main(MDSEC.main, args, cwd=self.home, home=self.home)
 
     def test_a_stale_anchor_fails_loudly_with_the_closest_and_real_anchors(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -44,6 +41,16 @@ class SkillPointerTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("Did you mean '#evidence-file'?", result.stderr)
         self.assertIn("#other-rule", result.stderr)
+
+    def test_the_script_exits_zero_on_a_readable_pointer_and_one_on_a_broken_one(self) -> None:
+        # The one test that starts the script itself: its process exit status is the contract.
+        def mdsec(pointer: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [sys.executable, str(MDSEC_PATH), pointer], capture_output=True, text=True, check=False
+            )
+
+        self.assertEqual(mdsec(f"{self.skill}#land").returncode, 0)
+        self.assertEqual(mdsec(f"{self.skill}#no-such-heading").returncode, 1)
 
     def test_check_catches_a_broken_pointer_of_every_kind_it_claims(self) -> None:
         # The corpus being green proves nothing about detection, so plant one break of each kind.

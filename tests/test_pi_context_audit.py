@@ -7,8 +7,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests import _support as support
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "home" / ".local" / "bin" / "pi-context-audit"
+AUDIT = support.load_script(SCRIPT)
 CWD = "/work/demo"
 SINCE = "2026-01-01T00:00:00Z"
 UNTIL = "2026-01-02T00:00:00Z"
@@ -63,11 +66,11 @@ class Session:
 
 
 def audit(agent_dir: Path, *extra: str) -> dict:
-    done = subprocess.run(
-        [sys.executable, str(SCRIPT), "--agent-dir", str(agent_dir), "--since", SINCE, "--until", UNTIL,
-         "--json", *extra],
-        capture_output=True, text=True, check=True,
+    done = support.run_main(
+        AUDIT.main,
+        ["--agent-dir", str(agent_dir), "--since", SINCE, "--until", UNTIL, "--json", *extra],
     )
+    assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
 
 
@@ -192,6 +195,16 @@ class PiContextAuditTest(unittest.TestCase):
         self.assertAlmostEqual(usage["cache_hit_rate"], 0.8)
         self.assertAlmostEqual(usage["cost_usd"], 0.76)
         self.assertAlmostEqual(usage["cost_split_usd"]["cache_read"], 0.16)
+
+    def test_the_script_prints_a_json_report_and_exits_zero(self) -> None:
+        # The one test that starts the script itself: its process exit status is the contract.
+        done = subprocess.run(
+            [sys.executable, str(SCRIPT), "--agent-dir", str(self.agent), "--since", SINCE, "--until", UNTIL,
+             "--json"],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIsInstance(json.loads(done.stdout), dict)
 
     def test_window_project_and_subagent_selection(self) -> None:
         inside = Session()

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import os
-import subprocess
 import unittest
 from pathlib import Path
 
+from tests import _support as support
+
 ROOT = Path(__file__).resolve().parents[2]
 HOME = ROOT / "home"
-MDSEC = HOME / ".local/bin/mdsec"
+MDSEC = support.load_script(HOME / ".local/bin/mdsec")
 
 # An anchored pointer addresses one section, so a heading is an address: renaming one silently
 # breaks every pointer into it. These are the trees whose pointers must keep resolving.
@@ -25,12 +25,8 @@ POINTER_ROOTS = (
 class SkillPointerCheck(unittest.TestCase):
     def test_every_anchored_pointer_resolves(self) -> None:
         # Bare pointers resolve under ~/; use this checkout's home/ tree, not the installed one.
-        result = subprocess.run(
-            ["python3", str(MDSEC), "--check", *[str(p) for p in POINTER_ROOTS]],
-            capture_output=True,
-            text=True,
-            cwd=ROOT,
-            env={**os.environ, "HOME": str(HOME)},
+        result = support.run_main(
+            MDSEC.main, ["--check", *[str(p) for p in POINTER_ROOTS]], cwd=ROOT, home=HOME
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 

@@ -12,10 +12,11 @@ links into `$HOME`; `home/` mirrors `$HOME`.
 
 Three kinds, told apart by location:
 
-- `tests/test_*.py`: **behaviour tests** for Python scripts. A test loads the script by path and
-  calls `main(argv, cwd=...)` in-process, as `run_backlog` in `tests/test_candidate_backlog.py`
-  does; one test per script runs it as a process to cover its exit status. A script whose `main`
-  takes no `argv` gains one before its tests change.
+- `tests/test_*.py`: **behaviour tests** for Python scripts. A test loads the script with
+  `_support.load_script` and calls its `main` through `_support.run_main`, passing `argv` and any
+  `cwd` or `home` the script would otherwise read from the process; one test per script runs it as
+  a process to cover its exit status. A script whose `main` takes no `argv` gains one before its
+  tests change. Shell scripts run as processes.
 - `tests/*.test.mjs`: node:test files for TypeScript modules under `home/.pi/agent/`, run
   in-process with injected dependencies such as collab-op's `GitRunner`. New collab-op tests go
   here; `tests/test_collab_*.py` drive collab-op through a node harness process and move here when

@@ -70,18 +70,23 @@ class Unreadable(Exception):
     """One pointer that cannot be read; the rest of a batch still is."""
 
 
+def expand(path: str, home: Path) -> Path:
+    """`~/` names the home the caller passes, so one process can serve several homes."""
+    return home / path[2:] if path.startswith("~/") else Path(path)
+
+
 @functools.cache
-def searchable() -> list[Path]:
-    return [p for root in SEARCH_ROOTS for p in walk(Path(root).expanduser())]
+def searchable(home: Path) -> list[Path]:
+    return [p for root in SEARCH_ROOTS for p in walk(expand(root, home))]
 
 
-def resolve(target: str) -> Path:
+def resolve(target: str, cwd: Path, home: Path) -> Path:
     """A pointer is written relative to the document that carries it; find it from anywhere."""
-    direct = Path(target).expanduser()
+    direct = cwd / expand(target, home)
     if direct.is_file():
         return direct
     suffix = Path(*[p for p in Path(target).parts if p not in ("..", ".")])
-    hits = sorted({p for p in searchable()
+    hits = sorted({p for p in searchable(home)
                    if p.name == suffix.name and p.as_posix().endswith(suffix.as_posix())})
     if len(hits) == 1:
         return hits[0]
@@ -118,7 +123,7 @@ def is_bare_pointer(target: str, anchor: str | None) -> bool:
     return bool(anchor) or target.startswith("~/")
 
 
-def check(roots: list[Path]) -> None:
+def check(roots: list[Path], home: Path) -> int:
     # Only this repository's own documents: a symlinked directory is a vendored skill whose
     # pointers belong upstream. Say how many were skipped so the coverage is never silent.
     found: set[Path] = set()
@@ -141,7 +146,7 @@ def check(roots: list[Path]) -> None:
                 if set("<{") & set(m.group(1)):  # a template's placeholder path
                     continue
                 near = (f.parent / m.group(1)).resolve()
-                target = near if near.is_file() else Path(m.group(1)).expanduser()
+                target = near if near.is_file() else expand(m.group(1), home)
                 if not target.is_file():
                     print(f"{f}: missing target {m.group(1)}")
                     broken += 1
@@ -151,28 +156,28 @@ def check(roots: list[Path]) -> None:
                     broken += 1
     note = f"; skipped {skipped} symlinked director{'y' if skipped == 1 else 'ies'}" if skipped else ""
     print(f"checked {len(files)} files: {broken} broken pointer(s){note}")
-    if broken:
-        raise SystemExit(1)
+    return 1 if broken else 0
 
 
-def main() -> None:
+def main(argv: list[str] | None = None, cwd: Path | None = None, home: Path | None = None) -> int:
+    cwd = cwd or Path.cwd()
+    home = home or Path.home()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "target", nargs="+",
         help="pointers 'path.md#anchor', read in order; a bare path lists its anchors; roots with --check",
     )
     parser.add_argument("--check", action="store_true", help="verify every pointer under the given roots")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.check:
-        check([Path(t).expanduser() for t in args.target])
-        return
+        return check([cwd / expand(t, home) for t in args.target], home)
 
     failed = False
     for target in args.target:
         path, _, anchor = target.partition("#")
         try:
-            document = resolve(path)
+            document = resolve(path, cwd, home)
             if not anchor:
                 print(f"== {document}")
                 for n, level, _, s in headings(document):
@@ -182,9 +187,8 @@ def main() -> None:
         except Unreadable as error:
             print(error, file=sys.stderr)
             failed = True
-    if failed:
-        raise SystemExit(1)
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

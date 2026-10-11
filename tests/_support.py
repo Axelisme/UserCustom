@@ -10,13 +10,20 @@ scripts, the node harness and the git calls it makes -- inherits the result.
 from __future__ import annotations
 
 import atexit
+import importlib.machinery
+import importlib.util
+import io
 import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
+from collections.abc import Callable
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from types import ModuleType
 
 DEFAULT_PI_PACKAGE = "/usr/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js"
 PI_PACKAGE = Path(os.environ.get("PI_PACKAGE") or DEFAULT_PI_PACKAGE)
@@ -87,3 +94,28 @@ def require_pi() -> None:
     if not PI_PACKAGE.is_file():
         raise unittest.SkipTest(f"Pi package not found at {PI_PACKAGE} (set PI_PACKAGE)")
     require_git()
+
+
+def load_script(path: Path) -> ModuleType:
+    """Import a shipped script by path, extension or not, so a test calls its main in-process."""
+    name = f"script_{path.stem.replace('-', '_')}"
+    loader = importlib.machinery.SourceFileLoader(name, str(path))
+    spec = importlib.util.spec_from_loader(name, loader)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module  # dataclasses resolve annotations through sys.modules
+    loader.exec_module(module)
+    return module
+
+
+def run_main(
+    main: Callable[..., int], argv: tuple[str, ...] | list[str], **inputs: object
+) -> subprocess.CompletedProcess[str]:
+    """Call a script's main in-process; argv, stdout, stderr, and exit status match a process run."""
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        try:
+            code = main(list(argv), **inputs)
+        except SystemExit as exit:  # argparse rejects bad usage by exiting
+            code = 0 if exit.code is None else exit.code
+    return subprocess.CompletedProcess(list(argv), code, stdout.getvalue(), stderr.getvalue())

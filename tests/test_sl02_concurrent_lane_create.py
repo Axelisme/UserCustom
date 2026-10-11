@@ -11,10 +11,12 @@ from pathlib import Path
 
 from tests import _support as support
 from tests._collab_support import (
+    SHORT_LANE_CREATE_WAIT_MS,
     close_harness,
     close_harness_for,
     git,
     git_on_path,
+    lane_create_wait_ms,
     seed_managed_task,
     seed_repository,
     seed_task_container,
@@ -115,6 +117,8 @@ def node_loader_script(repo_path: str, body: str) -> str:
         const reportTool = regs.get("collab_report");
         const statusTool = regs.get("collab_status");
         {body}
+        // An aborted request leaves Pi's exec holding a 5 s SIGKILL timer that keeps node alive.
+        process.exit(0);
     """)
 
 
@@ -400,10 +404,11 @@ class SL02ConcurrentLaneCreateTests(unittest.TestCase):
                 const details = timeoutResult.error?.error?.details || {{}};
                 if (details.task_id !== "demo") throw new Error("expected task_id demo in details, got "+JSON.stringify(details));
                 if (typeof details.waited_ms !== "number") throw new Error("waited_ms missing in details "+JSON.stringify(details));
-                if (details.timeout_ms !== 10000) throw new Error("timeout_ms should be 10000, got "+JSON.stringify(details));
-                if (details.waited_ms < 9000 || details.waited_ms > 11000) throw new Error("waited_ms should be ~10000, got "+details.waited_ms);
+                const waitMs = {SHORT_LANE_CREATE_WAIT_MS};
+                if (details.timeout_ms !== waitMs) throw new Error("timeout_ms should be "+waitMs+", got "+JSON.stringify(details));
+                if (details.waited_ms < waitMs - 50) throw new Error("waited_ms should reach "+waitMs+", got "+details.waited_ms);
                 const elapsed = Date.now()-start;
-                if (elapsed < 9000 || elapsed > 12000) throw new Error("elapsed should be ~10000, got "+elapsed);
+                if (elapsed < waitMs - 50) throw new Error("elapsed should reach "+waitMs+", got "+elapsed);
                 const refsAfterTimeout = execSync("git -C "+repoPath+" for-each-ref --format='%(refname) %(objectname)'", {{encoding:"utf8"}}).trim();
                 if (refsBefore !== refsAfterTimeout) throw new Error("refs should be unchanged after timeout, before="+JSON.stringify(refsBefore)+" after="+JSON.stringify(refsAfterTimeout));
                 if (fs.existsSync(lanePathTimeout)) throw new Error("timeout should not create lane worktree");
@@ -437,7 +442,8 @@ class SL02ConcurrentLaneCreateTests(unittest.TestCase):
                 if (afterBranch !== integrationTip) throw new Error("after-timeout should point at integration tip, got "+afterBranch+" vs "+integrationTip);
                 process.stdout.write(JSON.stringify({{ok:true, elapsed, followElapsed, details}})+"\\n");
             """)
-            result = run_node_script(node_loader_script(repo_str, node_body), timeout=30)
+            with lane_create_wait_ms():
+                result = run_node_script(node_loader_script(repo_str, node_body), timeout=30)
             self.assertTrue(result.get("ok"), result)
             self.assertEqual(git(repository, "rev-parse", "--verify", "wave/demo/after-timeout"), git(repository, "rev-parse", "wave/demo/integration"))
             self.assertFalse((repository / ".agent_state/worktrees/demo/lanes/timeout-lane").exists())

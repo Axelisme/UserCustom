@@ -61,8 +61,7 @@ class CollabOpExtensionTaskLockTests(unittest.TestCase):
             self.assertEqual(observed["error"]["error"]["code"], "task_busy")
             details = observed["error"]["error"]["details"]
             self.assertEqual(details.get("task_id"), "demo")
-            # SL02: lane_create uses a bounded wait rather than immediate fail-fast. The 10 s production
-            # default is covered by test_A4_live_external_lock_timeout_returns_task_busy_with_wait_facts.
+            # SL02: lane_create uses a bounded wait rather than immediate fail-fast.
             self.assertIn("waited_ms", details)
             self.assertEqual(details.get("timeout_ms"), SHORT_LANE_CREATE_WAIT_MS)
             self.assertGreaterEqual(details.get("waited_ms", 0), SHORT_LANE_CREATE_WAIT_MS - 50)

@@ -32,6 +32,10 @@ frontier.
 **Standing orders** say how this task is run (process). **Decisions** say what is built (target
 design). Classify a new user ruling by that line before writing it.
 
+Decision numbers are task-local: every task numbers its own, so `0012` names a different ruling in
+each archive. Tracked files (code, comments, tests, repository docs) carry the reason itself, or the
+repository's ADR that holds it; decision numbers stay inside `.agent_state/`.
+
 Read rules:
 
 - On entry, read `INDEX.md` whole. Open spec, decisions, and tickets when the action needs them.
@@ -122,6 +126,10 @@ Every ticket runs the repository's declared checks (test, lint, typecheck, as AG
 CLAUDE.md states) plus any check its acceptance criteria name. Logs go to `scratch/`; results are
 read from exit status, not recorded.
 
+The **record gate** applies to every ticket: each line the lane adds to a tracked file states its
+reason without a decision number (`D` + digits, or `decisions/NNNN`). Rewrite a hit as the reason it
+stood for.
+
 **Red-green proof.** A ticket that adds or changes behaviour delivers its new tests in their own
 commit before the implementation commit. Before collecting, check out that test commit in the lane
 (`git checkout --detach <test-commit>`) and run the new tests. Each must fail because what the ticket
@@ -196,8 +204,15 @@ grant. Land with the operation in [runtime.md](runtime.md).
 
 ## Close
 
-1. If the repository keeps ADRs, propose which decisions and spec content deserve one, and write the
-   ones the user picks with domain-modeling. Read `retired/` here for the history.
+1. **Promote** every in-force decision to where its rule lives once the task is archived, then show
+   the user the list and write the ones they confirm:
+   - a component's placement, responsibility, or cross-module boundary → an ADR, written with
+     domain-modeling, carrying the ruling date and the user's words in 「」;
+   - one module's behaviour or format → that module's documentation, docstring, or a test;
+   - how work runs in this repository → the repository's agent instructions;
+   - a choice that only steered this task → stays in the archive.
+
+   Read `retired/` here for the history.
 2. List `scratch/` to the user, then delete it.
 3. Move the task directory to `.agent_state/archives/<task-id>/`. Deleting the archive is the user's
    call.

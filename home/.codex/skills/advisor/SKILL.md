@@ -143,6 +143,6 @@ can send it back with `STDO:`. Common grants:
 
 ## Close the effort
 
-When the last Staircase step is accepted: propose ADR material from `design.md` and decisions,
-write the ones the user picks with domain-modeling, delete `scratch/`, and move the map to
+When the last Staircase step is accepted: promote the map's decisions and `design.md` as task-flow's
+Close step 1 does, delete `scratch/`, and move the map to
 `.agent_state/archives/maps/<effort-id>/`.

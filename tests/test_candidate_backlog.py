@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib.util
+import io
 import json
 import os
 import re
@@ -7,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 try:
@@ -35,7 +38,32 @@ def add_worktree(root: Path, path: Path) -> None:
     subprocess.run([*git, "worktree", "add", "-q", "--detach", str(path)], check=True)
 
 
+def load_backlog():
+    spec = importlib.util.spec_from_file_location("backlog", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses resolve annotations through sys.modules
+    spec.loader.exec_module(module)
+    return module
+
+
+BACKLOG = load_backlog()
+
+
 def run_backlog(cwd: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+    """Run the CLI in this process; argv, stdout, stderr, and exit status match the script's."""
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        try:
+            code = BACKLOG.main(list(arguments), cwd=cwd)
+        except SystemExit as exit:  # argparse rejects bad usage by exiting
+            code = exit.code
+    return subprocess.CompletedProcess(
+        [str(SCRIPT), *arguments], code, stdout.getvalue(), stderr.getvalue()
+    )
+
+
+def run_script(cwd: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(SCRIPT), *arguments],
         cwd=cwd,
@@ -420,12 +448,13 @@ class CandidateBacklogTests(unittest.TestCase):
     # --- exit codes -------------------------------------------------------
 
     def test_exit_code_is_zero_on_success_and_one_on_failure(self) -> None:
+        # The one test that starts the script itself: its process exit status is the contract.
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             init_repo(root)
-            ok = run_backlog(root, *add_args(root, "Exit code item"))
+            ok = run_script(root, *add_args(root, "Exit code item"))
             self.assertEqual(ok.returncode, 0)
-            failure = run_backlog(
+            failure = run_script(
                 root, "--root", str(root), "bind", "nonexistent", "--task-id", "T001"
             )
             self.assertEqual(failure.returncode, 1)

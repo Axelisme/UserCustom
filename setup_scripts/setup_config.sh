@@ -172,6 +172,7 @@ link_one .pi/agent/APPEND_SYSTEM.md
 # Claude
 link_each .claude/skills
 link_each .claude/agents
+link_one .claude/CLAUDE.md
 
 # ------------------------------------------------------------------------
 

@@ -132,10 +132,10 @@ class RepositoryContext:
         return cls(root, control)
 
 
-def resolve_control_root(root_arg: Path | None) -> Path:
+def resolve_control_root(root_arg: Path | None, cwd: Path) -> Path:
     if root_arg is None:
-        return RepositoryContext.discover(Path.cwd()).control_root
-    candidate = root_arg.resolve()
+        return RepositoryContext.discover(cwd).control_root
+    candidate = (cwd / root_arg).resolve()
     if not candidate.is_dir():
         raise Refusal("invalid_argument", f"--root is not a directory: {candidate}")
     context = RepositoryContext.discover(candidate)
@@ -530,11 +530,11 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
-def main() -> int:
-    args = parser().parse_args()
+def main(argv: list[str] | None = None, cwd: Path | None = None) -> int:
+    args = parser().parse_args(argv)
     operation = args.command
     try:
-        control_root = resolve_control_root(args.root)
+        control_root = resolve_control_root(args.root, cwd or Path.cwd())
         base = backlog_root(control_root)
         if operation == "add":
             payload = command_add(args, base)

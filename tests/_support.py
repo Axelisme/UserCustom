@@ -2,7 +2,7 @@
 
 Tests run real git and the installed Pi runtime. Both must behave the same on
 every machine, so `isolate_environment()` replaces the inherited user state
-(HOME, global/system git config, identity, clock, stray GIT_* variables) in
+(HOME, global/system git config, identity, clock, stray GIT_* variables, Pi network access) in
 this process's environment. Every subprocess a test starts -- git, python
 scripts, the node harness and the git calls it makes -- inherits the result.
 """
@@ -53,6 +53,8 @@ def isolate_environment() -> None:
             "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_CONFIG_GLOBAL": os.devnull,
             "GIT_TERMINAL_PROMPT": "0",
+            # The Pi runtime a harness loads must never reach the network from a test.
+            "PI_OFFLINE": "1",
             **GIT_IDENTITY,
         }
     )

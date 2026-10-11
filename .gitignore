@@ -5,3 +5,4 @@
 .scratch/
 .mcp.json
 /.pi
+/.venv

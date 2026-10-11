@@ -84,7 +84,8 @@ def invoke(
     support_extension: Path | None = None,
 ) -> dict[str, object]:
     support = support_extension.resolve() if support_extension is not None else None
-    environment = dict(os.environ)
+    # pytest rewrites PYTEST_CURRENT_TEST around every test; no harness reads it.
+    environment = {name: value for name, value in os.environ.items() if name != "PYTEST_CURRENT_TEST"}
     shared = _SHARED.get(support)
     process = shared[1] if shared is not None else None
     if shared is not None and (shared[0] != environment or process.poll() is not None):

@@ -34,5 +34,10 @@
     "showResetCountdown": true,
     "displayMode": "used",
     "refreshInterval": 30
+  },
+  "codexCockpit": {
+    "enabled": true,
+    "cliPath": "/home/axel/Documents/Codex/codex-cockpit/bin/codex-cockpit",
+    "refreshSeconds": 300
   }
 }

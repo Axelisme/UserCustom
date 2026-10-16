@@ -66,9 +66,9 @@ local function entry(st, job)
 	-- first time initialization
 	if not st.step then
 		local r = rt.mgr.ratio
-		st.parent = r.parent
-		st.current = r.current
-		st.preview = r.preview
+		st.parent = r[1]
+		st.current = r[2]
+		st.preview = r[3]
 		st.all = st.parent + st.current + st.preview
 		st.step = 0.05 * st.all
 	end

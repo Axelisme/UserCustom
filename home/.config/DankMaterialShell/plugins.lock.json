@@ -3,11 +3,11 @@
   "plugins": {
     "aiQuotas": {
       "repo": "https://github.com/agneswd/dms-ai-quotas",
-      "commit": "f8bcfb2fed740e9f9d184604f656999dcdf6fb0a"
+      "commit": "2603129556d7e38fa9857fee2472b8dd8c29c492"
     },
     "calculator": {
       "repo": "https://github.com/rochacbruno/DankCalculator",
-      "commit": "c9fbbe921e9afeb92f4e92390e9fc05f006f0373"
+      "commit": "a27b80ad8c3dd42da11af83461674fb362817515"
     },
     "dankKDEConnect": {
       "repo": "https://github.com/AvengeMedia/dms-plugins",

@@ -72,7 +72,8 @@ design is clear enough to slice.
    design by condition instead of copying it. Slice it with to-tickets. The user confirms both.
 4. Add the Tasks line as `planned` and ask the user to start an agent for it. Once it runs, name it
    with `herdr agent rename <pane> <name>`, mark the line `running`, and send it
-   `start(<task-id>): <task-dir>`.
+   `start(<task-id>): <task-dir>`. A session reset (`/new`) drops the name: rename after the
+   reset, then send, and confirm the agent turns `working`.
 
 The task's Orchestrator owns its spec and tickets from then on.
 
@@ -100,6 +101,10 @@ Messages go through `herdr agent prompt <name> "<message>"` and carry pointers, 
    task and `design-change` to every other running task whose spec points into the design text that
    moved.
 
+When a task's second question about a verification method, threshold, or rigor arrives, ask the user
+what the purpose needs ("runs end to end" or "meets a stated precision bar") before ruling another
+guard. Record that acceptance level as a decision; later method questions rule against it.
+
 A **proxy ruling** is a decision whose header reads `Ruled-by: advisor (STDO <date>)` and
 `Review: pending`, followed by the reasoning, an example, and the cost of the adopted option in
 place of the user's answer. It binds tasks like any decision.
@@ -119,10 +124,11 @@ bring the questions you held while the user was away.
   standing order that grants landing, send `land(<task>)` quoting that authority.
 - On `landed(<task>)`: mark the line `landed` and send `base-landed` to every task stacked on it.
 - On `blocked`: settle what is yours to rule; bring the rest to the user.
-- A **patrol**, when a standing order or the user asks for one, checks each running task: its herdr
-  state (`herdr agent get`), `check.py` on its task directory for frontier and `doing` tickets, and
-  its `scratch/questions/` for questions you have not answered. Report idle or blocked tasks to the
-  user; prompt an idle task with its frontier ticket numbers.
+- A **patrol**, when a standing order or the user asks for one, runs
+  `python3 <skill-dir>/scripts/patrol.py <map-dir>`: for each running task it prints the herdr
+  state, frontier and `doing` tickets, unanswered questions, scratch size, and a tail for idle
+  agents. Report idle or blocked tasks to the user; prompt an idle task with its frontier ticket
+  numbers.
 
 ## Suggest grants
 
@@ -144,5 +150,8 @@ can send it back with `STDO:`. Common grants:
 ## Close the effort
 
 When the last Staircase step is accepted: promote the map's decisions and `design.md` as task-flow's
-Close step 1 does, delete `scratch/`, and move the map to
+Close step 1 does, clear `scratch/` as task-flow's Close step 2 does, and move the map to
 `.agent_state/archives/maps/<effort-id>/`.
+
+Before telling a task to close, check whether another running task's spec or ticket names a path in
+that task's `scratch/`; name those paths in the close message so the task keeps them.

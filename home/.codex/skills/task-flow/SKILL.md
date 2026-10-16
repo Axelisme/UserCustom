@@ -213,6 +213,8 @@ grant. Land with the operation in [runtime.md](runtime.md).
    - a choice that only steered this task → stays in the archive.
 
    Read `retired/` here for the history.
-2. List `scratch/` to the user, then delete it.
+2. Search `.agent_state/plans/`, `.agent_state/maps/`, and tracked files for paths into this task's
+   `scratch/`. Move each referenced item into the archive and tell its referrer the new path; then
+   list the rest of `scratch/` to the user and delete it.
 3. Move the task directory to `.agent_state/archives/<task-id>/`. Deleting the archive is the user's
    call.

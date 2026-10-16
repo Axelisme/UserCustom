@@ -4,6 +4,7 @@ description: Implement one task-flow ticket, or one batch of land-review fixes, 
 modelList:
   - openai/gpt-6.1-sol:high
   - antigravity/claude-sonnet-5-5:high
+  - openai/gpt-6.1-sol:xhigh
 tools:
   - codemode
   - read

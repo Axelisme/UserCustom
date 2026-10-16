@@ -3,6 +3,8 @@ name: code-reviewer
 description: Review one pinned diff on exactly one dispatched axis, Standards or Spec, and report findings read-only; the reviewer the code-review skill dispatches, one per axis.
 modelList:
   - openai/gpt-6.1-sol:xhigh
+  - antigravity/claude-opus-5-5:high
+  - openai/gpt-6.1-sol:high
 tools:
   - codemode
   - read

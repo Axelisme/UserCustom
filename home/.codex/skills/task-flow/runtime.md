@@ -42,6 +42,12 @@ The `collab_*` tools are absent; use native Git with the same names.
 - Land: in the main checkout on the target branch, `git merge --no-ff wave/<task-id>/integration`.
   Stop on staged changes or files the merge would overwrite; leave unrelated local work untouched.
 
+## Checkpoint lane work
+
+Checkpoint tracked work with a lane-local WIP commit before an operation that needs a clean tree.
+Move useful untracked output to the assigned scratch path. Keep these commits on the lane; commit
+layout does not establish completion. Never use the shared Git stash stack across worktrees.
+
 ## Dispatch
 
 Both runtimes dispatch through the herdr subagent tools; Claude reaches them as the
@@ -50,6 +56,9 @@ Both runtimes dispatch through the herdr subagent tools; Claude reaches them as 
 - `spawn_subagent({ cwd: <lane>, role: "task-implementer", dispatch })`. A correction after the
   child returned its result is a fresh spawn; a change while the child is live is a
   `control_subagent` `steer`.
+- Include an absolute tdd `SKILL.md` path readable in the child's runtime, along with the task,
+  ticket or findings, gate commands and cwd, and scratch log path. Check readability before spawn;
+  the child reports a missing or unreadable path rather than skipping tdd.
 - A question arrives as a decision notification; answer with `control_subagent` `reply`.
 - `FAILED` means the process ended without a result. Inspect the lane, then `control_subagent`
   `resume` or dispatch fresh.

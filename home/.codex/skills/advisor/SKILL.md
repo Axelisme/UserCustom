@@ -86,10 +86,15 @@ Messages go through `herdr agent prompt <name> "<message>"` and carry pointers, 
 | task → advisor | `question(<task>): <one line>; <scratch path>` | A design question; scenario and options in the file |
 | advisor → task | `ruling(<task>): decisions/NNNN` | Answered; the task updates its spec to match |
 | advisor → task | `design-change(<task>): decisions/NNNN` | A ruling elsewhere changes this task's design |
+| advisor → task | `steer(<task>): <provenance>; <process instruction>` | Process guidance within existing scope, acceptance, and grants |
 | advisor → task | `base-landed(<task>)` | Retarget and pull |
 | task → advisor | `review-done(<task>): <report path>` | Land review finished; landing waits on you |
 | advisor → task | `land(<task>): 「<user's words>」` or `land(<task>): STDO <date>` | Land, on the quoted instruction or the named grant |
 | task → advisor | `landed(<task>)` or `blocked(<task>): <one line>` | Status |
+
+Before sending `steer`, read the receiving contract in task-flow's
+[Mapped tasks](../task-flow/SKILL.md#mapped-tasks) and check the message against its provenance and
+authority requirements. Link supporting evidence when needed.
 
 ## Answer a question
 

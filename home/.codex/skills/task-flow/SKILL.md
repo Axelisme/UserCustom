@@ -79,10 +79,10 @@ After compaction or a session change:
 2. Each `doing` ticket's lane is `wave/<task-id>/<ticket-stem>`, for example
    `wave/calc-ops/02-multiply`. Observe the lane and the live children with the runtime's status
    operations ([runtime.md](runtime.md)). A lane on a detached HEAD goes back to its branch first. A
-   live child keeps working; wait for it. With no live child, inspect the lane: a **finished
-   candidate** (clean tree, an implementation commit, and for a behaviour ticket a separate test
-   commit before it) goes to the [gates](#gates); anything else gets a fresh dispatch on the same
-   lane.
+   live child keeps working; wait for it. With no live child, inspect the delivered diff against
+   acceptance, the worktree, and scratch evidence. A clean, committed candidate with the required
+   evidence goes to the [gates](#gates); incomplete work gets a fresh dispatch on the same lane.
+   Commit count or layout is not proof of completeness.
 3. In a mapped task, re-send every question still in `scratch/questions/`.
 
 Then continue the frontier.
@@ -104,8 +104,10 @@ confirmed.
 The **frontier** is every `ready` ticket whose blockers are all `done`.
 
 1. For each frontier ticket, create a lane from integration named after the ticket file stem
-   (`02-multiply`) and dispatch a `task-implementer` in the background. The dispatch carries pointers, not copies: task path, ticket path, lane path, the
-   gate commands, and `scratch/<ticket>/` for logs.
+   (`02-multiply`) and dispatch a `task-implementer` in the background. The dispatch carries pointers,
+   not copies: task path, ticket path, lane path, gate commands with cwd, `scratch/<ticket>/` for
+   logs, and an absolute path to the tdd `SKILL.md` readable by the child. Resolve and verify the
+   skill path before dispatch; a missing or unreadable path blocks dispatch.
 2. Continue independent work while lanes run. When nothing independent remains, end the turn.
 3. On a COMPLETED result, run the [gates](#gates) yourself on the lane. Pass: collect the lane into
    integration, set `done`, and delete `scratch/<ticket>/`. Fail: send the failure back through a
@@ -130,15 +132,23 @@ The **record gate** applies to every ticket: each line the lane adds to a tracke
 reason without a decision number (`D` + digits, or `decisions/NNNN`). Rewrite a hit as the reason it
 stood for.
 
-**Red-green proof.** A ticket that adds or changes behaviour delivers its new tests in their own
-commit before the implementation commit. Before collecting, check out that test commit in the lane
-(`git checkout --detach <test-commit>`) and run the new tests. Each must fail because what the ticket
-adds is still missing: a failed assertion, or a missing function or attribute the ticket introduces.
-A failure unrelated to the target (collection, an unrelated import, setup, environment) is no proof.
-Then check out the lane branch again and run every gate green. A ticket that keeps behaviour
-unchanged (prefactor, migration batch, expand or contract step) and a ticket wholly outside the
-test surface (prose, configuration, data) skip the proof: the existing tests stay green, and land
-review covers the rest.
+**Red-green proof.** Before implementing changed behaviour, run its new tests red on the missing
+behaviour. A failed assertion or missing function or attribute introduced by the ticket qualifies;
+collection, unrelated imports, setup, and environment failures do not. Keep the command, tested
+state, exit status, and relevant failure output in scratch, then run green after implementation.
+Test corrections may fix a mistaken test while preserving acceptance and coverage; explain the
+correction and renew the relevant red-green evidence. Acceptance or scope changes need a ruling.
+Commit layout is unrestricted. Before collection, review the evidence and diff against acceptance,
+then run every gate green. Replay red only when evidence is suspect or explicitly required.
+A ticket that keeps behaviour unchanged (prefactor, migration batch, expand or contract step), or
+is wholly outside the test surface (prose, configuration, data), skips red-green proof; existing
+tests stay green and land review covers the rest.
+
+**Evidence budget.** Tie each artifact or experiment to an acceptance criterion or unresolved
+question. Keep commands, tested inputs/state, outcomes, and enough output to check the conclusion;
+link bulky raw output instead of copying it. Reuse evidence whose inputs and assumptions still
+hold. On reconcile, rerun affected checks and all required gates, not unrelated artifact generation.
+Stop optional evidence gathering once acceptance is supported and the named questions are resolved.
 
 ## Stacked tasks
 
@@ -174,6 +184,12 @@ advisor's herdr name is `<name>` in the `Advisor: <name>` line of the map's `## 
   the map design it changed, then update this task's spec and tickets to match. A `doing` ticket is
   interrupted as in [Run the frontier](#run-the-frontier); a `done` ticket whose behaviour the ruling
   changes gets a new ticket.
+- **On `steer(<task>): <provenance>; <process instruction>`**: treat it as advisor process guidance,
+  not a user ruling. Provenance is `advisor-observation`, a quoted user instruction, or a named
+  standing order with its date. Check the cited authority and apply only within existing scope,
+  acceptance, and grants. Keep red-green proof, declared gates, and unresolved findings intact.
+  A steer cannot authorize spec changes, standing orders, landing, or push; ask the advisor for the
+  required ruling or authority when it conflicts with those boundaries.
 - **On `base-landed(<task>)`**: retarget and pull per [stacked tasks](#stacked-tasks).
 - **After land review**, write the report of step 5 to `scratch/land-review.md` and send
   `review-done(<task-id>): <its path>` instead of reporting to the user. The advisor's

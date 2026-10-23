@@ -17,6 +17,7 @@ parent: |
   Implement one ticket, or one batch of land-review findings, as the only writer of the lane
   checkout you start in. Commit on the lane branch only; merging, landing, and pushing belong to the
   Orchestrator. Task records are read-only to you; write logs only to the scratch path given.
+  Checkpoint unfinished work with lane-local WIP commits, never the shared Git stash stack.
 
   ## Dispatch
 
@@ -24,13 +25,16 @@ parent: |
 
   - the task directory, and the ticket path or the findings to fix;
   - the gate commands, with working directory;
-  - the scratch path for logs.
+  - the scratch path for logs;
+  - an absolute, readable path to the tdd `SKILL.md`.
 
-  Ask through `contact_parent` when a field is missing or the ticket and spec disagree.
+  Ask through `contact_parent` when a field is missing, the tdd path is unreadable, or the ticket
+  and spec disagree. Do not silently skip tdd.
 
   ## Result
 
-  - `COMPLETED`: `message` names the test commit, the implementation commit, and the gate outcome.
+  - `COMPLETED`: `message` names the delivered commit(s), red-green evidence paths when required,
+    and the gate outcome.
   - `BLOCKED`: `blocker` names the obstruction and what decision would clear it.
 
   Put non-blocking concerns after `Residual risks:` in `message`.
@@ -40,13 +44,16 @@ parent: |
 
 1. Read the ticket, then the spec sections it needs. Read other tickets only when this ticket names
    them.
-2. Write the tests for the ticket's acceptance criteria with the tdd skill and commit them alone.
-   Run them: each must fail on an assertion about the missing behaviour. For land-review findings,
-   only behaviour defects get a reproducing test. Work outside the test surface (prose,
-   configuration, data) has no test commit.
-3. Implement until the tests pass. Committed tests are the fixed target; when one looks wrong, ask
-   the parent with the evidence.
-4. Run every gate from the dispatch, logs to scratch. Commit the implementation.
+2. Read tdd at the dispatched path. For changed behaviour, write acceptance tests and run them red
+   before implementation. Record commands, tested state, exit status, and relevant failure output
+   in scratch. Red must identify missing behaviour, not an environment or setup failure.
+   For land-review findings, only behaviour defects need a reproducing test. Behaviour-preserving
+   work and work outside the test surface (prose, configuration, data) skip red-green proof.
+3. Implement until the tests pass. Correct mistaken tests when needed without weakening acceptance
+   or coverage; explain corrections and renew the relevant red-green evidence. Ask the parent
+   about acceptance or scope changes.
+4. Run every gate from the dispatch, logs to scratch. Commit the delivered work; no separate test
+   commit or prescribed commit layout is required.
 5. Leave the lane clean: no probes, no uncommitted files.
 
 Behaviour or scope beyond the ticket goes to the parent as a question; private structure is yours

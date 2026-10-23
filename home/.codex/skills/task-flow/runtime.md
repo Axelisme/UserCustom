@@ -56,9 +56,8 @@ Both runtimes dispatch through the herdr subagent tools; Claude reaches them as 
 - `spawn_subagent({ cwd: <lane>, role: "task-implementer", dispatch })`. A correction after the
   child returned its result is a fresh spawn; a change while the child is live is a
   `control_subagent` `steer`.
-- Include an absolute tdd `SKILL.md` path readable in the child's runtime, along with the task,
-  ticket or findings, gate commands and cwd, and scratch log path. Check readability before spawn;
-  the child reports a missing or unreadable path rather than skipping tdd.
+- Before spawning, use [Run the frontier](SKILL.md#run-the-frontier) for the required dispatch
+  fields and skill-path validation.
 - A question arrives as a decision notification; answer with `control_subagent` `reply`.
 - `FAILED` means the process ended without a result. Inspect the lane, then `control_subagent`
   `resume` or dispatch fresh.

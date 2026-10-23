@@ -92,12 +92,9 @@ Messages go through `herdr agent prompt <name> "<message>"` and carry pointers, 
 | advisor → task | `land(<task>): 「<user's words>」` or `land(<task>): STDO <date>` | Land, on the quoted instruction or the named grant |
 | task → advisor | `landed(<task>)` or `blocked(<task>): <one line>` | Status |
 
-A `steer` names its provenance: `advisor-observation`, a quoted user instruction, or a named
-standing order with its date. Label your own observations as yours; never present them as user
-rulings. Link supporting evidence when needed. Use `ruling` or `design-change` for authorized design
-changes. A steer creates no standing order and grants no spec change, landing, or push authority.
-Recipients check the cited authority and preserve red-green proof, declared gates, and unresolved
-findings. Conflicts go back as questions, not silent acceptance reductions.
+Before sending `steer`, read the receiving contract in task-flow's
+[Mapped tasks](../task-flow/SKILL.md#mapped-tasks) and check the message against its provenance and
+authority requirements. Link supporting evidence when needed.
 
 ## Answer a question
 

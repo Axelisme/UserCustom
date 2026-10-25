@@ -14,8 +14,8 @@ elif command -v vim &>/dev/null; then
   export EDITOR=vim
 fi
 
-# asign python cache dir to /tmp
-export PYTHONPYCACHEPREFIX=/tmp
+# Keep bytecode caches out of the source trees and off tmpfs (RAM); 2026-10-24
+export PYTHONPYCACHEPREFIX="$HOME/.cache/pycache"
 # use multithread to unzip xz file
 export XZ_DEFAULTS='-T0'
 

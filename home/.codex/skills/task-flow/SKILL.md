@@ -178,8 +178,8 @@ advisor's herdr name is `<name>` in the `Advisor: <name>` line of the map's `## 
 - **Design questions** go to the advisor, not the user: write the scenario, options, and a
   recommendation to `scratch/questions/<slug>.md`, send
   `herdr agent prompt <advisor> "question(<task-id>): <one line>; <file path>"`, and continue
-  independent work. Delete the file once its ruling arrives, so a remaining file is an unanswered
-  question.
+  independent work. Delete the file once its ruling, or a `steer` that answers it, arrives, so a
+  remaining file is an unanswered question.
 - **On `ruling(<task>): <decision>` or `design-change(<task>): <decision>`**: read the decision and
   the map design it changed, then update this task's spec and tickets to match. A `doing` ticket is
   interrupted as in [Run the frontier](#run-the-frontier); a `done` ticket whose behaviour the ruling

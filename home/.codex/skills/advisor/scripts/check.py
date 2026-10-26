@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Check an advisor map directory's closed structure and list rulings awaiting the user's review."""
+"""Check an advisor map directory's closed structure and list rulings awaiting the user's review.
+
+A map past HANDOFF_TASKS task lines or HANDOFF_DECISIONS decisions also gets a
+`hand-off suggested:` line; it is advice, not a problem, so the exit status ignores it.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +21,8 @@ MAP_SECTIONS = (
     "Standing orders",
 )
 DECISION_NAME = re.compile(r"^\d{4}-[^/]+\.md$")
+HANDOFF_TASKS = 9
+HANDOFF_DECISIONS = 25
 TASK_LINE = re.compile(
     r"^- (\S+) — step \d+ — Base: \S+ — herdr: \S+ — (planned|running|landed)$"
 )
@@ -33,11 +39,11 @@ def header(text: str) -> dict[str, str]:
     return fields
 
 
-def main() -> int:
-    if len(sys.argv) != 2:
+def main(argv: list[str]) -> int:
+    if len(argv) != 2:
         print("usage: check.py <map-dir>", file=sys.stderr)
         return 2
-    effort = Path(sys.argv[1])
+    effort = Path(argv[1])
     problems: list[str] = []
     extra = sorted(entry.name for entry in effort.iterdir() if entry.name not in TOP_LEVEL)
     if extra:
@@ -64,10 +70,12 @@ def main() -> int:
                 problems.append(f"## Tasks line does not match the task format: {line!r}")
 
     pending: list[str] = []
+    decisions = 0
     for path in sorted((effort / "decisions").glob("*")):
         if not DECISION_NAME.match(path.name):
             problems.append(f"decisions/{path.name}: name is not NNNN-<slug>.md")
             continue
+        decisions += 1
         fields = header(path.read_text())
         if "Supersedes" not in fields:
             problems.append(f"decisions/{path.name}: header has no 'Supersedes:'")
@@ -81,10 +89,17 @@ def main() -> int:
     for task, state in tasks:
         print(f"task: {task} {state}")
     print(f"pending review: {pending or 'none'}")
+    oversized = []
+    if len(tasks) > HANDOFF_TASKS:
+        oversized.append(f"{len(tasks)} tasks (over {HANDOFF_TASKS})")
+    if decisions > HANDOFF_DECISIONS:
+        oversized.append(f"{decisions} decisions (over {HANDOFF_DECISIONS})")
+    if oversized:
+        print(f"hand-off suggested: {', '.join(oversized)}")
     for problem in problems:
         print(f"problem: {problem}")
     return 1 if problems else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv))

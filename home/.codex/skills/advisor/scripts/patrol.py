@@ -4,8 +4,9 @@
 Usage: python3 patrol.py <map-dir>
 
 For every `running` Tasks line it prints the agent's herdr status, the task-flow
-frontier and doing tickets, unanswered questions, and the scratch size; idle or
-done agents also get a short tail. A question counts as answered when it has a
+frontier and doing tickets, unanswered questions, the scratch size, and the size
+of any Python harness in scratch, flagged past HARNESS_WARN_LINES lines or when it
+carries its own tests or pyrightconfig; idle or done agents also get a short tail. A question counts as answered when it has a
 sibling `.ruling.md`, contains `## Ruling`, or a map decision names its file.
 The last line reports MemAvailable. Exit status is 0 unless the map is unreadable.
 """
@@ -16,6 +17,7 @@ import json
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 TASK_LINE = re.compile(
@@ -23,6 +25,8 @@ TASK_LINE = re.compile(
 )
 CHECK = Path(__file__).resolve().parents[2] / "task-flow" / "scripts" / "check.py"
 SCRATCH_WARN_BYTES = 10 * 1024 * 1024
+# A one-off acceptance harness fits one 100-200 line script; past this it has grown into a project.
+HARNESS_WARN_LINES = 300
 
 
 def run(args: list[str]) -> str:
@@ -34,10 +38,14 @@ def run(args: list[str]) -> str:
     return done.stdout + done.stderr
 
 
-def herdr_agents() -> dict[str, tuple[str, str]]:
+def herdr_cli(args: list[str]) -> str:
+    return run(["herdr", *args])
+
+
+def herdr_agents(herdr: Callable[[list[str]], str]) -> dict[str, tuple[str, str]]:
     """Map agent name -> (pane, status); empty when herdr is unavailable."""
     try:
-        listing = json.loads(run(["herdr", "agent", "list"]))
+        listing = json.loads(herdr(["agent", "list"]))
     except json.JSONDecodeError:
         return {}
     return {
@@ -47,11 +55,11 @@ def herdr_agents() -> dict[str, tuple[str, str]]:
     }
 
 
-def tail(name: str) -> list[str]:
+def tail(name: str, herdr: Callable[[list[str]], str]) -> list[str]:
     """Last non-empty screen lines; falls back to the visible screen when busy."""
-    text = run(["herdr", "agent", "read", name, "--source", "recent-unwrapped", "--lines", "30"])
+    text = herdr(["agent", "read", name, "--source", "recent-unwrapped", "--lines", "30"])
     if "agent_not_idle" in text:
-        text = run(["herdr", "agent", "read", name, "--source", "visible"])
+        text = herdr(["agent", "read", name, "--source", "visible"])
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     lines = [line for line in lines if not line.startswith(("───", "Cost ", "7d:"))]
     return lines[-6:]
@@ -79,6 +87,23 @@ def dir_bytes(path: Path) -> int:
     return sum(f.stat().st_size for f in path.rglob("*") if f.is_file() and not f.is_symlink())
 
 
+def harness(scratch: Path) -> str | None:
+    """Size of the Python harness in scratch, flagged once it outgrows a one-off script."""
+    scripts = [p for p in scratch.rglob("*.py") if p.is_file() and not p.is_symlink()]
+    if not scripts:
+        return None
+    lines = sum(len(p.read_text(encoding="utf-8", errors="replace").splitlines()) for p in scripts)
+    flags = []
+    if lines > HARNESS_WARN_LINES:
+        flags.append(f"over {HARNESS_WARN_LINES} lines")
+    if any(p.name.startswith("test_") or "tests" in p.relative_to(scratch).parts for p in scripts):
+        flags.append("own tests")
+    if any(scratch.rglob("pyrightconfig.json")):
+        flags.append("own pyrightconfig")
+    note = f"  ({', '.join(flags)})" if flags else ""
+    return f"harness {len(scripts)} py files, {lines} lines{note}"
+
+
 def mem_available_gb() -> str:
     for line in Path("/proc/meminfo").read_text().splitlines():
         if line.startswith("MemAvailable:"):
@@ -86,7 +111,7 @@ def mem_available_gb() -> str:
     return "?"
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str], herdr: Callable[[list[str]], str] = herdr_cli) -> int:
     if len(argv) != 2:
         print(__doc__)
         return 2
@@ -97,7 +122,7 @@ def main(argv: list[str]) -> int:
         p.read_text(encoding="utf-8", errors="replace")
         for p in (map_dir / "decisions").glob("*.md")
     )
-    agents = herdr_agents()
+    agents = herdr_agents(herdr)
     running = [m for m in map(TASK_LINE.match, map_text.splitlines()) if m and m["state"] == "running"]
     if not running:
         print("no running tasks")
@@ -118,8 +143,11 @@ def main(argv: list[str]) -> int:
             size = dir_bytes(scratch)
             flag = "  (over 10 MB)" if size > SCRATCH_WARN_BYTES else ""
             print(f"   scratch {size / 1024 / 1024:.1f} MB{flag}")
+            report = harness(scratch)
+            if report:
+                print(f"   {report}")
         if status in ("idle", "done"):
-            for line in tail(name):
+            for line in tail(name, herdr):
                 print(f"   | {line[:160]}")
     print(f"MemAvailable {mem_available_gb()}")
     return 0

@@ -2,7 +2,6 @@
 name: repo-investigator
 description: Map local code and constraints read-only by default, with explicitly authorized bounded experiments and no contract decisions.
 modelList:
-  - antigravity/gemini-3.8-flash:high
   - openai/gpt-6-luna:max
 tools:
   - codemode

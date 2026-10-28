@@ -1,9 +1,9 @@
 {
-  "lastChangelogVersion": "1.3.0",
+  "lastChangelogVersion": "1.4.0",
   "theme": "legacy-dark",
   "defaultProvider": "openai",
-  "defaultModel": "gpt-6.1-sol",
-  "defaultThinkingLevel": "high",
+  "defaultModel": "gpt-6-astra",
+  "defaultThinkingLevel": "xhigh",
   "defaultTools": [
     "+codemode",
     "+tool_search"
@@ -27,25 +27,21 @@
     "/home/axel/Documents/VSCode/Typescript/pi-herdr-subagents",
     "/home/axel/Documents/VSCode/Typescript/pi-self-compact",
     "/home/axel/Documents/VSCode/Typescript/pi-openai-fast-mode",
-    "npm:pi-antigravity@0.9.0",
-    "/home/axel/Documents/VSCode/Typescript/cache-stats"
+    "/home/axel/Documents/VSCode/Typescript/cache-stats",
+    "npm:pi-tidy"
   ],
   "enabledModels": [
     "openai/gpt-6-astra",
     "openai/gpt-6.1-sol",
-    "openai/gpt-6-luna",
-    "antigravity/gemini-3.8-flash",
-    "antigravity/claude-sonnet-5-5"
+    "openai/gpt-6-luna"
   ],
   "herdrSubagents": {
     "allowExtensions": [
       "builtin:codemode",
       "builtin:tool-search",
-      "builtin:mcp",
       "/home/axel/Documents/VSCode/Typescript/pi-openai-fast-mode",
-      "npm:pi-antigravity@0.9.0",
       "/home/axel/Documents/VSCode/Typescript/cache-stats",
-      "/home/axel/UserCustom/home/.pi/agent/workarounds/herdr-first-prompt/index.ts"
+      "npm:pi-tidy"
     ]
   },
   "deviceId": "3cdcc3bc-d760-4ef0-923f-dba06b98f455"

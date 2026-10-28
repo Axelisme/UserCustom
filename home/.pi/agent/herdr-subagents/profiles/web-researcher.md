@@ -2,7 +2,6 @@
 name: web-researcher
 description: Research official documentation and primary external sources with citations; no design or implementation.
 modelList:
-  - antigravity/gemini-3.8-flash:high
   - openai/gpt-6-luna:max
 tools:
   - codemode

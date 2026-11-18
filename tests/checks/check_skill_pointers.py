@@ -15,7 +15,8 @@ MDSEC = support.load_script(HOME / ".local/bin/mdsec")
 # breaks every pointer into it. These are the trees whose pointers must keep resolving.
 POINTER_ROOTS = (
     HOME / ".codex/skills/task-flow",
-    HOME / ".codex/skills/advisor",
+    HOME / ".codex/skills/coordinator",
+    HOME / ".codex/skills/designer",
     HOME / ".claude/agents",
     HOME / ".codex/agents",
     HOME / ".pi/agent/herdr-subagents/profiles",

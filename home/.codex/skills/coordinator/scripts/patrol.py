@@ -1,14 +1,26 @@
 #!/usr/bin/env python3
 """One patrol pass over an effort map's running tasks.
 
-Usage: python3 patrol.py <map-dir>
+Usage: python3 patrol.py <map-dir> [--questions]
 
 For every `running` Tasks line it prints the agent's herdr status, the task-flow
-frontier and doing tickets, unanswered questions, the scratch size, and the size
-of any Python harness in scratch, flagged past HARNESS_WARN_LINES lines or when it
-carries its own tests or pyrightconfig; idle or done agents also get a short tail. A question counts as answered when it has a
-sibling `.ruling.md`, contains `## Ruling`, or a map decision names its file.
-The last line reports MemAvailable. Exit status is 0 unless the map is unreadable.
+frontier and doing tickets, open questions with their tier, the scratch size, and the
+size of any Python harness in scratch, flagged past HARNESS_WARN_LINES lines or when it
+carries its own tests or pyrightconfig; idle or done agents also get a short tail.
+Then come the map's `tidy suggested:` lines, the number of open design questions, and
+MemAvailable.
+
+A question's tier is the value of its `Tier:` line (`local`, `simple`, `full`, or
+`process`); a file without one is `untiered`. A question counts as answered when it has a
+sibling `.ruling.md`, contains `## Ruling`, or a map decision names its file. Every tier
+but `process` and `local` (the task's own call, sent back by the coordinator) is a design
+question.
+
+With --questions it prints only the open design questions, one per line as
+`<tier> <path>`, followed by `  claimed by <name>` when the map's
+`scratch/designer-<name>.md` names that path; or `no open design questions`.
+
+Exit status is 0 unless the map is unreadable.
 """
 
 from __future__ import annotations
@@ -24,6 +36,8 @@ TASK_LINE = re.compile(
     r"^- (?P<task>\S+) — step \S+ — Base: \S+ — herdr: (?P<name>\S+) — (?P<state>\S+)"
 )
 CHECK = Path(__file__).resolve().parents[2] / "task-flow" / "scripts" / "check.py"
+MAP_CHECK = Path(__file__).resolve().with_name("check.py")
+TIER = re.compile(r"^Tier:\s*(\S+)", re.M)
 SCRATCH_WARN_BYTES = 10 * 1024 * 1024
 # A one-off acceptance harness fits one 100-200 line script; past this it has grown into a project.
 HARNESS_WARN_LINES = 300
@@ -65,7 +79,8 @@ def tail(name: str, herdr: Callable[[list[str]], str]) -> list[str]:
     return lines[-6:]
 
 
-def unanswered(task_dir: Path, decisions_text: str) -> list[str]:
+def unanswered(task_dir: Path, decisions_text: str) -> list[tuple[str, Path]]:
+    """Open question files of one task as (tier, path)."""
     questions = task_dir / "scratch" / "questions"
     if not questions.is_dir():
         return []
@@ -73,14 +88,26 @@ def unanswered(task_dir: Path, decisions_text: str) -> list[str]:
     for path in sorted(questions.glob("*.md")):
         if path.name.endswith(".ruling.md"):
             continue
+        text = path.read_text(encoding="utf-8", errors="replace")
         answered = (
             path.with_name(path.stem + ".ruling.md").exists()
-            or "## Ruling" in path.read_text(encoding="utf-8", errors="replace")
+            or "## Ruling" in text
             or path.name in decisions_text
         )
         if not answered:
-            open_items.append(str(path))
+            tier = TIER.search(text)
+            open_items.append((tier.group(1) if tier else "untiered", path))
     return open_items
+
+
+def claims(map_dir: Path) -> dict[str, str]:
+    """Map a claimed question path to the designer whose claim file names it."""
+    held: dict[str, str] = {}
+    for path in sorted((map_dir / "scratch").glob("designer-*.md")):
+        lines = path.read_text(encoding="utf-8", errors="replace").split()
+        if lines and lines[0] != "free":
+            held[lines[0]] = path.stem.removeprefix("designer-")
+    return held
 
 
 def dir_bytes(path: Path) -> int:
@@ -112,18 +139,34 @@ def mem_available_gb() -> str:
 
 
 def main(argv: list[str], herdr: Callable[[list[str]], str] = herdr_cli) -> int:
-    if len(argv) != 2:
+    only_questions = "--questions" in argv
+    arguments = [argument for argument in argv[1:] if argument != "--questions"]
+    if len(arguments) != 1:
         print(__doc__)
         return 2
-    map_dir = Path(argv[1]).resolve()
+    map_dir = Path(arguments[0]).resolve()
     map_text = (map_dir / "MAP.md").read_text(encoding="utf-8")
     plans = map_dir.parents[1] / "plans"
     decisions_text = "\n".join(
         p.read_text(encoding="utf-8", errors="replace")
         for p in (map_dir / "decisions").glob("*.md")
     )
-    agents = herdr_agents(herdr)
     running = [m for m in map(TASK_LINE.match, map_text.splitlines()) if m and m["state"] == "running"]
+    design_questions = [
+        (tier, path)
+        for match in running
+        for tier, path in unanswered(plans / match["task"], decisions_text)
+        if tier not in ("process", "local")
+    ]
+    if only_questions:
+        held = claims(map_dir)
+        for tier, path in design_questions:
+            holder = held.get(str(path))
+            print(f"{tier} {path}" + (f"  claimed by {holder}" if holder else ""))
+        if not design_questions:
+            print("no open design questions")
+        return 0
+    agents = herdr_agents(herdr)
     if not running:
         print("no running tasks")
     for match in running:
@@ -136,8 +179,8 @@ def main(argv: list[str], herdr: Callable[[list[str]], str] = herdr_cli) -> int:
             continue
         report = run([sys.executable, str(CHECK), str(task_dir)]).strip().splitlines()
         print("   " + " | ".join(report[-3:]))
-        for question in unanswered(task_dir, decisions_text):
-            print(f"   QUESTION {question}")
+        for tier, question in unanswered(task_dir, decisions_text):
+            print(f"   QUESTION {tier} {question}")
         scratch = task_dir / "scratch"
         if scratch.is_dir():
             size = dir_bytes(scratch)
@@ -149,6 +192,10 @@ def main(argv: list[str], herdr: Callable[[list[str]], str] = herdr_cli) -> int:
         if status in ("idle", "done"):
             for line in tail(name, herdr):
                 print(f"   | {line[:160]}")
+    for line in run([sys.executable, str(MAP_CHECK), str(map_dir)]).splitlines():
+        if line.startswith("tidy suggested:"):
+            print(line)
+    print(f"design questions open: {len(design_questions)}")
     print(f"MemAvailable {mem_available_gb()}")
     return 0
 

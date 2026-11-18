@@ -28,6 +28,9 @@ either can pick up the other's task.
 
 Collect and drop delete untracked files in the lane. Move anything worth keeping to `scratch/` first.
 
+Removing a lane or an integration, in either runtime, includes each parent directory it leaves
+empty under `.agent_state/worktrees/`.
+
 ## Claude
 
 The `collab_*` tools are absent; use native Git with the same names.

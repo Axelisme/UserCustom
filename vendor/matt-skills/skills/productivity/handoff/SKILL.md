@@ -11,7 +11,7 @@ of copying or summarizing its contents. Carry inline only receiver guidance and 
 have no owning document.
 
 For task-flow work, route the receiver first to the task-flow skill, the task `INDEX.md`, and the
-handed-off ticket; for an advisor effort, to the advisor skill and the map's `MAP.md`. Add only the
+handed-off ticket; for an effort, to the coordinator or designer skill and the map's `MAP.md`. Add only the
 current-work pointers those sources require. When they cannot identify the next action, point the
 receiver at the governing skill's resume procedure rather than at the ticket DAG or task history.
 

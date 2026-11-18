@@ -1,6 +1,6 @@
 # Light change
 
-Reached from the advisor's [Light change](SKILL.md#light-change) section. One implementer writes the
+Reached from the coordinator's [Light change](SKILL.md#light-change) section. One implementer writes the
 change on `light/<slug>`; you write its brief and merge it.
 
 ## Brief
@@ -27,5 +27,5 @@ Write `scratch/<slug>/brief.md` in the map:
 4. While a task-flow task runs its final full gates against the same target, hold merges until they
    finish.
 
-A light change is done when its branch is merged, the affected tests are green, and the branch and
-`scratch/<slug>/` are deleted.
+A light change is done when its branch is merged, the affected tests are green, and its branch,
+its worktree with each parent directory left empty, and `scratch/<slug>/` are deleted.

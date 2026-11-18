@@ -1,13 +1,16 @@
 # Design research
 
-Reached from the advisor's [Design research](SKILL.md#design-research) section.
+Reached from the designer's [Design research](SKILL.md#design-research) section.
 
 ## Fan-out
 
 Give each independent angle or option its own pi subagent (`spawn_subagent`), all dispatched
-together. Each gets one shared brief for the question, its own angle brief, and its own worktree,
-and reports its findings plus its coupling points with the other angles. Synthesize two or three
-options with a recommendation, and bring them to the user as a design question.
+together. Typical angles: the current code and its callers; precedents and principles; outside
+practice; cost or measurement. Each gets one shared brief for the question and its own angle brief.
+An angle that runs experiments also gets its own worktree; a read-only angle needs none. Each
+reports by [dossier.md](dossier.md#angle-report): its findings, its own recommendation, and its
+coupling points with the other angles. You then write the dossier from the reports and take it to
+the challenger.
 
 ## Spike
 
@@ -25,3 +28,6 @@ A **spike** answers "can this work?", not "how fast exactly?":
 Open the refactor as its own task beside the running optimisation, which keeps going. Slice the
 refactor expand-only first and land those slices early. Then move its remaining tickets into the
 optimisation task as candidates, ordered by what the algorithm needs; drop those it does not need.
+
+Every spike and angle worktree is removed when its report is accepted: the worktree, its branch, and
+each parent directory left empty.

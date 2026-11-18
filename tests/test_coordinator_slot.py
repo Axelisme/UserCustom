@@ -13,7 +13,7 @@ except ImportError:  # Direct test-file execution keeps tests/ on sys.path.
     import _support as support
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "home" / ".codex" / "skills" / "advisor" / "scripts" / "slot.py"
+SCRIPT = ROOT / "home" / ".codex" / "skills" / "coordinator" / "scripts" / "slot.py"
 SLOT = support.load_script(SCRIPT)
 
 setUpModule = support.require_git

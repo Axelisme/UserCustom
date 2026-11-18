@@ -55,7 +55,7 @@ Each write replaces or adds a whole entry. Records never accumulate appended his
   grants by reference ("STDO: 1 and 3"), record each referenced suggestion in full beside the user's
   words. Show the recorded entry in the same reply so the user can correct it.
 - **Spec and ticket content**: only after the user approves the change, or, in a mapped task, to
-  match an advisor ruling. Changes that alter behaviour
+  match a designer's ruling. Changes that alter behaviour
   or scope come back to the user; implementation detail lives in code and never enters the spec.
   Keep `spec.md` an entry file: move detail only some readers need into `spec/<topic>.md`, pointed
   to by a condition ("when you need X, read `spec/x.md`").
@@ -67,7 +67,10 @@ Each write replaces or adds a whole entry. Records never accumulate appended his
 - **Ticket `Status:`**: the Orchestrator alone sets `ready` → `doing` once the dispatch succeeds and
   `doing` → `done` at collection. A ticket the user drops moves to `retired/`.
 - **Scratch**: one file per purpose, overwritten in place; no versioned copies, no checkout copies.
-  A ticket's files go under `scratch/<ticket>/`, deleted when the ticket is collected.
+  A ticket's files go under `scratch/<ticket>/`, deleted when the ticket is collected. Evidence a
+  later decision still needs moves first: in a mapped task to the map's `scratch/<task-id>/`,
+  otherwise to `scratch/` itself. Data and conclusions others rely on go into Git where the
+  repository's instructions say. Raw output no conclusion needs is deleted at [Close](#close).
 
 Handoff is written only when the user asks, with the handoff skill, outside the task directory.
 
@@ -83,7 +86,8 @@ After compaction or a session change:
    acceptance, the worktree, and scratch evidence. A clean, committed candidate with the required
    evidence goes to the [gates](#gates); incomplete work gets a fresh dispatch on the same lane.
    Commit count or layout is not proof of completeness.
-3. In a mapped task, re-send every question still in `scratch/questions/`.
+3. In a mapped task, leave every file in `scratch/questions/` where it is: the coordinator's patrol
+   lists open question files, so a remaining file is still queued.
 
 Then continue the frontier.
 
@@ -109,13 +113,14 @@ The **frontier** is every `ready` ticket whose blockers are all `done`.
    logs, and an absolute path to the tdd `SKILL.md` readable by the child. Resolve and verify the
    skill path before dispatch; a missing or unreadable path blocks dispatch.
 2. Continue independent work while lanes run. When nothing independent remains, end the turn.
-3. On a COMPLETED result, run the [gates](#gates) yourself on the lane. Pass: collect the lane into
-   integration, set `done`, and delete `scratch/<ticket>/`. Fail: send the failure back through a
-   fresh dispatch on the same lane. On BLOCKED, settle the blocker as a question, then dispatch fresh
-   on the same lane.
+3. On a COMPLETED result, check the implementer's gate receipts against acceptance and rerun one
+   gate yourself as a spot check; rerun the rest only where a receipt is missing or suspect. Pass:
+   collect the lane into integration, set `done`, and delete `scratch/<ticket>/`. Fail: send the
+   failure back through a fresh dispatch on the same lane. On BLOCKED, settle the blocker as a
+   question, then dispatch fresh on the same lane.
 4. A collected ticket can widen the frontier; dispatch the newly unblocked tickets.
 
-An implementer question about scope or behaviour becomes a user question (an advisor question in a
+An implementer question about scope or behaviour becomes a user question (a design question in a
 mapped task); once it is settled, update the spec, then reply to the implementer.
 
 A settled change that touches a `doing` ticket interrupts it rather than waiting: update the ticket,
@@ -125,12 +130,28 @@ obsolete, terminate the implementer, drop the lane, and move the ticket to `reti
 ## Gates
 
 Every ticket runs the repository's declared checks (test, lint, typecheck, as AGENTS.md or
-CLAUDE.md states) plus any check its acceptance criteria name. Logs go to `scratch/`; results are
-read from exit status, not recorded.
+CLAUDE.md states) on what it touches: the affected tests and the lint and typecheck of the changed
+files, plus any check its acceptance criteria name. The full test suite and the whole-tree typecheck
+run once, at [land review](#land-review). Logs go to `scratch/`; results are read from exit status,
+not recorded.
 
 The **record gate** applies to every ticket: each line the lane adds to a tracked file states its
 reason without a decision number (`D` + digits, or `decisions/NNNN`). Rewrite a hit as the reason it
 stood for.
+
+The **doc gate** applies to every ticket that changes tracked code. Documents fall behind code,
+and the ones missed are rarely the changed module's own. Before collection, list the tracked
+documents the change can make stale, two ways:
+
+- **Related**: each changed path's README chain, the decision records those READMEs and the changed
+  code cite, and every other document citing the same records.
+- **Search**: all tracked documents, for the names the diff removed, renamed, or changed, the
+  changed files' paths, the values the diff removed, and the terms documents use for the changed
+  thing. A term with too many hits to read is replaced by a narrower one.
+
+Use the repository's tool for this when its instructions name one. Keep the list in
+`scratch/<ticket>/doc-hits.md` and give every hit one word: `unrelated`, `consistent`, or `updated`.
+At collection, rerun the list and collect only when every hit carries its word.
 
 **Red-green proof.** Before implementing changed behaviour, run its new tests red on the missing
 behaviour. A failed assertion or missing function or attribute introduced by the ticket qualifies;
@@ -147,8 +168,12 @@ tests stay green and land review covers the rest.
 **Evidence budget.** Tie each artifact or experiment to an acceptance criterion or unresolved
 question. Keep commands, tested inputs/state, outcomes, and enough output to check the conclusion;
 link bulky raw output instead of copying it. Reuse evidence whose inputs and assumptions still
-hold. On reconcile, rerun affected checks and all required gates, not unrelated artifact generation.
+hold: a green result recorded with a tree hash counts for every later check of that same tree. On
+reconcile, rerun the checks the incoming files affect, not unrelated artifact generation.
 Stop optional evidence gathering once acceptance is supported and the named questions are resolved.
+Run a measurement through the repository's own entry point, wrapped by at most one script per
+ticket. Check a run by reading its receipt and outputs; write a checking script only for a check
+that repeats, and reuse it across runs.
 
 ## Stacked tasks
 
@@ -169,48 +194,92 @@ part.
 
 ## Mapped tasks
 
-A task whose INDEX Goal carries `Map: <map-dir>` belongs to an effort run by an advisor. The advisor
-owns design and decisions in the map; this task's spec covers its slice and points into the map's
-design. The map's `## Standing orders` bind this task like its own; read them on entry. The
-advisor's herdr name is `<name>` in the `Advisor: <name>` line of the map's `## Tasks`.
+A task whose INDEX Goal carries `Map: <map-dir>` belongs to an effort. A **coordinator** keeps the
+effort's tasks moving and a **designer** owns its design and decisions in the map; this task's spec
+covers its slice and points into the map's design. The map's `## Standing orders` bind this task
+like its own; read them on entry. The coordinator's herdr name is `<name>` in the
+`Coordinator: <name>` line of the map's `## Tasks`.
 
-- **On `start(<task>)`**: the advisor has done Plan steps 1 and 2; do step 3, then run the frontier.
-- **Design questions** go to the advisor, not the user: write the scenario, options, and a
-  recommendation to `scratch/questions/<slug>.md`, send
-  `herdr agent prompt <advisor> "question(<task-id>): <one line>; <file path>"`, and continue
+- **On `start(<task>)`**: the designer has done Plan steps 1 and 2; do step 3, then run the
+  frontier. The message names your compute grant.
+- **Messages.** You send the coordinator four kinds and nothing else: `question`, `blocked`,
+  `review-done`, and the replies `promoted` and `landed`. It reads your progress from your records.
+- **Questions.** Write the scenario, options, and a recommendation to
+  `scratch/questions/<slug>.md`, starting with a `Tier:` line, send
+  `herdr agent prompt <coordinator> "question(<task-id>): <one line>; <file path>"`, and continue
   independent work. Delete the file once its ruling, or a `steer` that answers it, arrives, so a
   remaining file is an unanswered question.
-- **On `ruling(<task>): <decision>` or `design-change(<task>): <decision>`**: read the decision and
-  the map design it changed, then update this task's spec and tickets to match. A `doing` ticket is
-  interrupted as in [Run the frontier](#run-the-frontier); a `done` ticket whose behaviour the ruling
-  changes gets a new ticket.
-- **On `steer(<task>): <provenance>; <process instruction>`**: treat it as advisor process guidance,
-  not a user ruling. Provenance is `advisor-observation`, a quoted user instruction, or a named
-  standing order with its date. Check the cited authority and apply only within existing scope,
-  acceptance, and grants. Keep red-green proof, declared gates, and unresolved findings intact.
-  A steer cannot authorize spec changes, standing orders, landing, or push; ask the advisor for the
+
+  | `Tier:` | The question | Answered by |
+  |---|---|---|
+  | `local` | Stays inside one module, changes no public surface, data format, or acceptance text, and can be undone within this task | You: no question is sent |
+  | `simple` | Changes acceptance text, one module's public detail, or a test or measurement method | A quick ruling, in about 20 minutes |
+  | `full` | Adds or removes a concept; changes what a public interface or behaviour means; changes a data format; crosses a module boundary; sets a pattern others will copy; changes what the user sees; is hard to walk back | The designer, after an investigation |
+  | `process` | Changes neither design nor acceptance, and is past what you [handle yourself](#mapped-tasks) | The coordinator |
+
+  A `local` question is decided by you: adopt your recommended option and record it with its reason
+  under `## Local decisions` in `spec.md`; land review lists these. When unsure between two tiers,
+  take the lower; land review checks the call, and whoever receives the question may re-tier it.
+  Every sent question goes to the coordinator, whatever its tier: the coordinator routes design
+  questions. A `full` question can wait hours for the user; keep the frontier moving on tickets it
+  does not touch.
+- **Handle yourself.** Fix the cause, rerun, and log one `runs.md` line, with no question, for: a
+  mistaken test or fixture (acceptance meaning and coverage unchanged); a command or tool error (a
+  mistyped SHA, an empty selection, formatter, lint, or typecheck findings, a bug in a driver or a
+  read-only helper); a queue or outer timeout before the payload started; a lane environment rebuilt
+  with the repository's locked bootstrap; a selection that grew only because tests were added; a pane
+  clean-up warning. Still ask the coordinator for: exclusive runs, and any formal timing, benchmark,
+  or profile; a run over 10 minutes or over the memory limit the grant names; GPU work; a write to a
+  cache other tasks read as numeric input; rerunning or extending a named once-only acceptance batch.
+  Three failures from one cause in a row: walk the cause by hand before the next run.
+- **Compute grant.** Run heavy commands within the grant your `start` message or a standing order
+  names; the default is a non-exclusive run of up to 10 minutes at your own decision, 30 minutes of
+  exclusive time per ticket, and one retry of a failed run once its cause is fixed. Keep one line
+  per run in `scratch/runs.md`: the command, its bound, its outcome. Past the grant, send a
+  `process` question with the itemised estimate.
+- **On `ruling(<task>): <decision>` or `design-change(<task>): <decision>`**, sent by the designer:
+  read the decision and the map design it changed, then update this task's spec and tickets to
+  match. A `doing` ticket is interrupted as in [Run the frontier](#run-the-frontier); a `done`
+  ticket whose behaviour the ruling changes gets a new ticket.
+- **On `steer(<task>): <provenance>; <process instruction>`**: treat it as coordinator process
+  guidance, not a user ruling. Provenance is `coordinator-observation`, a quoted user instruction,
+  or a named standing order with its date. Check the cited authority and apply only within existing
+  scope, acceptance, and grants. Keep red-green proof, declared gates, and unresolved findings
+  intact. A steer cannot authorize spec changes, standing orders, landing, or push; ask for the
   required ruling or authority when it conflicts with those boundaries.
 - **On `base-landed(<task>)`**: retarget and pull per [stacked tasks](#stacked-tasks).
 - **After land review**, write the report of step 5 to `scratch/land-review.md` and send
-  `review-done(<task-id>): <its path>` instead of reporting to the user. The advisor's
+  `review-done(<task-id>): <its path>` instead of reporting to the user. The coordinator's
   `land(<task-id>): <authority>` reply quotes the user's instruction or names a standing order; it
   counts as the user's instruction to land.
+- **On `promote(<task>): <list path>`**: write each listed text at its destination as one commit on
+  the integration, re-run the gates those files require, and send `promoted(<task-id>): <commit>`.
+  For a mapped task this replaces Close step 1.
+- **Before `promoted` and `landed`**, when the target branch has moved past your integration,
+  reconcile it and run the checks the incoming files affect. A tool error on the way is yours to fix
+  and continue; a red result on the candidate itself stops the step with `blocked(<task-id>)`.
+- **On a planned-restart `steer`**: start no heavy run, stop a run that cannot finish by the named
+  time, commit WIP, write `scratch/reboot-checkpoint-<date>.md` (lanes and HEADs, the step in
+  progress, the next step), and reply `blocked(<task-id>): checkpoint <path>`. After the restart, a
+  run the restart interrupted is not evidence and does not use up a retry or a once-only grant.
 - **Report** `landed(<task-id>)` after landing, and `blocked(<task-id>): <one line>` when no frontier
-  ticket can move for a reason other than waiting on the base.
+  ticket can move for a reason other than waiting on the base or on a design question already
+  asked.
 
 ## Land review
 
 When every ticket is `done` (and, for a stacked task, persistence is retargeted to the target
 branch):
 
-1. Run the gates on the integration head.
+1. Run the gates on the integration head, this time with the full test suite and the whole-tree
+   typecheck. A green full run already recorded for this exact tree hash counts.
 2. Run code-review with the target branch as the fixed point, the integration head as candidate, the
    integration worktree as the checkout, and `spec.md` as the spec.
 3. For each finding, choose fix or decline. Decline with a one-line reason; a finding whose fix
    would contradict a decision goes to the user.
 4. Dispatch one `task-implementer` with every finding to fix, on a fresh lane. A behaviour-defect
    finding gets the [red-green proof](#gates) with a reproducing test; other findings need only the
-   gates. Collect it. Review again only when the user asks.
+   checks the fix affects. Collect it. Review again only when the user asks.
 5. Report to the user: the change, the gate result, and each finding's disposition.
 
 ## Land
@@ -231,6 +300,11 @@ grant. Land with the operation in [runtime.md](runtime.md).
    Read `retired/` here for the history.
 2. Search `.agent_state/plans/`, `.agent_state/maps/`, and tracked files for paths into this task's
    `scratch/`. Move each referenced item into the archive and tell its referrer the new path; then
-   list the rest of `scratch/` to the user and delete it.
+   list the rest of `scratch/` to the user and delete it. Data held under an earlier approval, or
+   kept for a later effort, moves into the archive unchanged; name the coordinator as its owner in
+   the close report.
 3. Move the task directory to `.agent_state/archives/<task-id>/`. Deleting the archive is the user's
    call.
+
+A mapped task skips step 1, because its decisions were promoted before landing. After step 3, send
+the coordinator the archive path so the task's decisions can move there.

@@ -83,7 +83,7 @@ then the sync point below is a hand-maintained claim, with the staleness that im
 
 ## Local skills — not upstream, never overwrite
 
-`task-flow`, `advisor`, `candidate-backlog`, `simplify`, `dictator`.
+`task-flow`, `coordinator`, `designer`, `candidate-backlog`, `simplify`, `dictator`.
 
 They may reference upstream skills as producers, and local adaptations can route back to these
 owners. For example, `ask-matt` names the local workflows as their router, and `retro` delegates
@@ -118,10 +118,10 @@ rather than copying their lifecycle rules into upstream skills.
 7. **`tdd` renames upstream's "One slice at a time" to "One cycle at a time"** — `slice` collides
    with `to-tickets`' tracer-bullet slices. Content unchanged.
 8. **Invocation policy** — `to-spec` and `to-tickets` are model-invocable here (upstream makes them
-   user-invoked) so `task-flow` and `advisor` can drive them. `wayfinder` stays user-invoked
+   user-invoked) so `task-flow`, `coordinator` and `designer` can drive them. `wayfinder` stays user-invoked
    deliberately: it is the heavyweight flow a human should choose to enter. Its description also
    scopes it to exploration that ends in decisions, so an effort that ends in landed code goes to
-   `advisor` instead.
+   `designer` instead.
 9. **`writing-for-agents` adds `PORTING.md`** and a `## Porting` section in `SKILL-MECHANICS.md`
    pointing at it — a checklist for adopting a skill written for another ecosystem. No upstream
    equivalent. (Upstream renamed this skill from `writing-great-skills` and dropped its
@@ -171,7 +171,7 @@ hand-maintained list could perform on itself.
     are kept concrete rather than trading a directive for adjectives.
 15. **`handoff` is rewritten as routing rather than factual authority** — it points at each owning
     spec, ticket, task record, ADR, commit or evidence artifact instead of copying them, routes
-    task-flow work to the skill, task `INDEX.md` and handed-off ticket (advisor work to the map), and
+    task-flow work to the skill, task `INDEX.md` and handed-off ticket (coordinator and designer work to the map), and
     covers the Pi `handoff_context` transition without authorizing it. A handoff that restates
     content becomes a second status store, which the task records exist to prevent.
 16. **`code-review` gains `references/wip-review.md`** — the advisory procedure for reviewing dirty
@@ -199,7 +199,7 @@ hand-maintained list could perform on itself.
     `/collab` as something to reach for when you want delegated review goes with it: `collab` is the
     path here, not an option. Deviation 14 reaches only the validation criterion in the router's
     `/implement` sentence, not this one. `ask-matt` is not installed now; its vendored text still routes to the retired
-    `dev-flow` and `collab`, so rewrite that routing to `task-flow` and `advisor` before adopting it.
+    `dev-flow` and `collab`, so rewrite that routing to `task-flow`, `coordinator` and `designer` before adopting it.
 20. **`retro` is adopted with local evidence and role bindings.** It stays user-invoked and keeps
     upstream's seven categories. A specific session event must support each candidate; an absent
     guardrail alone is not a finding, and no candidates is a valid result. Prior-session reading is

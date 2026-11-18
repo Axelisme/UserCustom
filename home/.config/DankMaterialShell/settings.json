@@ -20,6 +20,7 @@
       "showOnLastDisplay": true,
       "position": 1,
       "mode": "compact",
+      "middleClickAction": "close",
       "taskbarAlign": "center",
       "widgetExpansion": "popout",
       "iconSize": 34,
@@ -120,7 +121,8 @@
       "id": "brightnessSlider",
       "enabled": true,
       "w": 4,
-      "h": 1
+      "h": 1,
+      "deviceName": "backlight:intel_backlight"
     },
     {
       "id": "volumeSlider",
@@ -547,5 +549,7 @@
   },
   "frameMode": "separate",
   "configVersion": 42,
-  "updaterIgnoredPackages": []
+  "updaterIgnoredPackages": [],
+  "soundsEnabled": true,
+  "audioMono": false
 }

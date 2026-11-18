@@ -1,7 +1,7 @@
 ---
 description: Expert research, complex reasoning, and option analysis. High-cost model; use only with explicit user approval.
 modelList:
-  - openai/gpt-6-astra:high
+  - openai/gpt-6.2-astra:high
 tools:
   - codemode
   - read

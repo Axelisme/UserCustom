@@ -2,8 +2,8 @@
 name: contract-reviewer
 description: Judge every pinned contract option from one dispatched angle and score it against the datum; the specialized reviewer the contract-review skill dispatches, one per angle.
 modelList:
-  - openai/gpt-6.1-sol:xhigh
-  - openai/gpt-6.1-sol:high
+  - openai/gpt-6.2-sol:xhigh
+  - openai/gpt-6.2-sol:high
 tools:
   - codemode
   - read

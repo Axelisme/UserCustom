@@ -1,8 +1,8 @@
 {
-  "lastChangelogVersion": "1.4.0",
+  "lastChangelogVersion": "1.5.2",
   "theme": "legacy-dark",
   "defaultProvider": "openai",
-  "defaultModel": "gpt-6-astra",
+  "defaultModel": "gpt-6.2-sol",
   "defaultThinkingLevel": "xhigh",
   "defaultTools": [
     "+codemode",
@@ -14,10 +14,10 @@
   },
   "compaction": {
     "modelOverrides": {
-      "openai/gpt-6.1-sol": {
+      "openai/gpt-6.2-sol": {
         "reserveTokens": 20000
       },
-      "openai/gpt-6-astra": {
+      "openai/gpt-6.2-astra": {
         "reserveTokens": 20000
       }
     }
@@ -27,12 +27,11 @@
     "/home/axel/Documents/VSCode/Typescript/pi-herdr-subagents",
     "/home/axel/Documents/VSCode/Typescript/pi-self-compact",
     "/home/axel/Documents/VSCode/Typescript/pi-openai-fast-mode",
-    "/home/axel/Documents/VSCode/Typescript/cache-stats",
-    "npm:pi-tidy"
+    "/home/axel/Documents/VSCode/Typescript/cache-stats"
   ],
   "enabledModels": [
-    "openai/gpt-6-astra",
-    "openai/gpt-6.1-sol",
+    "openai/gpt-6.2-astra",
+    "openai/gpt-6.2-sol",
     "openai/gpt-6-luna"
   ],
   "herdrSubagents": {
@@ -40,8 +39,7 @@
       "builtin:codemode",
       "builtin:tool-search",
       "/home/axel/Documents/VSCode/Typescript/pi-openai-fast-mode",
-      "/home/axel/Documents/VSCode/Typescript/cache-stats",
-      "npm:pi-tidy"
+      "/home/axel/Documents/VSCode/Typescript/cache-stats"
     ]
   },
   "deviceId": "3cdcc3bc-d760-4ef0-923f-dba06b98f455"

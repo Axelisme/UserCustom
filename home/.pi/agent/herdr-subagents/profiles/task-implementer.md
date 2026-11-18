@@ -2,8 +2,8 @@
 name: task-implementer
 description: Implement one task-flow ticket, or one batch of land-review fixes, as the sole writer of one lane.
 modelList:
-  - openai/gpt-6.1-sol:high
-  - openai/gpt-6.1-sol:xhigh
+  - openai/gpt-6.2-sol:high
+  - openai/gpt-6.2-sol:xhigh
 tools:
   - codemode
   - read
